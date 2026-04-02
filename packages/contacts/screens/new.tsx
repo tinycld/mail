@@ -1,4 +1,4 @@
-import { useRouter, useParams } from 'one'
+import { useRouter, useActiveParams } from 'one'
 import { Pressable } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb'
@@ -14,7 +14,7 @@ import { contactSchema } from '../components/contactSchema'
 export default function NewContactScreen() {
     const router = useRouter()
     const theme = useTheme()
-    const { orgSlug = '' } = useParams<{ orgSlug: string }>()
+    const { orgSlug = '' } = useActiveParams<{ orgSlug: string }>()
     const userOrg = useCurrentUserOrg(orgSlug)
     const [contactsCollection] = useStore('contacts')
 

@@ -1,4 +1,4 @@
-import { Slot, useParams, usePathname } from 'one'
+import { Slot, useActiveParams, usePathname } from 'one'
 import { useEffect } from 'react'
 import { Platform } from 'react-native'
 import { LoginModal } from '~/components/workspace/LoginModal'
@@ -9,7 +9,7 @@ import { useWorkspaceLayout } from '~/components/workspace/useWorkspaceLayout'
 import { useAuth } from '~/lib/auth'
 
 export default function OrgLayout() {
-    const { orgSlug = '' } = useParams<{ orgSlug: string }>()
+    const { orgSlug = '' } = useActiveParams<{ orgSlug: string }>()
 
     if (Platform.OS !== 'web') {
         return <Slot />

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useParams, type Href } from 'one'
+import { Link, useActiveParams, type Href } from 'one'
 import { Pressable } from 'react-native'
 import { useLiveQuery } from '@tanstack/react-db'
 import { Star } from 'lucide-react-native'
@@ -9,7 +9,7 @@ import { YStack, XStack, SizableText, Input, useTheme } from 'tamagui'
 import { ContactAvatar } from '../components/ContactAvatar'
 
 export default function ContactListScreen() {
-    const { orgSlug = '' } = useParams<{ orgSlug: string }>()
+    const { orgSlug = '' } = useActiveParams<{ orgSlug: string }>()
     const [contactsCollection] = useStore('contacts')
     const [searchQuery, setSearchQuery] = useState('')
     const newContactHref = `/app/${orgSlug}/contacts/new` as Href
