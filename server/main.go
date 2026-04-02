@@ -166,7 +166,7 @@ func main() {
 			generateSchemas(e.App, typesDir)
 
 			if !e.Router.HasRoute(http.MethodGet, "/{path...}") {
-				e.Router.GET("/{path...}", staticWithFallback(publicDir, fallbackFile))
+				e.Router.Any("/{path...}", staticWithFallback(publicDir, fallbackFile))
 			}
 
 			return e.Next()
