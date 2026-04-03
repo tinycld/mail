@@ -92,8 +92,8 @@ COPY --from=go-builder /build/tinycld ./tinycld
 COPY --from=web-builder /app/dist/client ./public
 RUN mv ./public/index.html ./public/app.html
 
-# Copy PocketBase migrations and hooks from the original context
-COPY server/pb_migrations ./pb_migrations
+# Copy migrations from addon-generator where symlinks were resolved
+COPY --from=addon-generator /app/server/pb_migrations ./pb_migrations
 
 # Create necessary directories
 RUN mkdir -p pb_data types
