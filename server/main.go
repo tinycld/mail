@@ -165,6 +165,8 @@ func main() {
 		Func: func(e *core.ServeEvent) error {
 			generateSchemas(e.App, typesDir)
 
+			e.Router.POST("/api/signup", HandleSignup)
+
 			if !e.Router.HasRoute(http.MethodGet, "/{path...}") {
 				e.Router.Any("/{path...}", staticWithFallback(publicDir, fallbackFile))
 			}
