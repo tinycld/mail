@@ -66,6 +66,8 @@ COPY --from=addon-generator /app/lib/generated/ ./lib/generated/
 COPY --from=addon-generator /app/app/app/ ./app/app/
 
 # Build web app directly (skip prebuild:web which re-runs addons:generate)
+ARG ONE_SERVER_URL
+ENV ONE_SERVER_URL=${ONE_SERVER_URL}
 RUN npx one build
 
 
