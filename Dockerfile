@@ -59,7 +59,7 @@ COPY ui/ ./ui/
 COPY public/ ./public/
 COPY scripts/ ./scripts/
 COPY tinycld.addons.ts ./
-COPY react-native.config.cjs ./
+COPY react-native.config.cjs tamagui.config.ts ./
 
 # Copy generated addon wiring from generator stage
 COPY --from=addon-generator /app/lib/generated/ ./lib/generated/
