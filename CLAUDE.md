@@ -101,7 +101,7 @@ TinyCld is an One Stack React Native application backed by PocketBase . The repo
   // Bad — bypasses route type checking
   <Link href={`/app/${orgSlug}/contacts/${id}` as Href} />
   ```
-- The only exception is generic addon navigation (e.g. `AddonRail`, `AddonSidebarFallback`) where routes are constructed from runtime addon slugs — use `as OneRouter.Href` in those cases
+- The only exception is when routes must be built from runtime strings that TypeScript can't narrow (e.g. addon slugs from the registry, or routes that don't exist yet like settings) — use `as OneRouter.Href` in those cases
 - Use `useOrgInfo()` instead of `useParams()` to get `orgSlug` in org-scoped screens — it uses `useActiveParams` which resolves params reliably on first render
 
 ## Add-on System
