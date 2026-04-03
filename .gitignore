@@ -39,6 +39,8 @@ tsconfig.tsbuildinfo
 
 # PocketBase data
 server/pb_data/
+server/pb_test_data/
+server/.test-pb.pid
 
 # Generated addon wiring
 lib/generated/
@@ -51,3 +53,7 @@ server/tinycld
 server/addon_extensions.go
 
 .claude/
+
+# Playwright
+playwright-report/
+test-results/

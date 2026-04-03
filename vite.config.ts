@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
     server: {
-        port: 7100,
+        port: Number(process.env.VITE_PORT || 7100),
     },
     plugins: [
         one({

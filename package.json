@@ -17,6 +17,7 @@
         "clean": "one clean",
         "dev": "one dev",
         "dev:local": "bin/server & one dev; kill %1 2>/dev/null",
+        "dev:test:servers": "bin/dev-test-server",
         "dev:clean": "one dev --clean",
         "ios": "one run:ios",
         "prebuild:native": "one prebuild",
@@ -27,6 +28,7 @@
         "checks": "npm run lint && npm run typecheck",
         "db:reset": "npx tsx scripts/reset-dev-db.ts",
         "db:seed": "npx tsx scripts/seed-db.ts",
+        "test:e2e:debug": "playwright test --ui --headed --debug",
         "test:e2e": "npx playwright test"
     },
     "dependencies": {

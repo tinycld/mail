@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+export PB_SERVER_ADDR="http://127.0.0.1:7091"
+export VITE_PB_SERVER_ADDR="http://127.0.0.1:7091"
+export VITE_PORT=7101
+
+# Generate addon wiring
+npm run addons:generate
+
+cd server
+
+# Start Expo on test port (PocketBase is started by Playwright global setup)
+npx one dev
