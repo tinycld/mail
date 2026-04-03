@@ -1,7 +1,7 @@
 import { Slot, useActiveParams, usePathname } from 'one'
 import { useEffect } from 'react'
 import { Platform } from 'react-native'
-import { LoginModal } from '~/components/workspace/LoginModal'
+import { AuthGate } from '~/components/workspace/AuthGate'
 import { SkeletonLayout } from '~/components/workspace/SkeletonLayout'
 import { useWorkspaceLayout } from '~/components/workspace/useWorkspaceLayout'
 import { WorkspaceLayout } from '~/components/workspace/WorkspaceLayout'
@@ -33,7 +33,7 @@ function OrgLayoutInner({ orgSlug }: { orgSlug: string }) {
         return (
             <>
                 <SkeletonLayout />
-                <LoginModal />
+                <AuthGate />
             </>
         )
     }

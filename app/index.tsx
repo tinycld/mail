@@ -1,5 +1,5 @@
 import { Redirect } from 'one'
-import { LoginModal } from '~/components/workspace/LoginModal'
+import { AuthGate } from '~/components/workspace/AuthGate'
 import { SkeletonLayout } from '~/components/workspace/SkeletonLayout'
 import { useAuth } from '~/lib/auth'
 
@@ -24,7 +24,7 @@ export default function Index() {
     return (
         <>
             <SkeletonLayout />
-            <LoginModal />
+            <AuthGate />
         </>
     )
 }

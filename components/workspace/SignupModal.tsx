@@ -2,28 +2,74 @@ import { useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import { useAuth } from '~/lib/auth'
+import { pb } from '~/lib/pocketbase'
 
-interface LoginModalProps {
-    onSwitchToSignup: () => void
+interface SignupModalProps {
+    onSwitchToLogin: () => void
 }
 
-export function LoginModal({ onSwitchToSignup }: LoginModalProps) {
+export function SignupModal({ onSwitchToLogin }: SignupModalProps) {
     const theme = useTheme()
     const { login } = useAuth({ throwIfAnon: false })
+    const [orgName, setOrgName] = useState('')
+    const [orgSlug, setOrgSlug] = useState('')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
 
-    const canSubmit = email.trim().length > 0 && password.length > 0 && !isSubmitting
+    const canSubmit =
+        orgName.trim().length > 0 &&
+        orgSlug.trim().length > 0 &&
+        email.trim().length > 0 &&
+        password.length >= 8 &&
+        !isSubmitting
+
+    const deriveSlug = (name: string) => {
+        return name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '')
+            .slice(0, 15)
+    }
+
+    const handleOrgNameChange = (value: string) => {
+        setOrgName(value)
+        if (!orgSlug || orgSlug === deriveSlug(orgName)) {
+            setOrgSlug(deriveSlug(value))
+        }
+    }
 
     const handleSubmit = async () => {
         if (!canSubmit) return
         setError(null)
         setIsSubmitting(true)
-        const result = await login(email.trim(), password)
-        if (result.error) {
-            setError(result.error)
+
+        try {
+            const response = await pb.send('/api/signup', {
+                method: 'POST',
+                body: {
+                    email: email.trim(),
+                    password,
+                    orgName: orgName.trim(),
+                    orgSlug: orgSlug.trim(),
+                },
+            })
+
+            if (!response.userId) {
+                setError('Signup failed unexpectedly')
+                setIsSubmitting(false)
+                return
+            }
+
+            const result = await login(email.trim(), password)
+            if (result.error) {
+                setError(result.error)
+                setIsSubmitting(false)
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to create account'
+            setError(message)
             setIsSubmitting(false)
         }
     }
@@ -36,9 +82,9 @@ export function LoginModal({ onSwitchToSignup }: LoginModalProps) {
                     { backgroundColor: theme.background.val, borderColor: theme.borderColor.val },
                 ]}
             >
-                <Text style={[styles.title, { color: theme.color.val }]}>Sign in</Text>
+                <Text style={[styles.title, { color: theme.color.val }]}>Create account</Text>
                 <Text style={[styles.subtitle, { color: theme.color8.val }]}>
-                    Sign in to your account to continue
+                    Set up your organization and account
                 </Text>
 
                 {error && (
@@ -48,16 +94,43 @@ export function LoginModal({ onSwitchToSignup }: LoginModalProps) {
                 )}
 
                 <View style={styles.fieldGroup}>
+                    <Text style={[styles.label, { color: theme.color.val }]}>
+                        Organization name
+                    </Text>
+                    <TextInput
+                        style={[styles.input, inputColors(theme)]}
+                        value={orgName}
+                        onChangeText={handleOrgNameChange}
+                        placeholder="Acme Corp"
+                        placeholderTextColor={theme.color8.val}
+                        autoCapitalize="words"
+                        editable={!isSubmitting}
+                    />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                    <Text style={[styles.label, { color: theme.color.val }]}>
+                        Organization slug
+                    </Text>
+                    <TextInput
+                        style={[styles.input, inputColors(theme)]}
+                        value={orgSlug}
+                        onChangeText={setOrgSlug}
+                        placeholder="acme-corp"
+                        placeholderTextColor={theme.color8.val}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        editable={!isSubmitting}
+                    />
+                    <Text style={[styles.hint, { color: theme.color8.val }]}>
+                        3-15 chars, lowercase letters, numbers, hyphens
+                    </Text>
+                </View>
+
+                <View style={styles.fieldGroup}>
                     <Text style={[styles.label, { color: theme.color.val }]}>Email</Text>
                     <TextInput
-                        style={[
-                            styles.input,
-                            {
-                                color: theme.color.val,
-                                borderColor: theme.borderColor.val,
-                                backgroundColor: theme.backgroundHover.val,
-                            },
-                        ]}
+                        style={[styles.input, inputColors(theme)]}
                         value={email}
                         onChangeText={setEmail}
                         placeholder="you@example.com"
@@ -72,20 +145,13 @@ export function LoginModal({ onSwitchToSignup }: LoginModalProps) {
                 <View style={styles.fieldGroup}>
                     <Text style={[styles.label, { color: theme.color.val }]}>Password</Text>
                     <TextInput
-                        style={[
-                            styles.input,
-                            {
-                                color: theme.color.val,
-                                borderColor: theme.borderColor.val,
-                                backgroundColor: theme.backgroundHover.val,
-                            },
-                        ]}
+                        style={[styles.input, inputColors(theme)]}
                         value={password}
                         onChangeText={setPassword}
-                        placeholder="Password"
+                        placeholder="At least 8 characters"
                         placeholderTextColor={theme.color8.val}
                         secureTextEntry
-                        autoComplete="current-password"
+                        autoComplete="new-password"
                         editable={!isSubmitting}
                         onSubmitEditing={handleSubmit}
                     />
@@ -104,22 +170,30 @@ export function LoginModal({ onSwitchToSignup }: LoginModalProps) {
                         <ActivityIndicator color={theme.accentColor.val} size="small" />
                     ) : (
                         <Text style={[styles.submitButtonText, { color: theme.accentColor.val }]}>
-                            Sign in
+                            Create account
                         </Text>
                     )}
                 </Pressable>
 
-                <Pressable style={styles.switchLink} onPress={onSwitchToSignup}>
+                <Pressable style={styles.switchLink} onPress={onSwitchToLogin}>
                     <Text style={{ color: theme.color8.val, fontSize: 14 }}>
-                        Don't have an account?{' '}
+                        Already have an account?{' '}
                         <Text style={{ color: theme.accentBackground.val, fontWeight: '600' }}>
-                            Create one
+                            Sign in
                         </Text>
                     </Text>
                 </Pressable>
             </View>
         </View>
     )
+}
+
+function inputColors(theme: ReturnType<typeof useTheme>) {
+    return {
+        color: theme.color.val,
+        borderColor: theme.borderColor.val,
+        backgroundColor: theme.backgroundHover.val,
+    }
 }
 
 const styles = StyleSheet.create({
@@ -166,6 +240,10 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         marginBottom: 6,
+    },
+    hint: {
+        fontSize: 12,
+        marginTop: 4,
     },
     input: {
         borderWidth: 1,
