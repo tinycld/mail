@@ -10,6 +10,10 @@ RUN npm ci
 COPY scripts/ ./scripts/
 COPY server/ ./server/
 COPY tinycld.addons.ts ./
+
+# Remove broken symlinks (absolute paths from dev machine don't resolve in Docker)
+RUN find server/pb_migrations server/pb_hooks -type l -delete 2>/dev/null || true
+
 RUN npm run addons:generate
 
 
