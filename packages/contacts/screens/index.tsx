@@ -1,15 +1,16 @@
 import { useState } from 'react'
-import { Link, useActiveParams, type Href } from 'one'
+import { Link, type Href } from 'one'
 import { Pressable } from 'react-native'
 import { useLiveQuery } from '@tanstack/react-db'
 import { Star } from 'lucide-react-native'
 import { useStore } from '~/lib/pocketbase'
+import { useOrgInfo } from '~/lib/use-org-info'
 import { useMutation } from '~/lib/mutations'
 import { YStack, XStack, SizableText, Input, useTheme } from 'tamagui'
 import { ContactAvatar } from '../components/ContactAvatar'
 
 export default function ContactListScreen() {
-    const { orgSlug = '' } = useActiveParams<{ orgSlug: string }>()
+    const { orgSlug } = useOrgInfo()
     const [contactsCollection] = useStore('contacts')
     const [searchQuery, setSearchQuery] = useState('')
     const newContactHref = `/app/${orgSlug}/contacts/new` as Href

@@ -1,10 +1,11 @@
-import { useRouter, useActiveParams } from 'one'
+import { useRouter } from 'one'
 import { Pressable } from 'react-native'
 import { ArrowLeft } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb'
 import { YStack, XStack, SizableText, Button, ScrollView, useTheme } from 'tamagui'
 import { useForm, zodResolver, z } from '~/ui/form'
 import { useStore } from '~/lib/pocketbase'
+import { useOrgInfo } from '~/lib/use-org-info'
 import { useMutation } from '~/lib/mutations'
 import { handleMutationErrorsWithForm } from '~/lib/errors'
 import { useCurrentUserOrg } from '../hooks/useCurrentUserOrg'
@@ -14,7 +15,7 @@ import { contactSchema } from '../components/contactSchema'
 export default function NewContactScreen() {
     const router = useRouter()
     const theme = useTheme()
-    const { orgSlug = '' } = useActiveParams<{ orgSlug: string }>()
+    const { orgSlug } = useOrgInfo()
     const userOrg = useCurrentUserOrg(orgSlug)
     const [contactsCollection] = useStore('contacts')
 
