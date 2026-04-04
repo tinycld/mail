@@ -6,10 +6,13 @@ import { type Breakpoint, useBreakpoint } from './useBreakpoint'
 interface WorkspaceLayoutContextValue {
     activeAddonSlug: string | null
     isSidebarOpen: boolean
+    isDrawerOpen: boolean
     breakpoint: Breakpoint
     toggleSidebar: () => void
     setSidebarOpen: (open: boolean) => void
     setActiveAddonSlug: (slug: string | null) => void
+    toggleDrawer: () => void
+    setDrawerOpen: (open: boolean) => void
 }
 
 export const WorkspaceLayoutContext = createContext<WorkspaceLayoutContextValue | null>(null)
@@ -20,6 +23,7 @@ export function WorkspaceLayoutProvider({ children }: { children: ReactNode }) {
     const breakpoint = useBreakpoint()
     const [activeAddonSlug, setActiveAddonSlug] = useState<string | null>(null)
     const [isSidebarOpen, setSidebarOpen] = useState(true)
+    const [isDrawerOpen, setDrawerOpen] = useState(false)
 
     useEffect(() => {
         AsyncStorage.getItem(SIDEBAR_KEY).then(val => {
@@ -40,16 +44,36 @@ export function WorkspaceLayoutProvider({ children }: { children: ReactNode }) {
         AsyncStorage.setItem(SIDEBAR_KEY, String(open))
     }, [])
 
+    const toggleDrawer = useCallback(() => {
+        setDrawerOpen(prev => !prev)
+    }, [])
+
+    const handleSetDrawerOpen = useCallback((open: boolean) => {
+        setDrawerOpen(open)
+    }, [])
+
     const value = useMemo(
         () => ({
             activeAddonSlug,
             isSidebarOpen,
+            isDrawerOpen,
             breakpoint,
             toggleSidebar,
             setSidebarOpen: handleSetSidebarOpen,
             setActiveAddonSlug,
+            toggleDrawer,
+            setDrawerOpen: handleSetDrawerOpen,
         }),
-        [activeAddonSlug, isSidebarOpen, breakpoint, toggleSidebar, handleSetSidebarOpen]
+        [
+            activeAddonSlug,
+            isSidebarOpen,
+            isDrawerOpen,
+            breakpoint,
+            toggleSidebar,
+            handleSetSidebarOpen,
+            toggleDrawer,
+            handleSetDrawerOpen,
+        ]
     )
 
     return (

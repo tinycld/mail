@@ -1,34 +1,12 @@
-import {
-    Building2,
-    Calendar,
-    Home,
-    type LucideIcon,
-    Mail,
-    Settings,
-    User,
-    Users,
-} from 'lucide-react-native'
+import { Building2, type LucideIcon, Settings, User } from 'lucide-react-native'
 import type { OneRouter } from 'one'
 import { useRouter } from 'one'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import { useAddons } from '~/lib/addons/use-addons'
 import { useAuth } from '~/lib/auth'
+import { getIcon } from './addon-icon-map'
 import { useWorkspaceLayout } from './useWorkspaceLayout'
-
-const iconMap: Record<string, LucideIcon> = {
-    users: Users,
-    home: Home,
-    mail: Mail,
-    calendar: Calendar,
-    settings: Settings,
-    user: User,
-    building: Building2,
-}
-
-function getIcon(name: string): LucideIcon {
-    return iconMap[name] ?? Home
-}
 
 export function AddonRail() {
     const theme = useTheme()

@@ -3,6 +3,7 @@ import { Platform, Pressable, StyleSheet, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import { AddonRail } from './AddonRail'
 import { AddonSidebar } from './AddonSidebar'
+import { MobileLayout } from './MobileLayout'
 import { useWorkspaceLayout } from './useWorkspaceLayout'
 
 const SIDEBAR_WIDTH = 260
@@ -10,6 +11,8 @@ const SIDEBAR_WIDTH = 260
 export function WorkspaceLayout() {
     const theme = useTheme()
     const { breakpoint, isSidebarOpen, setSidebarOpen } = useWorkspaceLayout()
+
+    if (breakpoint === 'mobile') return <MobileLayout />
 
     const isTablet = breakpoint === 'tablet'
     const showSidebarOverlay = isTablet && isSidebarOpen

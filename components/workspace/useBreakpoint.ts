@@ -1,8 +1,10 @@
 import { useWindowDimensions } from 'react-native'
 
-export type Breakpoint = 'desktop' | 'tablet'
+export type Breakpoint = 'desktop' | 'tablet' | 'mobile'
 
 export function useBreakpoint(): Breakpoint {
     const { width } = useWindowDimensions()
-    return width >= 1024 ? 'desktop' : 'tablet'
+    if (width >= 1024) return 'desktop'
+    if (width >= 768) return 'tablet'
+    return 'mobile'
 }

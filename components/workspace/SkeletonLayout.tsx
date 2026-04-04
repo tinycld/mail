@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Platform, StyleSheet, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { useBreakpoint } from './useBreakpoint'
 
 function SkeletonBlock({
     width,
@@ -104,8 +105,42 @@ function SkeletonMain() {
 
 const SIDEBAR_WIDTH = 260
 
+function SkeletonTabBar() {
+    const theme = useTheme()
+    return (
+        <View
+            style={[
+                skeletonStyles.tabBar,
+                {
+                    backgroundColor: theme.railBackground.val,
+                    borderTopColor: theme.borderColor.val,
+                },
+            ]}
+        >
+            <SkeletonBlock width={36} height={36} style={{ borderRadius: 10, opacity: 0.15 }} />
+            <SkeletonBlock width={36} height={36} style={{ borderRadius: 10, opacity: 0.15 }} />
+            <SkeletonBlock width={36} height={36} style={{ borderRadius: 10, opacity: 0.15 }} />
+        </View>
+    )
+}
+
 export function SkeletonLayout() {
     const theme = useTheme()
+    const breakpoint = useBreakpoint()
+
+    if (breakpoint === 'mobile') {
+        return (
+            <View
+                style={[
+                    skeletonStyles.container,
+                    { backgroundColor: theme.background.val, flexDirection: 'column' },
+                ]}
+            >
+                <SkeletonMain />
+                <SkeletonTabBar />
+            </View>
+        )
+    }
 
     return (
         <View style={[skeletonStyles.container, { backgroundColor: theme.background.val }]}>
@@ -153,5 +188,13 @@ const skeletonStyles = StyleSheet.create({
     main: {
         flex: 1,
         padding: 24,
+    },
+    tabBar: {
+        flexDirection: 'row',
+        height: 56,
+        borderTopWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        paddingHorizontal: 16,
     },
 })

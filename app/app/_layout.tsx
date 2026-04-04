@@ -1,6 +1,5 @@
-import { Slot, usePathname } from 'one'
+import { usePathname } from 'one'
 import { useEffect } from 'react'
-import { Platform } from 'react-native'
 import { AuthGate } from '~/components/workspace/AuthGate'
 import { SkeletonLayout } from '~/components/workspace/SkeletonLayout'
 import { useWorkspaceLayout } from '~/components/workspace/useWorkspaceLayout'
@@ -9,10 +8,6 @@ import { WorkspaceLayoutProvider } from '~/components/workspace/WorkspaceLayoutP
 import { useAuth } from '~/lib/auth'
 
 export default function OrgLayout() {
-    if (Platform.OS !== 'web') {
-        return <Slot />
-    }
-
     return (
         <WorkspaceLayoutProvider>
             <OrgLayoutInner />
@@ -46,9 +41,11 @@ function OrgLayoutInner() {
 
 function ActiveAddonSync() {
     const pathname = usePathname()
-    const { setActiveAddonSlug } = useWorkspaceLayout()
+    const { setActiveAddonSlug, setDrawerOpen } = useWorkspaceLayout()
 
     useEffect(() => {
+        setDrawerOpen(false)
+
         const prefix = '/app/'
         if (!pathname.startsWith(prefix)) {
             setActiveAddonSlug(null)
@@ -57,7 +54,7 @@ function ActiveAddonSync() {
         const rest = pathname.slice(prefix.length)
         const slug = rest.split('/')[0] || null
         setActiveAddonSlug(slug)
-    }, [pathname, setActiveAddonSlug])
+    }, [pathname, setActiveAddonSlug, setDrawerOpen])
 
     return null
 }
