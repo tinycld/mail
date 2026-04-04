@@ -24,7 +24,7 @@ interface Config {
 function parseArgs(): Config {
     const args = process.argv.slice(2)
     const config: Config = {
-        url: process.env.PB_SERVER_ADDR || 'http://127.0.0.1:7090',
+        url: process.env.SMOKE_TEST_ADDRESS || 'http://127.0.0.1:7090',
         email: process.env.SMOKE_TEST_USER || '',
         password: process.env.SMOKE_TEST_PW || '',
     }
@@ -128,10 +128,42 @@ async function testCardDAV(config: Config) {
         fail('GET /.well-known/carddav', String(err))
     }
 
-    // PROPFIND to discover address books
-    let addressBookPath: string | null = null
+    // Step 1: Discover current-user-principal
+    let principalPath: string | null = null
     try {
         const body = `<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:">
+  <d:prop>
+    <d:current-user-principal/>
+  </d:prop>
+</d:propfind>`
+
+        const res = await fetch(`${config.url}/carddav/`, {
+            method: 'PROPFIND',
+            headers: { ...headers, 'Content-Type': 'application/xml', Depth: '0' },
+            body,
+        })
+        const text = await res.text()
+        if (res.status === 207) {
+            const hrefMatch = text.match(/<[A-Za-z:]*href[^>]*>([^<]*principals[^<]*)</)
+            if (hrefMatch) {
+                principalPath = hrefMatch[1]
+                ok('Discover principal', principalPath)
+            } else {
+                fail('Discover principal', `no principal href in response: ${text.slice(0, 300)}`)
+            }
+        } else {
+            fail('PROPFIND /carddav/', `status ${res.status}: ${text.slice(0, 200)}`)
+        }
+    } catch (err) {
+        fail('PROPFIND /carddav/', String(err))
+    }
+
+    // Step 2: List address books under the principal
+    let addressBookPath: string | null = null
+    if (principalPath) {
+        try {
+            const body = `<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
   <d:prop>
     <d:resourcetype/>
@@ -139,25 +171,32 @@ async function testCardDAV(config: Config) {
   </d:prop>
 </d:propfind>`
 
-        const res = await fetch(`${config.url}/carddav/`, {
-            method: 'PROPFIND',
-            headers: { ...headers, 'Content-Type': 'application/xml', Depth: '1' },
-            body,
-        })
-        const text = await res.text()
-        if (res.status === 207) {
-            ok('PROPFIND /carddav/', `${res.status} multistatus`)
-            // Extract an address book path from the response
-            const hrefMatch = text.match(/<[A-Za-z:]*href[^>]*>([^<]*principals[^<]*)</)
-            if (hrefMatch) {
-                addressBookPath = hrefMatch[1]
-                ok('Discovered address book', addressBookPath)
+            const res = await fetch(`${config.url}${principalPath}`, {
+                method: 'PROPFIND',
+                headers: { ...headers, 'Content-Type': 'application/xml', Depth: '1' },
+                body,
+            })
+            const text = await res.text()
+            if (res.status === 207) {
+                // Find an href deeper than the principal itself (an address book)
+                const allHrefs = [...text.matchAll(/<[A-Za-z:]*href[^>]*>([^<]+)</g)].map(m => m[1])
+                addressBookPath =
+                    allHrefs.find(h => h !== principalPath && h.startsWith(principalPath || '')) ||
+                    null
+                if (addressBookPath) {
+                    ok('Discovered address book', addressBookPath)
+                } else {
+                    fail(
+                        'Discover address book',
+                        `no child address book found. hrefs: ${allHrefs.join(', ')}`
+                    )
+                }
+            } else {
+                fail(`PROPFIND ${principalPath}`, `status ${res.status}: ${text.slice(0, 200)}`)
             }
-        } else {
-            fail('PROPFIND /carddav/', `status ${res.status}: ${text.slice(0, 200)}`)
+        } catch (err) {
+            fail(`PROPFIND ${principalPath}`, String(err))
         }
-    } catch (err) {
-        fail('PROPFIND /carddav/', String(err))
     }
 
     if (!addressBookPath) {
