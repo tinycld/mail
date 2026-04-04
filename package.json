@@ -13,6 +13,7 @@
         "predev": "npm run addons:generate",
         "prebuild:web": "npm run addons:generate",
         "android": "one run:android",
+        "migrate": "./server/tinycld migrate",
         "build:web": "one build",
         "clean": "one clean",
         "dev": "one dev",

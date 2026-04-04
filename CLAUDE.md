@@ -84,6 +84,7 @@ TinyCld is an One Stack React Native application backed by PocketBase . The repo
 ## PocketBase Notes
 - Local data lives in `server/pb_data/`; reset via `tests/pb-test-server` scripts when fixtures fall out of sync.
 - Keep migrations in `server/pb_migrations/` and describe manual steps in the PR body.
+- Go server hooks (e.g. CardDAV in `packages/contacts/server/`) use SDK methods that bypass PocketBase API rules — they implement equivalent authorization manually. When changing API rules on a collection, check if a Go hook also accesses that collection and update its filters to match.
 
 ## Users & Organizations
 - Users belong to orgs via the `user_org` junction table (many-to-many)
