@@ -95,7 +95,13 @@ const user_org = newCollection('user_org', {
     ...indexing,
 })
 
-const coreStores = { users, orgs, user_org }
+const settings = newCollection('settings', {
+    omitOnInsert: ['created', 'updated'],
+    expand: { org: orgs },
+    ...indexing,
+})
+
+const coreStores = { users, orgs, user_org, settings }
 export type CoreStores = typeof coreStores
 
 const stores = {
