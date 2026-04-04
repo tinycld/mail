@@ -24,7 +24,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
     const isMinimized = mode === 'minimized'
     const isMaximized = mode === 'maximized'
-    const isTablet = breakpoint === 'tablet'
+    const isNotDesktop = breakpoint !== 'desktop'
 
     const modeStyleMap = {
         open: styles.normal,
@@ -32,7 +32,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         maximized: styles.maximized,
         closed: styles.normal,
     }
-    const windowStyle = isTablet ? styles.fullscreen : modeStyleMap[mode]
+    const windowStyle = isNotDesktop ? styles.fullscreen : modeStyleMap[mode]
 
     return (
         <View

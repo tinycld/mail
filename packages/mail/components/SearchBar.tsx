@@ -1,13 +1,14 @@
-import { Search, SlidersHorizontal } from 'lucide-react-native'
+import { Menu, Search, SlidersHorizontal } from 'lucide-react-native'
 import { Pressable, StyleSheet, TextInput, View } from 'react-native'
 import { useTheme } from 'tamagui'
 
 interface SearchBarProps {
     value: string
     onChangeText: (text: string) => void
+    onMenuPress?: () => void
 }
 
-export function SearchBar({ value, onChangeText }: SearchBarProps) {
+export function SearchBar({ value, onChangeText, onMenuPress }: SearchBarProps) {
     const theme = useTheme()
 
     return (
@@ -20,6 +21,11 @@ export function SearchBar({ value, onChangeText }: SearchBarProps) {
                 },
             ]}
         >
+            {onMenuPress ? (
+                <Pressable onPress={onMenuPress} style={styles.menuButton}>
+                    <Menu size={20} color={theme.color8.val} />
+                </Pressable>
+            ) : null}
             <Search size={18} color={theme.color8.val} />
             <TextInput
                 style={[styles.input, { color: theme.color.val }]}
@@ -51,5 +57,8 @@ const styles = StyleSheet.create({
     },
     filterButton: {
         padding: 4,
+    },
+    menuButton: {
+        padding: 2,
     },
 })

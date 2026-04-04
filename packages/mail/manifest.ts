@@ -6,6 +6,10 @@ const manifest = {
     routes: { directory: 'screens' },
     nav: { label: 'Mail', icon: 'mail', order: 5 },
     sidebar: { component: 'sidebar' },
+    migrations: { directory: 'pb-migrations' },
+    collections: { register: 'collections', types: 'types' },
+    seed: { script: 'seed' },
+    server: { package: 'server', module: 'tinycld/addons/mail' },
 }
 
 export default manifest

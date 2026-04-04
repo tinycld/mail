@@ -2,10 +2,13 @@ import { Forward, Reply, ReplyAll } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 
 export function InlineReply() {
     const theme = useTheme()
     const [isExpanded, setIsExpanded] = useState(false)
+    const breakpoint = useBreakpoint()
+    const isMobile = breakpoint === 'mobile'
 
     if (isExpanded) {
         return (
@@ -38,7 +41,13 @@ export function InlineReply() {
     }
 
     return (
-        <View style={[styles.container, { borderTopColor: theme.borderColor.val }]}>
+        <View
+            style={[
+                styles.container,
+                isMobile && styles.containerMobile,
+                { borderTopColor: theme.borderColor.val },
+            ]}
+        >
             <Pressable
                 style={[styles.actionButton, { borderColor: theme.borderColor.val }]}
                 onPress={() => setIsExpanded(true)}
@@ -64,6 +73,9 @@ const styles = StyleSheet.create({
         gap: 8,
         padding: 16,
         borderTopWidth: 1,
+    },
+    containerMobile: {
+        flexWrap: 'wrap',
     },
     actionButton: {
         flexDirection: 'row',

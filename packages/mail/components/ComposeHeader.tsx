@@ -1,6 +1,7 @@
 import { Maximize2, Minimize2, X } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import type { ComposeMode } from '../hooks/useComposeState'
 
 interface ComposeHeaderProps {
@@ -12,6 +13,8 @@ interface ComposeHeaderProps {
 
 export function ComposeHeader({ mode, onMinimize, onMaximize, onClose }: ComposeHeaderProps) {
     const theme = useTheme()
+    const breakpoint = useBreakpoint()
+    const showWindowControls = breakpoint === 'desktop'
 
     return (
         <View style={[styles.header, { backgroundColor: theme.color.val }]}>
@@ -22,12 +25,16 @@ export function ComposeHeader({ mode, onMinimize, onMaximize, onClose }: Compose
                 <Text style={[styles.title, { color: theme.background.val }]}>New Message</Text>
             </Pressable>
             <View style={styles.actions}>
-                <Pressable style={styles.headerButton} onPress={onMinimize}>
-                    <Minimize2 size={14} color={theme.background.val} />
-                </Pressable>
-                <Pressable style={styles.headerButton} onPress={onMaximize}>
-                    <Maximize2 size={14} color={theme.background.val} />
-                </Pressable>
+                {showWindowControls ? (
+                    <>
+                        <Pressable style={styles.headerButton} onPress={onMinimize}>
+                            <Minimize2 size={14} color={theme.background.val} />
+                        </Pressable>
+                        <Pressable style={styles.headerButton} onPress={onMaximize}>
+                            <Maximize2 size={14} color={theme.background.val} />
+                        </Pressable>
+                    </>
+                ) : null}
                 <Pressable style={styles.headerButton} onPress={onClose}>
                     <X size={14} color={theme.background.val} />
                 </Pressable>

@@ -1,6 +1,7 @@
 import { MoreVertical, Reply, Star } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { LabelBadge } from './LabelBadge'
 import type { MockEmail, MockLabel } from './mockData'
 import { mockLabels } from './mockData'
@@ -11,6 +12,8 @@ interface EmailHeaderProps {
 
 export function EmailHeader({ email }: EmailHeaderProps) {
     const theme = useTheme()
+    const breakpoint = useBreakpoint()
+    const isMobile = breakpoint === 'mobile'
 
     const emailLabels = email.labels
         .map(id => mockLabels.find(l => l.id === id))
@@ -26,7 +29,15 @@ export function EmailHeader({ email }: EmailHeaderProps) {
     return (
         <View style={styles.container}>
             <View style={styles.subjectRow}>
-                <Text style={[styles.subject, { color: theme.color.val }]}>{email.subject}</Text>
+                <Text
+                    style={[
+                        styles.subject,
+                        isMobile && styles.subjectMobile,
+                        { color: theme.color.val },
+                    ]}
+                >
+                    {email.subject}
+                </Text>
                 <View style={styles.labelRow}>
                     {emailLabels.map(label => (
                         <LabelBadge key={label.id} name={label.name} color={label.color} />
@@ -45,11 +56,13 @@ export function EmailHeader({ email }: EmailHeaderProps) {
                         <Text style={[styles.senderName, { color: theme.color.val }]}>
                             {email.sender}
                         </Text>
-                        <Text style={[styles.senderEmail, { color: theme.color8.val }]}>
-                            {'<'}
-                            {email.senderEmail}
-                            {'>'}
-                        </Text>
+                        {isMobile ? null : (
+                            <Text style={[styles.senderEmail, { color: theme.color8.val }]}>
+                                {'<'}
+                                {email.senderEmail}
+                                {'>'}
+                            </Text>
+                        )}
                     </View>
                     <Text style={[styles.toLine, { color: theme.color8.val }]}>to me</Text>
                 </View>
@@ -87,6 +100,9 @@ const styles = StyleSheet.create({
     subject: {
         fontSize: 22,
         fontWeight: '400',
+    },
+    subjectMobile: {
+        fontSize: 18,
     },
     labelRow: {
         flexDirection: 'row',

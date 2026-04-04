@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, MoreVertical, RefreshCw, Square } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 
 interface EmailListToolbarProps {
     emailCount: number
@@ -8,6 +9,9 @@ interface EmailListToolbarProps {
 
 export function EmailListToolbar({ emailCount }: EmailListToolbarProps) {
     const theme = useTheme()
+    const breakpoint = useBreakpoint()
+
+    if (breakpoint === 'mobile') return null
 
     const paginationText =
         emailCount > 0 ? `1\u2013${emailCount} of ${emailCount}` : 'No conversations'
