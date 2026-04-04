@@ -131,7 +131,7 @@ async function testCardDAV(config: Config, auth: AuthResult) {
     console.log('\n▸ CardDAV')
     const basicAuth = Buffer.from(`${config.email}:${config.password}`).toString('base64')
     const headers = { Authorization: `Basic ${basicAuth}` }
-    const addressBookPath = `/carddav/${auth.orgSlug}/`
+    const addressBookPath = `/carddav/u/ab/${auth.orgSlug}/`
 
     // Well-known redirect
     try {

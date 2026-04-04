@@ -16,7 +16,14 @@ func Register(app *pocketbase.PocketBase) {
 		handler := carddav.Handler{Backend: backend, Prefix: "/carddav"}
 
 		serveCardDAV := func(re *core.RequestEvent) error {
-			// Inject the raw HTTP request into context for auth extraction
+			// Require Basic Auth — send 401 challenge if missing
+			_, _, ok := re.Request.BasicAuth()
+			if !ok {
+				re.Response.Header().Set("WWW-Authenticate", `Basic realm="TinyCld CardDAV"`)
+				http.Error(re.Response, "Authentication required", http.StatusUnauthorized)
+				return nil
+			}
+
 			ctx := context.WithValue(re.Request.Context(), httpRequestKey, re.Request)
 			handler.ServeHTTP(re.Response, re.Request.WithContext(ctx))
 			return nil
