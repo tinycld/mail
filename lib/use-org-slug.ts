@@ -1,42 +1,39 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
+import { loadPrimaryOrgFromStorage } from '~/lib/auth'
+import { parseSubdomain } from '~/lib/hostname'
 
-const PRIMARY_ORG_STORAGE_KEY = 'tinycld_primary_org'
+// Web: compute once at module load — hostname never changes during a session
+const WEB_ORG_SLUG: string =
+    Platform.OS === 'web' && typeof window !== 'undefined'
+        ? parseSubdomain(window.location.hostname).slug
+        : ''
 
-function getOrgSlugFromHostname(): string {
-    if (typeof window === 'undefined') return ''
-    const hostname = window.location.hostname
+// Native: single shared AsyncStorage read, cached after first resolution
+let cachedNativeSlug: string | null = null
+let pendingRead: Promise<string | null> | null = null
 
-    // acme.localhost → acme
-    if (hostname.endsWith('.localhost')) {
-        return hostname.slice(0, -'.localhost'.length)
+function readNativeSlug(): Promise<string | null> {
+    if (!pendingRead) {
+        pendingRead = loadPrimaryOrgFromStorage().then(slug => {
+            cachedNativeSlug = slug
+            return slug
+        })
     }
-
-    // acme.tinycld.com → acme
-    const parts = hostname.split('.')
-    if (parts.length >= 3) {
-        return parts[0]
-    }
-
-    // bare domain (localhost, tinycld.com) → no org
-    return ''
+    return pendingRead
 }
 
 export function useOrgSlug(): string {
-    const [nativeSlug, setNativeSlug] = useState('')
+    // genuinely local async state — AsyncStorage has no reactive primitive
+    const [slug, setSlug] = useState(cachedNativeSlug ?? '')
 
     useEffect(() => {
-        if (Platform.OS !== 'web') {
-            AsyncStorage.getItem(PRIMARY_ORG_STORAGE_KEY).then(slug => {
-                if (slug) setNativeSlug(slug)
-            })
-        }
+        if (Platform.OS === 'web' || cachedNativeSlug != null) return
+        readNativeSlug().then(s => {
+            if (s) setSlug(s)
+        })
     }, [])
 
-    if (Platform.OS === 'web') {
-        return getOrgSlugFromHostname()
-    }
-
-    return nativeSlug
+    if (Platform.OS === 'web') return WEB_ORG_SLUG
+    return slug
 }

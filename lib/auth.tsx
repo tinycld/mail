@@ -68,7 +68,7 @@ async function savePrimaryOrgToStorage(orgSlug: string): Promise<void> {
     }
 }
 
-async function loadPrimaryOrgFromStorage(): Promise<string | null> {
+export async function loadPrimaryOrgFromStorage(): Promise<string | null> {
     try {
         return await AsyncStorage.getItem(PRIMARY_ORG_STORAGE_KEY)
     } catch {
