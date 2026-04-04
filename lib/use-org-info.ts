@@ -1,10 +1,10 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
-import { useActiveParams } from 'one'
 import { useStore } from '~/lib/pocketbase'
+import { useOrgSlug } from '~/lib/use-org-slug'
 
 export function useOrgInfo() {
-    const { orgSlug = '' } = useActiveParams<{ orgSlug: string }>()
+    const orgSlug = useOrgSlug()
     const [orgsCollection] = useStore('orgs')
 
     const { data: orgs } = useLiveQuery(
