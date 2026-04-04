@@ -368,9 +368,7 @@ function generateSettingsFile(
         const panels: string[] = []
         for (const panel of a.manifest.settings ?? []) {
             const id = `${slugToIdentifier(a.manifest.slug)}${slugToPascal(panel.slug)}`
-            imports.push(
-                `import ${id} from '${a.packageName}/${panel.component}'`
-            )
+            imports.push(`import ${id} from '${a.packageName}/${panel.component}'`)
             panels.push(
                 `            { slug: '${panel.slug}', label: '${panel.label}', Component: ${id} },`
             )
