@@ -1,7 +1,6 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { ChevronDown, Clock, File, Inbox, Pencil, Send, Star, Tag } from 'lucide-react-native'
-import type { OneRouter } from 'one'
 import { useActiveParams, usePathname, useRouter } from 'one'
 import { useMemo } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
@@ -12,13 +11,13 @@ import {
     SidebarItem,
     SidebarNav,
 } from '~/components/sidebar-primitives'
+import { useOrgHref } from '~/lib/org-routes'
 import { useStore } from '~/lib/pocketbase'
 import { useCurrentRole } from '~/lib/use-current-role'
 import { useOrgInfo } from '~/lib/use-org-info'
 import { composeEvents } from './hooks/composeEvents'
 
 interface MailSidebarProps {
-    basePath: string
     isCollapsed: boolean
 }
 
@@ -36,6 +35,7 @@ export default function MailSidebar(_props: MailSidebarProps) {
     const activeFolder = useActiveFolder()
     const { userOrgId } = useCurrentRole()
     const { orgId } = useOrgInfo()
+    const orgHref = useOrgHref()
 
     const [threadStateCollection, labelsCollection] = useStore('mail_thread_state', 'mail_labels')
 
@@ -67,14 +67,14 @@ export default function MailSidebar(_props: MailSidebarProps) {
 
     const navigateToFolder = (folder: string) => {
         if (folder === 'inbox') {
-            router.push('/app/mail' as OneRouter.Href)
+            router.push(orgHref('mail'))
         } else {
-            router.push(`/app/mail?folder=${folder}` as OneRouter.Href)
+            router.push(orgHref('mail', { folder }))
         }
     }
 
     const navigateToLabel = (labelId: string) => {
-        router.push(`/app/mail?label=${labelId}` as OneRouter.Href)
+        router.push(orgHref('mail', { label: labelId }))
     }
 
     const labelItems = (orgLabels ?? []).map(label => (

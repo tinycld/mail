@@ -1,13 +1,13 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { Lock, Mail, Plus, Trash2, UserPlus, X } from 'lucide-react-native'
-import type { OneRouter } from 'one'
 import { Link } from 'one'
 import { newRecordId } from 'pbtsdb'
 import { useState } from 'react'
 import { Button, H4, ScrollView, Separator, SizableText, useTheme, XStack, YStack } from 'tamagui'
 import { handleMutationErrorsWithForm } from '~/lib/errors'
 import { useMutation } from '~/lib/mutations'
+import { useOrgHref } from '~/lib/org-routes'
 import { useStore } from '~/lib/pocketbase'
 import { useCurrentRole } from '~/lib/use-current-role'
 import { useOrgInfo } from '~/lib/use-org-info'
@@ -194,11 +194,13 @@ export default function MailboxesSettings() {
 }
 
 function NoDomainsBanner({ isVisible }: { isVisible: boolean }) {
+    const orgHref = useOrgHref()
+
     if (!isVisible) return null
     return (
         <SizableText color="$color8">
             No mail domains configured.{' '}
-            <Link href={'/app/settings/mail/provider' as OneRouter.Href}>
+            <Link href={orgHref('settings/[...section]', { section: ['mail', 'provider'] })}>
                 <SizableText color="$blue10" textDecorationLine="underline">
                     Add a domain in Provider settings
                 </SizableText>

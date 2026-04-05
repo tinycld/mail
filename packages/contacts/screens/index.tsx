@@ -1,11 +1,11 @@
 import { useLiveQuery } from '@tanstack/react-db'
 import { Star } from 'lucide-react-native'
-import type { OneRouter } from 'one'
 import { Link } from 'one'
 import { useMemo, useState } from 'react'
 import { Pressable } from 'react-native'
 import { Input, SizableText, useTheme, XStack, YStack } from 'tamagui'
 import { useMutation } from '~/lib/mutations'
+import { useOrgHref } from '~/lib/org-routes'
 import { useStore } from '~/lib/pocketbase'
 import { ContactAvatar } from '../components/ContactAvatar'
 import { useContactSearch } from '../hooks/useContactSearch'
@@ -13,7 +13,8 @@ import { useContactSearch } from '../hooks/useContactSearch'
 export default function ContactListScreen() {
     const [contactsCollection] = useStore('contacts')
     const [searchQuery, setSearchQuery] = useState('')
-    const newContactHref = '/app/contacts/new' as OneRouter.Href
+    const orgHref = useOrgHref()
+    const newContactHref = orgHref('contacts/new')
 
     const { data: contacts, isLoading } = useLiveQuery(query =>
         query
@@ -149,10 +150,11 @@ interface ContactRowProps {
 
 function ContactRow({ contact, onToggleFavorite }: ContactRowProps) {
     const theme = useTheme()
+    const orgHref = useOrgHref()
     const displayName = [contact.first_name, contact.last_name].filter(Boolean).join(' ')
 
     return (
-        <Link href={`/app/contacts/${contact.id}` as OneRouter.Href}>
+        <Link href={orgHref('contacts/[id]', { id: contact.id })}>
             <XStack
                 paddingHorizontal="$3"
                 paddingVertical="$3"

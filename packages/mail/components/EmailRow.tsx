@@ -4,6 +4,7 @@ import { Link } from 'one'
 import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { useOrgHref } from '~/lib/org-routes'
 import type { ThreadListItem } from './thread-list-item'
 import { formatMailDate } from './thread-list-item'
 
@@ -100,6 +101,7 @@ function SenderWithDraft({
 
 function MobileEmailRow({ email, onToggleStar, onPress }: EmailRowProps) {
     const theme = useTheme()
+    const orgHref = useOrgHref()
 
     const senderWeight = email.isRead ? ('400' as const) : ('700' as const)
     const subjectWeight = email.isRead ? ('400' as const) : ('600' as const)
@@ -117,7 +119,7 @@ function MobileEmailRow({ email, onToggleStar, onPress }: EmailRowProps) {
     const dateDisplay = formatMailDate(email.latestDate)
 
     return (
-        <RowWrapper href={`/app/mail/${email.threadId}` as OneRouter.Href} onPress={onPress}>
+        <RowWrapper href={orgHref('mail/[id]', { id: email.threadId })} onPress={onPress}>
             <View
                 style={[
                     mobileStyles.row,
@@ -194,6 +196,7 @@ function DesktopEmailRow({
     onPress,
 }: EmailRowProps) {
     const theme = useTheme()
+    const orgHref = useOrgHref()
 
     const rowBg = isSelected
         ? `${theme.accentBackground.val}18`
@@ -208,7 +211,7 @@ function DesktopEmailRow({
     const checkboxColor = isSelected ? theme.accentBackground.val : theme.color8.val
 
     return (
-        <RowWrapper href={`/app/mail/${email.threadId}` as OneRouter.Href} onPress={onPress}>
+        <RowWrapper href={orgHref('mail/[id]', { id: email.threadId })} onPress={onPress}>
             <View
                 style={[
                     styles.row,
