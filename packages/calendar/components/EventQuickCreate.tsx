@@ -1,10 +1,17 @@
 import { Users, X } from 'lucide-react-native'
 import { useRouter } from 'one'
+import { newRecordId } from 'pbtsdb'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Button, SizableText, useTheme, XStack, YStack } from 'tamagui'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
+import { captureException } from '~/lib/errors'
+import { useMutation } from '~/lib/mutations'
 import { useOrgHref } from '~/lib/org-routes'
+import { useStore } from '~/lib/pocketbase'
+import { useCurrentUserOrg } from '~/lib/use-current-user-org'
+import { useOrgInfo } from '~/lib/use-org-info'
 import { TextInput, useForm, z, zodResolver } from '~/ui/form'
+import { useVisibleCalendars } from '../hooks/useCalendarEvents'
 import { getTimeLabel } from '../hooks/useCalendarNavigation'
 
 const quickCreateSchema = z.object({
@@ -28,11 +35,51 @@ export function EventQuickCreate({
     const router = useRouter()
     const orgHref = useOrgHref()
     const isMobile = useBreakpoint() === 'mobile'
+    const { orgSlug } = useOrgInfo()
+    const userOrg = useCurrentUserOrg(orgSlug)
+    const { mineCalendars, calendars } = useVisibleCalendars()
+    const [eventsCollection] = useStore('calendar_events')
 
     const { control, handleSubmit, reset } = useForm({
         mode: 'onChange',
         resolver: zodResolver(quickCreateSchema),
         defaultValues: { title: '' },
+    })
+
+    const createEvent = useMutation({
+        mutationFn: function* (data: z.infer<typeof quickCreateSchema>) {
+            if (!userOrg) throw new Error('No organization context')
+            const defaultCalendar = mineCalendars[0] ?? calendars[0]
+            if (!defaultCalendar) throw new Error('No calendar available')
+
+            const startDate = new Date(initialDate)
+            startDate.setHours(initialHour, 0, 0, 0)
+            const endDate = new Date(initialDate)
+            endDate.setHours(initialHour + 1, 0, 0, 0)
+
+            yield eventsCollection.insert({
+                id: newRecordId(),
+                calendar: defaultCalendar.id,
+                created_by: userOrg.id,
+                title: data.title,
+                start: startDate.toISOString(),
+                end: endDate.toISOString(),
+                all_day: false,
+                description: '',
+                location: '',
+                recurrence: '',
+                guests: [],
+                reminder: 30,
+                busy_status: 'busy',
+                visibility: 'default',
+                ical_uid: '',
+            })
+        },
+        onSuccess: () => {
+            reset()
+            onClose()
+        },
+        onError: error => captureException('EventQuickCreate', error),
     })
 
     if (!isVisible) return null
@@ -45,10 +92,7 @@ export function EventQuickCreate({
     const endHour = (initialHour + 1) % 24
     const timeLabel = `${getTimeLabel(initialHour)} – ${getTimeLabel(endHour)}`
 
-    const onSave = handleSubmit(() => {
-        reset()
-        onClose()
-    })
+    const onSave = handleSubmit(data => createEvent.mutate(data))
 
     const onMoreOptions = () => {
         onClose()

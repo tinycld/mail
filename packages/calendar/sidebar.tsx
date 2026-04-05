@@ -9,7 +9,7 @@ import { useWorkspaceLayout } from '~/components/workspace/useWorkspaceLayout'
 import { useOrgHref } from '~/lib/org-routes'
 import { CalendarList } from './components/CalendarList'
 import { MiniCalendar } from './components/MiniCalendar'
-import { useVisibleCalendars } from './hooks/useCalendarEvents'
+import { useVisibleCalendars, VisibleCalendarsProvider } from './hooks/useCalendarEvents'
 import { parseDate, toDateString } from './hooks/useCalendarNavigation'
 import type { ViewMode } from './hooks/useCalendarView'
 
@@ -24,7 +24,15 @@ interface CalendarSidebarProps {
     isCollapsed: boolean
 }
 
-export default function CalendarSidebar(_props: CalendarSidebarProps) {
+export default function CalendarSidebar(props: CalendarSidebarProps) {
+    return (
+        <VisibleCalendarsProvider>
+            <CalendarSidebarInner {...props} />
+        </VisibleCalendarsProvider>
+    )
+}
+
+function CalendarSidebarInner(_props: CalendarSidebarProps) {
     const theme = useTheme()
     const router = useRouter()
     const orgHref = useOrgHref()

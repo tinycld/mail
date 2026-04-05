@@ -1,12 +1,21 @@
+import { eq } from '@tanstack/db'
+import { useLiveQuery } from '@tanstack/react-db'
 import { ArrowLeft } from 'lucide-react-native'
 import { useParams, useRouter } from 'one'
+import { newRecordId } from 'pbtsdb'
 import { Pressable } from 'react-native'
 import { Button, ScrollView, SizableText, useTheme, XStack, YStack } from 'tamagui'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
+import { handleMutationErrorsWithForm } from '~/lib/errors'
+import { useMutation } from '~/lib/mutations'
+import { useStore } from '~/lib/pocketbase'
+import { useCurrentUserOrg } from '~/lib/use-current-user-org'
+import { useOrgInfo } from '~/lib/use-org-info'
 import { useForm, z, zodResolver } from '~/ui/form'
 import { EventForm } from '../components/EventForm'
 import { EventGuestList } from '../components/EventGuestList'
-import { getAllCalendars, getEventById } from '../mock-data'
+import { useVisibleCalendars } from '../hooks/useCalendarEvents'
+import { parseEventId } from '../lib/recurrence'
 
 const eventSchema = z.object({
     title: z.string().min(1, 'Title is required'),
@@ -16,50 +25,138 @@ const eventSchema = z.object({
     startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Use HH:MM format'),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format'),
     endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Use HH:MM format'),
-    allDay: z.boolean(),
-    calendarId: z.string(),
-    busyStatus: z.enum(['busy', 'free']),
+    all_day: z.boolean(),
+    recurrence: z.string(),
+    calendar: z.string(),
+    busy_status: z.enum(['busy', 'free']),
     visibility: z.enum(['default', 'public', 'private']),
     reminderMinutes: z.number(),
 })
+
+function combineDateAndTime(dateStr: string, timeStr: string): string {
+    return new Date(`${dateStr}T${timeStr}:00`).toISOString()
+}
 
 export default function EventEditorScreen() {
     const { id } = useParams<{ id: string }>()
     const router = useRouter()
     const theme = useTheme()
     const breakpoint = useBreakpoint()
+    const { orgSlug } = useOrgInfo()
+    const userOrg = useCurrentUserOrg(orgSlug)
+    const { calendars, mineCalendars } = useVisibleCalendars()
+    const [eventsCollection] = useStore('calendar_events')
 
+    const { baseId } = parseEventId(id ?? '')
     const isNew = !id || id === 'new'
-    const event = isNew ? undefined : getEventById(id)
-    const calendars = getAllCalendars()
+    const lookupId = isNew ? '' : baseId
+
+    const { data: existingEvents } = useLiveQuery(
+        query => query.from({ evt: eventsCollection }).where(({ evt }) => eq(evt.id, lookupId)),
+        [lookupId]
+    )
+    const event = existingEvents?.[0]
 
     const startDate = event ? new Date(event.start) : new Date()
     const endDate = event ? new Date(event.end) : new Date()
 
+    const defaultCalendar = mineCalendars[0]?.id ?? calendars[0]?.id ?? ''
+
     const {
         control,
         handleSubmit,
+        setError,
+        getValues,
+        watch,
         formState: { errors, isSubmitted },
     } = useForm({
         mode: 'onChange',
         resolver: zodResolver(eventSchema),
+        values: event
+            ? {
+                  title: event.title,
+                  description: event.description,
+                  location: event.location,
+                  startDate: startDate.toISOString().split('T')[0],
+                  startTime: startDate.toTimeString().slice(0, 5),
+                  endDate: endDate.toISOString().split('T')[0],
+                  endTime: endDate.toTimeString().slice(0, 5),
+                  all_day: event.all_day,
+                  recurrence: event.recurrence,
+                  calendar: event.calendar,
+                  busy_status: event.busy_status,
+                  visibility: event.visibility,
+                  reminderMinutes: event.reminder,
+              }
+            : undefined,
         defaultValues: {
-            title: event?.title ?? '',
-            description: event?.description ?? '',
-            location: event?.location ?? '',
+            title: '',
+            description: '',
+            location: '',
             startDate: startDate.toISOString().split('T')[0],
             startTime: startDate.toTimeString().slice(0, 5),
             endDate: endDate.toISOString().split('T')[0],
             endTime: endDate.toTimeString().slice(0, 5),
-            allDay: event?.allDay ?? false,
-            calendarId: event?.calendarId ?? calendars[0]?.id ?? '',
-            busyStatus: event?.busyStatus ?? ('busy' as const),
-            visibility: event?.visibility ?? ('default' as const),
-            reminderMinutes: event?.reminder ?? 30,
+            all_day: false,
+            recurrence: '',
+            calendar: defaultCalendar,
+            busy_status: 'busy' as const,
+            visibility: 'default' as const,
+            reminderMinutes: 30,
         },
     })
 
-    if (!isNew && !event) {
+    const startDateValue = watch('startDate')
+
+    const createEvent = useMutation({
+        mutationFn: function* (data: z.infer<typeof eventSchema>) {
+            if (!userOrg) throw new Error('No organization context')
+            yield eventsCollection.insert({
+                id: newRecordId(),
+                calendar: data.calendar,
+                created_by: userOrg.id,
+                title: data.title.trim(),
+                description: data.description,
+                location: data.location,
+                start: combineDateAndTime(data.startDate, data.startTime),
+                end: combineDateAndTime(data.endDate, data.endTime),
+                all_day: data.all_day,
+                recurrence: data.recurrence,
+                guests: [],
+                reminder: data.reminderMinutes,
+                busy_status: data.busy_status,
+                visibility: data.visibility,
+                ical_uid: '',
+            })
+        },
+        onSuccess: () => router.back(),
+        onError: handleMutationErrorsWithForm({ setError, getValues }),
+    })
+
+    const updateEvent = useMutation({
+        mutationFn: function* (data: z.infer<typeof eventSchema>) {
+            yield eventsCollection.update(baseId, draft => {
+                draft.title = data.title.trim()
+                draft.description = data.description
+                draft.location = data.location
+                draft.start = combineDateAndTime(data.startDate, data.startTime)
+                draft.end = combineDateAndTime(data.endDate, data.endTime)
+                draft.all_day = data.all_day
+                draft.recurrence = data.recurrence
+                draft.calendar = data.calendar
+                draft.reminder = data.reminderMinutes
+                draft.busy_status = data.busy_status
+                draft.visibility = data.visibility
+            })
+        },
+        onSuccess: () => router.back(),
+        onError: handleMutationErrorsWithForm({ setError, getValues }),
+    })
+
+    const isLoadingEvent = !isNew && !existingEvents
+    const isNotFound = !isNew && existingEvents && !event
+
+    if (isNotFound) {
         return (
             <YStack
                 flex={1}
@@ -77,9 +174,9 @@ export default function EventEditorScreen() {
         )
     }
 
-    const onSubmit = handleSubmit(() => {
-        router.back()
-    })
+    const mutation = isNew ? createEvent : updateEvent
+    const onSubmit = handleSubmit(data => mutation.mutate(data))
+    const canSubmit = !mutation.isPending && !!userOrg && !isLoadingEvent
 
     const isDesktop = breakpoint === 'desktop'
     const guests = event?.guests ?? []
@@ -90,6 +187,7 @@ export default function EventEditorScreen() {
             errors={errors}
             isSubmitted={isSubmitted}
             calendars={calendars}
+            startDateValue={startDateValue}
         />
     )
 
@@ -107,8 +205,16 @@ export default function EventEditorScreen() {
                             {event ? 'Edit Event' : 'New Event'}
                         </SizableText>
                     </XStack>
-                    <Button theme="accent" size="$3" onPress={onSubmit}>
-                        <Button.Text fontWeight="600">Save</Button.Text>
+                    <Button
+                        theme="accent"
+                        size="$3"
+                        onPress={onSubmit}
+                        disabled={!canSubmit}
+                        opacity={canSubmit ? 1 : 0.5}
+                    >
+                        <Button.Text fontWeight="600">
+                            {mutation.isPending ? 'Saving...' : 'Save'}
+                        </Button.Text>
                     </Button>
                 </XStack>
 

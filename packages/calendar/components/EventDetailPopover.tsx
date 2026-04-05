@@ -1,25 +1,27 @@
-import { Clock, MapPin, MoreHorizontal, Pencil, Trash2, Users, X } from 'lucide-react-native'
+import { Clock, MapPin, Pencil, Trash2, Users, X } from 'lucide-react-native'
 import { useRouter } from 'one'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { useOrgHref } from '~/lib/org-routes'
-import type { CalendarEvent } from '../types'
+import { describeRRule, parseEventId } from '../lib/recurrence'
+import type { CalendarEvents } from '../types'
 import { getCalendarColorResolved } from './calendar-colors'
 import { EventGuestList } from './EventGuestList'
 
 interface EventDetailPopoverProps {
     isVisible: boolean
-    event: CalendarEvent | undefined
+    event: CalendarEvents | undefined
     calendarName: string
     calendarColorKey: string
     onClose: () => void
+    onDelete?: (eventId: string) => void
 }
 
-function formatEventDateTime(event: CalendarEvent): string {
+function formatEventDateTime(event: CalendarEvents): string {
     const start = new Date(event.start)
     const end = new Date(event.end)
-    if (event.allDay) {
+    if (event.all_day) {
         return start.toLocaleDateString('en-US', {
             weekday: 'long',
             month: 'long',
@@ -42,11 +44,10 @@ function formatEventDateTime(event: CalendarEvent): string {
     return `${dateStr}\n${startTime} – ${endTime}`
 }
 
-const RECURRENCE_LABELS: Record<string, string> = {
-    daily: 'Repeats every day',
-    weekly: 'Repeats every week',
-    monthly: 'Repeats every month',
-    yearly: 'Repeats every year',
+function getRecurrenceLabel(event: CalendarEvents): string {
+    if (!event.recurrence) return ''
+    const eventStart = new Date(event.start)
+    return describeRRule(event.recurrence, eventStart)
 }
 
 function MobileEventDetail({
@@ -54,16 +55,18 @@ function MobileEventDetail({
     calendarName,
     calendarColorKey,
     onClose,
-}: Omit<EventDetailPopoverProps, 'isVisible'> & { event: CalendarEvent }) {
+    onDelete,
+}: Omit<EventDetailPopoverProps, 'isVisible'> & { event: CalendarEvents }) {
     const theme = useTheme()
     const router = useRouter()
     const orgHref = useOrgHref()
     const colors = getCalendarColorResolved(calendarColorKey)
     const dateTimeStr = formatEventDateTime(event)
 
+    const { baseId } = parseEventId(event.id)
     const onEdit = () => {
         onClose()
-        router.push(orgHref('calendar/[id]', { id: event.id }))
+        router.push(orgHref('calendar/[id]', { id: baseId }))
     }
 
     return (
@@ -76,8 +79,14 @@ function MobileEventDetail({
                     <Pressable onPress={onEdit} hitSlop={8}>
                         <Pencil size={20} color={theme.color8.val} />
                     </Pressable>
-                    <Pressable hitSlop={8}>
-                        <MoreHorizontal size={20} color={theme.color8.val} />
+                    <Pressable
+                        hitSlop={8}
+                        onPress={() => {
+                            onDelete?.(baseId)
+                            onClose()
+                        }}
+                    >
+                        <Trash2 size={20} color={theme.color8.val} />
                     </Pressable>
                 </View>
             </View>
@@ -99,7 +108,7 @@ function MobileEventDetail({
 
                 {event.recurrence ? (
                     <Text style={[mobileStyles.recurrence, { color: theme.color8.val }]}>
-                        {RECURRENCE_LABELS[event.recurrence] ?? event.recurrence}
+                        {getRecurrenceLabel(event)}
                     </Text>
                 ) : null}
 
@@ -145,6 +154,7 @@ export function EventDetailPopover({
     calendarName,
     calendarColorKey,
     onClose,
+    onDelete,
 }: EventDetailPopoverProps) {
     const theme = useTheme()
     const router = useRouter()
@@ -161,6 +171,7 @@ export function EventDetailPopover({
                     calendarName={calendarName}
                     calendarColorKey={calendarColorKey}
                     onClose={onClose}
+                    onDelete={onDelete}
                 />
             </View>
         )
@@ -168,13 +179,15 @@ export function EventDetailPopover({
 
     const colors = getCalendarColorResolved(calendarColorKey)
     const dateTimeStr = formatEventDateTime(event)
+    const { baseId: desktopBaseId } = parseEventId(event.id)
 
     const onEdit = () => {
         onClose()
-        router.push(orgHref('calendar/[id]', { id: event.id }))
+        router.push(orgHref('calendar/[id]', { id: desktopBaseId }))
     }
 
-    const onDelete = () => {
+    const handleDelete = () => {
+        onDelete?.(parseEventId(event.id).baseId)
         onClose()
     }
 
@@ -195,7 +208,7 @@ export function EventDetailPopover({
                     <Pressable onPress={onEdit} hitSlop={8}>
                         <Pencil size={18} color={theme.color8.val} />
                     </Pressable>
-                    <Pressable onPress={onDelete} hitSlop={8}>
+                    <Pressable onPress={handleDelete} hitSlop={8}>
                         <Trash2 size={18} color={theme.color8.val} />
                     </Pressable>
                     <Pressable onPress={onClose} hitSlop={8}>

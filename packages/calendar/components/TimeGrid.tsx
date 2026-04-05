@@ -2,10 +2,10 @@ import type React from 'react'
 import { useCallback, useMemo } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { useCalendarMap } from '../hooks/useCalendarEvents'
 import { getTimeLabel, isToday } from '../hooks/useCalendarNavigation'
 import { type LayoutEvent, layoutTimedEvents } from '../layout'
-import { getCalendarById } from '../mock-data'
-import type { CalendarEvent } from '../types'
+import type { CalendarEvents } from '../types'
 import { CurrentTimeIndicator } from './CurrentTimeIndicator'
 import { getCalendarColorResolved } from './calendar-colors'
 import { EventBlock } from './EventBlock'
@@ -14,7 +14,7 @@ export const HOUR_HEIGHT = 60
 
 interface TimeGridColumn {
     date: Date
-    events: CalendarEvent[]
+    events: CalendarEvents[]
 }
 
 interface TimeGridProps {
@@ -25,7 +25,7 @@ interface TimeGridProps {
     onEventPress: (eventId: string) => void
 }
 
-function formatEventTime(event: CalendarEvent): string {
+function formatEventTime(event: CalendarEvents): string {
     const start = new Date(event.start)
     const hours = start.getHours()
     const minutes = start.getMinutes()
@@ -35,12 +35,12 @@ function formatEventTime(event: CalendarEvent): string {
     return `${displayHour}${minuteStr} ${suffix}`
 }
 
-function toLayoutEvents(events: CalendarEvent[]): LayoutEvent[] {
+function toLayoutEvents(events: CalendarEvents[]): LayoutEvent[] {
     return events.map(e => ({
         id: e.id,
         start: new Date(e.start),
         end: new Date(e.end),
-        allDay: e.allDay,
+        allDay: e.all_day,
     }))
 }
 
@@ -52,6 +52,7 @@ export function TimeGrid({
     onEventPress,
 }: TimeGridProps) {
     const theme = useTheme()
+    const calendarMap = useCalendarMap()
     const totalHours = endHour - startHour + 1
 
     const scrollRef = useCallback(
@@ -130,8 +131,8 @@ export function TimeGrid({
                                 {column.events.map(event => {
                                     const layout = layoutMap.get(event.id)
                                     if (!layout) return null
-                                    const cal = getCalendarById(event.calendarId)
-                                    const colors = getCalendarColorResolved(cal?.colorKey ?? 'blue')
+                                    const cal = calendarMap.get(event.calendar)
+                                    const colors = getCalendarColorResolved(cal?.color ?? 'blue')
                                     return (
                                         <EventBlock
                                             key={event.id}

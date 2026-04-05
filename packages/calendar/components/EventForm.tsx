@@ -1,5 +1,6 @@
 import { MapPin } from 'lucide-react-native'
 import type { Control, FieldErrors } from 'react-hook-form'
+import { Controller } from 'react-hook-form'
 import { YStack } from 'tamagui'
 import {
     FormErrorSummary,
@@ -9,7 +10,8 @@ import {
     TextInput,
     Toggle,
 } from '~/ui/form'
-import type { Calendar } from '../types'
+import type { CalendarWithGroup } from '../types'
+import { RecurrencePicker } from './RecurrencePicker'
 
 interface EventFormProps {
     control: Control<{
@@ -20,19 +22,30 @@ interface EventFormProps {
         startTime: string
         endDate: string
         endTime: string
-        allDay: boolean
-        calendarId: string
-        busyStatus: 'busy' | 'free'
+        all_day: boolean
+        recurrence: string
+        calendar: string
+        busy_status: 'busy' | 'free'
         visibility: 'default' | 'public' | 'private'
         reminderMinutes: number
     }>
     errors: FieldErrors
     isSubmitted: boolean
-    calendars: Calendar[]
+    calendars: CalendarWithGroup[]
+    startDateValue: string
 }
 
-export function EventForm({ control, errors, isSubmitted, calendars }: EventFormProps) {
+export function EventForm({
+    control,
+    errors,
+    isSubmitted,
+    calendars,
+    startDateValue,
+}: EventFormProps) {
     const calendarOptions = calendars.map(c => ({ label: c.name, value: c.id }))
+    const eventStartDate = new Date(
+        `${startDateValue || new Date().toISOString().split('T')[0]}T00:00:00`
+    )
 
     return (
         <YStack gap="$4">
@@ -40,7 +53,19 @@ export function EventForm({ control, errors, isSubmitted, calendars }: EventForm
 
             <TextInput control={control} name="title" label="Title" placeholder="Event title" />
 
-            <Toggle control={control} name="allDay" label="All day" />
+            <Toggle control={control} name="all_day" label="All day" />
+
+            <Controller
+                control={control}
+                name="recurrence"
+                render={({ field }) => (
+                    <RecurrencePicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        eventStartDate={eventStartDate}
+                    />
+                )}
+            />
 
             <TextInput
                 control={control}
@@ -71,14 +96,14 @@ export function EventForm({ control, errors, isSubmitted, calendars }: EventForm
 
             <SelectInput
                 control={control}
-                name="calendarId"
+                name="calendar"
                 label="Calendar"
                 options={calendarOptions}
             />
 
             <SelectInput
                 control={control}
-                name="busyStatus"
+                name="busy_status"
                 label="Status"
                 options={[
                     { label: 'Busy', value: 'busy' },

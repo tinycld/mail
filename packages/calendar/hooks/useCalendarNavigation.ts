@@ -1,4 +1,4 @@
-import type { CalendarEvent } from '../types'
+import type { CalendarEvents } from '../types'
 
 export function addDays(date: Date, days: number): Date {
     const result = new Date(date)
@@ -95,13 +95,13 @@ export function getShortDayName(date: Date): string {
 }
 
 export function eventOverlapsRange(
-    event: CalendarEvent,
+    event: CalendarEvents,
     rangeStart: Date,
     rangeEnd: Date
 ): boolean {
     const eventStart = new Date(event.start)
     const eventEnd = new Date(event.end)
-    if (event.allDay) {
+    if (event.all_day) {
         const allDayStart = new Date(eventStart)
         allDayStart.setHours(0, 0, 0, 0)
         const allDayEnd = new Date(eventEnd)

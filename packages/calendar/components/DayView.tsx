@@ -12,8 +12,8 @@ export function DayView() {
     const events = useCalendarEvents(focusDate, focusDate)
 
     const { allDayEvents, timedEvents } = useMemo(() => {
-        const allDay = events.filter(e => e.allDay)
-        const timed = events.filter(e => !e.allDay)
+        const allDay = events.filter(e => e.all_day)
+        const timed = events.filter(e => !e.all_day)
         return { allDayEvents: allDay, timedEvents: timed }
     }, [events])
 

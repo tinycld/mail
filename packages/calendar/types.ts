@@ -45,34 +45,12 @@ export interface CalendarEvents {
     reminder: number
     busy_status: 'busy' | 'free'
     visibility: 'default' | 'public' | 'private'
+    ical_uid: string
     created: string
     updated: string
 }
 
-/** @deprecated Use CalendarCalendars instead */
-export interface Calendar {
-    id: string
-    name: string
-    colorKey: CalendarColorKey
-    group: 'mine' | 'other'
-}
-
-/** @deprecated Use CalendarEvents instead */
-export interface CalendarEvent {
-    id: string
-    title: string
-    description: string
-    location: string
-    start: string
-    end: string
-    allDay: boolean
-    recurrence: Recurrence
-    calendarId: string
-    guests: EventGuest[]
-    reminder: number
-    busyStatus: 'busy' | 'free'
-    visibility: 'default' | 'public' | 'private'
-}
+export type CalendarWithGroup = CalendarCalendars & { group: 'mine' | 'other' }
 
 export type CalendarSchema = {
     calendar_calendars: {

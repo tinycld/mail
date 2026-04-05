@@ -2,11 +2,11 @@ import { Check, ChevronDown, ChevronRight } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
-import type { Calendar } from '../types'
+import type { CalendarWithGroup } from '../types'
 import { getCalendarColorResolved } from './calendar-colors'
 
 interface CalendarListProps {
-    calendars: Calendar[]
+    calendars: CalendarWithGroup[]
     visibleIds: Set<string>
     onToggle: (id: string) => void
 }
@@ -16,12 +16,12 @@ function CalendarCheckbox({
     isChecked,
     onToggle,
 }: {
-    calendar: Calendar
+    calendar: CalendarWithGroup
     isChecked: boolean
     onToggle: (id: string) => void
 }) {
     const theme = useTheme()
-    const colors = getCalendarColorResolved(calendar.colorKey)
+    const colors = getCalendarColorResolved(calendar.color)
 
     return (
         <Pressable style={styles.calendarRow} onPress={() => onToggle(calendar.id)}>
@@ -47,7 +47,7 @@ function CalendarSection({
     onToggle,
 }: {
     title: string
-    calendars: Calendar[]
+    calendars: CalendarWithGroup[]
     visibleIds: Set<string>
     onToggle: (id: string) => void
 }) {

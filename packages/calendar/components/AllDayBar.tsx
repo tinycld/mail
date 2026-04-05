@@ -1,15 +1,15 @@
 import { useMemo } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { useCalendarMap } from '../hooks/useCalendarEvents'
 import { type LayoutEvent, layoutAllDayEvents } from '../layout'
-import { getCalendarById } from '../mock-data'
-import type { CalendarEvent } from '../types'
+import type { CalendarEvents } from '../types'
 import { getCalendarColorResolved } from './calendar-colors'
 
 const ROW_HEIGHT = 22
 
 interface AllDayBarProps {
-    events: CalendarEvent[]
+    events: CalendarEvents[]
     weekStart: Date
     dayCount: number
     onEventPress: (eventId: string) => void
@@ -18,12 +18,14 @@ interface AllDayBarProps {
 export function AllDayBar({ events, weekStart, dayCount, onEventPress }: AllDayBarProps) {
     const theme = useTheme()
 
+    const calendarMap = useCalendarMap()
+
     const { layouts, eventMap, maxRow } = useMemo(() => {
         const layoutEvents: LayoutEvent[] = events.map(e => ({
             id: e.id,
             start: new Date(e.start),
             end: new Date(e.end),
-            allDay: e.allDay,
+            allDay: e.all_day,
         }))
         const allDayLayouts = layoutAllDayEvents(layoutEvents, weekStart, dayCount)
         const map = new Map(events.map(e => [e.id, e]))
@@ -50,8 +52,8 @@ export function AllDayBar({ events, weekStart, dayCount, onEventPress }: AllDayB
                 {layouts.map(layout => {
                     const event = eventMap.get(layout.id)
                     if (!event) return null
-                    const cal = getCalendarById(event.calendarId)
-                    const colors = getCalendarColorResolved(cal?.colorKey ?? 'blue')
+                    const cal = calendarMap.get(event.calendar)
+                    const colors = getCalendarColorResolved(cal?.color ?? 'blue')
                     return (
                         <Pressable
                             key={event.id}

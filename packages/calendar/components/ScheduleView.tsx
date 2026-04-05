@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
-import { useCalendarEvents } from '../hooks/useCalendarEvents'
+import { useCalendarEvents, useCalendarMap } from '../hooks/useCalendarEvents'
 import {
     addDays,
     isToday as checkIsToday,
@@ -10,8 +10,7 @@ import {
     toDateString,
 } from '../hooks/useCalendarNavigation'
 import { useCalendarView } from '../hooks/useCalendarView'
-import { getCalendarById } from '../mock-data'
-import type { CalendarEvent } from '../types'
+import type { CalendarEvents } from '../types'
 import { getCalendarColorResolved } from './calendar-colors'
 
 const SCHEDULE_DAYS = 30
@@ -19,22 +18,23 @@ const SCHEDULE_DAYS = 30
 interface DayRow {
     key: string
     date: Date
-    events: CalendarEvent[]
+    events: CalendarEvents[]
     today: boolean
 }
 
-function formatTimeRange(event: CalendarEvent): string {
-    if (event.allDay) return 'All day'
+function formatTimeRange(event: CalendarEvents): string {
+    if (event.all_day) return 'All day'
     const start = new Date(event.start)
     const end = new Date(event.end)
     const fmt = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
     return `${fmt(start)} – ${fmt(end)}`
 }
 
-function EventCard({ event, onPress }: { event: CalendarEvent; onPress: (id: string) => void }) {
+function EventCard({ event, onPress }: { event: CalendarEvents; onPress: (id: string) => void }) {
     const theme = useTheme()
-    const cal = getCalendarById(event.calendarId)
-    const colors = getCalendarColorResolved(cal?.colorKey ?? 'blue')
+    const calendarMap = useCalendarMap()
+    const cal = calendarMap.get(event.calendar)
+    const colors = getCalendarColorResolved(cal?.color ?? 'blue')
 
     return (
         <Pressable
@@ -85,7 +85,12 @@ function DaySection({
                         row.today && { backgroundColor: theme.accentBackground.val },
                     ]}
                 >
-                    <Text style={[styles.dateNum, { color: row.today ? '#fff' : theme.color.val }]}>
+                    <Text
+                        style={[
+                            styles.dateNum,
+                            { color: row.today ? theme.background.val : theme.color.val },
+                        ]}
+                    >
                         {row.date.getDate()}
                     </Text>
                 </View>
@@ -123,8 +128,8 @@ export function ScheduleView() {
             const dayEvents = events
                 .filter(e => eventOverlapsRange(e, dayStart, dayEnd))
                 .sort((a, b) => {
-                    if (a.allDay && !b.allDay) return -1
-                    if (!a.allDay && b.allDay) return 1
+                    if (a.all_day && !b.all_day) return -1
+                    if (!a.all_day && b.all_day) return 1
                     return new Date(a.start).getTime() - new Date(b.start).getTime()
                 })
             result.push({

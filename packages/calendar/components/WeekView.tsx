@@ -5,12 +5,12 @@ import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { useCalendarEvents } from '../hooks/useCalendarEvents'
 import { addDays, eventOverlapsRange, isToday, startOfWeek } from '../hooks/useCalendarNavigation'
 import { useCalendarView } from '../hooks/useCalendarView'
-import type { CalendarEvent } from '../types'
+import type { CalendarEvents } from '../types'
 import { AllDayBar } from './AllDayBar'
 import { DayColumnHeader } from './DayColumnHeader'
 import { TimeGrid } from './TimeGrid'
 
-function getEventsForDay(events: CalendarEvent[], date: Date): CalendarEvent[] {
+function getEventsForDay(events: CalendarEvents[], date: Date): CalendarEvents[] {
     const dayStart = new Date(date)
     dayStart.setHours(0, 0, 0, 0)
     const dayEnd = new Date(date)
@@ -38,8 +38,8 @@ export function WeekView() {
     const events = useCalendarEvents(rangeStart, rangeEnd)
 
     const { allDayEvents, columns } = useMemo(() => {
-        const allDay = events.filter(e => e.allDay)
-        const timed = events.filter(e => !e.allDay)
+        const allDay = events.filter(e => e.all_day)
+        const timed = events.filter(e => !e.all_day)
         const cols = days.map(date => ({
             date,
             events: getEventsForDay(timed, date),
