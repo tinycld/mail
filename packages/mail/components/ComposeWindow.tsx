@@ -41,7 +41,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     } = useForm<ComposeFormData>({
         resolver: zodResolver(composeSchema),
         mode: 'onChange',
-        defaultValues: { to: '', subject: '' },
+        defaultValues: { to: '', cc: '', bcc: '', subject: '' },
     })
 
     useEffect(() => {
@@ -49,20 +49,22 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         prevModeRef.current = mode
 
         if (replyContext) {
-            const toValue = replyContext.to.map(r => r.email).join(', ')
+            const toValue =
+                replyContext.to.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
+                (replyContext.to.length > 0 ? ', ' : '')
             const subjectPrefix = replyContext.subject.startsWith('Re:')
                 ? replyContext.subject
                 : `Re: ${replyContext.subject}`
-            reset({ to: toValue, subject: subjectPrefix })
+            reset({ to: toValue, cc: '', bcc: '', subject: subjectPrefix })
         } else if (mode === 'open' && wasClosedOrNew) {
-            reset({ to: '', subject: '' })
+            reset({ to: '', cc: '', bcc: '', subject: '' })
         }
     }, [replyContext, mode, reset])
 
     const { send, isPending } = useSendEmail({
         onSuccess: () => {
             editorRef.current?.clear()
-            reset({ to: '', subject: '' })
+            reset({ to: '', cc: '', bcc: '', subject: '' })
             close()
         },
     })
@@ -92,9 +94,14 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         const htmlBody = (await editorRef.current?.getHTML()) ?? ''
         const textBody = (await editorRef.current?.getText()) ?? ''
 
+        const cc = data.cc ? parseRecipients(data.cc) : undefined
+        const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
+
         send({
             mailbox_id: mailboxId,
             to: parseRecipients(data.to),
+            cc,
+            bcc,
             subject: data.subject,
             html_body: htmlBody,
             text_body: textBody,
@@ -102,7 +109,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         })
     })
 
-    return (
+    const composeWindow = (
         <View
             style={[
                 styles.container,
@@ -138,6 +145,12 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             )}
         </View>
     )
+
+    if (isMaximized && !isNotDesktop) {
+        return <View style={styles.backdrop}>{composeWindow}</View>
+    }
+
+    return composeWindow
 }
 
 const styles = StyleSheet.create({
@@ -145,7 +158,6 @@ const styles = StyleSheet.create({
         position: 'absolute',
         borderWidth: 1,
         borderRadius: 8,
-        overflow: 'hidden',
         zIndex: 1000,
     },
     normal: {
@@ -161,10 +173,22 @@ const styles = StyleSheet.create({
         height: 40,
     },
     maximized: {
+        position: 'relative',
+        width: '75%',
+        maxWidth: 900,
+        height: '85%',
+        maxHeight: 800,
+    },
+    backdrop: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
         bottom: 0,
-        right: 16,
-        width: 700,
-        height: 700,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        zIndex: 1000,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     fullscreen: {
         top: 0,

@@ -6,6 +6,7 @@ interface SendEmailParams {
     mailbox_id: string
     to: { name: string; email: string }[]
     cc?: { name: string; email: string }[]
+    bcc?: { name: string; email: string }[]
     subject: string
     html_body: string
     text_body: string

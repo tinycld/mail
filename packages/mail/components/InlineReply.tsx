@@ -120,7 +120,9 @@ function InlineComposeForm({
     const editorRef = useRef<RichTextEditorHandle>(null)
     const mailboxId = useDefaultMailbox()
 
-    const toValue = replyContext.to.map(r => r.email).join(', ')
+    const toValue =
+        replyContext.to.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
+        (replyContext.to.length > 0 ? ', ' : '')
     const subjectValue = replyContext.subject.startsWith('Re:')
         ? replyContext.subject
         : `Re: ${replyContext.subject}`
@@ -134,13 +136,13 @@ function InlineComposeForm({
     } = useForm<ComposeFormData>({
         resolver: zodResolver(composeSchema),
         mode: 'onChange',
-        defaultValues: { to: toValue, subject: subjectValue },
+        defaultValues: { to: toValue, cc: '', bcc: '', subject: subjectValue },
     })
 
     const { send, isPending } = useSendEmail({
         onSuccess: () => {
             editorRef.current?.clear()
-            reset({ to: '', subject: '' })
+            reset({ to: '', cc: '', bcc: '', subject: '' })
             onClose()
         },
     })
@@ -154,9 +156,14 @@ function InlineComposeForm({
         const htmlBody = (await editorRef.current?.getHTML()) ?? ''
         const textBody = (await editorRef.current?.getText()) ?? ''
 
+        const cc = data.cc ? parseRecipients(data.cc) : undefined
+        const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
+
         send({
             mailbox_id: mailboxId,
             to: parseRecipients(data.to),
+            cc,
+            bcc,
             subject: data.subject,
             html_body: htmlBody,
             text_body: textBody,
@@ -213,7 +220,6 @@ const inlineStyles = StyleSheet.create({
         margin: 16,
         borderWidth: 1,
         borderRadius: 8,
-        overflow: 'hidden',
         minHeight: 200,
     },
     body: {
