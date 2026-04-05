@@ -1,9 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { useCalendarMap } from '../hooks/useCalendarEvents'
 import { formatShortTime } from '../hooks/useCalendarNavigation'
 import type { MonthCellLayout } from '../layout'
-import { getCalendarById } from '../mock-data'
-import type { CalendarEvent } from '../types'
+import type { CalendarEvents } from '../types'
 import { getCalendarColorResolved } from './calendar-colors'
 
 interface MonthCellProps {
@@ -11,7 +11,7 @@ interface MonthCellProps {
     isCurrentMonth: boolean
     isToday: boolean
     cellLayout: MonthCellLayout | undefined
-    eventMap: Map<string, CalendarEvent>
+    eventMap: Map<string, CalendarEvents>
     onDatePress: (date: Date) => void
     onEventPress: (eventId: string) => void
 }
@@ -26,6 +26,7 @@ export function MonthCell({
     onEventPress,
 }: MonthCellProps) {
     const theme = useTheme()
+    const calendarMap = useCalendarMap()
     const dateNum = date.getDate()
     const layouts = cellLayout?.layouts ?? []
     const overflowCount = cellLayout?.overflowCount ?? 0
@@ -65,10 +66,10 @@ export function MonthCell({
                 const event = eventMap.get(layout.id)
                 if (!event) return null
 
-                const cal = getCalendarById(event.calendarId)
-                const colors = getCalendarColorResolved(cal?.colorKey ?? 'blue')
+                const cal = calendarMap.get(event.calendar)
+                const colors = getCalendarColorResolved(cal?.color ?? 'blue')
 
-                if (event.allDay) {
+                if (event.all_day) {
                     return (
                         <Pressable key={event.id} onPress={() => onEventPress(event.id)}>
                             <View style={[styles.allDayPill, { backgroundColor: colors.bg }]}>
@@ -117,10 +118,10 @@ export function MonthCell({
 const styles = StyleSheet.create({
     cell: {
         flex: 1,
-        minHeight: 100,
         borderRightWidth: StyleSheet.hairlineWidth,
         borderBottomWidth: StyleSheet.hairlineWidth,
         padding: 2,
+        overflow: 'hidden',
     },
     dateCircle: {
         width: 24,
@@ -128,8 +129,9 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
-        alignSelf: 'center',
+        alignSelf: 'flex-end',
         marginBottom: 2,
+        marginRight: 2,
     },
     dateText: {
         fontSize: 12,

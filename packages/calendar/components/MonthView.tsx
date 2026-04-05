@@ -1,13 +1,12 @@
 import { useMemo } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
-import { useCalendarEvents } from '../hooks/useCalendarEvents'
+import { useCalendarEvents, useCalendarMap } from '../hooks/useCalendarEvents'
 import { addDays, eventOverlapsRange } from '../hooks/useCalendarNavigation'
 import { useCalendarView } from '../hooks/useCalendarView'
 import { getMonthGrid, type MonthGridCell } from '../hooks/useMonthGrid'
 import { type LayoutEvent, layoutMonthEvents, type MonthCellLayout } from '../layout'
-import { getCalendarById } from '../mock-data'
-import type { CalendarEvent } from '../types'
+import type { CalendarEvents } from '../types'
 import { getCalendarColorResolved } from './calendar-colors'
 import { MonthCell } from './MonthCell'
 
@@ -19,6 +18,7 @@ const DATE_HEADER_HEIGHT = 28
 export function MonthView() {
     const { focusDate, openEventDetail, setViewMode, goToDate } = useCalendarView()
     const theme = useTheme()
+    const calendarMap = useCalendarMap()
 
     const grid = useMemo(() => getMonthGrid(focusDate), [focusDate])
 
@@ -51,7 +51,7 @@ export function MonthView() {
                     id: e.id,
                     start: new Date(e.start),
                     end: new Date(e.end),
-                    allDay: e.allDay,
+                    allDay: e.all_day,
                 }))
 
                 return layoutMonthEvents(layoutEvents, weekStart, MAX_VISIBLE_ROWS)
@@ -84,6 +84,7 @@ export function MonthView() {
                         <MultiDayBars
                             cellLayoutMap={cellLayoutMap}
                             eventMap={eventMap}
+                            calendarMap={calendarMap}
                             onEventPress={openEventDetail}
                         />
                         {row.map((cell, colIndex) => {
@@ -110,11 +111,12 @@ export function MonthView() {
 
 interface MultiDayBarsProps {
     cellLayoutMap: Map<number, MonthCellLayout>
-    eventMap: Map<string, CalendarEvent>
+    eventMap: Map<string, CalendarEvents>
+    calendarMap: Map<string, { color: string }>
     onEventPress: (eventId: string) => void
 }
 
-function MultiDayBars({ cellLayoutMap, eventMap, onEventPress }: MultiDayBarsProps) {
+function MultiDayBars({ cellLayoutMap, eventMap, calendarMap, onEventPress }: MultiDayBarsProps) {
     const rendered = new Set<string>()
     const bars: React.JSX.Element[] = []
 
@@ -126,8 +128,8 @@ function MultiDayBars({ cellLayoutMap, eventMap, onEventPress }: MultiDayBarsPro
             const event = eventMap.get(layout.id)
             if (!event) continue
 
-            const cal = getCalendarById(event.calendarId)
-            const colors = getCalendarColorResolved(cal?.colorKey ?? 'blue')
+            const cal = calendarMap.get(event.calendar)
+            const colors = getCalendarColorResolved(cal?.color ?? 'blue')
             const top = DATE_HEADER_HEIGHT + layout.row * MULTI_DAY_ROW_HEIGHT
 
             bars.push(
@@ -163,6 +165,7 @@ function MultiDayBars({ cellLayoutMap, eventMap, onEventPress }: MultiDayBarsPro
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        overflow: 'hidden',
     },
     headerRow: {
         flexDirection: 'row',
@@ -181,6 +184,8 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         position: 'relative',
+        overflow: 'hidden',
+        minHeight: 0,
     },
     multiDayBar: {
         flex: 1,
