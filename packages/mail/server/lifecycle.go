@@ -57,6 +57,10 @@ func handleUserOrgCreated(app *pocketbase.PocketBase, userOrgRecord *core.Record
 	mailbox.Set("domain", domain.Id)
 	mailbox.Set("display_name", user.GetString("name"))
 	mailbox.Set("type", "personal")
+	org, orgErr := app.FindRecordById("orgs", orgID)
+	if orgErr == nil {
+		mailbox.Set("name", org.GetString("name"))
+	}
 	if err := app.Save(mailbox); err != nil {
 		app.Logger().Warn("mail lifecycle: failed to create personal mailbox",
 			"address", address, "error", err)
