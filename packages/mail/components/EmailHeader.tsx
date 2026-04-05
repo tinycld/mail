@@ -1,16 +1,38 @@
-import { MoreVertical, Reply, Star } from 'lucide-react-native'
+import { ChevronDown, ChevronUp, MoreVertical, Reply, Star } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { LabelBadge } from './LabelBadge'
-import type { MockEmail, MockLabel } from './mockData'
-import { mockLabels } from './mockData'
+import { formatMailDate } from './thread-list-item'
 
-interface EmailHeaderProps {
-    email: MockEmail & {
-        delivery_status?: string
-        bounce_reason?: string
-    }
+interface ThreadSubjectHeaderProps {
+    subject: string
+    labels: { id: string; name: string; color: string }[]
+}
+
+export function ThreadSubjectHeader({ subject, labels }: ThreadSubjectHeaderProps) {
+    const breakpoint = useBreakpoint()
+    const isMobile = breakpoint === 'mobile'
+    const theme = useTheme()
+
+    return (
+        <View style={styles.subjectRow}>
+            <Text
+                style={[
+                    styles.subject,
+                    isMobile && styles.subjectMobile,
+                    { color: theme.color.val },
+                ]}
+            >
+                {subject}
+            </Text>
+            <View style={styles.labelRow}>
+                {labels.map(label => (
+                    <LabelBadge key={label.id} name={label.name} color={label.color} />
+                ))}
+            </View>
+        </View>
+    )
 }
 
 function DeliveryStatusBadge({ status, bounceReason }: { status?: string; bounceReason?: string }) {
@@ -35,90 +57,96 @@ function DeliveryStatusBadge({ status, bounceReason }: { status?: string; bounce
     )
 }
 
-export function EmailHeader({ email }: EmailHeaderProps) {
+interface MessageHeaderProps {
+    senderName: string
+    senderEmail: string
+    date: string
+    isStarred?: boolean
+    deliveryStatus?: string
+    bounceReason?: string
+    isExpanded: boolean
+    onToggleExpand: () => void
+}
+
+export function MessageHeader({
+    senderName,
+    senderEmail,
+    date,
+    isStarred,
+    deliveryStatus,
+    bounceReason,
+    isExpanded,
+    onToggleExpand,
+}: MessageHeaderProps) {
     const theme = useTheme()
     const breakpoint = useBreakpoint()
     const isMobile = breakpoint === 'mobile'
 
-    const emailLabels = email.labels
-        .map(id => mockLabels.find(l => l.id === id))
-        .filter((l): l is MockLabel => l != null)
-
-    const initials = email.sender
+    const initials = senderName
         .split(' ')
+        .filter(Boolean)
         .map(n => n[0])
         .join('')
         .toUpperCase()
         .slice(0, 2)
 
+    const dateDisplay = formatMailDate(date)
+
     return (
-        <View style={styles.container}>
-            <View style={styles.subjectRow}>
-                <Text
-                    style={[
-                        styles.subject,
-                        isMobile && styles.subjectMobile,
-                        { color: theme.color.val },
-                    ]}
-                >
-                    {email.subject}
-                </Text>
-                <View style={styles.labelRow}>
-                    {emailLabels.map(label => (
-                        <LabelBadge key={label.id} name={label.name} color={label.color} />
-                    ))}
-                </View>
-            </View>
-
-            <DeliveryStatusBadge
-                status={email.delivery_status}
-                bounceReason={email.bounce_reason}
-            />
-
-            <View style={[styles.senderRow, { borderBottomColor: theme.borderColor.val }]}>
-                <View style={[styles.avatar, { backgroundColor: theme.accentBackground.val }]}>
-                    <Text style={[styles.avatarText, { color: theme.accentColor.val }]}>
-                        {initials}
-                    </Text>
-                </View>
-                <View style={styles.senderInfo}>
-                    <View style={styles.senderNameRow}>
-                        <Text style={[styles.senderName, { color: theme.color.val }]}>
-                            {email.sender}
+        <View style={styles.messageHeaderContainer}>
+            <DeliveryStatusBadge status={deliveryStatus} bounceReason={bounceReason} />
+            <Pressable onPress={onToggleExpand}>
+                <View style={[styles.senderRow, { borderBottomColor: theme.borderColor.val }]}>
+                    <View style={[styles.avatar, { backgroundColor: theme.accentBackground.val }]}>
+                        <Text style={[styles.avatarText, { color: theme.accentColor.val }]}>
+                            {initials}
                         </Text>
-                        {isMobile ? null : (
-                            <Text style={[styles.senderEmail, { color: theme.color8.val }]}>
-                                {'<'}
-                                {email.senderEmail}
-                                {'>'}
-                            </Text>
-                        )}
                     </View>
-                    <Text style={[styles.toLine, { color: theme.color8.val }]}>to me</Text>
+                    <View style={styles.senderInfo}>
+                        <View style={styles.senderNameRow}>
+                            <Text style={[styles.senderName, { color: theme.color.val }]}>
+                                {senderName}
+                            </Text>
+                            {isMobile ? null : (
+                                <Text style={[styles.senderEmail, { color: theme.color8.val }]}>
+                                    {'<'}
+                                    {senderEmail}
+                                    {'>'}
+                                </Text>
+                            )}
+                        </View>
+                        <Text style={[styles.toLine, { color: theme.color8.val }]}>to me</Text>
+                    </View>
+                    <Text style={[styles.date, { color: theme.color8.val }]}>{dateDisplay}</Text>
+                    {isStarred != null ? (
+                        <Pressable style={styles.iconButton}>
+                            <Star
+                                size={18}
+                                color={isStarred ? theme.yellow8.val : theme.color8.val}
+                                fill={isStarred ? theme.yellow8.val : 'transparent'}
+                            />
+                        </Pressable>
+                    ) : null}
+                    <Pressable style={styles.iconButton}>
+                        <Reply size={18} color={theme.color8.val} />
+                    </Pressable>
+                    <Pressable style={styles.iconButton}>
+                        {isExpanded ? (
+                            <ChevronUp size={18} color={theme.color8.val} />
+                        ) : (
+                            <ChevronDown size={18} color={theme.color8.val} />
+                        )}
+                    </Pressable>
+                    <Pressable style={styles.iconButton}>
+                        <MoreVertical size={18} color={theme.color8.val} />
+                    </Pressable>
                 </View>
-                <Text style={[styles.date, { color: theme.color8.val }]}>{email.date}</Text>
-                <Pressable style={styles.iconButton}>
-                    <Star
-                        size={18}
-                        color={email.isStarred ? theme.yellow8.val : theme.color8.val}
-                        fill={email.isStarred ? theme.yellow8.val : 'transparent'}
-                    />
-                </Pressable>
-                <Pressable style={styles.iconButton}>
-                    <Reply size={18} color={theme.color8.val} />
-                </Pressable>
-                <Pressable style={styles.iconButton}>
-                    <MoreVertical size={18} color={theme.color8.val} />
-                </Pressable>
-            </View>
+            </Pressable>
         </View>
     )
 }
 
 const styles = StyleSheet.create({
-    container: {
-        gap: 0,
-    },
     subjectRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -156,6 +184,9 @@ const styles = StyleSheet.create({
     statusBadgeReason: {
         fontSize: 11,
         flexShrink: 1,
+    },
+    messageHeaderContainer: {
+        gap: 0,
     },
     senderRow: {
         flexDirection: 'row',

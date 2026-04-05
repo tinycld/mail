@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
-import { useForm, z, zodResolver } from '~/ui/form'
+import { useForm, zodResolver } from '~/ui/form'
+import { type ComposeFormData, composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useCompose } from '../hooks/useComposeState'
 import { useDefaultMailbox } from '../hooks/useDefaultMailbox'
 import { useSendEmail } from '../hooks/useSendEmail'
@@ -12,38 +13,12 @@ import { ComposeToolbar } from './ComposeToolbar'
 import type { RichTextEditorHandle } from './RichTextEditor'
 import { RichTextEditor } from './RichTextEditor'
 
+export type { ComposeFormData } from '../hooks/composeSchema'
+
 const webShadow =
     Platform.OS === 'web'
         ? ({ boxShadow: '0 8px 32px rgba(0,0,0,0.24)' } as Record<string, unknown>)
         : {}
-
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-const composeSchema = z.object({
-    to: z
-        .string()
-        .min(1, 'At least one recipient is required')
-        .refine(
-            value =>
-                value
-                    .split(',')
-                    .map(s => s.trim())
-                    .filter(Boolean)
-                    .every(email => emailPattern.test(email)),
-            'One or more email addresses are invalid'
-        ),
-    subject: z.string().min(1, 'Subject is required'),
-})
-
-export type ComposeFormData = z.infer<typeof composeSchema>
-
-function parseRecipients(value: string) {
-    return value
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean)
-        .map(email => ({ name: '', email }))
-}
 
 interface ComposeWindowProps {
     isVisible: boolean
@@ -104,6 +79,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         minimized: styles.minimized,
         maximized: styles.maximized,
         closed: styles.normal,
+        inline: styles.normal,
     }
     const windowStyle = isNotDesktop ? styles.fullscreen : modeStyleMap[mode]
 

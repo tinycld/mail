@@ -31,7 +31,7 @@ export default function MailLayout() {
 
     const openReply = useCallback((context: ReplyContext) => {
         setReplyContext(context)
-        setComposeMode('open')
+        setComposeMode('inline')
     }, [])
 
     const composeValue = useMemo(
@@ -39,7 +39,7 @@ export default function MailLayout() {
         [composeMode, replyContext, open, minimize, maximize, close, openReply]
     )
 
-    const isComposeVisible = composeMode !== 'closed'
+    const isComposeVisible = composeMode !== 'closed' && composeMode !== 'inline'
     const isMobile = breakpoint === 'mobile'
 
     return (

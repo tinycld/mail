@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 
-export type ComposeMode = 'closed' | 'minimized' | 'open' | 'maximized'
+export type ComposeMode = 'closed' | 'minimized' | 'open' | 'maximized' | 'inline'
 
 export interface ReplyContext {
     messageId: string
