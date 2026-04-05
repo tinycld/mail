@@ -3,7 +3,10 @@ package mail
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/pocketbase/pocketbase"
@@ -26,8 +29,24 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	userID := re.Auth.Id
 
 	var req draftRequest
-	if err := json.NewDecoder(re.Request.Body).Decode(&req); err != nil {
-		return re.BadRequestError("Invalid request body", err)
+	var uploadedFiles []*multipart.FileHeader
+
+	contentType := re.Request.Header.Get("Content-Type")
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		if err := re.Request.ParseMultipartForm(25 << 20); err != nil {
+			return re.BadRequestError("Failed to parse multipart form", err)
+		}
+		jsonStr := re.Request.FormValue("json")
+		if err := json.Unmarshal([]byte(jsonStr), &req); err != nil {
+			return re.BadRequestError("Invalid JSON in form field", err)
+		}
+		if re.Request.MultipartForm != nil {
+			uploadedFiles = re.Request.MultipartForm.File["attachments"]
+		}
+	} else {
+		if err := json.NewDecoder(re.Request.Body).Decode(&req); err != nil {
+			return re.BadRequestError("Invalid request body", err)
+		}
 	}
 
 	if req.MailboxID == "" {
@@ -75,13 +94,17 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		if err != nil {
 			return re.NotFoundError("Draft message not found", err)
 		}
-		if err := updateDraftRecord(app, record, req, subject, senderEmail, now); err != nil {
-			return re.InternalServerError("Failed to update draft", err)
-		}
 
 		thread, err := app.FindRecordById("mail_threads", record.GetString("thread"))
 		if err != nil {
 			return re.InternalServerError("Failed to load thread", err)
+		}
+		if thread.GetString("mailbox") != req.MailboxID {
+			return re.ForbiddenError("Draft does not belong to this mailbox", nil)
+		}
+
+		if err := updateDraftRecord(app, record, req, subject, senderEmail, now, uploadedFiles); err != nil {
+			return re.InternalServerError("Failed to update draft", err)
 		}
 		thread.Set("snippet", truncateSnippet(req.TextBody, 200))
 		thread.Set("subject", subject)
@@ -120,6 +143,10 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		return re.InternalServerError("Failed to store message", err)
 	}
 
+	if err := addFileAttachmentsToRecord(app, record, uploadedFiles); err != nil {
+		return re.InternalServerError("Failed to store attachments", err)
+	}
+
 	if err := updateThreadMetadata(app, thread, displayName, senderEmail, msg.TextBody, now); err != nil {
 		return re.InternalServerError("Failed to update thread", err)
 	}
@@ -134,7 +161,7 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	})
 }
 
-func updateDraftRecord(app *pocketbase.PocketBase, record *core.Record, req draftRequest, subject, senderEmail, date string) error {
+func updateDraftRecord(app *pocketbase.PocketBase, record *core.Record, req draftRequest, subject, senderEmail, date string, uploadedFiles []*multipart.FileHeader) error {
 	record.Set("subject", subject)
 	record.Set("date", date)
 	record.Set("sender_email", senderEmail)
@@ -154,6 +181,12 @@ func updateDraftRecord(app *pocketbase.PocketBase, record *core.Record, req draf
 	}
 	record.Set("recipients_cc", string(ccJSON))
 
+	bccJSON, err := json.Marshal(req.Bcc)
+	if err != nil {
+		return fmt.Errorf("failed to marshal recipients_bcc: %w", err)
+	}
+	record.Set("recipients_bcc", string(bccJSON))
+
 	if req.HTMLBody != "" {
 		sanitized := sanitizeEmailHTML(req.HTMLBody)
 		htmlFile, err := filesystem.NewFileFromBytes([]byte(sanitized), "body.html")
@@ -163,5 +196,44 @@ func updateDraftRecord(app *pocketbase.PocketBase, record *core.Record, req draf
 		record.Set("body_html", htmlFile)
 	}
 
+	if err := appendFileAttachments(record, uploadedFiles); err != nil {
+		return err
+	}
+
+	record.Set("has_attachments", len(record.GetStringSlice("attachments")) > 0 || len(uploadedFiles) > 0)
+
+	return app.Save(record)
+}
+
+func appendFileAttachments(record *core.Record, fileHeaders []*multipart.FileHeader) error {
+	for _, fh := range fileHeaders {
+		f, err := fh.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open attachment %s: %w", fh.Filename, err)
+		}
+		data, err := io.ReadAll(f)
+		f.Close()
+		if err != nil {
+			return fmt.Errorf("failed to read attachment %s: %w", fh.Filename, err)
+		}
+		file, err := filesystem.NewFileFromBytes(data, fh.Filename)
+		if err != nil {
+			return fmt.Errorf("failed to create attachment file %s: %w", fh.Filename, err)
+		}
+		record.Set("attachments+", file)
+	}
+	return nil
+}
+
+// addFileAttachmentsToRecord adds uploaded files directly to a PocketBase record's
+// attachments field and saves it.
+func addFileAttachmentsToRecord(app *pocketbase.PocketBase, record *core.Record, fileHeaders []*multipart.FileHeader) error {
+	if len(fileHeaders) == 0 {
+		return nil
+	}
+	if err := appendFileAttachments(record, fileHeaders); err != nil {
+		return err
+	}
+	record.Set("has_attachments", true)
 	return app.Save(record)
 }

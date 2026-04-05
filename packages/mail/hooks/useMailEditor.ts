@@ -9,7 +9,6 @@ import {
     HistoryBridge,
     ItalicBridge,
     LinkBridge,
-    ListItemBridge,
     OrderedListBridge,
     PlaceholderBridge,
     UnderlineBridge,
@@ -64,7 +63,6 @@ const baseBridgeExtensions = [
     UnderlineBridge,
     BulletListBridge,
     OrderedListBridge,
-    ListItemBridge,
     BlockquoteBridge,
     LinkBridge,
     HistoryBridge,
@@ -118,15 +116,15 @@ export function useEditorHandle(editor: EditorBridge, ref: RefObject<RichTextEdi
     }
 }
 
-export function setContentWhenReady(editor: EditorBridge, content: string) {
+export function setContentWhenReady(editor: EditorBridge, content: string): () => void {
     if (Platform.OS === 'web') {
-        setContentOnWeb(editor, content)
-    } else {
-        setContentOnNative(editor, content)
+        return setContentOnWeb(editor, content)
     }
+    setContentOnNative(editor, content)
+    return () => {}
 }
 
-function setContentOnWeb(editor: EditorBridge, content: string) {
+function setContentOnWeb(editor: EditorBridge, content: string): () => void {
     const escaped = JSON.stringify(content)
     const js = `(function trySet(n) {
         var pm = document.querySelector('.ProseMirror');
@@ -143,7 +141,7 @@ function setContentOnWeb(editor: EditorBridge, content: string) {
         return false
     }
 
-    if (tryInject()) return
+    if (tryInject()) return () => {}
 
     let attempts = 0
     const interval = setInterval(() => {
@@ -152,6 +150,8 @@ function setContentOnWeb(editor: EditorBridge, content: string) {
             clearInterval(interval)
         }
     }, 100)
+
+    return () => clearInterval(interval)
 }
 
 function setContentOnNative(editor: EditorBridge, content: string) {

@@ -63,6 +63,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const onSubjectBlur = useCallback(() => setHeaderTitle(getValues('subject')), [getValues])
 
     useEffect(() => {
+        let cleanup: (() => void) | undefined
         if (draftContext) {
             draftIdRef.current = draftContext.messageId
             const formatRecipients = (recipients: { name: string; email: string }[]) =>
@@ -74,7 +75,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                 subject: draftContext.subject,
             })
             setHeaderTitle(draftContext.subject)
-            setContentWhenReady(
+            cleanup = setContentWhenReady(
                 editorBridgeRef.current,
                 draftContext.htmlBody || draftContext.textBody || ''
             )
@@ -93,6 +94,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             reset({ to: '', cc: '', bcc: '', subject: '' })
             setHeaderTitle('')
         }
+        return () => cleanup?.()
     }, [replyContext, draftContext, reset])
 
     const [messagesCollection] = useStore('mail_messages')
@@ -201,7 +203,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         try {
             addFiles(Array.from(files))
         } catch (err) {
-            captureException(err)
+            captureException('Failed to add attachments', err)
         }
         e.target.value = ''
     }
