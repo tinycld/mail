@@ -1,4 +1,4 @@
-import { Square, SquareCheck, Star } from 'lucide-react-native'
+import { Paperclip, Square, SquareCheck, Star } from 'lucide-react-native'
 import type { OneRouter } from 'one'
 import { Link } from 'one'
 import type { ReactNode } from 'react'
@@ -145,6 +145,9 @@ function MobileEmailRow({ email, onToggleStar, onPress }: EmailRowProps) {
                             ]}
                             numberOfLines={1}
                         />
+                        {email.hasAttachments ? (
+                            <Paperclip size={14} color={theme.color8.val} />
+                        ) : null}
                         <Text style={[mobileStyles.date, { color: theme.color8.val }]}>
                             {dateDisplay}
                         </Text>
@@ -267,6 +270,7 @@ function DesktopEmailRow({
                         {email.snippet}
                     </Text>
                 </View>
+                {email.hasAttachments ? <Paperclip size={14} color={theme.color8.val} /> : null}
                 <Text style={[styles.date, { color: theme.color8.val }]}>{dateDisplay}</Text>
             </View>
         </RowWrapper>

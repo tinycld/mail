@@ -7,6 +7,7 @@ import { useTheme, YStack } from 'tamagui'
 import { useMutation } from '~/lib/mutations'
 import { useStore } from '~/lib/pocketbase'
 import { useCurrentRole } from '~/lib/use-current-role'
+import { EmailAttachments } from '../components/EmailAttachments'
 import { EmailBody } from '../components/EmailBody'
 import { EmailDetailToolbar } from '../components/EmailDetailToolbar'
 import { MessageHeader, ThreadSubjectHeader } from '../components/EmailHeader'
@@ -106,6 +107,12 @@ export default function MailDetailScreen() {
 
     const subject = messages?.[0]?.subject ?? ''
 
+    const visibleAttachments = messageList.flatMap((msg, index) => {
+        if (!isMessageExpanded(msg, index)) return []
+        if (!msg.has_attachments || !msg.attachments?.length) return []
+        return [{ recordId: msg.id, filenames: msg.attachments as string[] }]
+    })
+
     return (
         <YStack flex={1} backgroundColor="$background">
             <EmailDetailToolbar />
@@ -140,6 +147,15 @@ export default function MailDetailScreen() {
                     )
                 })}
             </ScrollView>
+            {visibleAttachments.map(({ recordId, filenames }) => (
+                <EmailAttachments
+                    key={recordId}
+                    isVisible
+                    collectionId="mail_messages"
+                    recordId={recordId}
+                    filenames={filenames}
+                />
+            ))}
             {lastMessage ? (
                 <InlineReply
                     messageId={lastMessage.id}
