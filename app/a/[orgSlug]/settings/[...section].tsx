@@ -11,7 +11,7 @@ export default function AddonSettingsSection() {
     const router = useRouter()
     const theme = useTheme()
     const { isAdmin } = useCurrentRole()
-    const href = useOrgHref()
+    const orgHref = useOrgHref()
     const params = useParams<{ section: string[] }>()
     const segments = params.section ?? []
     const [addonSlug, panelSlug] = segments
@@ -53,7 +53,7 @@ export default function AddonSettingsSection() {
                 <SizableText size="$6" fontWeight="bold" color="$color" marginBottom="$3">
                     Settings not found
                 </SizableText>
-                <Pressable onPress={() => router.push(href('/a/[orgSlug]/settings'))}>
+                <Pressable onPress={() => router.push(orgHref('settings'))}>
                     <SizableText size="$4" color="$accentColor">
                         Back to Settings
                     </SizableText>

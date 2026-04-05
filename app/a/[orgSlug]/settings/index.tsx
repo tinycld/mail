@@ -6,12 +6,11 @@ import { getIcon } from '~/components/workspace/addon-icon-map'
 import { addonSettings } from '~/lib/generated/addon-settings'
 import { useOrgHref } from '~/lib/org-routes'
 import { useCurrentRole } from '~/lib/use-current-role'
-import { useOrgSlug } from '~/lib/use-org-slug'
 
 export default function SettingsIndex() {
     const theme = useTheme()
     const { isAdmin } = useCurrentRole()
-    const href = useOrgHref()
+    const orgHref = useOrgHref()
     const router = useRouter()
 
     return (
@@ -24,7 +23,7 @@ export default function SettingsIndex() {
                 <SettingsGroup label="Account">
                     <SettingsLink
                         label="Profile"
-                        onPress={() => router.push(href('/a/[orgSlug]/settings/profile'))}
+                        onPress={() => router.push(orgHref('settings/profile'))}
                         icon={<User size={20} color={theme.color.val} />}
                     />
                 </SettingsGroup>
@@ -37,9 +36,8 @@ export default function SettingsIndex() {
 
 function AdminSettings({ isVisible }: { isVisible: boolean }) {
     const theme = useTheme()
-    const href = useOrgHref()
+    const orgHref = useOrgHref()
     const router = useRouter()
-    const orgSlug = useOrgSlug()
 
     if (!isVisible) return null
 
@@ -48,12 +46,12 @@ function AdminSettings({ isVisible }: { isVisible: boolean }) {
             <SettingsGroup label="Organization">
                 <SettingsLink
                     label="General"
-                    onPress={() => router.push(href('/a/[orgSlug]/settings/organization'))}
+                    onPress={() => router.push(orgHref('settings/organization'))}
                     icon={<Building2 size={20} color={theme.color.val} />}
                 />
                 <SettingsLink
                     label="Members"
-                    onPress={() => router.push(href('/a/[orgSlug]/settings/members'))}
+                    onPress={() => router.push(orgHref('settings/members'))}
                     icon={<Users size={20} color={theme.color.val} />}
                 />
             </SettingsGroup>
@@ -67,13 +65,11 @@ function AdminSettings({ isVisible }: { isVisible: boolean }) {
                                 key={panel.slug}
                                 label={panel.label}
                                 onPress={() =>
-                                    router.push({
-                                        pathname: '/a/[orgSlug]/settings/[...section]',
-                                        params: {
-                                            orgSlug,
+                                    router.push(
+                                        orgHref('settings/[...section]', {
                                             section: [group.addonSlug, panel.slug],
-                                        },
-                                    })
+                                        })
+                                    )
                                 }
                                 icon={<Icon size={20} color={theme.color.val} />}
                             />
