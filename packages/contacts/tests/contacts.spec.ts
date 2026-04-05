@@ -18,14 +18,14 @@ test.describe('Contacts', () => {
     })
 
     test('list screen renders with seed data', async ({ page }) => {
-        await page.goto(`/app/${ORG_SLUG}/contacts`)
+        await page.goto(`/a/${ORG_SLUG}/contacts`)
         await expect(page.getByText(/Contacts \(\d+\)/)).toBeVisible()
         await expect(page.getByRole('link', { name: /Alice Johnson/ })).toBeVisible()
         await expect(page.getByRole('link', { name: /Bob Smith/ })).toBeVisible()
     })
 
     test('create a new contact and verify it appears', async ({ page }) => {
-        await page.goto(`/app/${ORG_SLUG}/contacts`)
+        await page.goto(`/a/${ORG_SLUG}/contacts`)
         await page.getByText('+ Create contact').click()
         await page.waitForURL(/\/contacts\/new/)
 
@@ -42,7 +42,7 @@ test.describe('Contacts', () => {
     })
 
     test('click a contact, edit fields, save, verify changes persist', async ({ page }) => {
-        await page.goto(`/app/${ORG_SLUG}/contacts`)
+        await page.goto(`/a/${ORG_SLUG}/contacts`)
         await page.getByRole('link', { name: /Alice Johnson/ }).click()
         await page.waitForURL(/\/contacts\//)
 
@@ -57,7 +57,7 @@ test.describe('Contacts', () => {
     })
 
     test('toggle favorite from detail view', async ({ page }) => {
-        await page.goto(`/app/${ORG_SLUG}/contacts`)
+        await page.goto(`/a/${ORG_SLUG}/contacts`)
         await page.getByRole('link', { name: /Bob Smith/ }).click()
         await page.waitForURL(/\/contacts\//)
 
@@ -69,7 +69,7 @@ test.describe('Contacts', () => {
     })
 
     test('search filters contacts', async ({ page }) => {
-        await page.goto(`/app/${ORG_SLUG}/contacts`)
+        await page.goto(`/a/${ORG_SLUG}/contacts`)
 
         const searchInput = page.getByPlaceholder('Search contacts...')
         await searchInput.fill('carol')

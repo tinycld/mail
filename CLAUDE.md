@@ -90,31 +90,36 @@ TinyCld is an One Stack React Native application backed by PocketBase . The repo
 - Users belong to orgs via the `user_org` junction table (many-to-many)
 - Roles (`admin`, `clerical`, `workforce`) are per-org—a user can have different roles in different orgs
 - Use `useOrgInfo()` from `~/lib/use-org-info` to get `{ orgSlug, orgId, org }` for the current org context
-- `useOrgSlug()` from `~/lib/use-org-slug` returns just the org slug — on web it parses the subdomain from `window.location.hostname`, on native it reads from AsyncStorage
-- `navigateToOrg(orgSlug)` from `~/lib/org-url` does a full-page navigation to the org's subdomain (e.g. `acme.localhost:8100/app`)
+- `useOrgSlug()` from `~/lib/use-org-slug` returns just the org slug — on web it reads from `OrgSlugContext` (set by `[orgSlug]/_layout.tsx`), on native it reads from AsyncStorage
+- `navigateToOrg(orgSlug)` from `~/lib/org-url` does a same-origin path navigation to `/a/<orgSlug>`
 - Session helpers like `getRoleForOrg(session, orgSlug)` provide role lookups
 
 ## Routing & Navigation
-- **Org context comes from subdomains**, not URL path segments. In dev: `acme.localhost:8100`, in prod: `acme.tinycld.com`
-- Routes no longer contain `[orgSlug]` — e.g. `/app/contacts/new`, `/app/contacts/[id]`
-- Use `as OneRouter.Href` for routes built from runtime strings (e.g. addon slugs, settings)
+- **Org context comes from the URL path**: `/a/<orgSlug>/<service>` — e.g. `/a/acme/contacts`, `/a/acme/mail`, `/a/acme/settings/profile`
+- All org-scoped routes use the `/a/[orgSlug]/` prefix in file-system routing
+- Use `useOrgHref()` from `~/lib/org-routes` for **type-safe** org-scoped navigation. Pass short paths (without the `/a/[orgSlug]` prefix) — misspellings are caught at compile time:
   ```tsx
-  router.push('/app/contacts/new' as OneRouter.Href)
-  <Link href={`/app/contacts/${id}` as OneRouter.Href} />
+  const orgHref = useOrgHref()
+  router.push(orgHref('contacts/new'))
+  router.push(orgHref('contacts/[id]', { id: contact.id }))
+  router.push(orgHref('mail', { folder: 'sent' }))
+  <Link href={orgHref('mail/[id]', { id: threadId })} />
   ```
-- Use `useOrgInfo()` or `useOrgSlug()` to get the current org — never read it from route params
+- **Never** use `as OneRouter.Href` casts for org routes — always use `useOrgHref()`
+- For dynamic addon navigation where the slug is a runtime value (e.g. rail/tab bar), use the resolved URL string: `` `/a/${orgSlug}/${addonSlug}` ``
+- Use `useOrgInfo()` or `useOrgSlug()` to get the current org — `useOrgSlug()` reads from context on web
 
 ## Add-on System
 - Add-ons are npm packages (workspace or published) registered in `tinycld.addons.ts`
 - `npm run addons:generate` (runs automatically before `dev` and `build:web`) wires addons into the app:
-  - Re-exports addon screens into `app/app/{slug}/`
+  - Re-exports addon screens into `app/a/[orgSlug]/{slug}/`
   - Generates typed collection wiring in `lib/generated/addon-collections.ts`
   - Generates addon registry in `lib/generated/addon-registry.ts`
   - Symlinks migrations/hooks into `server/pb_migrations/` and `server/pb_hooks/`
 - Each addon provides: `manifest.ts`, `types.ts` (schema types), `collections.ts`, `screens/`, and optionally `pb-migrations/`, `pb-hooks/`, `seed.ts`, and `tests/`
 - The type system is fully integrated — addon types.ts exports a `{PascalSlug}Schema` type that gets merged into `MergedSchema` so `useStore('addonCollection')` is strongly typed end-to-end
 - Addon screens run in the app's bundle context and can import from the host app using `~/`
-- `lib/generated/` and `app/app/*/` are gitignored; `app/app/_layout.tsx` is a core file (force-add to git)
+- `lib/generated/` and `app/a/[orgSlug]/*/` are gitignored; `app/a/[orgSlug]/_layout.tsx` and `app/a/[orgSlug]/settings/*` are core files (force-add to git)
 - Runtime hooks: `useAddons()` and `useAddon(slug)` from `~/lib/addons/use-addons`
 - Full documentation: `docs/addons.md`
 
@@ -153,5 +158,5 @@ TinyCld is an One Stack React Native application backed by PocketBase . The repo
 - PocketBase TS helper docs: https://raw.githubusercontent.com/satohshi/pocketbase-ts/refs/heads/master/README.md
 
 ## Project Structure & Module Organization
-Expo routes live under `app/`, with organization screens in `app/app/[orgSlug]` and shared layouts in `_layout.tsx`. Shared UI lives in `components/` and `ui/`, hooks in `hooks/`, and domain utilities in `lib/` and `constants/`. Static assets stay in `assets/` and `public/`. PocketBase data, migrations, and hooks live in `pb_data/`, `pb_migrations/`, and `pb_hooks/`. Tests and automation land in `tests/`, covering Playwright, Vitest, and Docker helpers.
+Expo routes live under `app/`, with organization screens in `app/a/[orgSlug]/` and shared layouts in `_layout.tsx`. Shared UI lives in `components/` and `ui/`, hooks in `hooks/`, and domain utilities in `lib/` and `constants/`. Static assets stay in `assets/` and `public/`. PocketBase data, migrations, and hooks live in `pb_data/`, `pb_migrations/`, and `pb_hooks/`. Tests and automation land in `tests/`, covering Playwright, Vitest, and Docker helpers.
 

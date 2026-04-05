@@ -22,7 +22,7 @@ test.describe('Signup flow', () => {
         await page.getByText('Create account').last().click()
 
         // Should redirect to the app after signup + auto-login
-        await page.waitForURL(/\/app\//, { timeout: 15_000 })
+        await page.waitForURL(/\/a\//, { timeout: 15_000 })
 
         // Sign out
         await page.getByLabel('Sign out').click()
@@ -36,6 +36,6 @@ test.describe('Signup flow', () => {
         await page.getByText('Sign in', { exact: true }).last().click()
 
         // Should redirect to the app
-        await page.waitForURL(/\/app\//, { timeout: 10_000 })
+        await page.waitForURL(/\/a\//, { timeout: 10_000 })
     })
 })
