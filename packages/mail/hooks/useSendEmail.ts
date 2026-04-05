@@ -1,6 +1,6 @@
 import { errorToString } from '~/lib/errors'
 import { useMutation } from '~/lib/mutations'
-import { pb } from '~/lib/pocketbase'
+import { PB_SERVER_ADDR, pb } from '~/lib/pocketbase'
 
 interface SendEmailParams {
     mailbox_id: string
@@ -11,6 +11,7 @@ interface SendEmailParams {
     html_body: string
     text_body: string
     in_reply_to_message_id?: string
+    attachments?: File[]
 }
 
 interface UseSendEmailOptions {
@@ -21,9 +22,29 @@ interface UseSendEmailOptions {
 export function useSendEmail({ onSuccess, onError }: UseSendEmailOptions = {}) {
     const mutation = useMutation({
         mutationFn: async (params: SendEmailParams) => {
+            const { attachments, ...jsonFields } = params
+
+            if (attachments?.length) {
+                const formData = new FormData()
+                formData.append('json', JSON.stringify(jsonFields))
+                for (const file of attachments) {
+                    formData.append('attachments', file, file.name)
+                }
+                const res = await fetch(`${PB_SERVER_ADDR}/api/mail/send`, {
+                    method: 'POST',
+                    headers: { Authorization: pb.authStore.token },
+                    body: formData,
+                })
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}))
+                    throw new Error(data.message || `Send failed: ${res.status}`)
+                }
+                return await res.json()
+            }
+
             return await pb.send('/api/mail/send', {
                 method: 'POST',
-                body: params,
+                body: jsonFields,
             })
         },
         onSuccess,

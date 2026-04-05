@@ -1,14 +1,17 @@
 import { Forward, Reply, ReplyAll } from 'lucide-react-native'
 import { useRef } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
+import { captureException } from '~/lib/errors'
 import { useForm, zodResolver } from '~/ui/form'
 import { type ComposeFormData, composeSchema, parseRecipients } from '../hooks/composeSchema'
+import { useAttachments } from '../hooks/useAttachments'
 import { useCompose } from '../hooks/useComposeState'
 import { useDefaultMailbox } from '../hooks/useDefaultMailbox'
 import { useEditorHandle, useMailEditor } from '../hooks/useMailEditor'
 import { useSendEmail } from '../hooks/useSendEmail'
+import { AttachmentRibbon } from './AttachmentRibbon'
 import { ComposeFields } from './ComposeFields'
 import { ComposeToolbar } from './ComposeToolbar'
 import type { RichTextEditorHandle } from './RichTextEditor'
@@ -119,9 +122,11 @@ function InlineComposeForm({
 }) {
     const theme = useTheme()
     const editorRef = useRef<RichTextEditorHandle>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
     const mailboxId = useDefaultMailbox()
     const editor = useMailEditor({ placeholder: 'Compose reply' })
     useEditorHandle(editor, editorRef)
+    const { attachments, addFiles, removeFile, clearAll: clearAttachments } = useAttachments()
 
     const toValue =
         replyContext.to.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
@@ -145,6 +150,7 @@ function InlineComposeForm({
     const { send, isPending } = useSendEmail({
         onSuccess: () => {
             editorRef.current?.clear()
+            clearAttachments()
             reset({ to: '', cc: '', bcc: '', subject: '' })
             onClose()
         },
@@ -171,8 +177,24 @@ function InlineComposeForm({
             html_body: htmlBody,
             text_body: textBody,
             in_reply_to_message_id: replyContext.messageId,
+            attachments: attachments.map(a => a.file),
         })
     })
+
+    const handleAttach = () => {
+        fileInputRef.current?.click()
+    }
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files
+        if (!files?.length) return
+        try {
+            addFiles(Array.from(files))
+        } catch (err) {
+            captureException('Failed to add attachments', err)
+        }
+        e.target.value = ''
+    }
 
     return (
         <View
@@ -188,10 +210,25 @@ function InlineComposeForm({
             <View style={inlineStyles.body}>
                 <RichTextEditor editor={editor} />
             </View>
+            <AttachmentRibbon
+                isVisible={attachments.length > 0}
+                attachments={attachments}
+                onRemove={removeFile}
+            />
+            {Platform.OS === 'web' && (
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={handleFileChange}
+                />
+            )}
             <ComposeToolbar
                 editor={editor}
                 onDiscard={onClose}
                 onSend={onSend}
+                onAttach={handleAttach}
                 isPending={isPending}
             />
         </View>

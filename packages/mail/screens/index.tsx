@@ -3,7 +3,7 @@ import { useLiveQuery } from '@tanstack/react-db'
 import { useParams } from 'one'
 import { useCallback, useMemo } from 'react'
 import { FlatList } from 'react-native'
-import { SizableText, YStack } from 'tamagui'
+import { SizableText, Spinner, YStack } from 'tamagui'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { useMutation } from '~/lib/mutations'
 import { pb, useStore } from '~/lib/pocketbase'
@@ -15,7 +15,9 @@ import type { ThreadListItem } from '../components/thread-list-item'
 import { toThreadListItem } from '../components/thread-list-item'
 import { useCompose } from '../hooks/useComposeState'
 import { useMailBulkActions } from '../hooks/useMailBulkActions'
+import type { MailSearchResult } from '../hooks/useMailSearch'
 import { useMailSelection } from '../hooks/useMailSelection'
+import { useMailSearchState } from '../hooks/useSearchState'
 import type { MailMessages } from '../types'
 
 function useQueryParams() {
@@ -34,11 +36,56 @@ function EmptyState({ folderTitle, isVisible }: { folderTitle: string; isVisible
     )
 }
 
+function SearchResultsHeader({ total, isSearching }: { total: number; isSearching: boolean }) {
+    return (
+        <YStack paddingHorizontal="$3" paddingVertical="$2">
+            <SizableText size="$3" color="$color8">
+                {isSearching ? 'Searching...' : `${total} result${total !== 1 ? 's' : ''}`}
+            </SizableText>
+        </YStack>
+    )
+}
+
+function stripHtmlTags(html: string): string {
+    return html.replace(/<[^>]*>/g, '')
+}
+
+function searchResultToThreadListItem(result: MailSearchResult): ThreadListItem {
+    let participants: { name: string; email: string }[] = []
+    try {
+        participants =
+            typeof result.participants === 'string'
+                ? JSON.parse(result.participants)
+                : (result.participants ?? [])
+    } catch {
+        // ignore parse errors
+    }
+
+    return {
+        stateId: result.thread_id,
+        threadId: result.thread_id,
+        subject: result.subject,
+        snippet: stripHtmlTags(result.snippet_highlight) || '',
+        latestDate: result.latest_date,
+        messageCount: result.message_count,
+        senderName: participants[0]?.name ?? '',
+        senderEmail: participants[0]?.email ?? '',
+        participants,
+        isRead: true,
+        isStarred: false,
+        labels: [],
+        folder: 'search',
+        hasDraft: false,
+        hasAttachments: false,
+    }
+}
+
 export default function MailListScreen() {
     const { folder, label } = useQueryParams()
     const breakpoint = useBreakpoint()
     const { userOrgId } = useCurrentRole()
     const { openDraft } = useCompose()
+    const search = useMailSearchState()
 
     const [threadStateCollection, threadsCollection, labelsCollection, messagesCollection] =
         useStore('mail_thread_state', 'mail_threads', 'mail_labels', 'mail_messages')
@@ -78,6 +125,22 @@ export default function MailListScreen() {
         return map
     }, [draftMessages])
 
+    const { data: attachmentMessages } = useLiveQuery(
+        query =>
+            query
+                .from({ mail_messages: messagesCollection })
+                .where(({ mail_messages }) => eq(mail_messages.has_attachments, true)),
+        []
+    )
+
+    const threadsWithAttachments = useMemo(() => {
+        const set = new Set<string>()
+        for (const msg of (attachmentMessages ?? []) as MailMessages[]) {
+            set.add(msg.thread)
+        }
+        return set
+    }, [attachmentMessages])
+
     const threadMap = useMemo(() => {
         const map = new Map<string, (typeof threads)[number]>()
         for (const t of threads ?? []) {
@@ -104,7 +167,8 @@ export default function MailListScreen() {
                 .map((lid: string) => labelMap.get(lid))
                 .filter((l): l is { id: string; name: string; color: string } => l != null)
             const hasDraft = draftByThread.has(state.thread)
-            return toThreadListItem(state, thread, stateLabels, hasDraft)
+            const hasAttachments = threadsWithAttachments.has(state.thread)
+            return toThreadListItem(state, thread, stateLabels, hasDraft, hasAttachments)
         })
 
         if (label) {
@@ -117,7 +181,7 @@ export default function MailListScreen() {
         }
 
         return mapped.filter(item => item.folder === activeFolder)
-    }, [threadStates, threadMap, labelMap, draftByThread, folder, label])
+    }, [threadStates, threadMap, labelMap, draftByThread, threadsWithAttachments, folder, label])
 
     const selection = useMailSelection(items, folder, label)
     const bulkActions = useMailBulkActions(
@@ -182,12 +246,43 @@ export default function MailListScreen() {
         [draftByThread, openDraft]
     )
 
+    const searchItems = useMemo(
+        () => search.results.map(searchResultToThreadListItem),
+        [search.results]
+    )
+
     const folderTitle = label
         ? 'Label'
         : (folder ?? 'inbox').charAt(0).toUpperCase() + (folder ?? 'inbox').slice(1)
 
-    const isEmpty = items.length === 0
     const isMobile = breakpoint === 'mobile'
+
+    if (search.isActive) {
+        return (
+            <YStack flex={1}>
+                <SearchResultsHeader total={search.total} isSearching={search.isSearching} />
+                {search.isSearching && searchItems.length === 0 ? (
+                    <YStack flex={1} alignItems="center" justifyContent="center">
+                        <Spinner size="large" color="$accentColor" />
+                    </YStack>
+                ) : searchItems.length === 0 ? (
+                    <YStack flex={1} alignItems="center" justifyContent="center" padding="$8">
+                        <SizableText size="$4" color="$color8">
+                            No results found
+                        </SizableText>
+                    </YStack>
+                ) : (
+                    <FlatList
+                        data={searchItems}
+                        keyExtractor={item => item.threadId}
+                        renderItem={({ item }) => <EmailRow email={item} isMobile={isMobile} />}
+                    />
+                )}
+            </YStack>
+        )
+    }
+
+    const isEmpty = items.length === 0
 
     return (
         <YStack flex={1}>

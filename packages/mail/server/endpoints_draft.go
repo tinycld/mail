@@ -32,7 +32,10 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	var uploadedFiles []*multipart.FileHeader
 
 	contentType := re.Request.Header.Get("Content-Type")
-	if strings.HasPrefix(contentType, "multipart/form-data") {
+	isMultipart := strings.HasPrefix(contentType, "multipart/form-data") ||
+		strings.HasPrefix(contentType, "multipart/mixed")
+
+	if isMultipart {
 		if err := re.Request.ParseMultipartForm(25 << 20); err != nil {
 			return re.BadRequestError("Failed to parse multipart form", err)
 		}
@@ -43,10 +46,12 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		if re.Request.MultipartForm != nil {
 			uploadedFiles = re.Request.MultipartForm.File["attachments"]
 		}
-	} else {
+	} else if strings.HasPrefix(contentType, "application/json") || contentType == "" {
 		if err := json.NewDecoder(re.Request.Body).Decode(&req); err != nil {
 			return re.BadRequestError("Invalid request body", err)
 		}
+	} else {
+		return re.BadRequestError("Unsupported Content-Type: "+contentType, nil)
 	}
 
 	if req.MailboxID == "" {

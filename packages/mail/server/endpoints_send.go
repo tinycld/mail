@@ -1,9 +1,12 @@
 package mail
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/pocketbase/pocketbase"
@@ -26,8 +29,31 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	userID := re.Auth.Id
 
 	var req sendRequest
-	if err := json.NewDecoder(re.Request.Body).Decode(&req); err != nil {
-		return re.BadRequestError("Invalid request body", err)
+	var fileAttachments []Attachment
+
+	contentType := re.Request.Header.Get("Content-Type")
+	isMultipart := strings.HasPrefix(contentType, "multipart/form-data") ||
+		strings.HasPrefix(contentType, "multipart/mixed")
+
+	if isMultipart {
+		if err := re.Request.ParseMultipartForm(25 << 20); err != nil {
+			return re.BadRequestError("Failed to parse multipart form", err)
+		}
+		jsonStr := re.Request.FormValue("json")
+		if err := json.Unmarshal([]byte(jsonStr), &req); err != nil {
+			return re.BadRequestError("Invalid JSON in form field", err)
+		}
+		var err error
+		fileAttachments, err = parseFileAttachments(re)
+		if err != nil {
+			return re.BadRequestError("Failed to read attachments", err)
+		}
+	} else if strings.HasPrefix(contentType, "application/json") || contentType == "" {
+		if err := json.NewDecoder(re.Request.Body).Decode(&req); err != nil {
+			return re.BadRequestError("Invalid request body", err)
+		}
+	} else {
+		return re.BadRequestError("Unsupported Content-Type: "+contentType, nil)
 	}
 
 	if req.MailboxID == "" {
@@ -81,15 +107,16 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 
 	// Send via provider
 	sendReq := &SendRequest{
-		From:       fromAddr,
-		To:         req.To,
-		Cc:         req.Cc,
-		Bcc:        req.Bcc,
-		Subject:    req.Subject,
-		HTMLBody:   req.HTMLBody,
-		TextBody:   req.TextBody,
-		InReplyTo:  inReplyToHeader,
-		References: referencesHeader,
+		From:        fromAddr,
+		To:          req.To,
+		Cc:          req.Cc,
+		Bcc:         req.Bcc,
+		Subject:     req.Subject,
+		HTMLBody:    req.HTMLBody,
+		TextBody:    req.TextBody,
+		InReplyTo:   inReplyToHeader,
+		References:  referencesHeader,
+		Attachments: fileAttachments,
 	}
 
 	result, err := provider.Send(re.Request.Context(), sendReq)
@@ -105,6 +132,16 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		return re.InternalServerError("Failed to create thread", err)
 	}
 
+	// Convert Attachment (base64) → InboundAttachment for storage
+	var storedAttachments []InboundAttachment
+	for _, att := range fileAttachments {
+		storedAttachments = append(storedAttachments, InboundAttachment{
+			Name:        att.Name,
+			ContentType: att.ContentType,
+			Content:     att.Content,
+		})
+	}
+
 	msg := &storedMessage{
 		MessageID:      result.MessageID,
 		InReplyTo:      inReplyToHeader,
@@ -117,6 +154,7 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		HTMLBody:       req.HTMLBody,
 		TextBody:       req.TextBody,
 		DeliveryStatus: "sent",
+		Attachments:    storedAttachments,
 	}
 
 	record, err := storeMessage(app, thread.Id, msg)
@@ -137,4 +175,36 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		"message_id": record.Id,
 		"thread_id":  thread.Id,
 	})
+}
+
+// parseFileAttachments reads uploaded files from a multipart form and returns
+// them as base64-encoded Attachment structs ready for the email provider.
+func parseFileAttachments(re *core.RequestEvent) ([]Attachment, error) {
+	if re.Request.MultipartForm == nil {
+		return nil, nil
+	}
+	fileHeaders := re.Request.MultipartForm.File["attachments"]
+	if len(fileHeaders) == 0 {
+		return nil, nil
+	}
+
+	attachments := make([]Attachment, 0, len(fileHeaders))
+	for _, fh := range fileHeaders {
+		f, err := fh.Open()
+		if err != nil {
+			return nil, fmt.Errorf("failed to open attachment %s: %w", fh.Filename, err)
+		}
+		data, err := io.ReadAll(f)
+		f.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read attachment %s: %w", fh.Filename, err)
+		}
+
+		attachments = append(attachments, Attachment{
+			Name:        fh.Filename,
+			ContentType: fh.Header.Get("Content-Type"),
+			Content:     base64.StdEncoding.EncodeToString(data),
+		})
+	}
+	return attachments, nil
 }

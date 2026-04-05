@@ -75,6 +75,15 @@ export function registerCollections(
         },
     })
 
+    const mail_imap_mailbox_state = newCollection('mail_imap_mailbox_state', {
+        omitOnInsert: ['created', 'updated'] as const,
+        expand: { mailbox: mail_mailboxes },
+        collectionOptions: {
+            autoIndex: 'eager' as const,
+            defaultIndexType: BasicIndex,
+        },
+    })
+
     return {
         mail_domains,
         mail_mailboxes,
@@ -83,5 +92,6 @@ export function registerCollections(
         mail_threads,
         mail_messages,
         mail_thread_state,
+        mail_imap_mailbox_state,
     }
 }

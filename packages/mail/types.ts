@@ -14,6 +14,7 @@ export interface MailMailboxes {
     address: string
     domain: string
     display_name: string
+    name: string
     type: 'personal' | 'shared'
     created: string
     updated: string
@@ -66,6 +67,8 @@ export interface MailMessages {
     attachments: string[]
     delivery_status: 'sending' | 'sent' | 'delivered' | 'bounced' | 'spam_complaint' | 'draft'
     bounce_reason: string
+    imap_uid: number
+    raw_headers: string
     created: string
     updated: string
 }
@@ -79,6 +82,15 @@ export interface MailThreadState {
     is_starred: boolean
     labels: string[]
     snoozed_until: string
+    created: string
+    updated: string
+}
+
+export interface MailImapMailboxState {
+    id: string
+    mailbox: string
+    uid_validity: number
+    uid_next: number
     created: string
     updated: string
 }
@@ -127,6 +139,12 @@ export type MailSchema = {
             thread: MailThreads
             user_org: UserOrg
             labels: MailLabels[]
+        }
+    }
+    mail_imap_mailbox_state: {
+        type: MailImapMailboxState
+        relations: {
+            mailbox: MailMailboxes
         }
     }
 }

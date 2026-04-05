@@ -17,10 +17,17 @@ interface ComposeToolbarProps {
     editor: EditorBridge
     onDiscard: () => void
     onSend: () => void
+    onAttach?: () => void
     isPending: boolean
 }
 
-export function ComposeToolbar({ editor, onDiscard, onSend, isPending }: ComposeToolbarProps) {
+export function ComposeToolbar({
+    editor,
+    onDiscard,
+    onSend,
+    onAttach,
+    isPending,
+}: ComposeToolbarProps) {
     const theme = useTheme()
     const editorState = useBridgeState(editor)
     const iconColor = theme.color8.val
@@ -131,7 +138,7 @@ export function ComposeToolbar({ editor, onDiscard, onSend, isPending }: Compose
 
             <View style={[styles.separator, { backgroundColor: theme.borderColor.val }]} />
 
-            <Pressable style={styles.iconButton}>
+            <Pressable style={styles.iconButton} onPress={onAttach}>
                 <Paperclip size={16} color={iconColor} />
             </Pressable>
 

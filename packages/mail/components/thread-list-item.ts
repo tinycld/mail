@@ -17,13 +17,15 @@ export interface ThreadListItem {
     labels: { id: string; name: string; color: string }[]
     folder: string
     hasDraft: boolean
+    hasAttachments: boolean
 }
 
 export function toThreadListItem(
     state: MailThreadState,
     thread: MailThreads | undefined,
     labels: LabelInfo[],
-    hasDraft = false
+    hasDraft = false,
+    hasAttachments = false
 ): ThreadListItem {
     const t = thread
     const participants = t?.participants ?? []
@@ -43,6 +45,7 @@ export function toThreadListItem(
         labels,
         folder: state.folder,
         hasDraft,
+        hasAttachments,
     }
 }
 

@@ -12,6 +12,8 @@ import {
     type DraftContext,
     type ReplyContext,
 } from '../hooks/useComposeState'
+import { useMailSearch } from '../hooks/useMailSearch'
+import { SearchContext } from '../hooks/useSearchState'
 
 export default function MailLayout() {
     const [composeMode, setComposeMode] = useState<ComposeMode>('closed')
@@ -72,24 +74,39 @@ export default function MailLayout() {
         ]
     )
 
+    const { results, total, isSearching } = useMailSearch(searchQuery)
+
+    const searchValue = useMemo(
+        () => ({
+            query: searchQuery,
+            results,
+            total,
+            isSearching,
+            isActive: searchQuery.length >= 2,
+        }),
+        [searchQuery, results, total, isSearching]
+    )
+
     const isComposeVisible = composeMode !== 'closed' && composeMode !== 'inline'
     const isMobile = breakpoint === 'mobile'
 
     return (
         <ComposeContext.Provider value={composeValue}>
-            <YStack flex={1} backgroundColor="$background">
-                <YStack paddingHorizontal="$4" paddingVertical="$2">
-                    <SearchBar
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        onMenuPress={isMobile ? () => setDrawerOpen(true) : undefined}
-                    />
+            <SearchContext.Provider value={searchValue}>
+                <YStack flex={1} backgroundColor="$background">
+                    <YStack paddingHorizontal="$4" paddingVertical="$2">
+                        <SearchBar
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            onMenuPress={isMobile ? () => setDrawerOpen(true) : undefined}
+                        />
+                    </YStack>
+                    <YStack flex={1}>
+                        <Slot />
+                    </YStack>
+                    <ComposeWindow isVisible={isComposeVisible} />
                 </YStack>
-                <YStack flex={1}>
-                    <Slot />
-                </YStack>
-                <ComposeWindow isVisible={isComposeVisible} />
-            </YStack>
+            </SearchContext.Provider>
         </ComposeContext.Provider>
     )
 }

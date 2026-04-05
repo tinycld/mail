@@ -21,6 +21,7 @@ const createMailboxSchema = z.object({
         .regex(/^[a-z0-9._-]+$/, 'Only lowercase letters, numbers, dots, hyphens, underscores'),
     domain: z.string().min(1, 'Domain is required'),
     display_name: z.string().max(200).optional(),
+    name: z.string().max(100).optional(),
 })
 
 interface MailboxRow {
@@ -29,6 +30,7 @@ interface MailboxRow {
     domain: string
     domainName: string
     displayName: string
+    name: string
     type: string
 }
 
@@ -95,6 +97,7 @@ function useMailboxData(orgId: string) {
             domain: mb.domain,
             domainName: domainMap.get(mb.domain) ?? '',
             displayName: mb.display_name,
+            name: mb.name,
             type: mb.type,
         }))
 
@@ -244,6 +247,7 @@ function MailboxCard({
                         <TypeBadge type={mailbox.type} />
                     </XStack>
                     <SizableText size="$2" color="$color8">
+                        {mailbox.name ? `${mailbox.name} · ` : ''}
                         {mailbox.displayName || 'No display name'} · {members.length} member
                         {members.length !== 1 ? 's' : ''}
                     </SizableText>
@@ -567,6 +571,7 @@ function CreateMailboxForm({
             address: '',
             domain: domainOptions[0]?.value ?? '',
             display_name: '',
+            name: '',
         },
     })
 
@@ -578,6 +583,7 @@ function CreateMailboxForm({
                 address: data.address,
                 domain: data.domain,
                 display_name: data.display_name ?? '',
+                name: data.name ?? '',
                 type: 'shared',
             })
             yield membersCollection.insert({
@@ -610,6 +616,8 @@ function CreateMailboxForm({
                 label="Display Name"
                 placeholder="Support Team"
             />
+
+            <TextInput control={control} name="name" label="Mailbox Name" placeholder="Acme Corp" />
 
             <Button
                 theme="accent"
