@@ -1,7 +1,7 @@
 import type PocketBase from 'pocketbase'
 
 interface SeedContext {
-    user: { id: string }
+    user: { id: string; email: string; name: string }
     org: { id: string }
     userOrg: { id: string }
 }
@@ -47,8 +47,8 @@ const THREADS: {
         message_count: 3,
         latest_date: '2026-04-04 10:42:00.000Z',
         participants: [
-            { name: 'Alice Chen', email: 'alice.chen@example.com' },
-            { name: 'Bob Park', email: 'bob.park@example.com' },
+            { name: 'Alice Chen', email: 'alice.chen@tinycld.org' },
+            { name: 'Bob Park', email: 'bob.park@tinycld.org' },
         ],
         folder: 'inbox',
         is_read: false,
@@ -57,8 +57,8 @@ const THREADS: {
         messages: [
             {
                 sender_name: 'Alice Chen',
-                sender_email: 'alice.chen@example.com',
-                recipients_to: [{ name: 'Team', email: 'support@example.com' }],
+                sender_email: 'alice.chen@tinycld.org',
+                recipients_to: [{ name: 'Team', email: 'support@tinycld.org' }],
                 date: '2026-04-04 08:00:00.000Z',
                 subject: 'Q2 Product Roadmap Review',
                 snippet: 'Hi team, here is the initial Q2 roadmap draft for review.',
@@ -67,9 +67,9 @@ const THREADS: {
             },
             {
                 sender_name: 'Bob Park',
-                sender_email: 'bob.park@example.com',
-                recipients_to: [{ name: 'Team', email: 'support@example.com' }],
-                in_reply_to: 'roadmap-1@example.com',
+                sender_email: 'bob.park@tinycld.org',
+                recipients_to: [{ name: 'Team', email: 'support@tinycld.org' }],
+                in_reply_to: 'roadmap-1@tinycld.org',
                 date: '2026-04-04 09:30:00.000Z',
                 subject: 'Re: Q2 Product Roadmap Review',
                 snippet: 'Looks good overall. I have a few suggestions on the Sprint 14 timeline.',
@@ -78,9 +78,9 @@ const THREADS: {
             },
             {
                 sender_name: 'Alice Chen',
-                sender_email: 'alice.chen@example.com',
-                recipients_to: [{ name: 'Team', email: 'support@example.com' }],
-                in_reply_to: 'roadmap-2@example.com',
+                sender_email: 'alice.chen@tinycld.org',
+                recipients_to: [{ name: 'Team', email: 'support@tinycld.org' }],
+                in_reply_to: 'roadmap-2@tinycld.org',
                 date: '2026-04-04 10:42:00.000Z',
                 subject: 'Re: Q2 Product Roadmap Review',
                 snippet:
@@ -105,7 +105,7 @@ const THREADS: {
             {
                 sender_name: 'GitHub',
                 sender_email: 'notifications@github.com',
-                recipients_to: [{ name: 'Alice', email: 'alice@example.com' }],
+                recipients_to: [{ name: 'Alice', email: 'alice@tinycld.org' }],
                 date: '2026-04-04 09:15:00.000Z',
                 subject: '[tinycld/app] Fix: resolve subdomain redirect loop (#247)',
                 snippet: 'nathanstitt merged pull request #247 into main.',
@@ -120,7 +120,7 @@ const THREADS: {
             "Hey! Are you free for lunch tomorrow around noon? There's a new Thai place on 5th that just opened.",
         message_count: 1,
         latest_date: '2026-04-03 12:30:00.000Z',
-        participants: [{ name: 'Marcus Johnson', email: 'marcus.j@example.com' }],
+        participants: [{ name: 'Marcus Johnson', email: 'marcus.j@tinycld.org' }],
         folder: 'inbox',
         is_read: true,
         is_starred: false,
@@ -128,8 +128,8 @@ const THREADS: {
         messages: [
             {
                 sender_name: 'Marcus Johnson',
-                sender_email: 'marcus.j@example.com',
-                recipients_to: [{ name: 'Alice', email: 'alice@example.com' }],
+                sender_email: 'marcus.j@tinycld.org',
+                recipients_to: [{ name: 'Alice', email: 'alice@tinycld.org' }],
                 date: '2026-04-03 12:30:00.000Z',
                 subject: 'Lunch tomorrow?',
                 snippet: 'Hey! Are you free for lunch tomorrow around noon?',
@@ -153,7 +153,7 @@ const THREADS: {
             {
                 sender_name: 'Stripe',
                 sender_email: 'receipts@stripe.com',
-                recipients_to: [{ name: 'Alice', email: 'alice@example.com' }],
+                recipients_to: [{ name: 'Alice', email: 'alice@tinycld.org' }],
                 date: '2026-04-01 14:00:00.000Z',
                 subject: 'Your receipt from TinyCld',
                 snippet:
@@ -170,9 +170,9 @@ const THREADS: {
         message_count: 5,
         latest_date: '2026-03-30 16:45:00.000Z',
         participants: [
-            { name: 'Sarah Kim', email: 'sarah.kim@example.com' },
-            { name: 'Alice', email: 'alice@example.com' },
-            { name: 'David Lee', email: 'david.lee@example.com' },
+            { name: 'Sarah Kim', email: 'sarah.kim@tinycld.org' },
+            { name: 'Alice', email: 'alice@tinycld.org' },
+            { name: 'David Lee', email: 'david.lee@tinycld.org' },
         ],
         folder: 'inbox',
         is_read: false,
@@ -181,10 +181,10 @@ const THREADS: {
         messages: [
             {
                 sender_name: 'David Lee',
-                sender_email: 'david.lee@example.com',
+                sender_email: 'david.lee@tinycld.org',
                 recipients_to: [
-                    { name: 'Sarah Kim', email: 'sarah.kim@example.com' },
-                    { name: 'Alice', email: 'alice@example.com' },
+                    { name: 'Sarah Kim', email: 'sarah.kim@tinycld.org' },
+                    { name: 'Alice', email: 'alice@tinycld.org' },
                 ],
                 date: '2026-03-28 09:00:00.000Z',
                 subject: 'Conference travel arrangements',
@@ -194,12 +194,12 @@ const THREADS: {
             },
             {
                 sender_name: 'Alice',
-                sender_email: 'alice@example.com',
+                sender_email: 'alice@tinycld.org',
                 recipients_to: [
-                    { name: 'Sarah Kim', email: 'sarah.kim@example.com' },
-                    { name: 'David Lee', email: 'david.lee@example.com' },
+                    { name: 'Sarah Kim', email: 'sarah.kim@tinycld.org' },
+                    { name: 'David Lee', email: 'david.lee@tinycld.org' },
                 ],
-                in_reply_to: 'travel-1@example.com',
+                in_reply_to: 'travel-1@tinycld.org',
                 date: '2026-03-28 10:15:00.000Z',
                 subject: 'Re: Conference travel arrangements',
                 snippet: 'I can help coordinate. Sarah, can you handle flights?',
@@ -208,12 +208,12 @@ const THREADS: {
             },
             {
                 sender_name: 'Sarah Kim',
-                sender_email: 'sarah.kim@example.com',
+                sender_email: 'sarah.kim@tinycld.org',
                 recipients_to: [
-                    { name: 'Alice', email: 'alice@example.com' },
-                    { name: 'David Lee', email: 'david.lee@example.com' },
+                    { name: 'Alice', email: 'alice@tinycld.org' },
+                    { name: 'David Lee', email: 'david.lee@tinycld.org' },
                 ],
-                in_reply_to: 'travel-2@example.com',
+                in_reply_to: 'travel-2@tinycld.org',
                 date: '2026-03-29 11:00:00.000Z',
                 subject: 'Re: Conference travel arrangements',
                 snippet: 'On it! Looking at flights now.',
@@ -222,12 +222,12 @@ const THREADS: {
             },
             {
                 sender_name: 'Alice',
-                sender_email: 'alice@example.com',
+                sender_email: 'alice@tinycld.org',
                 recipients_to: [
-                    { name: 'Sarah Kim', email: 'sarah.kim@example.com' },
-                    { name: 'David Lee', email: 'david.lee@example.com' },
+                    { name: 'Sarah Kim', email: 'sarah.kim@tinycld.org' },
+                    { name: 'David Lee', email: 'david.lee@tinycld.org' },
                 ],
-                in_reply_to: 'travel-3@example.com',
+                in_reply_to: 'travel-3@tinycld.org',
                 date: '2026-03-30 08:30:00.000Z',
                 subject: 'Re: Conference travel arrangements',
                 snippet:
@@ -237,12 +237,12 @@ const THREADS: {
             },
             {
                 sender_name: 'Sarah Kim',
-                sender_email: 'sarah.kim@example.com',
+                sender_email: 'sarah.kim@tinycld.org',
                 recipients_to: [
-                    { name: 'Alice', email: 'alice@example.com' },
-                    { name: 'David Lee', email: 'david.lee@example.com' },
+                    { name: 'Alice', email: 'alice@tinycld.org' },
+                    { name: 'David Lee', email: 'david.lee@tinycld.org' },
                 ],
-                in_reply_to: 'travel-4@example.com',
+                in_reply_to: 'travel-4@tinycld.org',
                 date: '2026-03-30 16:45:00.000Z',
                 subject: 'Re: Conference travel arrangements',
                 snippet:
@@ -258,7 +258,7 @@ const THREADS: {
             "Here's the draft for this month's newsletter. Still need to add the section about new features.",
         message_count: 1,
         latest_date: '2026-03-28 15:00:00.000Z',
-        participants: [{ name: 'Alice', email: 'alice@example.com' }],
+        participants: [{ name: 'Alice', email: 'alice@tinycld.org' }],
         folder: 'drafts',
         is_read: true,
         is_starred: false,
@@ -266,7 +266,7 @@ const THREADS: {
         messages: [
             {
                 sender_name: 'Alice',
-                sender_email: 'alice@example.com',
+                sender_email: 'alice@tinycld.org',
                 recipients_to: [],
                 date: '2026-03-28 15:00:00.000Z',
                 subject: 'Draft: Monthly newsletter',
@@ -282,7 +282,7 @@ const THREADS: {
             "Quick summary from today's standup: API migration on track, mobile app release pushed to next week.",
         message_count: 1,
         latest_date: '2026-03-27 17:00:00.000Z',
-        participants: [{ name: 'Alice', email: 'alice@example.com' }],
+        participants: [{ name: 'Alice', email: 'alice@tinycld.org' }],
         folder: 'sent',
         is_read: true,
         is_starred: false,
@@ -290,8 +290,8 @@ const THREADS: {
         messages: [
             {
                 sender_name: 'Alice',
-                sender_email: 'alice@example.com',
-                recipients_to: [{ name: 'Team', email: 'support@example.com' }],
+                sender_email: 'alice@tinycld.org',
+                recipients_to: [{ name: 'Team', email: 'support@tinycld.org' }],
                 date: '2026-03-27 17:00:00.000Z',
                 subject: 'Team standup notes — March 27',
                 snippet: "Quick summary from today's standup.",
@@ -302,21 +302,70 @@ const THREADS: {
     },
 ]
 
-export default async function seed(pb: PocketBase, { org, userOrg }: SeedContext) {
-    // 1. Create domain
+function deriveAddress(email: string) {
+    return (
+        email
+            .split('@')[0]
+            .toLowerCase()
+            .replace(/[^a-z0-9._-]/g, '') || 'user'
+    )
+}
+
+async function findUniqueAddress(pb: PocketBase, base: string, domainId: string) {
+    let address = base
+    let suffix = 2
+    while (true) {
+        try {
+            await pb
+                .collection('mail_mailboxes')
+                .getFirstListItem(`address = "${address}" && domain = "${domainId}"`)
+            address = `${base}${suffix++}`
+        } catch {
+            return address
+        }
+    }
+}
+
+async function createPersonalMailbox(
+    pb: PocketBase,
+    email: string,
+    name: string,
+    domainId: string,
+    userOrgId: string
+) {
+    const base = deriveAddress(email)
+    const address = await findUniqueAddress(pb, base, domainId)
+
+    const mailbox = await pb.collection('mail_mailboxes').create({
+        address,
+        domain: domainId,
+        display_name: name || address,
+        type: 'personal',
+    })
+
+    await pb.collection('mail_mailbox_members').create({
+        mailbox: mailbox.id,
+        user_org: userOrgId,
+        role: 'owner',
+    })
+
+    return mailbox
+}
+
+export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedContext) {
     const domain = await pb.collection('mail_domains').create({
         org: org.id,
-        domain: 'example.com',
+        domain: 'tinycld.org',
         verified: true,
     })
 
-    // 2. Create mailboxes
-    const personalMailbox = await pb.collection('mail_mailboxes').create({
-        address: 'alice',
-        domain: domain.id,
-        display_name: 'Alice',
-        type: 'personal',
-    })
+    const personalMailbox = await createPersonalMailbox(
+        pb,
+        user.email,
+        user.name,
+        domain.id,
+        userOrg.id
+    )
 
     const sharedMailbox = await pb.collection('mail_mailboxes').create({
         address: 'support',
@@ -325,20 +374,24 @@ export default async function seed(pb: PocketBase, { org, userOrg }: SeedContext
         type: 'shared',
     })
 
-    // 3. Create mailbox members
-    await pb.collection('mail_mailbox_members').create({
-        mailbox: personalMailbox.id,
-        user_org: userOrg.id,
-        role: 'owner',
-    })
-
     await pb.collection('mail_mailbox_members').create({
         mailbox: sharedMailbox.id,
         user_org: userOrg.id,
         role: 'owner',
     })
 
-    // 4. Create labels
+    // Create personal mailboxes for any other org members
+    const otherMembers = await pb.collection('user_org').getFullList({
+        filter: `org = "${org.id}" && id != "${userOrg.id}"`,
+        expand: 'user',
+    })
+    for (const member of otherMembers) {
+        const memberUser = member.expand?.user as { email: string; name: string } | undefined
+        if (!memberUser) continue
+        await createPersonalMailbox(pb, memberUser.email, memberUser.name, domain.id, member.id)
+    }
+
+    // Create labels
     const labelMap: Record<string, string> = {}
     for (const label of LABELS) {
         const record = await pb.collection('mail_labels').create({
@@ -349,7 +402,7 @@ export default async function seed(pb: PocketBase, { org, userOrg }: SeedContext
         labelMap[label.name] = record.id
     }
 
-    // 5. Create threads, messages, and thread state
+    // 7. Create threads, messages, and thread state
     for (const thread of THREADS) {
         const threadRecord = await pb.collection('mail_threads').create({
             mailbox: personalMailbox.id,
@@ -382,7 +435,7 @@ export default async function seed(pb: PocketBase, { org, userOrg }: SeedContext
             const msgId = `<${thread.subject
                 .toLowerCase()
                 .replace(/[^a-z0-9]/g, '-')
-                .slice(0, 30)}-${i + 1}@example.com>`
+                .slice(0, 30)}-${i + 1}@tinycld.org>`
             formData.append('message_id', msgId)
 
             await pb.collection('mail_messages').create(formData)
