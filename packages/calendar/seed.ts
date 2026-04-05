@@ -1081,11 +1081,13 @@ async function seedEvents(pb: PocketBase, calendarMap: Record<string, string>, u
 }
 
 export default async function seed(pb: PocketBase, { org, userOrg }: SeedContext) {
-    const existing = await pb.collection('calendar_calendars').getList(1, 1, {
-        filter: `org = "${org.id}"`,
+    // Check for existing seed events (not calendars, since the lifecycle hook
+    // auto-creates a personal calendar when user_org is created)
+    const existingEvents = await pb.collection('calendar_events').getList(1, 1, {
+        filter: `created_by = "${userOrg.id}"`,
     })
-    if (existing.totalItems > 0) {
-        log(`Skipping (${existing.totalItems} calendars already exist)`)
+    if (existingEvents.totalItems > 0) {
+        log(`Skipping (${existingEvents.totalItems} events already exist)`)
         return
     }
 
