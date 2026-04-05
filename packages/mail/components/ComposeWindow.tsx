@@ -2,10 +2,14 @@ import { useEffect, useRef } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
+import { performMutations } from '~/lib/mutations'
+import { useStore } from '~/lib/pocketbase'
 import { useForm, zodResolver } from '~/ui/form'
 import { type ComposeFormData, composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useCompose } from '../hooks/useComposeState'
 import { useDefaultMailbox } from '../hooks/useDefaultMailbox'
+import { useEditorHandle, useMailEditor } from '../hooks/useMailEditor'
+import { useSaveDraft } from '../hooks/useSaveDraft'
 import { useSendEmail } from '../hooks/useSendEmail'
 import { ComposeFields } from './ComposeFields'
 import { ComposeHeader } from './ComposeHeader'
@@ -26,17 +30,22 @@ interface ComposeWindowProps {
 
 export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const theme = useTheme()
-    const { mode, replyContext, minimize, maximize, open, close } = useCompose()
+    const { mode, replyContext, draftContext, minimize, maximize, open, close } = useCompose()
     const breakpoint = useBreakpoint()
     const editorRef = useRef<RichTextEditorHandle>(null)
     const mailboxId = useDefaultMailbox()
     const prevModeRef = useRef(mode)
+    const draftIdRef = useRef<string | null>(null)
+
+    const editor = useMailEditor({ placeholder: 'Compose email' })
+    useEditorHandle(editor, editorRef)
 
     const {
         control,
         handleSubmit,
         reset,
         setError,
+        getValues,
         formState: { errors },
     } = useForm<ComposeFormData>({
         resolver: zodResolver(composeSchema),
@@ -48,7 +57,19 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         const wasClosedOrNew = prevModeRef.current === 'closed'
         prevModeRef.current = mode
 
-        if (replyContext) {
+        if (draftContext) {
+            draftIdRef.current = draftContext.messageId
+            const formatRecipients = (recipients: { name: string; email: string }[]) =>
+                recipients.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ')
+            reset({
+                to: formatRecipients(draftContext.to),
+                cc: formatRecipients(draftContext.cc),
+                bcc: formatRecipients(draftContext.bcc),
+                subject: draftContext.subject,
+            })
+            editor.setContent(draftContext.htmlBody || draftContext.textBody || '')
+        } else if (replyContext) {
+            draftIdRef.current = null
             const toValue =
                 replyContext.to.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
                 (replyContext.to.length > 0 ? ', ' : '')
@@ -57,17 +78,62 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                 : `Re: ${replyContext.subject}`
             reset({ to: toValue, cc: '', bcc: '', subject: subjectPrefix })
         } else if (mode === 'open' && wasClosedOrNew) {
+            draftIdRef.current = null
             reset({ to: '', cc: '', bcc: '', subject: '' })
         }
-    }, [replyContext, mode, reset])
+    }, [replyContext, draftContext, mode, reset, editor])
+
+    const [messagesCollection] = useStore('mail_messages')
+
+    const deleteDraftMessage = async () => {
+        const id = draftIdRef.current
+        if (!id) return
+        draftIdRef.current = null
+        await performMutations(function* () {
+            yield messagesCollection.delete(id)
+        })
+    }
 
     const { send, isPending } = useSendEmail({
-        onSuccess: () => {
+        onSuccess: async () => {
+            await deleteDraftMessage()
             editorRef.current?.clear()
             reset({ to: '', cc: '', bcc: '', subject: '' })
             close()
         },
     })
+
+    const { saveDraft } = useSaveDraft()
+
+    const handleClose = async () => {
+        const text = await editorRef.current?.getText()
+        if (!text?.trim() || !mailboxId) {
+            close()
+            return
+        }
+
+        const data = getValues()
+        const htmlBody = (await editorRef.current?.getHTML()) ?? ''
+        const to = data.to ? parseRecipients(data.to) : undefined
+        const cc = data.cc ? parseRecipients(data.cc) : undefined
+        const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
+
+        saveDraft({
+            mailbox_id: mailboxId,
+            message_id: draftIdRef.current ?? undefined,
+            to,
+            cc,
+            bcc,
+            subject: data.subject,
+            html_body: htmlBody,
+            text_body: text,
+        })
+
+        draftIdRef.current = null
+        editorRef.current?.clear()
+        reset({ to: '', cc: '', bcc: '', subject: '' })
+        close()
+    }
 
     if (!isVisible) return null
 
@@ -125,7 +191,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                 mode={mode}
                 onMinimize={isMinimized ? open : minimize}
                 onMaximize={isMaximized ? open : maximize}
-                onClose={close}
+                onClose={handleClose}
             />
             {isMinimized ? null : (
                 <>
@@ -138,9 +204,14 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                         </View>
                     )}
                     <View style={styles.body}>
-                        <RichTextEditor editorRef={editorRef} />
+                        <RichTextEditor editor={editor} />
                     </View>
-                    <ComposeToolbar onDiscard={close} onSend={onSend} isPending={isPending} />
+                    <ComposeToolbar
+                        editor={editor}
+                        onDiscard={close}
+                        onSend={onSend}
+                        isPending={isPending}
+                    />
                 </>
             )}
         </View>

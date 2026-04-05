@@ -1,6 +1,7 @@
 import { Square, SquareCheck, Star } from 'lucide-react-native'
 import type { OneRouter } from 'one'
 import { Link } from 'one'
+import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import type { ThreadListItem } from './thread-list-item'
@@ -12,6 +13,7 @@ interface EmailRowProps {
     onToggleStar?: () => void
     isSelected?: boolean
     onToggleSelect?: () => void
+    onPress?: () => void
 }
 
 export function EmailRow({
@@ -20,26 +22,91 @@ export function EmailRow({
     onToggleStar,
     isSelected,
     onToggleSelect,
+    onPress,
 }: EmailRowProps) {
-    if (isMobile) return <MobileEmailRow email={email} onToggleStar={onToggleStar} />
+    if (isMobile)
+        return <MobileEmailRow email={email} onToggleStar={onToggleStar} onPress={onPress} />
     return (
         <DesktopEmailRow
             email={email}
             onToggleStar={onToggleStar}
             isSelected={isSelected}
             onToggleSelect={onToggleSelect}
+            onPress={onPress}
         />
     )
 }
 
-function MobileEmailRow({ email, onToggleStar }: EmailRowProps) {
+function RowWrapper({
+    href,
+    onPress,
+    children,
+}: {
+    href: OneRouter.Href
+    onPress?: () => void
+    children: ReactNode
+}) {
+    if (onPress) {
+        return (
+            <Pressable onPress={onPress} style={{ display: 'flex', width: '100%' }}>
+                {children}
+            </Pressable>
+        )
+    }
+    return (
+        <Link href={href} style={{ display: 'flex', width: '100%' }}>
+            {children}
+        </Link>
+    )
+}
+
+function SenderWithDraft({
+    email,
+    theme,
+    style,
+    numberOfLines,
+}: {
+    email: ThreadListItem
+    theme: ReturnType<typeof useTheme>
+    style: Record<string, unknown>[]
+    numberOfLines?: number
+}) {
+    if (!email.hasDraft) {
+        return (
+            <Text style={style} numberOfLines={numberOfLines}>
+                {email.senderName}
+            </Text>
+        )
+    }
+
+    const otherParticipants = email.participants
+        .filter(p => p.email !== email.senderEmail)
+        .map(p => p.name || p.email.split('@')[0])
+
+    if (otherParticipants.length === 0) {
+        return (
+            <Text style={style} numberOfLines={numberOfLines}>
+                <Text style={{ color: theme.red10.val }}>Draft</Text>
+            </Text>
+        )
+    }
+
+    return (
+        <Text style={style} numberOfLines={numberOfLines}>
+            {otherParticipants.join(', ')}, <Text style={{ color: theme.red10.val }}>Draft</Text>
+        </Text>
+    )
+}
+
+function MobileEmailRow({ email, onToggleStar, onPress }: EmailRowProps) {
     const theme = useTheme()
 
     const senderWeight = email.isRead ? ('400' as const) : ('700' as const)
     const subjectWeight = email.isRead ? ('400' as const) : ('600' as const)
     const rowBg = email.isRead ? 'transparent' : theme.backgroundHover.val
 
-    const initials = email.senderName
+    const displayName = email.hasDraft ? 'Draft' : email.senderName
+    const initials = displayName
         .split(' ')
         .filter(Boolean)
         .map(n => n[0])
@@ -50,10 +117,7 @@ function MobileEmailRow({ email, onToggleStar }: EmailRowProps) {
     const dateDisplay = formatMailDate(email.latestDate)
 
     return (
-        <Link
-            href={`/app/mail/${email.threadId}` as OneRouter.Href}
-            style={{ display: 'flex', width: '100%' }}
-        >
+        <RowWrapper href={`/app/mail/${email.threadId}` as OneRouter.Href} onPress={onPress}>
             <View
                 style={[
                     mobileStyles.row,
@@ -72,15 +136,15 @@ function MobileEmailRow({ email, onToggleStar }: EmailRowProps) {
                 </View>
                 <View style={mobileStyles.content}>
                     <View style={mobileStyles.topRow}>
-                        <Text
+                        <SenderWithDraft
+                            email={email}
+                            theme={theme}
                             style={[
                                 mobileStyles.sender,
                                 { color: theme.color.val, fontWeight: senderWeight },
                             ]}
                             numberOfLines={1}
-                        >
-                            {email.senderName}
-                        </Text>
+                        />
                         <Text style={[mobileStyles.date, { color: theme.color8.val }]}>
                             {dateDisplay}
                         </Text>
@@ -115,11 +179,17 @@ function MobileEmailRow({ email, onToggleStar }: EmailRowProps) {
                     </Text>
                 </View>
             </View>
-        </Link>
+        </RowWrapper>
     )
 }
 
-function DesktopEmailRow({ email, onToggleStar, isSelected, onToggleSelect }: EmailRowProps) {
+function DesktopEmailRow({
+    email,
+    onToggleStar,
+    isSelected,
+    onToggleSelect,
+    onPress,
+}: EmailRowProps) {
     const theme = useTheme()
 
     const rowBg = isSelected
@@ -135,10 +205,7 @@ function DesktopEmailRow({ email, onToggleStar, isSelected, onToggleSelect }: Em
     const checkboxColor = isSelected ? theme.accentBackground.val : theme.color8.val
 
     return (
-        <Link
-            href={`/app/mail/${email.threadId}` as OneRouter.Href}
-            style={{ display: 'flex', width: '100%' }}
-        >
+        <RowWrapper href={`/app/mail/${email.threadId}` as OneRouter.Href} onPress={onPress}>
             <View
                 style={[
                     styles.row,
@@ -171,15 +238,15 @@ function DesktopEmailRow({ email, onToggleStar, isSelected, onToggleSelect }: Em
                         fill={email.isStarred ? theme.yellow8.val : 'transparent'}
                     />
                 </Pressable>
-                <Text
+                <SenderWithDraft
+                    email={email}
+                    theme={theme}
                     style={[
                         styles.sender,
                         { color: theme.color.val, fontWeight: senderWeight as '400' | '700' },
                     ]}
                     numberOfLines={1}
-                >
-                    {email.senderName}
-                </Text>
+                />
                 {email.messageCount > 1 ? (
                     <Text style={[styles.threadBadge, { color: theme.color8.val }]}>
                         {email.messageCount}
@@ -202,7 +269,7 @@ function DesktopEmailRow({ email, onToggleStar, isSelected, onToggleSelect }: Em
                 </View>
                 <Text style={[styles.date, { color: theme.color8.val }]}>{dateDisplay}</Text>
             </View>
-        </Link>
+        </RowWrapper>
     )
 }
 

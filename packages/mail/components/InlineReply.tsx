@@ -7,6 +7,7 @@ import { useForm, zodResolver } from '~/ui/form'
 import { type ComposeFormData, composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useCompose } from '../hooks/useComposeState'
 import { useDefaultMailbox } from '../hooks/useDefaultMailbox'
+import { useEditorHandle, useMailEditor } from '../hooks/useMailEditor'
 import { useSendEmail } from '../hooks/useSendEmail'
 import { ComposeFields } from './ComposeFields'
 import { ComposeToolbar } from './ComposeToolbar'
@@ -119,6 +120,8 @@ function InlineComposeForm({
     const theme = useTheme()
     const editorRef = useRef<RichTextEditorHandle>(null)
     const mailboxId = useDefaultMailbox()
+    const editor = useMailEditor({ placeholder: 'Compose reply' })
+    useEditorHandle(editor, editorRef)
 
     const toValue =
         replyContext.to.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
@@ -183,9 +186,14 @@ function InlineComposeForm({
         >
             <ComposeFields control={control} errors={errors} />
             <View style={inlineStyles.body}>
-                <RichTextEditor editorRef={editorRef} />
+                <RichTextEditor editor={editor} />
             </View>
-            <ComposeToolbar onDiscard={onClose} onSend={onSend} isPending={isPending} />
+            <ComposeToolbar
+                editor={editor}
+                onDiscard={onClose}
+                onSend={onSend}
+                isPending={isPending}
+            />
         </View>
     )
 }

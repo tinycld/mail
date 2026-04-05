@@ -47,6 +47,11 @@ func Register(app *pocketbase.PocketBase) {
 			return handleSend(app, re)
 		}).BindFunc(requireAuth)
 
+		// Draft endpoint (requires auth, saves without sending)
+		e.Router.POST("/api/mail/draft", func(re *core.RequestEvent) error {
+			return handleDraft(app, re)
+		}).BindFunc(requireAuth)
+
 		// Inbound webhook (unauthenticated, secured via secret token)
 		inboundSecret := os.Getenv("MAIL_INBOUND_SECRET")
 		e.Router.POST("/api/mail/inbound/{token}", func(re *core.RequestEvent) error {

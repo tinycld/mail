@@ -1,20 +1,22 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useParams } from 'one'
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { FlatList } from 'react-native'
 import { SizableText, YStack } from 'tamagui'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { useMutation } from '~/lib/mutations'
-import { useStore } from '~/lib/pocketbase'
+import { pb, useStore } from '~/lib/pocketbase'
 import { useCurrentRole } from '~/lib/use-current-role'
 import { ComposeFAB } from '../components/ComposeFAB'
 import { EmailListToolbar } from '../components/EmailListToolbar'
 import { EmailRow } from '../components/EmailRow'
 import type { ThreadListItem } from '../components/thread-list-item'
 import { toThreadListItem } from '../components/thread-list-item'
+import { useCompose } from '../hooks/useComposeState'
 import { useMailBulkActions } from '../hooks/useMailBulkActions'
 import { useMailSelection } from '../hooks/useMailSelection'
+import type { MailMessages } from '../types'
 
 function useQueryParams() {
     const { folder, label } = useParams<{ folder?: string; label?: string }>()
@@ -36,12 +38,10 @@ export default function MailListScreen() {
     const { folder, label } = useQueryParams()
     const breakpoint = useBreakpoint()
     const { userOrgId } = useCurrentRole()
+    const { openDraft } = useCompose()
 
-    const [threadStateCollection, threadsCollection, labelsCollection] = useStore(
-        'mail_thread_state',
-        'mail_threads',
-        'mail_labels'
-    )
+    const [threadStateCollection, threadsCollection, labelsCollection, messagesCollection] =
+        useStore('mail_thread_state', 'mail_threads', 'mail_labels', 'mail_messages')
 
     const { data: threadStates } = useLiveQuery(
         query =>
@@ -61,6 +61,22 @@ export default function MailListScreen() {
         query => query.from({ mail_labels: labelsCollection }),
         []
     )
+
+    const { data: draftMessages } = useLiveQuery(
+        query =>
+            query
+                .from({ mail_messages: messagesCollection })
+                .where(({ mail_messages }) => eq(mail_messages.delivery_status, 'draft')),
+        []
+    )
+
+    const draftByThread = useMemo(() => {
+        const map = new Map<string, MailMessages>()
+        for (const msg of (draftMessages ?? []) as MailMessages[]) {
+            map.set(msg.thread, msg)
+        }
+        return map
+    }, [draftMessages])
 
     const threadMap = useMemo(() => {
         const map = new Map<string, (typeof threads)[number]>()
@@ -87,7 +103,8 @@ export default function MailListScreen() {
             const stateLabels = labelIds
                 .map((lid: string) => labelMap.get(lid))
                 .filter((l): l is { id: string; name: string; color: string } => l != null)
-            return toThreadListItem(state, thread, stateLabels)
+            const hasDraft = draftByThread.has(state.thread)
+            return toThreadListItem(state, thread, stateLabels, hasDraft)
         })
 
         if (label) {
@@ -100,7 +117,7 @@ export default function MailListScreen() {
         }
 
         return mapped.filter(item => item.folder === activeFolder)
-    }, [threadStates, threadMap, labelMap, folder, label])
+    }, [threadStates, threadMap, labelMap, draftByThread, folder, label])
 
     const selection = useMailSelection(items, folder, label)
     const bulkActions = useMailBulkActions(
@@ -134,6 +151,36 @@ export default function MailListScreen() {
             })
         },
     })
+
+    const handleDraftPress = useCallback(
+        async (item: ThreadListItem) => {
+            const draft = draftByThread.get(item.threadId)
+            if (!draft) return
+
+            let htmlBody = ''
+            if (draft.body_html) {
+                const url = pb.files.getURL(
+                    { collectionId: 'mail_messages', id: draft.id },
+                    draft.body_html
+                )
+                htmlBody = await fetch(url)
+                    .then(r => r.text())
+                    .catch(() => '')
+            }
+
+            openDraft({
+                messageId: draft.id,
+                threadId: item.threadId,
+                subject: draft.subject ?? '',
+                to: draft.recipients_to ?? [],
+                cc: draft.recipients_cc ?? [],
+                bcc: [],
+                htmlBody,
+                textBody: draft.snippet ?? '',
+            })
+        },
+        [draftByThread, openDraft]
+    )
 
     const folderTitle = label
         ? 'Label'
@@ -182,6 +229,7 @@ export default function MailListScreen() {
                                     currentStarred: item.isStarred,
                                 })
                             }
+                            onPress={item.hasDraft ? () => handleDraftPress(item) : undefined}
                         />
                     )}
                 />

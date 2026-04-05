@@ -16,12 +16,14 @@ export interface ThreadListItem {
     isStarred: boolean
     labels: { id: string; name: string; color: string }[]
     folder: string
+    hasDraft: boolean
 }
 
 export function toThreadListItem(
     state: MailThreadState,
     thread: MailThreads | undefined,
-    labels: LabelInfo[]
+    labels: LabelInfo[],
+    hasDraft = false
 ): ThreadListItem {
     const t = thread
     const participants = t?.participants ?? []
@@ -40,6 +42,7 @@ export function toThreadListItem(
         isStarred: state.is_starred,
         labels,
         folder: state.folder,
+        hasDraft,
     }
 }
 

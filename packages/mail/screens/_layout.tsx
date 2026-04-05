@@ -6,11 +6,17 @@ import { useWorkspaceLayout } from '~/components/workspace/useWorkspaceLayout'
 import { ComposeWindow } from '../components/ComposeWindow'
 import { SearchBar } from '../components/SearchBar'
 import { composeEvents } from '../hooks/composeEvents'
-import { ComposeContext, type ComposeMode, type ReplyContext } from '../hooks/useComposeState'
+import {
+    ComposeContext,
+    type ComposeMode,
+    type DraftContext,
+    type ReplyContext,
+} from '../hooks/useComposeState'
 
 export default function MailLayout() {
     const [composeMode, setComposeMode] = useState<ComposeMode>('closed')
     const [replyContext, setReplyContext] = useState<ReplyContext | null>(null)
+    const [draftContext, setDraftContext] = useState<DraftContext | null>(null)
     const [searchQuery, setSearchQuery] = useState('')
     const breakpoint = useBreakpoint()
     const { setDrawerOpen } = useWorkspaceLayout()
@@ -27,6 +33,7 @@ export default function MailLayout() {
     const close = useCallback(() => {
         setComposeMode('closed')
         setReplyContext(null)
+        setDraftContext(null)
     }, [])
 
     const openReply = useCallback((context: ReplyContext) => {
@@ -34,9 +41,35 @@ export default function MailLayout() {
         setComposeMode('inline')
     }, [])
 
+    const openDraft = useCallback((context: DraftContext) => {
+        setDraftContext(context)
+        setReplyContext(null)
+        setComposeMode('open')
+    }, [])
+
     const composeValue = useMemo(
-        () => ({ mode: composeMode, replyContext, open, minimize, maximize, close, openReply }),
-        [composeMode, replyContext, open, minimize, maximize, close, openReply]
+        () => ({
+            mode: composeMode,
+            replyContext,
+            draftContext,
+            open,
+            minimize,
+            maximize,
+            close,
+            openReply,
+            openDraft,
+        }),
+        [
+            composeMode,
+            replyContext,
+            draftContext,
+            open,
+            minimize,
+            maximize,
+            close,
+            openReply,
+            openDraft,
+        ]
     )
 
     const isComposeVisible = composeMode !== 'closed' && composeMode !== 'inline'

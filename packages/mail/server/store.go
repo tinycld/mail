@@ -185,7 +185,7 @@ type storedMessage struct {
 	TextBody       string
 	StrippedReply  string
 	Attachments    []InboundAttachment
-	DeliveryStatus string // "sending", "sent", "delivered", "bounced", "spam_complaint"
+	DeliveryStatus string // "sending", "sent", "delivered", "bounced", "spam_complaint", "draft"
 }
 
 // updateThreadMetadata updates the thread's snippet, latest_date, message_count, and participants.
