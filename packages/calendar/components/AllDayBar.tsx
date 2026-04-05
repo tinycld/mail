@@ -1,18 +1,39 @@
+import { useMemo } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { type LayoutEvent, layoutAllDayEvents } from '../layout'
 import { getCalendarById } from '../mock-data'
 import type { CalendarEvent } from '../types'
 import { getCalendarColorResolved } from './calendar-colors'
 
+const ROW_HEIGHT = 22
+
 interface AllDayBarProps {
     events: CalendarEvent[]
+    weekStart: Date
+    dayCount: number
     onEventPress: (eventId: string) => void
 }
 
-export function AllDayBar({ events, onEventPress }: AllDayBarProps) {
+export function AllDayBar({ events, weekStart, dayCount, onEventPress }: AllDayBarProps) {
     const theme = useTheme()
 
-    if (events.length === 0) return null
+    const { layouts, eventMap, maxRow } = useMemo(() => {
+        const layoutEvents: LayoutEvent[] = events.map(e => ({
+            id: e.id,
+            start: new Date(e.start),
+            end: new Date(e.end),
+            allDay: e.allDay,
+        }))
+        const allDayLayouts = layoutAllDayEvents(layoutEvents, weekStart, dayCount)
+        const map = new Map(events.map(e => [e.id, e]))
+        const max = allDayLayouts.reduce((m, l) => Math.max(m, l.row), -1)
+        return { layouts: allDayLayouts, eventMap: map, maxRow: max }
+    }, [events, weekStart, dayCount])
+
+    if (layouts.length === 0) return null
+
+    const containerHeight = (maxRow + 1) * ROW_HEIGHT + 4
 
     return (
         <View
@@ -24,34 +45,60 @@ export function AllDayBar({ events, onEventPress }: AllDayBarProps) {
                 },
             ]}
         >
-            {events.map(event => {
-                const cal = getCalendarById(event.calendarId)
-                const colors = getCalendarColorResolved(cal?.colorKey ?? 'blue')
-                return (
-                    <Pressable key={event.id} onPress={() => onEventPress(event.id)}>
-                        <View style={[styles.pill, { backgroundColor: colors.bg }]}>
-                            <Text style={[styles.pillText, { color: colors.text }]}>
-                                {event.title}
-                            </Text>
-                        </View>
-                    </Pressable>
-                )
-            })}
+            <View style={styles.gutterSpacer} />
+            <View style={[styles.columnsArea, { height: containerHeight }]}>
+                {layouts.map(layout => {
+                    const event = eventMap.get(layout.id)
+                    if (!event) return null
+                    const cal = getCalendarById(event.calendarId)
+                    const colors = getCalendarColorResolved(cal?.colorKey ?? 'blue')
+                    return (
+                        <Pressable
+                            key={event.id}
+                            onPress={() => onEventPress(event.id)}
+                            style={{
+                                position: 'absolute',
+                                top: layout.row * ROW_HEIGHT + 2,
+                                left: `${(layout.startCol / dayCount) * 100}%`,
+                                width: `${(layout.span / dayCount) * 100}%`,
+                                height: ROW_HEIGHT - 2,
+                                paddingHorizontal: 1,
+                            }}
+                        >
+                            <View style={[styles.pill, { backgroundColor: colors.bg }]}>
+                                <Text
+                                    style={[styles.pillText, { color: colors.text }]}
+                                    numberOfLines={1}
+                                >
+                                    {event.title}
+                                </Text>
+                            </View>
+                        </Pressable>
+                    )
+                })}
+            </View>
         </View>
     )
 }
 
 const styles = StyleSheet.create({
     container: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        gap: 4,
+        flexDirection: 'row',
         borderBottomWidth: 1,
     },
+    gutterSpacer: {
+        width: 50,
+    },
+    columnsArea: {
+        flex: 1,
+        position: 'relative',
+    },
     pill: {
+        flex: 1,
         borderRadius: 3,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
+        paddingHorizontal: 4,
+        paddingVertical: 1,
+        overflow: 'hidden',
     },
     pillText: {
         fontSize: 12,

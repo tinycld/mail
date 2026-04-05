@@ -1,14 +1,9 @@
 import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { useCalendarEvents } from '../hooks/useCalendarEvents'
-import {
-    addDays,
-    eventOverlapsRange,
-    getWeekDays,
-    isToday,
-    startOfWeek,
-} from '../hooks/useCalendarNavigation'
+import { addDays, eventOverlapsRange, isToday, startOfWeek } from '../hooks/useCalendarNavigation'
 import { useCalendarView } from '../hooks/useCalendarView'
 import type { CalendarEvent } from '../types'
 import { AllDayBar } from './AllDayBar'
@@ -27,34 +22,47 @@ function getEventsForDay(events: CalendarEvent[], date: Date): CalendarEvent[] {
 export function WeekView() {
     const { focusDate, openQuickCreate, openEventDetail } = useCalendarView()
     const theme = useTheme()
+    const isMobile = useBreakpoint() === 'mobile'
+    const dayCount = isMobile ? 3 : 7
 
-    const weekStart = useMemo(() => startOfWeek(focusDate), [focusDate])
-    const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
-    const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart])
+    const rangeStart = useMemo(
+        () => (isMobile ? focusDate : startOfWeek(focusDate)),
+        [focusDate, isMobile]
+    )
+    const rangeEnd = useMemo(() => addDays(rangeStart, dayCount - 1), [rangeStart, dayCount])
+    const days = useMemo(
+        () => Array.from({ length: dayCount }, (_, i) => addDays(rangeStart, i)),
+        [rangeStart, dayCount]
+    )
 
-    const events = useCalendarEvents(weekStart, weekEnd)
+    const events = useCalendarEvents(rangeStart, rangeEnd)
 
     const { allDayEvents, columns } = useMemo(() => {
         const allDay = events.filter(e => e.allDay)
         const timed = events.filter(e => !e.allDay)
-        const cols = weekDays.map(date => ({
+        const cols = days.map(date => ({
             date,
             events: getEventsForDay(timed, date),
         }))
         return { allDayEvents: allDay, columns: cols }
-    }, [events, weekDays])
+    }, [events, days])
 
     return (
         <View style={styles.container}>
             <View style={[styles.headerRow, { borderBottomColor: theme.borderColor.val }]}>
                 <View style={styles.gutterSpacer} />
-                {weekDays.map(date => (
+                {days.map(date => (
                     <View key={date.toISOString()} style={styles.headerCell}>
                         <DayColumnHeader date={date} isToday={isToday(date)} />
                     </View>
                 ))}
             </View>
-            <AllDayBar events={allDayEvents} onEventPress={openEventDetail} />
+            <AllDayBar
+                events={allDayEvents}
+                weekStart={rangeStart}
+                dayCount={dayCount}
+                onEventPress={openEventDetail}
+            />
             <TimeGrid
                 columns={columns}
                 onSlotPress={openQuickCreate}

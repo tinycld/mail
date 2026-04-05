@@ -1,8 +1,9 @@
 import type React from 'react'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import { getTimeLabel, isToday } from '../hooks/useCalendarNavigation'
+import { type LayoutEvent, layoutTimedEvents } from '../layout'
 import { getCalendarById } from '../mock-data'
 import type { CalendarEvent } from '../types'
 import { CurrentTimeIndicator } from './CurrentTimeIndicator'
@@ -24,16 +25,6 @@ interface TimeGridProps {
     onEventPress: (eventId: string) => void
 }
 
-function getEventPosition(event: CalendarEvent, startHour: number) {
-    const start = new Date(event.start)
-    const end = new Date(event.end)
-    const startMinutes = start.getHours() * 60 + start.getMinutes()
-    const endMinutes = end.getHours() * 60 + end.getMinutes()
-    const topOffset = ((startMinutes - startHour * 60) / 60) * HOUR_HEIGHT
-    const height = ((endMinutes - startMinutes) / 60) * HOUR_HEIGHT
-    return { topOffset, height }
-}
-
 function formatEventTime(event: CalendarEvent): string {
     const start = new Date(event.start)
     const hours = start.getHours()
@@ -42,6 +33,15 @@ function formatEventTime(event: CalendarEvent): string {
     const displayHour = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
     const minuteStr = minutes > 0 ? `:${String(minutes).padStart(2, '0')}` : ''
     return `${displayHour}${minuteStr} ${suffix}`
+}
+
+function toLayoutEvents(events: CalendarEvent[]): LayoutEvent[] {
+    return events.map(e => ({
+        id: e.id,
+        start: new Date(e.start),
+        end: new Date(e.end),
+        allDay: e.allDay,
+    }))
 }
 
 export function TimeGrid({
@@ -54,7 +54,6 @@ export function TimeGrid({
     const theme = useTheme()
     const totalHours = endHour - startHour + 1
 
-    // Scroll to current hour once the ScrollView mounts
     const scrollRef = useCallback(
         (node: ScrollView | null) => {
             if (!node) return
@@ -80,6 +79,17 @@ export function TimeGrid({
         return labels
     }, [startHour, endHour, theme.color8.val])
 
+    const columnLayouts = useMemo(
+        () =>
+            columns.map(col => {
+                const layoutEvents = toLayoutEvents(col.events)
+                const layouts = layoutTimedEvents(layoutEvents, startHour, HOUR_HEIGHT)
+                const layoutMap = new Map(layouts.map(l => [l.id, l]))
+                return { column: col, layoutMap }
+            }),
+        [columns, startHour]
+    )
+
     const now = new Date()
     const currentTimeOffset =
         ((now.getHours() * 60 + now.getMinutes() - startHour * 60) / 60) * HOUR_HEIGHT
@@ -90,7 +100,7 @@ export function TimeGrid({
                 <View style={styles.gutterColumn}>{renderTimeLabels()}</View>
 
                 <View style={styles.columnsContainer}>
-                    {columns.map((column, colIndex) => {
+                    {columnLayouts.map(({ column, layoutMap }, colIndex) => {
                         const todayColumn = isToday(column.date)
                         return (
                             <View
@@ -118,7 +128,8 @@ export function TimeGrid({
                                 })}
 
                                 {column.events.map(event => {
-                                    const { topOffset, height } = getEventPosition(event, startHour)
+                                    const layout = layoutMap.get(event.id)
+                                    if (!layout) return null
                                     const cal = getCalendarById(event.calendarId)
                                     const colors = getCalendarColorResolved(cal?.colorKey ?? 'blue')
                                     return (
@@ -128,8 +139,10 @@ export function TimeGrid({
                                             timeLabel={formatEventTime(event)}
                                             bgColor={colors.bg}
                                             textColor={colors.text}
-                                            topOffset={topOffset}
-                                            height={height}
+                                            topOffset={layout.top}
+                                            height={layout.height}
+                                            left={layout.left}
+                                            width={layout.width}
                                             onPress={() => onEventPress(event.id)}
                                         />
                                     )

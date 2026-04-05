@@ -25,7 +25,12 @@ export function DayView() {
     return (
         <YStack flex={1}>
             <DayColumnHeader date={focusDate} isToday={isToday(focusDate)} />
-            <AllDayBar events={allDayEvents} onEventPress={openEventDetail} />
+            <AllDayBar
+                events={allDayEvents}
+                weekStart={focusDate}
+                dayCount={1}
+                onEventPress={openEventDetail}
+            />
             <TimeGrid
                 columns={columns}
                 onSlotPress={openQuickCreate}

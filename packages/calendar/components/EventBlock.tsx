@@ -7,6 +7,8 @@ interface EventBlockProps {
     textColor: string
     topOffset: number
     height: number
+    left?: number
+    width?: number
     onPress: () => void
 }
 
@@ -17,6 +19,8 @@ export function EventBlock({
     textColor,
     topOffset,
     height,
+    left = 0,
+    width = 100,
     onPress,
 }: EventBlockProps) {
     const showTwoLines = height > 40
@@ -27,9 +31,10 @@ export function EventBlock({
             style={{
                 position: 'absolute',
                 top: topOffset,
-                left: 2,
-                right: 2,
+                left: `${left}%`,
+                width: `${width}%`,
                 height: Math.max(height - 2, 18),
+                paddingHorizontal: 1,
                 zIndex: 5,
             }}
         >

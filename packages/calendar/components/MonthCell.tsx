@@ -1,17 +1,17 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import { formatShortTime } from '../hooks/useCalendarNavigation'
+import type { MonthCellLayout } from '../layout'
 import { getCalendarById } from '../mock-data'
 import type { CalendarEvent } from '../types'
 import { getCalendarColorResolved } from './calendar-colors'
-
-const MAX_VISIBLE_EVENTS = 3
 
 interface MonthCellProps {
     date: Date
     isCurrentMonth: boolean
     isToday: boolean
-    events: CalendarEvent[]
+    cellLayout: MonthCellLayout | undefined
+    eventMap: Map<string, CalendarEvent>
     onDatePress: (date: Date) => void
     onEventPress: (eventId: string) => void
 }
@@ -20,14 +20,15 @@ export function MonthCell({
     date,
     isCurrentMonth,
     isToday,
-    events,
+    cellLayout,
+    eventMap,
     onDatePress,
     onEventPress,
 }: MonthCellProps) {
     const theme = useTheme()
     const dateNum = date.getDate()
-    const visibleEvents = events.slice(0, MAX_VISIBLE_EVENTS)
-    const remainingCount = events.length - MAX_VISIBLE_EVENTS
+    const layouts = cellLayout?.layouts ?? []
+    const overflowCount = cellLayout?.overflowCount ?? 0
 
     return (
         <Pressable
@@ -58,7 +59,12 @@ export function MonthCell({
                 </Text>
             </View>
 
-            {visibleEvents.map(event => {
+            {layouts.map(layout => {
+                if (layout.isAllDay) return null
+
+                const event = eventMap.get(layout.id)
+                if (!event) return null
+
                 const cal = getCalendarById(event.calendarId)
                 const colors = getCalendarColorResolved(cal?.colorKey ?? 'blue')
 
@@ -97,10 +103,10 @@ export function MonthCell({
                 )
             })}
 
-            {remainingCount > 0 && (
+            {overflowCount > 0 && (
                 <Pressable onPress={() => onDatePress(date)}>
                     <Text style={[styles.moreText, { color: theme.color8.val }]}>
-                        +{remainingCount} more
+                        +{overflowCount} more
                     </Text>
                 </Pressable>
             )}
