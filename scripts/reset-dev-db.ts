@@ -24,6 +24,12 @@ import { spawn, spawnSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
+try {
+    process.loadEnvFile()
+} catch {
+    // .env may not exist in CI
+}
+
 interface Config {
     url: string
     dataDir: string

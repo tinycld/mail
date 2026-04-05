@@ -23,6 +23,8 @@ import (
 const defaultHTTPAddr = "127.0.0.1:7090"
 
 func main() {
+	loadEnvFile()
+
 	// Default to port 7090 if --http is not explicitly provided (serve only)
 	if hasSubcommand("serve") && !hasFlag("--http") {
 		os.Args = append(os.Args, "--http", defaultHTTPAddr)
@@ -808,6 +810,44 @@ func quotedJoin(strs []string) string {
 		quoted[i] = fmt.Sprintf(`"%s"`, s)
 	}
 	return strings.Join(quoted, ", ")
+}
+
+// loadEnvFile reads a .env file from the working directory (or parent) and
+// sets any variables that are not already present in the environment.
+func loadEnvFile() {
+	envPath := ".env"
+	if _, err := os.Stat(envPath); os.IsNotExist(err) {
+		envPath = "../.env"
+		if _, err := os.Stat(envPath); os.IsNotExist(err) {
+			return
+		}
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		return
+	}
+
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, val, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		val = strings.TrimSpace(val)
+		// Strip surrounding quotes
+		if len(val) >= 2 && ((val[0] == '"' && val[len(val)-1] == '"') || (val[0] == '\'' && val[len(val)-1] == '\'')) {
+			val = val[1 : len(val)-1]
+		}
+		// Don't override existing env vars
+		if _, exists := os.LookupEnv(key); !exists {
+			os.Setenv(key, val)
+		}
+	}
 }
 
 func formatTS(input string) string {
