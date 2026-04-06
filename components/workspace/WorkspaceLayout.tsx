@@ -1,6 +1,7 @@
 import { Slot } from 'one'
 import { Platform, Pressable, StyleSheet, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { AddonProviderWrapper } from './AddonProviderWrapper'
 import { AddonRail } from './AddonRail'
 import { AddonSidebar } from './AddonSidebar'
 import { MobileLayout } from './MobileLayout'
@@ -21,20 +22,22 @@ export function WorkspaceLayout({ isReady = true }: { isReady?: boolean }) {
         <View style={[styles.container, { backgroundColor: theme.background.val }]}>
             {isReady && <AddonRail />}
 
-            {isReady &&
-                (isTablet ? (
-                    <SidebarOverlay
-                        isVisible={showSidebarOverlay}
-                        overlayColor={theme.overlayBackground.val}
-                        onDismiss={() => setSidebarOpen(false)}
-                    />
-                ) : (
-                    <AddonSidebar width={SIDEBAR_WIDTH} />
-                ))}
+            <AddonProviderWrapper>
+                {isReady &&
+                    (isTablet ? (
+                        <SidebarOverlay
+                            isVisible={showSidebarOverlay}
+                            overlayColor={theme.overlayBackground.val}
+                            onDismiss={() => setSidebarOpen(false)}
+                        />
+                    ) : (
+                        <AddonSidebar width={SIDEBAR_WIDTH} />
+                    ))}
 
-            <View style={[styles.main, { backgroundColor: theme.background.val }]}>
-                <Slot />
-            </View>
+                <View style={[styles.main, { backgroundColor: theme.background.val }]}>
+                    <Slot />
+                </View>
+            </AddonProviderWrapper>
         </View>
     )
 }
