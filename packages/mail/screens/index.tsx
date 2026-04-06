@@ -72,7 +72,6 @@ function searchResultToThreadListItem(result: MailSearchResult): ThreadListItem 
         isRead: true,
         isStarred: false,
         isImportant: false,
-        snoozedUntil: '',
         labels: [],
         folder: 'search',
         hasDraft: false,
@@ -135,6 +134,36 @@ export default function MailListScreen() {
         }) {
             yield threadStateCollection.update(stateId, draft => {
                 draft.is_starred = !currentStarred
+            })
+        },
+    })
+
+    const archiveThread = useMutation({
+        mutationFn: function* ({ stateId }: { stateId: string }) {
+            yield threadStateCollection.update(stateId, draft => {
+                draft.folder = 'archive'
+            })
+        },
+    })
+
+    const trashThread = useMutation({
+        mutationFn: function* ({ stateId }: { stateId: string }) {
+            yield threadStateCollection.update(stateId, draft => {
+                draft.folder = 'trash'
+            })
+        },
+    })
+
+    const toggleRead = useMutation({
+        mutationFn: function* ({
+            stateId,
+            currentRead,
+        }: {
+            stateId: string
+            currentRead: boolean
+        }) {
+            yield threadStateCollection.update(stateId, draft => {
+                draft.is_read = !currentRead
             })
         },
     })
@@ -250,6 +279,14 @@ export default function MailListScreen() {
                                 })
                             }
                             onPress={item.hasDraft ? () => handleDraftPress(item) : undefined}
+                            onArchive={() => archiveThread.mutate({ stateId: item.stateId })}
+                            onTrash={() => trashThread.mutate({ stateId: item.stateId })}
+                            onToggleRead={() =>
+                                toggleRead.mutate({
+                                    stateId: item.stateId,
+                                    currentRead: item.isRead,
+                                })
+                            }
                         />
                     )}
                 />

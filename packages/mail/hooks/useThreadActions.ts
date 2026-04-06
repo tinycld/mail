@@ -113,28 +113,6 @@ export function useThreadActions(
         onError,
     })
 
-    const snoozeThread = useMutation({
-        mutationFn: function* (snoozedUntil: string) {
-            if (!threadState) return
-            yield col.update(threadState.id, draft => {
-                draft.snoozed_until = snoozedUntil
-                draft.folder = 'inbox'
-            })
-        },
-        onError,
-    })
-
-    const unsnoozeThread = useMutation({
-        mutationFn: function* () {
-            if (!threadState) return
-            yield col.update(threadState.id, draft => {
-                draft.snoozed_until = ''
-                draft.folder = 'inbox'
-            })
-        },
-        onError,
-    })
-
     return {
         archiveThread,
         spamThread,
@@ -144,7 +122,5 @@ export function useThreadActions(
         toggleStar,
         toggleImportant,
         updateLabel,
-        snoozeThread,
-        unsnoozeThread,
     }
 }

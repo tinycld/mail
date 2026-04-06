@@ -97,7 +97,6 @@ export default function MailDetailScreen() {
         toggleStar,
         toggleImportant,
         updateLabel,
-        snoozeThread,
     } = useThreadActions(threadStateCollection, threadState, navigateBack)
 
     const { threadIds } = useThreadListContext()
@@ -160,7 +159,6 @@ export default function MailDetailScreen() {
                 onToggleStar={() => toggleStar.mutate()}
                 onToggleImportant={() => toggleImportant.mutate()}
                 onForwardAll={handleForwardAll}
-                onSnooze={date => snoozeThread.mutate(date)}
                 onNewer={goToPrevious}
                 onOlder={goToNext}
                 hasNewer={hasPrevious}

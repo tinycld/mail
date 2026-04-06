@@ -1,12 +1,22 @@
-import { Paperclip, Square, SquareCheck, Star } from 'lucide-react-native'
+import {
+    Archive,
+    Mail,
+    MailOpen,
+    Paperclip,
+    Square,
+    SquareCheck,
+    Star,
+    Trash2,
+} from 'lucide-react-native'
 import type { OneRouter } from 'one'
 import { Link } from 'one'
 import type { ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useState } from 'react'
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { formatRelativeDate } from '~/lib/format-utils'
 import { useOrgHref } from '~/lib/org-routes'
 import type { ThreadListItem } from './thread-list-item'
-import { formatMailDate } from './thread-list-item'
 
 interface EmailRowProps {
     email: ThreadListItem
@@ -15,6 +25,9 @@ interface EmailRowProps {
     isSelected?: boolean
     onToggleSelect?: () => void
     onPress?: () => void
+    onArchive?: () => void
+    onTrash?: () => void
+    onToggleRead?: () => void
 }
 
 export function EmailRow({
@@ -24,6 +37,9 @@ export function EmailRow({
     isSelected,
     onToggleSelect,
     onPress,
+    onArchive,
+    onTrash,
+    onToggleRead,
 }: EmailRowProps) {
     if (isMobile)
         return <MobileEmailRow email={email} onToggleStar={onToggleStar} onPress={onPress} />
@@ -34,6 +50,9 @@ export function EmailRow({
             isSelected={isSelected}
             onToggleSelect={onToggleSelect}
             onPress={onPress}
+            onArchive={onArchive}
+            onTrash={onTrash}
+            onToggleRead={onToggleRead}
         />
     )
 }
@@ -99,6 +118,42 @@ function SenderWithDraft({
     )
 }
 
+function HoverAction({
+    icon: Icon,
+    label,
+    onPress,
+    theme,
+}: {
+    icon: typeof Archive
+    label: string
+    onPress?: () => void
+    theme: ReturnType<typeof useTheme>
+}) {
+    const webProps = Platform.OS === 'web' ? { title: label } : {}
+
+    return (
+        <Pressable
+            style={hoverActionStyles.button}
+            onPress={e => {
+                e.stopPropagation()
+                e.preventDefault()
+                onPress?.()
+            }}
+            accessibilityLabel={label}
+            {...webProps}
+        >
+            <Icon size={16} color={theme.color8.val} />
+        </Pressable>
+    )
+}
+
+const hoverActionStyles = StyleSheet.create({
+    button: {
+        padding: 6,
+        borderRadius: 16,
+    },
+})
+
 function MobileEmailRow({ email, onToggleStar, onPress }: EmailRowProps) {
     const theme = useTheme()
     const orgHref = useOrgHref()
@@ -116,7 +171,7 @@ function MobileEmailRow({ email, onToggleStar, onPress }: EmailRowProps) {
         .toUpperCase()
         .slice(0, 2)
 
-    const dateDisplay = formatMailDate(email.latestDate)
+    const dateDisplay = formatRelativeDate(email.latestDate)
 
     return (
         <RowWrapper href={orgHref('mail/[id]', { id: email.threadId })} onPress={onPress}>
@@ -188,15 +243,44 @@ function MobileEmailRow({ email, onToggleStar, onPress }: EmailRowProps) {
     )
 }
 
+function RowHoverActions({
+    email,
+    isSelected,
+    onArchive,
+    onTrash,
+    onToggleRead,
+}: Pick<EmailRowProps, 'email' | 'isSelected' | 'onArchive' | 'onTrash' | 'onToggleRead'>) {
+    const theme = useTheme()
+    const ReadIcon = email.isRead ? Mail : MailOpen
+    const bg = isSelected ? `${theme.accentBackground.val}18` : theme.background.val
+
+    return (
+        <View style={[styles.hoverActions, { backgroundColor: bg }]}>
+            <HoverAction icon={Archive} label="Archive" onPress={onArchive} theme={theme} />
+            <HoverAction icon={Trash2} label="Delete" onPress={onTrash} theme={theme} />
+            <HoverAction
+                icon={ReadIcon}
+                label={email.isRead ? 'Mark as unread' : 'Mark as read'}
+                onPress={onToggleRead}
+                theme={theme}
+            />
+        </View>
+    )
+}
+
 function DesktopEmailRow({
     email,
     onToggleStar,
     isSelected,
     onToggleSelect,
     onPress,
+    onArchive,
+    onTrash,
+    onToggleRead,
 }: EmailRowProps) {
     const theme = useTheme()
     const orgHref = useOrgHref()
+    const [isHovered, setIsHovered] = useState(false)
 
     const rowBg = isSelected
         ? `${theme.accentBackground.val}18`
@@ -205,10 +289,27 @@ function DesktopEmailRow({
           : theme.backgroundHover.val
     const senderWeight = email.isRead ? '400' : '700'
     const subjectWeight = email.isRead ? '400' : '600'
-    const dateDisplay = formatMailDate(email.latestDate)
+    const dateDisplay = formatRelativeDate(email.latestDate)
 
     const CheckboxIcon = isSelected ? SquareCheck : Square
     const checkboxColor = isSelected ? theme.accentBackground.val : theme.color8.val
+
+    const hoverWebProps =
+        Platform.OS === 'web'
+            ? {
+                  onMouseEnter: () => setIsHovered(true),
+                  onMouseLeave: () => setIsHovered(false),
+              }
+            : {}
+
+    const hoverShadow =
+        isHovered && Platform.OS === 'web'
+            ? ({
+                  boxShadow:
+                      '0 2px 6px 0 rgba(0,0,0,0.12), inset 1px 0 0 #dadce0, inset -1px 0 0 #dadce0',
+                  zIndex: 1,
+              } as Record<string, unknown>)
+            : null
 
     return (
         <RowWrapper href={orgHref('mail/[id]', { id: email.threadId })} onPress={onPress}>
@@ -219,7 +320,9 @@ function DesktopEmailRow({
                         backgroundColor: rowBg,
                         borderBottomColor: theme.borderColor.val,
                     },
+                    hoverShadow,
                 ]}
+                {...hoverWebProps}
             >
                 <Pressable
                     style={styles.checkbox}
@@ -274,7 +377,17 @@ function DesktopEmailRow({
                     </Text>
                 </View>
                 {email.hasAttachments ? <Paperclip size={14} color={theme.color8.val} /> : null}
-                <Text style={[styles.date, { color: theme.color8.val }]}>{dateDisplay}</Text>
+                {isHovered ? (
+                    <RowHoverActions
+                        email={email}
+                        isSelected={isSelected}
+                        onArchive={onArchive}
+                        onTrash={onTrash}
+                        onToggleRead={onToggleRead}
+                    />
+                ) : (
+                    <Text style={[styles.date, { color: theme.color8.val }]}>{dateDisplay}</Text>
+                )}
             </View>
         </RowWrapper>
     )
@@ -375,5 +488,11 @@ const styles = StyleSheet.create({
         fontSize: 12,
         flexShrink: 0,
         marginLeft: 8,
+    },
+    hoverActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginLeft: 8,
+        flexShrink: 0,
     },
 })

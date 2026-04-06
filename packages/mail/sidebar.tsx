@@ -5,7 +5,6 @@ import {
     Archive,
     ChevronDown,
     ChevronRight,
-    Clock,
     File,
     Inbox,
     Mail,
@@ -20,6 +19,7 @@ import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import {
+    SidebarActionButton,
     SidebarDivider,
     SidebarHeading,
     SidebarItem,
@@ -102,17 +102,11 @@ export default function MailSidebar(_props: MailSidebarProps) {
 
     return (
         <SidebarNav>
-            <View style={styles.composeWrapper}>
-                <Pressable
-                    style={[styles.composeButton, { backgroundColor: theme.accentBackground.val }]}
-                    onPress={() => composeEvents.emit()}
-                >
-                    <Pencil size={16} color={theme.accentColor.val} />
-                    <Text style={[styles.composeText, { color: theme.accentColor.val }]}>
-                        Compose
-                    </Text>
-                </Pressable>
-            </View>
+            <SidebarActionButton
+                label="Compose"
+                icon={Pencil}
+                onPress={() => composeEvents.emit()}
+            />
 
             <SidebarItem
                 label="Inbox"
@@ -126,12 +120,6 @@ export default function MailSidebar(_props: MailSidebarProps) {
                 icon={Star}
                 isActive={activeFolder === 'starred'}
                 onPress={() => navigateToFolder('starred')}
-            />
-            <SidebarItem
-                label="Snoozed"
-                icon={Clock}
-                isActive={activeFolder === 'snoozed'}
-                onPress={() => navigateToFolder('snoozed')}
             />
             <SidebarItem
                 label="Sent"
@@ -209,23 +197,6 @@ export default function MailSidebar(_props: MailSidebarProps) {
 }
 
 const styles = StyleSheet.create({
-    composeWrapper: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-    },
-    composeButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 24,
-    },
-    composeText: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
     labelsHeader: {
         flexDirection: 'row',
         alignItems: 'center',

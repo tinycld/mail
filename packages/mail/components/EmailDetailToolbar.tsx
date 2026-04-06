@@ -21,7 +21,6 @@ import { useTheme } from 'tamagui'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import type { MailThreadState } from '../types'
 import { MenuActionItem, ToolbarMenu } from './DropdownMenu'
-import { SnoozePopover } from './SnoozePopover'
 import { ToolbarIconButton } from './ToolbarIconButton'
 
 interface LabelInfo {
@@ -43,7 +42,6 @@ interface EmailDetailToolbarProps {
     onToggleStar: () => void
     onToggleImportant: () => void
     onForwardAll: () => void
-    onSnooze?: (date: string) => void
     onNewer?: () => void
     onOlder?: () => void
     hasNewer?: boolean
@@ -72,7 +70,6 @@ export function EmailDetailToolbar({
     onToggleStar,
     onToggleImportant,
     onForwardAll,
-    onSnooze,
     onNewer,
     onOlder,
     hasNewer = false,
@@ -154,7 +151,6 @@ export function EmailDetailToolbar({
                     />
                     <MenuActionItem label="Forward all" icon={Forward} onPress={onForwardAll} />
                 </ToolbarMenu>
-                {onSnooze ? <SnoozePopover onSnooze={onSnooze} /> : null}
             </View>
             {isMobile ? null : (
                 <View style={styles.right}>

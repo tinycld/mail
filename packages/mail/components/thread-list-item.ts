@@ -15,7 +15,6 @@ export interface ThreadListItem {
     isRead: boolean
     isStarred: boolean
     isImportant: boolean
-    snoozedUntil: string
     labels: { id: string; name: string; color: string }[]
     folder: string
     hasDraft: boolean
@@ -45,53 +44,9 @@ export function toThreadListItem(
         isRead: state.is_read,
         isStarred: state.is_starred,
         isImportant: state.is_important,
-        snoozedUntil: state.snoozed_until ?? '',
         labels,
         folder: state.folder,
         hasDraft,
         hasAttachments,
     }
-}
-
-export function formatMailDate(isoDate: string): string {
-    if (!isoDate) return ''
-
-    const date = new Date(isoDate)
-    const now = new Date()
-
-    if (Number.isNaN(date.getTime())) return isoDate
-
-    const isToday =
-        date.getFullYear() === now.getFullYear() &&
-        date.getMonth() === now.getMonth() &&
-        date.getDate() === now.getDate()
-
-    if (isToday) {
-        return date.toLocaleTimeString(undefined, {
-            hour: 'numeric',
-            minute: '2-digit',
-        })
-    }
-
-    const yesterday = new Date(now)
-    yesterday.setDate(yesterday.getDate() - 1)
-    const isYesterday =
-        date.getFullYear() === yesterday.getFullYear() &&
-        date.getMonth() === yesterday.getMonth() &&
-        date.getDate() === yesterday.getDate()
-
-    if (isYesterday) return 'Yesterday'
-
-    if (date.getFullYear() === now.getFullYear()) {
-        return date.toLocaleDateString(undefined, {
-            month: 'short',
-            day: 'numeric',
-        })
-    }
-
-    return date.toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-    })
 }

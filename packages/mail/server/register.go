@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
@@ -147,11 +146,6 @@ func Register(app *pocketbase.PocketBase) {
 			return handleBounce(app, webhookProvider, re, bounceSecret)
 		})
 
-		// Cron job: un-snooze threads whose snoozed_until has passed
-		app.Cron().Add("mail_unsnooze", "* * * * *", func() {
-			unsnoozeDueThreads(app)
-		})
-
 		return e.Next()
 	})
 }
@@ -259,36 +253,6 @@ func indexMessageRecordFromStorage(app *pocketbase.PocketBase, record *core.Reco
 		SenderEmail: record.GetString("sender_email"),
 		TextBody:    bodyText,
 	}, attachmentText)
-}
-
-// unsnoozeDueThreads finds mail_thread_state records with a snoozed_until in the
-// past and clears the snooze, returning them to the inbox.
-func unsnoozeDueThreads(app *pocketbase.PocketBase) {
-	now := time.Now().UTC().Format(time.RFC3339)
-	records, err := app.FindRecordsByFilter(
-		"mail_thread_state",
-		"snoozed_until != '' && snoozed_until <= {:now}",
-		"",
-		200,
-		0,
-		map[string]any{"now": now},
-	)
-	if err != nil {
-		app.Logger().Error("Failed to query snoozed threads", "error", err)
-		return
-	}
-
-	for _, r := range records {
-		r.Set("snoozed_until", "")
-		r.Set("folder", "inbox")
-		if err := app.Save(r); err != nil {
-			app.Logger().Error("Failed to unsnooze thread", "id", r.Id, "error", err)
-		}
-	}
-
-	if len(records) > 0 {
-		app.Logger().Info("Un-snoozed threads", "count", len(records))
-	}
 }
 
 // requireAuth is a middleware that ensures the request has a valid auth token.

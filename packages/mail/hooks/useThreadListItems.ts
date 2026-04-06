@@ -99,16 +99,8 @@ export function useThreadListItems(
         if (activeFolder === 'all') {
             return mapped
         }
-        if (activeFolder === 'snoozed') {
-            return mapped.filter(
-                item => item.snoozedUntil && new Date(item.snoozedUntil) > new Date()
-            )
-        }
         if (activeFolder === 'inbox') {
-            return mapped.filter(item => {
-                if (item.snoozedUntil && new Date(item.snoozedUntil) > new Date()) return false
-                return item.folder === 'inbox'
-            })
+            return mapped.filter(item => item.folder === 'inbox')
         }
 
         return mapped.filter(item => item.folder === activeFolder)

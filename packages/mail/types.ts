@@ -83,7 +83,6 @@ export interface MailThreadState {
     is_starred: boolean
     is_important: boolean
     labels: string[]
-    snoozed_until: string
     created: string
     updated: string
 }
