@@ -10,11 +10,18 @@ import {
     useRef,
     useState,
 } from 'react'
+import { useMutation } from '~/lib/mutations'
 import { useStore } from '~/lib/pocketbase'
 import { useCurrentUserOrg } from '~/lib/use-current-user-org'
 import { useOrgInfo } from '~/lib/use-org-info'
 import { expandRecurringEvents, parseEventId } from '../lib/recurrence'
-import type { CalendarEvents, CalendarWithGroup } from '../types'
+import type { CalendarColorKey, CalendarEvents, CalendarWithGroup } from '../types'
+
+interface MembershipInfo {
+    id: string
+    role: 'owner' | 'editor' | 'viewer'
+    color: CalendarColorKey | ''
+}
 
 interface VisibleCalendarsState {
     calendars: CalendarWithGroup[]
@@ -23,6 +30,9 @@ interface VisibleCalendarsState {
     visibleIds: Set<string>
     toggleCalendar: (id: string) => void
     calendarMap: Map<string, CalendarWithGroup>
+    membershipByCalendar: Map<string, MembershipInfo>
+    setCalendarColor: (calendarId: string, color: CalendarColorKey) => void
+    showOnlyCalendar: (calendarId: string) => void
     isLoading: boolean
 }
 
@@ -47,18 +57,28 @@ export function VisibleCalendarsProvider({ children }: { children: ReactNode }) 
         [userOrgId]
     )
 
-    const membershipMap = useMemo(
-        () => new Map((memberships ?? []).map(m => [m.calendar, m.role])),
+    const membershipByCalendar = useMemo(
+        () =>
+            new Map(
+                (memberships ?? []).map(m => [
+                    m.calendar,
+                    { id: m.id, role: m.role, color: m.color } as MembershipInfo,
+                ])
+            ),
         [memberships]
     )
 
     const calendars = useMemo<CalendarWithGroup[]>(
         () =>
-            (allCalendars ?? []).map(cal => ({
-                ...cal,
-                group: membershipMap.get(cal.id) === 'owner' ? 'mine' : 'other',
-            })),
-        [allCalendars, membershipMap]
+            (allCalendars ?? []).map(cal => {
+                const membership = membershipByCalendar.get(cal.id)
+                return {
+                    ...cal,
+                    color: membership?.color || cal.color,
+                    group: membership?.role === 'owner' ? 'mine' : 'other',
+                }
+            }),
+        [allCalendars, membershipByCalendar]
     )
 
     const initializedRef = useRef(false)
@@ -81,6 +101,34 @@ export function VisibleCalendarsProvider({ children }: { children: ReactNode }) 
         })
     }, [])
 
+    const showOnlyCalendar = useCallback((id: string) => {
+        setVisibleIds(new Set([id]))
+    }, [])
+
+    const colorMutation = useMutation({
+        mutationFn: function* ({
+            membershipId,
+            color,
+        }: {
+            membershipId: string
+            color: CalendarColorKey
+        }) {
+            yield membersCollection.update(membershipId, draft => {
+                draft.color = color
+            })
+        },
+    })
+
+    const setCalendarColor = useCallback(
+        (calendarId: string, color: CalendarColorKey) => {
+            const membership = membershipByCalendar.get(calendarId)
+            if (membership) {
+                colorMutation.mutate({ membershipId: membership.id, color })
+            }
+        },
+        [membershipByCalendar, colorMutation]
+    )
+
     const mineCalendars = useMemo(() => calendars.filter(c => c.group === 'mine'), [calendars])
     const otherCalendars = useMemo(() => calendars.filter(c => c.group === 'other'), [calendars])
 
@@ -96,6 +144,9 @@ export function VisibleCalendarsProvider({ children }: { children: ReactNode }) 
             visibleIds,
             toggleCalendar,
             calendarMap,
+            membershipByCalendar,
+            setCalendarColor,
+            showOnlyCalendar,
             isLoading,
         }),
         [
@@ -105,6 +156,9 @@ export function VisibleCalendarsProvider({ children }: { children: ReactNode }) 
             visibleIds,
             toggleCalendar,
             calendarMap,
+            membershipByCalendar,
+            setCalendarColor,
+            showOnlyCalendar,
             isLoading,
         ]
     )
@@ -112,12 +166,27 @@ export function VisibleCalendarsProvider({ children }: { children: ReactNode }) 
     return createElement(VisibleCalendarsContext.Provider, { value }, children)
 }
 
+const NOOP = () => {}
+const EMPTY_SET = new Set<string>()
+const EMPTY_MAP_CWG = new Map<string, CalendarWithGroup>()
+const EMPTY_MAP_MI = new Map<string, MembershipInfo>()
+
+const DEFAULT_STATE: VisibleCalendarsState = {
+    calendars: [],
+    mineCalendars: [],
+    otherCalendars: [],
+    visibleIds: EMPTY_SET,
+    toggleCalendar: NOOP,
+    calendarMap: EMPTY_MAP_CWG,
+    membershipByCalendar: EMPTY_MAP_MI,
+    setCalendarColor: NOOP,
+    showOnlyCalendar: NOOP,
+    isLoading: true,
+}
+
 export function useVisibleCalendars(): VisibleCalendarsState {
     const ctx = useContext(VisibleCalendarsContext)
-    if (!ctx) {
-        throw new Error('useVisibleCalendars must be used within VisibleCalendarsProvider')
-    }
-    return ctx
+    return ctx ?? DEFAULT_STATE
 }
 
 export function useCalendarMap(): Map<string, CalendarWithGroup> {

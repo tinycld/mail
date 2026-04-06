@@ -1,6 +1,23 @@
 import type { Orgs, UserOrg } from '~/types/pbSchema'
 
-export type CalendarColorKey = 'blue' | 'green' | 'red' | 'teal' | 'purple' | 'orange'
+export type CalendarColorKey =
+    | 'blue'
+    | 'green'
+    | 'red'
+    | 'teal'
+    | 'purple'
+    | 'orange'
+    | 'tomato'
+    | 'flamingo'
+    | 'tangerine'
+    | 'banana'
+    | 'sage'
+    | 'basil'
+    | 'peacock'
+    | 'blueberry'
+    | 'lavender'
+    | 'grape'
+    | 'graphite'
 
 export type Recurrence = '' | 'daily' | 'weekly' | 'monthly' | 'yearly'
 
@@ -26,6 +43,7 @@ export interface CalendarMembers {
     calendar: string
     user_org: string
     role: 'owner' | 'editor' | 'viewer'
+    color: CalendarColorKey | ''
     created: string
     updated: string
 }

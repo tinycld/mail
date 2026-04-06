@@ -8,7 +8,7 @@ import { CalendarFAB } from '../components/CalendarFAB'
 import { CalendarHeader } from '../components/CalendarHeader'
 import { EventDetailPopover } from '../components/EventDetailPopover'
 import { EventQuickCreate } from '../components/EventQuickCreate'
-import { useEventDetail, VisibleCalendarsProvider } from '../hooks/useCalendarEvents'
+import { useEventDetail } from '../hooks/useCalendarEvents'
 import { CalendarViewProvider, useCalendarView } from '../hooks/useCalendarView'
 
 function CalendarLayoutInner() {
@@ -56,10 +56,8 @@ function CalendarLayoutInner() {
 
 export default function CalendarLayout() {
     return (
-        <VisibleCalendarsProvider>
-            <CalendarViewProvider>
-                <CalendarLayoutInner />
-            </CalendarViewProvider>
-        </VisibleCalendarsProvider>
+        <CalendarViewProvider>
+            <CalendarLayoutInner />
+        </CalendarViewProvider>
     )
 }

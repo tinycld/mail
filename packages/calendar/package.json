@@ -12,6 +12,7 @@
         "./screens/index": "./screens/index.tsx",
         "./screens/[id]": "./screens/[id].tsx",
         "./sidebar": "./sidebar.tsx",
+        "./provider": "./provider.tsx",
         "./seed": "./seed.ts",
         "./hooks/*": "./hooks/*",
         "./components/*": "./components/*"

@@ -1,15 +1,19 @@
 import { CalendarDays, Columns3, Grid3X3, List } from 'lucide-react-native'
 import { useActiveParams, useRouter } from 'one'
 import { useMemo } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useTheme } from 'tamagui'
-import { SidebarDivider, SidebarItem, SidebarNav } from '~/components/sidebar-primitives'
+import { StyleSheet, View } from 'react-native'
+import {
+    SidebarActionButton,
+    SidebarDivider,
+    SidebarItem,
+    SidebarNav,
+} from '~/components/sidebar-primitives'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { useWorkspaceLayout } from '~/components/workspace/useWorkspaceLayout'
 import { useOrgHref } from '~/lib/org-routes'
 import { CalendarList } from './components/CalendarList'
 import { MiniCalendar } from './components/MiniCalendar'
-import { useVisibleCalendars, VisibleCalendarsProvider } from './hooks/useCalendarEvents'
+import { useVisibleCalendars } from './hooks/useCalendarEvents'
 import { parseDate, toDateString } from './hooks/useCalendarNavigation'
 import type { ViewMode } from './hooks/useCalendarView'
 
@@ -25,18 +29,14 @@ interface CalendarSidebarProps {
 }
 
 export default function CalendarSidebar(props: CalendarSidebarProps) {
-    return (
-        <VisibleCalendarsProvider>
-            <CalendarSidebarInner {...props} />
-        </VisibleCalendarsProvider>
-    )
+    return <CalendarSidebarInner {...props} />
 }
 
 function CalendarSidebarInner(_props: CalendarSidebarProps) {
-    const theme = useTheme()
     const router = useRouter()
     const orgHref = useOrgHref()
-    const { calendars, visibleIds, toggleCalendar } = useVisibleCalendars()
+    const { calendars, visibleIds, toggleCalendar, setCalendarColor, showOnlyCalendar } =
+        useVisibleCalendars()
     const { view, date } = useActiveParams<{ view?: string; date?: string }>()
     const isMobile = useBreakpoint() === 'mobile'
     const { setDrawerOpen } = useWorkspaceLayout()
@@ -76,27 +76,19 @@ function CalendarSidebarInner(_props: CalendarSidebarProps) {
                 </>
             )}
 
-            {!isMobile && (
-                <View style={styles.createWrapper}>
-                    <Pressable
-                        style={[
-                            styles.createButton,
-                            { backgroundColor: theme.accentBackground.val },
-                        ]}
-                        onPress={handleCreate}
-                    >
-                        <Text style={[styles.createText, { color: theme.accentColor.val }]}>
-                            + Create
-                        </Text>
-                    </Pressable>
-                </View>
-            )}
+            {!isMobile && <SidebarActionButton label="+ Create" onPress={handleCreate} />}
 
             <MiniCalendar selectedDate={selectedDate} onDateSelect={handleDateSelect} />
 
             <SidebarDivider />
 
-            <CalendarList calendars={calendars} visibleIds={visibleIds} onToggle={toggleCalendar} />
+            <CalendarList
+                calendars={calendars}
+                visibleIds={visibleIds}
+                onToggle={toggleCalendar}
+                onColorChange={setCalendarColor}
+                onShowOnly={showOnlyCalendar}
+            />
         </SidebarNav>
     )
 }
@@ -105,22 +97,5 @@ const styles = StyleSheet.create({
     viewModeSection: {
         paddingHorizontal: 8,
         paddingVertical: 4,
-    },
-    createWrapper: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-    },
-    createButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 24,
-    },
-    createText: {
-        fontSize: 14,
-        fontWeight: '600',
     },
 })
