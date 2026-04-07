@@ -1,4 +1,4 @@
-import { Clock, FileSpreadsheet, Plus, Users } from 'lucide-react-native'
+import { Clock, Plus, Table, Users } from 'lucide-react-native'
 import {
     SidebarActionButton,
     SidebarDivider,
@@ -24,7 +24,7 @@ export default function SheetsSidebar(_props: SheetsSidebarProps) {
 
             <SidebarItem
                 label="My Sheets"
-                icon={FileSpreadsheet}
+                icon={Table}
                 isActive={activeSection === 'my-sheets'}
                 onPress={() => navigateToSection('my-sheets')}
             />

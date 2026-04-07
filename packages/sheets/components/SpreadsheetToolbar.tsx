@@ -5,6 +5,8 @@ import {
     Bold,
     Download,
     Italic,
+    Redo2,
+    Undo2,
     Upload,
 } from 'lucide-react-native'
 import { Pressable, StyleSheet, View } from 'react-native'
@@ -13,7 +15,8 @@ import { useSpreadsheet } from '../hooks/useSpreadsheet'
 
 export function SpreadsheetToolbar() {
     const theme = useTheme()
-    const { selection, getCellValue, setCellFormat, isReadOnly } = useSpreadsheet()
+    const { selection, getCellValue, setCellFormat, isReadOnly, undo, redo, canUndo, canRedo } =
+        useSpreadsheet()
 
     const cell = getCellValue(selection.row, selection.col)
 
@@ -35,6 +38,19 @@ export function SpreadsheetToolbar() {
         <View style={[styles.container, { borderBottomColor: theme.borderColor.val }]}>
             {!isReadOnly && (
                 <View style={styles.group}>
+                    <ToolbarButton
+                        icon={Undo2}
+                        onPress={undo}
+                        color={iconColor}
+                        disabled={!canUndo}
+                    />
+                    <ToolbarButton
+                        icon={Redo2}
+                        onPress={redo}
+                        color={iconColor}
+                        disabled={!canRedo}
+                    />
+                    <View style={[styles.separator, { backgroundColor: theme.borderColor.val }]} />
                     <ToolbarButton
                         icon={Bold}
                         onPress={toggleBold}
@@ -88,15 +104,25 @@ interface ToolbarButtonProps {
     isActive?: boolean
     color: string
     activeColor?: string
+    disabled?: boolean
 }
 
-function ToolbarButton({ icon: Icon, onPress, isActive, color, activeColor }: ToolbarButtonProps) {
+function ToolbarButton({
+    icon: Icon,
+    onPress,
+    isActive,
+    color,
+    activeColor,
+    disabled,
+}: ToolbarButtonProps) {
     return (
         <Pressable
             onPress={onPress}
+            disabled={disabled}
             style={[
                 styles.button,
                 isActive && activeColor ? { backgroundColor: `${activeColor}20` } : undefined,
+                disabled && styles.disabled,
             ]}
         >
             <Icon size={16} color={isActive && activeColor ? activeColor : color} />
@@ -128,5 +154,8 @@ const styles = StyleSheet.create({
     button: {
         padding: 6,
         borderRadius: 4,
+    },
+    disabled: {
+        opacity: 0.3,
     },
 })

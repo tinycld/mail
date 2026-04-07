@@ -1,23 +1,34 @@
 import { memo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { useTheme } from 'tamagui'
 import type { CellData } from '../lib/cell-utils'
+
+export interface ThemeColors {
+    borderColor: string
+    accentBg: string
+    defaultColor: string
+    color8: string
+    background: string
+}
 
 interface CellRendererProps {
     cell: CellData | undefined
     width: number
     height: number
+    left: number
+    top: number
     isSelected: boolean
+    themeColors: ThemeColors
 }
 
 export const CellRenderer = memo(function CellRenderer({
     cell,
     width,
     height,
+    left,
+    top,
     isSelected,
+    themeColors,
 }: CellRendererProps) {
-    const theme = useTheme()
-
     const displayValue = cell?.computed ?? cell?.value ?? ''
     const align = cell?.align ?? (cell?.type === 'number' ? 'right' : 'left')
 
@@ -26,14 +37,17 @@ export const CellRenderer = memo(function CellRenderer({
             style={[
                 styles.cell,
                 {
+                    position: 'absolute',
+                    left,
+                    top,
                     width,
                     height,
-                    borderRightColor: theme.borderColor.val,
-                    borderBottomColor: theme.borderColor.val,
+                    borderRightColor: themeColors.borderColor,
+                    borderBottomColor: themeColors.borderColor,
                     backgroundColor: cell?.bgColor ?? 'transparent',
                 },
                 isSelected && {
-                    borderColor: theme.accentBackground.val,
+                    borderColor: themeColors.accentBg,
                     borderWidth: 2,
                 },
             ]}
@@ -42,7 +56,7 @@ export const CellRenderer = memo(function CellRenderer({
                 style={[
                     styles.cellText,
                     {
-                        color: cell?.textColor ?? theme.color.val,
+                        color: cell?.textColor ?? themeColors.defaultColor,
                         textAlign: align,
                         fontWeight: cell?.bold ? '700' : '400',
                         fontStyle: cell?.italic ? 'italic' : 'normal',

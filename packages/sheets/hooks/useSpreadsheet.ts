@@ -2,6 +2,7 @@ import {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
     useReducer,
     useRef,
@@ -15,6 +16,7 @@ import {
     DEFAULT_ROW_HEIGHT,
     inferCellType,
 } from '../lib/cell-utils'
+import { detectCircular, evaluateFormula } from '../lib/formula-engine'
 
 export interface SheetMeta {
     id: string
@@ -53,6 +55,10 @@ interface SpreadsheetContextValue {
     getColWidth: (col: number) => number
     getRowHeight: (row: number) => number
     gridDimensions: { rows: number; cols: number }
+    undo: () => void
+    redo: () => void
+    canUndo: boolean
+    canRedo: boolean
 }
 
 export const SpreadsheetContext = createContext<SpreadsheetContextValue | null>(null)
@@ -77,6 +83,8 @@ export function useSpreadsheetState({
     const [editingCell, setEditingCell] = useState<Selection | null>(null)
     const [yjsVersion, bumpYjsVersion] = useReducer((n: number) => n + 1, 0)
     const observerRef = useRef<(() => void) | null>(null)
+    const undoManagerRef = useRef<Y.UndoManager | null>(null)
+    const [undoState, setUndoState] = useState({ canUndo: false, canRedo: false })
 
     // Subscribe to Y.Doc changes and force re-render
     if (doc && !observerRef.current) {
@@ -92,6 +100,25 @@ export function useSpreadsheetState({
             doc.getMap('rowHeights').unobserveDeep(handler)
         }
     }
+
+    // Initialize UndoManager
+    useEffect(() => {
+        if (!doc) return
+        const um = new Y.UndoManager(
+            [doc.getMap('cells'), doc.getMap('colWidths'), doc.getMap('rowHeights')],
+            { captureTimeout: 500 }
+        )
+        undoManagerRef.current = um
+        const updateState = () => {
+            setUndoState({ canUndo: um.canUndo(), canRedo: um.canRedo() })
+        }
+        um.on('stack-item-added', updateState)
+        um.on('stack-item-popped', updateState)
+        return () => {
+            um.destroy()
+            undoManagerRef.current = null
+        }
+    }, [doc])
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: yjsVersion triggers re-read from Y.Doc on remote changes
     const sheets = useMemo<SheetMeta[]>(() => {
@@ -116,13 +143,14 @@ export function useSpreadsheetState({
     const cells = useMemo(() => {
         if (!doc || !effectiveSheetId) return new Map<string, CellData>()
         const cellsMap = doc.getMap('cells')
-        const result = new Map<string, CellData>()
+        const rawCells = new Map<string, CellData>()
+
         cellsMap.forEach((value, key) => {
             if (!key.startsWith(`${effectiveSheetId}:`)) return
             const cell = value as Y.Map<unknown>
             const parts = key.split(':')
             const localKey = `${parts[1]}:${parts[2]}`
-            result.set(localKey, {
+            rawCells.set(localKey, {
                 value: (cell.get('value') as string) ?? '',
                 computed: cell.get('computed') as string | undefined,
                 type: (cell.get('type') as CellData['type']) ?? 'text',
@@ -134,7 +162,36 @@ export function useSpreadsheetState({
                 bgColor: cell.get('bgColor') as string | undefined,
             })
         })
-        return result
+
+        // Evaluate formulas
+        const getCellRawValue = (row: number, col: number): string | undefined => {
+            const cell = rawCells.get(`${row}:${col}`)
+            if (!cell) return undefined
+            if (cell.computed !== undefined) return cell.computed
+            return cell.value
+        }
+
+        for (const [localKey, cell] of Array.from(rawCells.entries())) {
+            if (cell.type === 'formula' && cell.value.startsWith('=')) {
+                const parts = localKey.split(':')
+                const row = Number.parseInt(parts[0], 10)
+                const col = Number.parseInt(parts[1], 10)
+
+                const getFormula = (r: number, c: number) => {
+                    const c2 = rawCells.get(`${r}:${c}`)
+                    return c2?.value
+                }
+
+                if (detectCircular(row, col, cell.value, getFormula)) {
+                    cell.computed = '#CIRCULAR!'
+                } else {
+                    const result = evaluateFormula(cell.value, getCellRawValue)
+                    cell.computed = result.value
+                }
+            }
+        }
+
+        return rawCells
     }, [doc, effectiveSheetId, yjsVersion])
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: yjsVersion triggers re-read from Y.Doc on remote changes
@@ -315,6 +372,14 @@ export function useSpreadsheetState({
         setEditingCell(null)
     }, [])
 
+    const undo = useCallback(() => {
+        undoManagerRef.current?.undo()
+    }, [])
+
+    const redo = useCallback(() => {
+        undoManagerRef.current?.redo()
+    }, [])
+
     // biome-ignore lint/correctness/useExhaustiveDependencies: setSelection is stable from useState
     return useMemo(
         () => ({
@@ -342,6 +407,10 @@ export function useSpreadsheetState({
             getColWidth,
             getRowHeight,
             gridDimensions,
+            undo,
+            redo,
+            canUndo: undoState.canUndo,
+            canRedo: undoState.canRedo,
         }),
         [
             doc,
@@ -368,6 +437,9 @@ export function useSpreadsheetState({
             getColWidth,
             getRowHeight,
             gridDimensions,
+            undo,
+            redo,
+            undoState,
         ]
     )
 }
