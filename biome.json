@@ -21,7 +21,8 @@
             "!**/routes.d.ts",
             "!.expo/**/*",
             "!.one/**/*",
-            "!.claude/**/*"
+            "!.claude/**/*",
+            "!ideas/**/*"
         ]
     },
     "formatter": {

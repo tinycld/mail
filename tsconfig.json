@@ -20,7 +20,8 @@
         "**/test",
         "**/dist",
         "node_modules/**/types",
-        "**/__tests__"
+        "**/__tests__",
+        "ideas"
     ],
     "typeAcquisition": {
         "enable": true

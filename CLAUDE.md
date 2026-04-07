@@ -84,6 +84,7 @@ TinyCld is an One Stack React Native application backed by PocketBase . The repo
 ## PocketBase Notes
 - Local data lives in `server/pb_data/`; reset via `tests/pb-test-server` scripts when fixtures fall out of sync.
 - Keep migrations in `server/pb_migrations/` and describe manual steps in the PR body.
+- Create api routes only as a last resort and after discussion. Prefer to create records using standard useMutation with pbtsdb stores.  If needed we can use golang hooks to observe and modify records as they're created/modified
 - Go server hooks (e.g. CardDAV in `packages/contacts/server/`) use SDK methods that bypass PocketBase API rules — they implement equivalent authorization manually. When changing API rules on a collection, check if a Go hook also accesses that collection and update its filters to match.
 
 ## Users & Organizations
@@ -121,7 +122,7 @@ TinyCld is an One Stack React Native application backed by PocketBase . The repo
 - Addon screens run in the app's bundle context and can import from the host app using `~/`
 - `lib/generated/` and `app/a/[orgSlug]/*/` are gitignored; `app/a/[orgSlug]/_layout.tsx` and `app/a/[orgSlug]/settings/*` are core files (force-add to git)
 - Runtime hooks: `useAddons()` and `useAddon(slug)` from `~/lib/addons/use-addons`
-- Full documentation: `docs/addons.md`
+- Full documentation: `@docs/addons.md`
 
 ## Forms and other components
 - All form UI components live in `ui/form/` and are exported from `~/ui/form`
@@ -151,6 +152,7 @@ TinyCld is an One Stack React Native application backed by PocketBase . The repo
 - For complex forms, extract a `useFeatureForm()` hook that wraps `useForm` with schema, defaults, and submit logic
 - See `packages/contacts/screens/new.tsx` for a reference implementation
 - When developing a feature for a add-on, consider if the components you are adding would be of use to other add-ons. If so add them to the top-level ./components and offer to update other add-ons to use them.
+- Always prefer to use tamagui components and styling.  full docs for tamagui are in @docs/tamagui.md
 
 ## Documentation & Support
 - Expo documentation: https://docs.expo.dev/llms-full.txt
