@@ -31,7 +31,8 @@
         "db:seed": "npx tsx scripts/seed-db.ts",
         "test:e2e:debug": "playwright test --ui --headed --debug",
         "test:e2e": "npx playwright test",
-        "test:server": "npx tsx scripts/test-server-api.ts"
+        "test:server": "npx tsx scripts/test-server-api.ts",
+        "push:genkeys": "cd server/push && go run ./cmd/genkeys"
     },
     "dependencies": {
         "@10play/react-native-web-webview": "^0.0.3",
@@ -46,6 +47,7 @@
         "expo": "~55.0.7",
         "expo-crypto": "^55.0.12",
         "expo-document-picker": "~55.0.11",
+        "expo-notifications": "~55.0.16",
         "lucide-react-native": "^1.7.0",
         "one": "^1.13.5",
         "pbtsdb": "^0.3.0",
@@ -68,6 +70,7 @@
         "@biomejs/biome": "^2.4.10",
         "@playwright/test": "^1.52.0",
         "@react-native-community/cli": "^20.1.2",
+        "@tamagui/cli": "^2.0.0-rc.36",
         "@types/react": "^19.2.2",
         "tsx": "^4.21.0",
         "vite": "^8.0.0"
