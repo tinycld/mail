@@ -1,9 +1,10 @@
-import { Download, RotateCcw, X } from 'lucide-react-native'
+import { Download, FolderOpen, RotateCcw, X } from 'lucide-react-native'
 import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Button, Dialog, SizableText, useTheme, XStack } from 'tamagui'
 import { formatBytes, formatDate } from '~/lib/format-utils'
 import { pb } from '~/lib/pocketbase'
+import { useDrive } from '../hooks/useDrive'
 import { useVersionHistory } from '../hooks/useVersionHistory'
 import type { DriveItemView } from '../types'
 import { getFileIcon } from './file-icons'
@@ -63,10 +64,32 @@ function DetailPanelContent({ item, onClose }: { item: DriveItemView; onClose: (
 
 function DetailsContent({ item }: { item: DriveItemView }) {
     const theme = useTheme()
+    const { activeSection, getItemPath } = useDrive()
     const accessText = item.shared ? 'Shared with others' : 'Private to you'
+    const isTrash = activeSection === 'trash'
+    const originalLocation = isTrash ? getItemPath(item.parentId) : null
 
     return (
         <View style={styles.content}>
+            {isTrash && (
+                <>
+                    <View style={styles.section}>
+                        <Text style={[styles.sectionTitle, { color: theme.color.val }]}>
+                            Original location
+                        </Text>
+                        <View style={styles.accessRow}>
+                            <FolderOpen size={16} color={theme.color8.val} />
+                            <Text style={[styles.accessText, { color: theme.color8.val }]}>
+                                {originalLocation}
+                            </Text>
+                        </View>
+                        <DetailRow label="Deleted" value={formatDate(item.trashedAt)} />
+                    </View>
+
+                    <View style={[styles.divider, { backgroundColor: theme.borderColor.val }]} />
+                </>
+            )}
+
             <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: theme.color.val }]}>
                     Who has access

@@ -1,11 +1,11 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
+import type { OneRouter } from 'one'
+import { useActiveParams, usePathname, useRouter } from 'one'
 import { newRecordId } from 'pbtsdb'
-import { useActiveParams, useRouter } from 'one'
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import { Platform } from 'react-native'
 import { useMutation } from '~/lib/mutations'
-import { useOrgHref } from '~/lib/org-routes'
 import { pb, useStore } from '~/lib/pocketbase'
 import { useCurrentUserOrg } from '~/lib/use-current-user-org'
 import { useOrgInfo } from '~/lib/use-org-info'
@@ -36,19 +36,25 @@ interface DriveContextValue {
     toggleStar: (itemId: string) => void
     moveToTrash: (itemId: string) => void
     restoreFromTrash: (itemId: string) => void
+    permanentlyDelete: (itemId: string) => void
+    canRestoreToOriginalLocation: (itemId: string) => boolean
+    restoreToFolder: (itemId: string, newParentId: string) => void
     createFolder: (name: string) => void
     renameItem: (itemId: string, name: string) => void
     downloadItem: (itemId: string) => void
     moveItem: (itemId: string, newParentId: string) => void
     shareItem: (itemId: string, userOrgId: string, role: 'editor' | 'viewer') => void
     removeShare: (shareId: string) => void
-    getSharesForItem: (itemId: string) => { id: string; userOrgId: string; name: string; email: string; role: string }[]
+    getSharesForItem: (
+        itemId: string
+    ) => { id: string; userOrgId: string; name: string; email: string; role: string }[]
     orgMembers: { userOrgId: string; name: string; email: string }[]
     uploadFiles: (files: File[]) => void
     isUploading: boolean
     uploadingFiles: { name: string; status: 'pending' | 'uploading' | 'done' | 'error' }[]
     triggerFilePicker: () => void
     uploadNewVersion: (itemId: string, file: File) => Promise<void>
+    getItemPath: (itemId: string) => string
 }
 
 export const DriveContext = createContext<DriveContextValue | null>(null)
@@ -59,15 +65,30 @@ export function useDrive(): DriveContextValue {
     return ctx
 }
 
-function parseSectionParam(s: string | undefined): SidebarSection {
-    const valid: SidebarSection[] = ['my-drive', 'shared-with-me', 'recent', 'starred', 'trash']
-    return valid.includes(s as SidebarSection) ? (s as SidebarSection) : 'my-drive'
+const SECTION_SLUGS: Record<string, SidebarSection> = {
+    trash: 'trash',
+    starred: 'starred',
+    recent: 'recent',
+    shared: 'shared-with-me',
+}
+
+function parseDrivePath(pathname: string): { section: SidebarSection; folderId: string } {
+    const driveIdx = pathname.indexOf('/drive')
+    if (driveIdx === -1) return { section: 'my-drive', folderId: '' }
+    const rest = pathname.slice(driveIdx + '/drive'.length)
+    const segments = rest.split('/').filter(Boolean)
+
+    if (segments[0] === 'folder' && segments[1]) {
+        return { section: 'my-drive', folderId: segments[1] }
+    }
+    const section = SECTION_SLUGS[segments[0] ?? '']
+    if (section) return { section, folderId: '' }
+    return { section: 'my-drive', folderId: '' }
 }
 
 export function useDriveState(): DriveContextValue {
     const { orgSlug, orgId } = useOrgInfo()
     const router = useRouter()
-    const orgHref = useOrgHref()
     const userOrg = useCurrentUserOrg(orgSlug)
     const userOrgId = userOrg?.id ?? ''
 
@@ -76,28 +97,14 @@ export function useDriveState(): DriveContextValue {
     const [stateCollection] = useStore('drive_item_state')
     const [userOrgCollection] = useStore('user_org')
 
-    const params = useActiveParams<{
-        folder?: string
-        file?: string
-        section?: string
-    }>()
-    const currentFolderId = params.folder ?? ''
+    const pathname = usePathname()
+    const { section: activeSection, folderId: currentFolderId } = parseDrivePath(pathname)
+
+    const params = useActiveParams<{ file?: string }>()
     const selectedItemId = params.file ?? null
-    const activeSection = parseSectionParam(params.section)
 
     const [viewMode, setViewMode] = useState<ViewMode>('list')
     const [searchQuery, setSearchQuery] = useState('')
-
-    const pushParams = useCallback(
-        (p: { folder?: string; file?: string; section?: string }) => {
-            const query: Record<string, string> = {}
-            if (p.folder) query.folder = p.folder
-            if (p.file) query.file = p.file
-            if (p.section && p.section !== 'my-drive') query.section = p.section
-            router.push(orgHref('drive', query))
-        },
-        [router, orgHref]
-    )
 
     const isSearchActive = searchQuery.length >= 2
     const { results: searchResults, isSearching } = useDriveSearch(
@@ -149,13 +156,7 @@ export function useDriveState(): DriveContextValue {
     )
 
     const userOrgEmails = useMemo(
-        () =>
-            new Map(
-                (orgUserOrgs ?? []).map(uo => [
-                    uo.id,
-                    uo.expand?.user?.email || '',
-                ])
-            ),
+        () => new Map((orgUserOrgs ?? []).map(uo => [uo.id, uo.expand?.user?.email || ''])),
         [orgUserOrgs]
     )
 
@@ -332,6 +333,47 @@ export function useDriveState(): DriveContextValue {
         },
     })
 
+    const permanentDeleteMutation = useMutation({
+        mutationFn: function* (itemId: string) {
+            const existing = stateByItem.get(itemId)
+            if (existing) {
+                yield stateCollection.delete(existing.id)
+            }
+            yield itemsCollection.delete(itemId)
+        },
+    })
+
+    const permanentlyDelete = useCallback(
+        (itemId: string) => permanentDeleteMutation.mutate(itemId),
+        [permanentDeleteMutation]
+    )
+
+    const getItemPath = useCallback(
+        (itemId: string) => {
+            const parts: string[] = []
+            let id = itemId
+            while (id) {
+                const item = itemsById.get(id)
+                if (!item) break
+                parts.unshift(item.name)
+                id = item.parentId
+            }
+            return parts.length > 0 ? `/${parts.join('/')}` : '/My Files'
+        },
+        [itemsById]
+    )
+
+    const canRestoreToOriginalLocation = useCallback(
+        (itemId: string) => {
+            const item = itemsById.get(itemId)
+            if (!item) return false
+            if (!item.parentId) return true
+            const parent = itemsById.get(item.parentId)
+            return !!parent && !parent.trashedAt
+        },
+        [itemsById]
+    )
+
     const toggleStar = useCallback(
         (itemId: string) => {
             const item = itemsById.get(itemId)
@@ -380,7 +422,11 @@ export function useDriveState(): DriveContextValue {
             itemId,
             targetUserOrgId,
             role,
-        }: { itemId: string; targetUserOrgId: string; role: 'editor' | 'viewer' }) {
+        }: {
+            itemId: string
+            targetUserOrgId: string
+            role: 'editor' | 'viewer'
+        }) {
             yield sharesCollection.insert({
                 id: newRecordId(),
                 item: itemId,
@@ -423,10 +469,7 @@ export function useDriveState(): DriveContextValue {
     )
 
     const moveMutation = useMutation({
-        mutationFn: function* ({
-            itemId,
-            newParentId,
-        }: { itemId: string; newParentId: string }) {
+        mutationFn: function* ({ itemId, newParentId }: { itemId: string; newParentId: string }) {
             yield itemsCollection.update(itemId, draft => {
                 draft.parent = newParentId
             })
@@ -436,6 +479,14 @@ export function useDriveState(): DriveContextValue {
     const moveItem = useCallback(
         (itemId: string, newParentId: string) => moveMutation.mutate({ itemId, newParentId }),
         [moveMutation]
+    )
+
+    const restoreToFolder = useCallback(
+        (itemId: string, newParentId: string) => {
+            moveMutation.mutate({ itemId, newParentId })
+            trashMutation.mutate({ itemId, restore: true })
+        },
+        [moveMutation, trashMutation]
     )
 
     const createFolder = useCallback(
@@ -452,10 +503,7 @@ export function useDriveState(): DriveContextValue {
         (itemId: string) => {
             const item = itemsById.get(itemId)
             if (!item?.file) return
-            const url = pb.files.getURL(
-                { collectionId: 'drive_items', id: itemId },
-                item.file
-            )
+            const url = pb.files.getURL({ collectionId: 'drive_items', id: itemId }, item.file)
             if (Platform.OS === 'web') {
                 const a = document.createElement('a')
                 a.href = url
@@ -473,31 +521,49 @@ export function useDriveState(): DriveContextValue {
             currentFolderId,
         })
 
+    const driveBase = `/a/${orgSlug}/drive`
+
+    const buildDriveHref = useCallback(
+        (opts?: { section?: SidebarSection; folderId?: string; fileId?: string }) => {
+            let path = driveBase
+            if (opts?.folderId) path = `${driveBase}/folder/${opts.folderId}`
+            else if (opts?.section && opts.section !== 'my-drive') {
+                const slug = opts.section === 'shared-with-me' ? 'shared' : opts.section
+                path = `${driveBase}/${slug}`
+            }
+            if (opts?.fileId) path += `?file=${opts.fileId}`
+            return path as OneRouter.Href
+        },
+        [driveBase]
+    )
+
     const navigateToFolder = useCallback(
         (folderId: string) => {
-            pushParams({ folder: folderId || undefined })
+            router.push(buildDriveHref({ folderId: folderId || undefined }))
             setSearchQuery('')
         },
-        [pushParams]
+        [router, buildDriveHref]
     )
 
     const navigateToSection = useCallback(
         (section: SidebarSection) => {
-            pushParams({ section })
+            router.push(buildDriveHref({ section }))
             setSearchQuery('')
         },
-        [pushParams]
+        [router, buildDriveHref]
     )
 
     const selectItem = useCallback(
         (itemId: string | null) => {
-            pushParams({
-                folder: currentFolderId || undefined,
-                section: activeSection !== 'my-drive' ? activeSection : undefined,
-                file: itemId ?? undefined,
-            })
+            router.push(
+                buildDriveHref({
+                    section: activeSection,
+                    folderId: currentFolderId || undefined,
+                    fileId: itemId ?? undefined,
+                })
+            )
         },
-        [pushParams, currentFolderId, activeSection]
+        [router, buildDriveHref, currentFolderId, activeSection]
     )
 
     const openItem = useCallback(
@@ -534,6 +600,9 @@ export function useDriveState(): DriveContextValue {
             toggleStar,
             moveToTrash,
             restoreFromTrash,
+            permanentlyDelete,
+            canRestoreToOriginalLocation,
+            restoreToFolder,
             createFolder,
             renameItem,
             downloadItem,
@@ -547,6 +616,7 @@ export function useDriveState(): DriveContextValue {
             uploadingFiles,
             triggerFilePicker,
             uploadNewVersion,
+            getItemPath,
         }),
         [
             currentFolderId,
@@ -568,6 +638,9 @@ export function useDriveState(): DriveContextValue {
             toggleStar,
             moveToTrash,
             restoreFromTrash,
+            permanentlyDelete,
+            canRestoreToOriginalLocation,
+            restoreToFolder,
             createFolder,
             renameItem,
             downloadItem,
@@ -581,6 +654,7 @@ export function useDriveState(): DriveContextValue {
             uploadingFiles,
             triggerFilePicker,
             uploadNewVersion,
+            getItemPath,
         ]
     )
 }

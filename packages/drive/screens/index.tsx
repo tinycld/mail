@@ -9,17 +9,18 @@ import { useDrive } from '../hooks/useDrive'
 import type { DriveItemView } from '../types'
 
 export default function DriveScreen() {
-    const { viewMode, currentItems, searchQuery, isSearching } = useDrive()
+    const { viewMode, activeSection, currentItems, searchQuery, isSearching } = useDrive()
     const isSearchActive = searchQuery.length >= 2
+    const isTrash = activeSection === 'trash'
 
     if (isSearching) {
         return <EmptyState message="Searching..." />
     }
 
     if (currentItems.length === 0) {
-        const message = isSearchActive
-            ? `No results for "${searchQuery}"`
-            : 'No files in this location'
+        let message = 'No files in this location'
+        if (isSearchActive) message = `No results for "${searchQuery}"`
+        else if (isTrash) message = 'Trash is empty'
         return <EmptyState message={message} />
     }
 
@@ -27,7 +28,7 @@ export default function DriveScreen() {
         return <GridView items={currentItems} />
     }
 
-    return <ListView items={currentItems} />
+    return <ListView items={currentItems} isTrash={isTrash} />
 }
 
 const DRIVE_COLUMNS = [
@@ -37,19 +38,33 @@ const DRIVE_COLUMNS = [
     { label: 'File size', flex: 1 },
 ]
 
-function ListView({ items }: { items: DriveItemView[] }) {
+const TRASH_COLUMNS = [
+    { label: 'Name', flex: 3 },
+    { label: 'Date deleted', flex: 2 },
+    { label: 'File size', flex: 1 },
+]
+
+function ListView({ items, isTrash }: { items: DriveItemView[]; isTrash: boolean }) {
     const folders = items.filter(i => i.isFolder)
     const files = items.filter(i => !i.isFolder)
 
     return (
         <View style={styles.listContainer}>
-            <DataTableHeader columns={DRIVE_COLUMNS} />
-            {folders.map(item => (
-                <FilesListRow key={item.id} item={item} />
-            ))}
-            {files.map(item => (
-                <FilesListRow key={item.id} item={item} />
-            ))}
+            <DataTableHeader columns={isTrash ? TRASH_COLUMNS : DRIVE_COLUMNS} />
+            {folders.map(item =>
+                isTrash ? (
+                    <TrashListRow key={item.id} item={item} />
+                ) : (
+                    <FilesListRow key={item.id} item={item} />
+                )
+            )}
+            {files.map(item =>
+                isTrash ? (
+                    <TrashListRow key={item.id} item={item} />
+                ) : (
+                    <FilesListRow key={item.id} item={item} />
+                )
+            )}
         </View>
     )
 }
@@ -83,6 +98,37 @@ function FilesListRow({ item }: { item: DriveItemView }) {
             </Text>
             <Text style={[styles.cellText, { color: theme.color8.val, flex: 2 }]}>
                 {formatDate(item.updated)}
+            </Text>
+            <Text style={[styles.cellText, { color: theme.color8.val, flex: 1 }]}>
+                {item.isFolder ? '—' : formatBytes(item.size)}
+            </Text>
+        </Pressable>
+    )
+}
+
+function TrashListRow({ item }: { item: DriveItemView }) {
+    const theme = useTheme()
+    const { selectedItemId, selectItem } = useDrive()
+    const isSelected = selectedItemId === item.id
+    const { icon: FileIcon, color: iconColor } = getFileIcon(item.category, theme.color8.val)
+
+    return (
+        <Pressable
+            onPress={() => selectItem(item.id)}
+            style={[
+                styles.listRow,
+                { borderBottomColor: theme.borderColor.val },
+                isSelected && { backgroundColor: `${theme.activeIndicator.val}12` },
+            ]}
+        >
+            <View style={[styles.nameCell, { flex: 3 }]}>
+                <FileIcon size={20} color={iconColor} />
+                <Text style={[styles.nameText, { color: theme.color.val }]} numberOfLines={1}>
+                    {item.name}
+                </Text>
+            </View>
+            <Text style={[styles.cellText, { color: theme.color8.val, flex: 2 }]}>
+                {formatDate(item.trashedAt)}
             </Text>
             <Text style={[styles.cellText, { color: theme.color8.val, flex: 1 }]}>
                 {item.isFolder ? '—' : formatBytes(item.size)}
