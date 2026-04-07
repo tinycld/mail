@@ -7,7 +7,7 @@ import { pb } from '~/lib/pocketbase'
 import { useDrive } from '../hooks/useDrive'
 import { useVersionHistory } from '../hooks/useVersionHistory'
 import type { DriveItemView } from '../types'
-import { getFileIcon } from './file-icons'
+import { Thumbnail } from './Thumbnail'
 
 interface DetailPanelProps {
     isVisible: boolean
@@ -26,7 +26,6 @@ type DetailTab = 'details' | 'versions' | 'activity'
 function DetailPanelContent({ item, onClose }: { item: DriveItemView; onClose: () => void }) {
     const theme = useTheme()
     const [activeTab, setActiveTab] = useState<DetailTab>('details')
-    const { icon: FileIcon, color: iconColor } = getFileIcon(item.category, theme.color8.val)
     const showVersionsTab = !item.isFolder
 
     return (
@@ -41,7 +40,7 @@ function DetailPanelContent({ item, onClose }: { item: DriveItemView; onClose: (
             </View>
 
             <View style={styles.iconArea}>
-                <FileIcon size={64} color={iconColor} />
+                <Thumbnail item={item} size={120} />
             </View>
 
             <TabBar

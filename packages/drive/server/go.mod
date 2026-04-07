@@ -8,11 +8,14 @@ require (
 	github.com/pocketbase/pocketbase v0.36.8
 	tinycld.org/mailer v0.0.0
 	tinycld.org/textextract v0.0.0
+	tinycld.org/thumbnails v0.0.0
 )
 
 replace tinycld.org/textextract => ../../../server/textextract
 
 replace tinycld.org/mailer => ../../../server/mailer
+
+replace tinycld.org/thumbnails => ../../../server/thumbnails
 
 require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
@@ -20,14 +23,17 @@ require (
 	github.com/disintegration/imaging v1.6.2 // indirect
 	github.com/domodwyer/mailyak/v3 v3.6.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/ebitengine/purego v0.8.0 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/ganigeorgiev/fexpr v0.5.0 // indirect
+	github.com/gen2brain/go-fitz v1.24.14 // indirect
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/jupiterrider/ffi v0.2.0 // indirect
 	github.com/ledongthuc/pdf v0.0.0-20240201131950-da5b75280b06 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

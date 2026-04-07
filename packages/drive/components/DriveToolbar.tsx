@@ -3,6 +3,7 @@ import {
     ChevronDown,
     ChevronRight,
     Download,
+    Eye,
     FolderInput,
     FolderPlus,
     Grid,
@@ -17,7 +18,7 @@ import {
     UserPlus,
     X,
 } from 'lucide-react-native'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Button, Dialog, useTheme, XStack } from 'tamagui'
 import { MenuActionItem } from '~/components/DropdownMenu'
@@ -61,6 +62,12 @@ export function DriveToolbar() {
         removeShare,
         getSharesForItem,
         orgMembers,
+        pendingRename,
+        pendingMove,
+        pendingShare,
+        clearPendingRename,
+        clearPendingMove,
+        clearPendingShare,
     } = useDrive()
     const { userOrgId } = useCurrentRole()
     const orgSlug = useOrgSlug()
@@ -86,6 +93,31 @@ export function DriveToolbar() {
         setPrompt(state)
         setPromptKey(k => k + 1)
     }, [])
+
+    useEffect(() => {
+        if (pendingRename) {
+            openPrompt({
+                type: 'rename',
+                itemId: pendingRename.id,
+                currentName: pendingRename.name,
+            })
+            clearPendingRename()
+        }
+    }, [pendingRename, openPrompt, clearPendingRename])
+
+    useEffect(() => {
+        if (pendingMove) {
+            setMoveTarget({ id: pendingMove.id, name: pendingMove.name })
+            clearPendingMove()
+        }
+    }, [pendingMove, clearPendingMove])
+
+    useEffect(() => {
+        if (pendingShare) {
+            setShareTarget({ id: pendingShare.id, name: pendingShare.name })
+            clearPendingShare()
+        }
+    }, [pendingShare, clearPendingShare])
 
     const promptDialog = (
         <NamePromptDialog
@@ -385,6 +417,8 @@ function SelectionToolbar({
         canRestoreToOriginalLocation,
         restoreToFolder,
         folderTree,
+        openPreview,
+        selectedItem,
     } = useDrive()
     const [restoreMoveTarget, setRestoreMoveTarget] = useState<string | null>(null)
 
@@ -486,6 +520,14 @@ function SelectionToolbar({
     const actionIcons = [
         ...(!item.isFolder
             ? [
+                  {
+                      key: 'preview',
+                      icon: Eye,
+                      label: 'Preview',
+                      onPress: () => {
+                          if (selectedItem) openPreview(selectedItem)
+                      },
+                  },
                   {
                       key: 'upload-version',
                       icon: Upload,

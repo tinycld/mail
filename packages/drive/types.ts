@@ -10,6 +10,7 @@ export interface DriveItems {
     created_by: string
     size: number
     file: string
+    thumbnail: string
     description: string
     created: string
     updated: string
@@ -64,6 +65,7 @@ export interface DriveItemView {
     starred: boolean
     trashedAt: string
     file: string
+    thumbnail: string
     description: string
     category: FileCategory
 }

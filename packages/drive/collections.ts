@@ -11,7 +11,7 @@ export function registerCollections(
     coreStores: CoreStores
 ) {
     const drive_items = newCollection('drive_items', {
-        omitOnInsert: ['created', 'updated'] as const,
+        omitOnInsert: ['created', 'updated', 'thumbnail'] as const,
         expand: { created_by: coreStores.user_org },
         collectionOptions: {
             autoIndex: 'eager' as const,

@@ -1,10 +1,14 @@
 import { Star } from 'lucide-react-native'
+import { useCallback } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import { DataTableHeader } from '~/components/DataTableHeader'
 import { EmptyState } from '~/components/EmptyState'
 import { formatBytes, formatDate } from '~/lib/format-utils'
+import { DriveContextMenu } from '../components/DriveContextMenu'
 import { getFileIcon } from '../components/file-icons'
+import { Thumbnail } from '../components/Thumbnail'
+import { useDoubleClick } from '../hooks/useDoubleClick'
 import { useDrive } from '../hooks/useDrive'
 import type { DriveItemView } from '../types'
 
@@ -53,16 +57,24 @@ function ListView({ items, isTrash }: { items: DriveItemView[]; isTrash: boolean
             <DataTableHeader columns={isTrash ? TRASH_COLUMNS : DRIVE_COLUMNS} />
             {folders.map(item =>
                 isTrash ? (
-                    <TrashListRow key={item.id} item={item} />
+                    <DriveContextMenu key={item.id} item={item}>
+                        <TrashListRow item={item} />
+                    </DriveContextMenu>
                 ) : (
-                    <FilesListRow key={item.id} item={item} />
+                    <DriveContextMenu key={item.id} item={item}>
+                        <FilesListRow item={item} />
+                    </DriveContextMenu>
                 )
             )}
             {files.map(item =>
                 isTrash ? (
-                    <TrashListRow key={item.id} item={item} />
+                    <DriveContextMenu key={item.id} item={item}>
+                        <TrashListRow item={item} />
+                    </DriveContextMenu>
                 ) : (
-                    <FilesListRow key={item.id} item={item} />
+                    <DriveContextMenu key={item.id} item={item}>
+                        <FilesListRow item={item} />
+                    </DriveContextMenu>
                 )
             )}
         </View>
@@ -71,13 +83,19 @@ function ListView({ items, isTrash }: { items: DriveItemView[]; isTrash: boolean
 
 function FilesListRow({ item }: { item: DriveItemView }) {
     const theme = useTheme()
-    const { selectedItemId, openItem } = useDrive()
+    const { selectedItemId, openItem, openPreview } = useDrive()
     const isSelected = selectedItemId === item.id
     const { icon: FileIcon, color: iconColor } = getFileIcon(item.category, theme.color8.val)
 
+    const handleSingle = useCallback(() => openItem(item), [item, openItem])
+    const handleDouble = useCallback(() => {
+        if (!item.isFolder) openPreview(item)
+    }, [item, openPreview])
+    const handlePress = useDoubleClick(handleSingle, handleDouble)
+
     return (
         <Pressable
-            onPress={() => openItem(item)}
+            onPress={handlePress}
             style={[
                 styles.listRow,
                 { borderBottomColor: theme.borderColor.val },
@@ -148,7 +166,9 @@ function GridView({ items }: { items: DriveItemView[] }) {
                     <GridSectionHeader title="Folders" />
                     <View style={styles.gridWrap}>
                         {folders.map(item => (
-                            <FolderGridCard key={item.id} item={item} />
+                            <DriveContextMenu key={item.id} item={item}>
+                                <FolderGridCard item={item} />
+                            </DriveContextMenu>
                         ))}
                     </View>
                 </View>
@@ -158,7 +178,9 @@ function GridView({ items }: { items: DriveItemView[] }) {
                     <GridSectionHeader title="Files" />
                     <View style={styles.gridWrap}>
                         {files.map(item => (
-                            <FileGridCard key={item.id} item={item} />
+                            <DriveContextMenu key={item.id} item={item}>
+                                <FileGridCard item={item} />
+                            </DriveContextMenu>
                         ))}
                     </View>
                 </View>
@@ -197,13 +219,21 @@ function FolderGridCard({ item }: { item: DriveItemView }) {
 
 function FileGridCard({ item }: { item: DriveItemView }) {
     const theme = useTheme()
-    const { selectedItemId, openItem } = useDrive()
+    const { selectedItemId, openItem, openPreview } = useDrive()
     const isSelected = selectedItemId === item.id
     const { icon: FileIcon, color: iconColor } = getFileIcon(item.category, theme.color8.val)
 
+    const handleSingle = useCallback(() => openItem(item), [item, openItem])
+    const handleDouble = useCallback(() => openPreview(item), [item, openPreview])
+    const handlePress = useDoubleClick(handleSingle, handleDouble)
+
+    const handleThumbnailPress = useCallback(() => {
+        openPreview(item)
+    }, [item, openPreview])
+
     return (
         <Pressable
-            onPress={() => openItem(item)}
+            onPress={handlePress}
             style={[
                 styles.fileCard,
                 { borderColor: theme.borderColor.val },
@@ -216,9 +246,12 @@ function FileGridCard({ item }: { item: DriveItemView }) {
                     {item.name}
                 </Text>
             </View>
-            <View style={[styles.fileCardBody, { backgroundColor: `${theme.color8.val}08` }]}>
-                <FileIcon size={40} color={iconColor} />
-            </View>
+            <Pressable
+                onPress={handleThumbnailPress}
+                style={[styles.fileCardBody, { backgroundColor: `${theme.color8.val}08` }]}
+            >
+                <Thumbnail item={item} size={120} />
+            </Pressable>
         </Pressable>
     )
 }

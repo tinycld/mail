@@ -14,6 +14,11 @@ import type { DriveItemView, FolderTreeNode, SidebarSection, ViewMode } from '..
 import { useDriveSearch } from './useDriveSearch'
 import { useFileUpload } from './useFileUpload'
 
+export interface PendingAction {
+    id: string
+    name: string
+}
+
 interface DriveContextValue {
     currentFolderId: string
     activeSection: SidebarSection
@@ -28,6 +33,9 @@ interface DriveContextValue {
     searchQuery: string
     setSearchQuery: (query: string) => void
     isSearching: boolean
+    previewItem: DriveItemView | null
+    openPreview: (item: DriveItemView) => void
+    closePreview: () => void
     navigateToFolder: (folderId: string) => void
     navigateToSection: (section: SidebarSection) => void
     selectItem: (itemId: string | null) => void
@@ -55,6 +63,15 @@ interface DriveContextValue {
     triggerFilePicker: () => void
     uploadNewVersion: (itemId: string, file: File) => Promise<void>
     getItemPath: (itemId: string) => string
+    pendingRename: PendingAction | null
+    pendingMove: PendingAction | null
+    pendingShare: PendingAction | null
+    requestRename: (id: string, name: string) => void
+    requestMove: (id: string, name: string) => void
+    requestShare: (id: string, name: string) => void
+    clearPendingRename: () => void
+    clearPendingMove: () => void
+    clearPendingShare: () => void
 }
 
 export const DriveContext = createContext<DriveContextValue | null>(null)
@@ -105,6 +122,7 @@ export function useDriveState(): DriveContextValue {
 
     const [viewMode, setViewMode] = useState<ViewMode>('list')
     const [searchQuery, setSearchQuery] = useState('')
+    const [previewItemId, setPreviewItemId] = useState<string | null>(null)
 
     const isSearchActive = searchQuery.length >= 2
     const { results: searchResults, isSearching } = useDriveSearch(
@@ -194,6 +212,7 @@ export function useDriveState(): DriveContextValue {
                     starred: state?.is_starred ?? false,
                     trashedAt: state?.trashed_at ?? '',
                     file: item.file,
+                    thumbnail: (item as unknown as { thumbnail?: string }).thumbnail ?? '',
                     description: item.description,
                     category: mimeTypeToCategory(item.mime_type, item.is_folder),
                 }
@@ -222,6 +241,7 @@ export function useDriveState(): DriveContextValue {
                 starred: false,
                 trashedAt: '',
                 file: '',
+                thumbnail: '',
                 description: sr.description,
                 category: mimeTypeToCategory(sr.mime_type, sr.is_folder),
             }
@@ -270,6 +290,11 @@ export function useDriveState(): DriveContextValue {
     const selectedItem = useMemo(
         () => (selectedItemId ? itemsById.get(selectedItemId) : undefined),
         [selectedItemId, itemsById]
+    )
+
+    const previewItem = useMemo(
+        () => (previewItemId ? (itemsById.get(previewItemId) ?? null) : null),
+        [previewItemId, itemsById]
     )
 
     const folderTree = useMemo(() => {
@@ -506,13 +531,19 @@ export function useDriveState(): DriveContextValue {
             const url = pb.files.getURL({ collectionId: 'drive_items', id: itemId }, item.file)
             if (Platform.OS === 'web') {
                 const a = document.createElement('a')
-                a.href = url
+                a.href = `${url}?download=1`
                 a.download = item.name
                 a.click()
             }
         },
         [itemsById]
     )
+
+    const openPreview = useCallback((item: DriveItemView) => {
+        if (!item.isFolder) setPreviewItemId(item.id)
+    }, [])
+
+    const closePreview = useCallback(() => setPreviewItemId(null), [])
 
     const { uploadFiles, isUploading, uploadingFiles, triggerFilePicker, uploadNewVersion } =
         useFileUpload({
@@ -577,6 +608,38 @@ export function useDriveState(): DriveContextValue {
         [navigateToFolder, selectItem]
     )
 
+    const [pendingRename, setPendingRename] = useState<PendingAction | null>(null)
+    const [pendingMove, setPendingMove] = useState<PendingAction | null>(null)
+    const [pendingShare, setPendingShare] = useState<PendingAction | null>(null)
+
+    const requestRename = useCallback(
+        (id: string, name: string) => {
+            selectItem(id)
+            setPendingRename({ id, name })
+        },
+        [selectItem]
+    )
+
+    const requestMove = useCallback(
+        (id: string, name: string) => {
+            selectItem(id)
+            setPendingMove({ id, name })
+        },
+        [selectItem]
+    )
+
+    const requestShare = useCallback(
+        (id: string, name: string) => {
+            selectItem(id)
+            setPendingShare({ id, name })
+        },
+        [selectItem]
+    )
+
+    const clearPendingRename = useCallback(() => setPendingRename(null), [])
+    const clearPendingMove = useCallback(() => setPendingMove(null), [])
+    const clearPendingShare = useCallback(() => setPendingShare(null), [])
+
     return useMemo(
         () => ({
             currentFolderId,
@@ -592,6 +655,9 @@ export function useDriveState(): DriveContextValue {
             searchQuery,
             setSearchQuery,
             isSearching,
+            previewItem,
+            openPreview,
+            closePreview,
             navigateToFolder,
             navigateToSection,
             selectItem,
@@ -617,6 +683,15 @@ export function useDriveState(): DriveContextValue {
             triggerFilePicker,
             uploadNewVersion,
             getItemPath,
+            pendingRename,
+            pendingMove,
+            pendingShare,
+            requestRename,
+            requestMove,
+            requestShare,
+            clearPendingRename,
+            clearPendingMove,
+            clearPendingShare,
         }),
         [
             currentFolderId,
@@ -631,6 +706,9 @@ export function useDriveState(): DriveContextValue {
             isLoading,
             searchQuery,
             isSearching,
+            previewItem,
+            openPreview,
+            closePreview,
             navigateToFolder,
             navigateToSection,
             selectItem,
@@ -655,6 +733,15 @@ export function useDriveState(): DriveContextValue {
             triggerFilePicker,
             uploadNewVersion,
             getItemPath,
+            pendingRename,
+            pendingMove,
+            pendingShare,
+            requestRename,
+            requestMove,
+            requestShare,
+            clearPendingRename,
+            clearPendingMove,
+            clearPendingShare,
         ]
     )
 }

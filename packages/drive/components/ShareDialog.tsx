@@ -1,7 +1,7 @@
 import { useLiveQuery } from '@tanstack/react-db'
 import { ChevronDown, Link, Lock, Trash2 } from 'lucide-react-native'
 import { useCallback, useMemo, useState } from 'react'
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Button, Dialog, ListItem, SizableText, useTheme, YStack } from 'tamagui'
 import { NameAvatar } from '~/components/NameAvatar'
 import { pb, useStore } from '~/lib/pocketbase'

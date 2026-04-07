@@ -16,15 +16,15 @@ func Register(app *pocketbase.PocketBase) {
 	// FTS sync hooks for drive_items
 	app.OnRecordAfterCreateSuccess("drive_items").BindFunc(func(e *core.RecordEvent) error {
 		syncDriveItemToFTS(app, e.Record, "create")
-		// Async file content extraction
 		go extractAndIndexDriveItem(app, e.Record)
+		go generateThumbnail(app, e.Record)
 		return e.Next()
 	})
 
 	app.OnRecordAfterUpdateSuccess("drive_items").BindFunc(func(e *core.RecordEvent) error {
 		syncDriveItemToFTS(app, e.Record, "update")
-		// Re-extract if file may have changed
 		go extractAndIndexDriveItem(app, e.Record)
+		go generateThumbnail(app, e.Record)
 		return e.Next()
 	})
 

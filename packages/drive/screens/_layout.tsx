@@ -6,8 +6,10 @@ import { DetailPanel } from '../components/DetailPanel'
 import { DriveToolbar } from '../components/DriveToolbar'
 import { DropZone } from '../components/DropZone'
 import { FileUploadFAB } from '../components/FileUploadFAB'
+import { PreviewModal } from '../components/PreviewModal'
 import { UploadStatusBar } from '../components/UploadStatusBar'
 import { useDrive } from '../hooks/useDrive'
+import '../lib/register-previews'
 import DriveProvider from '../provider'
 
 export default function DriveLayout() {
@@ -19,7 +21,15 @@ export default function DriveLayout() {
 }
 
 function DriveLayoutInner() {
-    const { selectedItem, selectItem, activeSection, uploadFiles, isUploading } = useDrive()
+    const {
+        selectedItem,
+        selectItem,
+        activeSection,
+        uploadFiles,
+        isUploading,
+        previewItem,
+        closePreview,
+    } = useDrive()
     const isMobile = useBreakpoint() === 'mobile'
     const showDetail = !!selectedItem && !isMobile
     const isMyDrive = activeSection === 'my-drive'
@@ -41,6 +51,7 @@ function DriveLayoutInner() {
                     onClose={() => selectItem(null)}
                 />
             </XStack>
+            <PreviewModal isVisible={!!previewItem} item={previewItem} onClose={closePreview} />
         </YStack>
     )
 }

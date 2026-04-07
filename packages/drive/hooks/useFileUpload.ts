@@ -6,6 +6,20 @@ import { captureException } from '~/lib/errors'
 import { performMutations, useMutation } from '~/lib/mutations'
 import { pb, useStore } from '~/lib/pocketbase'
 
+function deduplicateName(name: string, existingNames: Set<string>): string {
+    if (!existingNames.has(name)) return name
+
+    const dotIdx = name.lastIndexOf('.')
+    const base = dotIdx > 0 ? name.slice(0, dotIdx) : name
+    const ext = dotIdx > 0 ? name.slice(dotIdx) : ''
+
+    for (let counter = 1; counter <= 999; counter++) {
+        const candidate = `${base} (${counter})${ext}`
+        if (!existingNames.has(candidate)) return candidate
+    }
+    return `${base} (${Date.now()})${ext}`
+}
+
 interface UploadingFile {
     name: string
     status: 'pending' | 'uploading' | 'done' | 'error'
@@ -27,6 +41,15 @@ export function useFileUpload({ orgId, userOrgId, currentFolderId }: UseFileUplo
         mutationFn: async (files: File[]) => {
             setUploadingFiles(files.map(f => ({ name: f.name, status: 'pending' })))
 
+            const existing = await pb.collection('drive_items').getFullList({
+                filter: pb.filter('org = {:org} && parent = {:parent}', {
+                    org: orgId,
+                    parent: folderRef.current || '',
+                }),
+                fields: 'name',
+            })
+            const usedNames = new Set(existing.map(r => r.name))
+
             for (let i = 0; i < files.length; i++) {
                 const file = files[i]
                 setUploadingFiles(prev =>
@@ -35,10 +58,12 @@ export function useFileUpload({ orgId, userOrgId, currentFolderId }: UseFileUplo
 
                 try {
                     const itemId = newRecordId()
+                    const uniqueName = deduplicateName(file.name, usedNames)
+                    usedNames.add(uniqueName)
                     const formData = new FormData()
                     formData.append('id', itemId)
                     formData.append('org', orgId)
-                    formData.append('name', file.name)
+                    formData.append('name', uniqueName)
                     formData.append('is_folder', 'false')
                     formData.append('mime_type', file.type || 'application/octet-stream')
                     formData.append('parent', folderRef.current)
