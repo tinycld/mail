@@ -4,6 +4,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
 import { useMutation } from '~/lib/mutations'
 import { useStore } from '~/lib/pocketbase'
+import { useCurrentRole } from '~/lib/use-current-role'
 import { useOrgInfo } from '~/lib/use-org-info'
 import { TextInput, useForm, z, zodResolver } from '~/ui/form'
 
@@ -33,6 +34,7 @@ interface LabelCreateDialogProps {
 export function LabelCreateDialog({ isVisible, onClose }: LabelCreateDialogProps) {
     const theme = useTheme()
     const { orgId } = useOrgInfo()
+    const { userOrgId } = useCurrentRole()
     const [labelsCollection] = useStore('labels')
 
     const {
@@ -55,6 +57,7 @@ export function LabelCreateDialog({ isVisible, onClose }: LabelCreateDialogProps
             yield labelsCollection.insert({
                 id: newRecordId(),
                 org: orgId,
+                user_org: userOrgId,
                 name: data.name,
                 color: data.color,
             })
