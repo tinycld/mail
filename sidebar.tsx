@@ -3,8 +3,6 @@ import { useLiveQuery } from '@tanstack/react-db'
 import {
     AlertTriangle,
     Archive,
-    ChevronDown,
-    ChevronRight,
     File,
     Inbox,
     Mail,
@@ -50,7 +48,6 @@ export default function MailSidebar(_props: MailSidebarProps) {
     const activeFolder = useActiveFolder()
     const { userOrgId } = useCurrentRole()
     const orgHref = useOrgHref()
-    const [moreExpanded, setMoreExpanded] = useState(false)
     const [labelDialogOpen, setLabelDialogOpen] = useState(false)
 
     const [threadStateCollection] = useStore('mail_thread_state')
@@ -87,8 +84,6 @@ export default function MailSidebar(_props: MailSidebarProps) {
     const navigateToLabel = (labelId: string) => {
         router.push(orgHref('mail', { label: labelId }))
     }
-
-    const MoreIcon = moreExpanded ? ChevronDown : ChevronRight
 
     const labelItems = orgLabels.map(label => (
         <SidebarItem
@@ -135,41 +130,31 @@ export default function MailSidebar(_props: MailSidebarProps) {
                 onPress={() => navigateToFolder('drafts')}
             />
             <SidebarItem
-                label="More"
-                icon={MoreIcon}
-                isActive={false}
-                onPress={() => setMoreExpanded(prev => !prev)}
+                label="All Mail"
+                icon={Mail}
+                isActive={activeFolder === 'all'}
+                onPress={() => navigateToFolder('all')}
             />
-            {moreExpanded ? (
-                <>
-                    <SidebarItem
-                        label="All Mail"
-                        icon={Mail}
-                        isActive={activeFolder === 'all'}
-                        onPress={() => navigateToFolder('all')}
-                    />
-                    <SidebarItem
-                        label="Spam"
-                        icon={AlertTriangle}
-                        badge={folderCounts.spam || undefined}
-                        isActive={activeFolder === 'spam'}
-                        onPress={() => navigateToFolder('spam')}
-                    />
-                    <SidebarItem
-                        label="Trash"
-                        icon={Trash2}
-                        badge={folderCounts.trash || undefined}
-                        isActive={activeFolder === 'trash'}
-                        onPress={() => navigateToFolder('trash')}
-                    />
-                    <SidebarItem
-                        label="Archive"
-                        icon={Archive}
-                        isActive={activeFolder === 'archive'}
-                        onPress={() => navigateToFolder('archive')}
-                    />
-                </>
-            ) : null}
+            <SidebarItem
+                label="Spam"
+                icon={AlertTriangle}
+                badge={folderCounts.spam || undefined}
+                isActive={activeFolder === 'spam'}
+                onPress={() => navigateToFolder('spam')}
+            />
+            <SidebarItem
+                label="Trash"
+                icon={Trash2}
+                badge={folderCounts.trash || undefined}
+                isActive={activeFolder === 'trash'}
+                onPress={() => navigateToFolder('trash')}
+            />
+            <SidebarItem
+                label="Archive"
+                icon={Archive}
+                isActive={activeFolder === 'archive'}
+                onPress={() => navigateToFolder('archive')}
+            />
 
             <SidebarDivider />
 
