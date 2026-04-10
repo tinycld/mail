@@ -81,7 +81,6 @@ export interface MailThreadState {
     folder: 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam' | 'archive'
     is_read: boolean
     is_starred: boolean
-    is_important: boolean
     labels: string[]
     created: string
     updated: string

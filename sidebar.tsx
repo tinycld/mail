@@ -143,12 +143,6 @@ export default function MailSidebar(_props: MailSidebarProps) {
             {moreExpanded ? (
                 <>
                     <SidebarItem
-                        label="Important"
-                        icon={Star}
-                        isActive={activeFolder === 'important'}
-                        onPress={() => navigateToFolder('important')}
-                    />
-                    <SidebarItem
                         label="All Mail"
                         icon={Mail}
                         isActive={activeFolder === 'all'}

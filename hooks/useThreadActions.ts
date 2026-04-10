@@ -86,16 +86,6 @@ export function useThreadActions(
         onError,
     })
 
-    const toggleImportant = useMutation({
-        mutationFn: function* () {
-            if (!threadState) return
-            yield col.update(threadState.id, draft => {
-                draft.is_important = !draft.is_important
-            })
-        },
-        onError,
-    })
-
     const updateLabel = useMutation({
         mutationFn: function* ({ labelId, add }: { labelId: string; add: boolean }) {
             if (!threadState) return
@@ -120,7 +110,6 @@ export function useThreadActions(
         moveThread,
         toggleRead,
         toggleStar,
-        toggleImportant,
         updateLabel,
     }
 }

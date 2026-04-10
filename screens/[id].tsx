@@ -95,7 +95,6 @@ export default function MailDetailScreen() {
         moveThread,
         toggleRead,
         toggleStar,
-        toggleImportant,
         updateLabel,
     } = useThreadActions(threadStateCollection, threadState, navigateBack)
 
@@ -157,7 +156,6 @@ export default function MailDetailScreen() {
                 onUpdateLabel={(labelId, add) => updateLabel.mutate({ labelId, add })}
                 onToggleRead={() => toggleRead.mutate()}
                 onToggleStar={() => toggleStar.mutate()}
-                onToggleImportant={() => toggleImportant.mutate()}
                 onForwardAll={handleForwardAll}
                 onNewer={goToPrevious}
                 onOlder={goToNext}

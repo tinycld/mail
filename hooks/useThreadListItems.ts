@@ -93,9 +93,6 @@ export function useThreadListItems(
         if (activeFolder === 'starred') {
             return mapped.filter(item => item.isStarred)
         }
-        if (activeFolder === 'important') {
-            return mapped.filter(item => item.isImportant)
-        }
         if (activeFolder === 'all') {
             return mapped
         }

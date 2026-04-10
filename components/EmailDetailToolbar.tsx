@@ -3,7 +3,6 @@ import {
     ArrowLeft,
     ChevronLeft,
     ChevronRight,
-    ChevronUp,
     CircleAlert,
     FolderInput,
     Forward,
@@ -40,7 +39,6 @@ interface EmailDetailToolbarProps {
     onUpdateLabel: (labelId: string, add: boolean) => void
     onToggleRead: () => void
     onToggleStar: () => void
-    onToggleImportant: () => void
     onForwardAll: () => void
     onNewer?: () => void
     onOlder?: () => void
@@ -68,7 +66,6 @@ export function EmailDetailToolbar({
     onUpdateLabel,
     onToggleRead,
     onToggleStar,
-    onToggleImportant,
     onForwardAll,
     onNewer,
     onOlder,
@@ -82,7 +79,6 @@ export function EmailDetailToolbar({
 
     const isRead = threadState?.is_read ?? false
     const isStarred = threadState?.is_starred ?? false
-    const isImportant = threadState?.is_important ?? false
 
     const ReadIcon = isRead ? MailOpen : Mail
     const readLabel = isRead ? 'Mark as unread' : 'Mark as read'
@@ -132,11 +128,6 @@ export function EmailDetailToolbar({
                         label={isRead ? 'Mark as unread' : 'Mark as read'}
                         icon={isRead ? MailOpen : Mail}
                         onPress={onToggleRead}
-                    />
-                    <MenuActionItem
-                        label={isImportant ? 'Mark as not important' : 'Mark as important'}
-                        icon={ChevronUp}
-                        onPress={onToggleImportant}
                     />
                     <MenuActionItem
                         label={isStarred ? 'Remove star' : 'Add star'}
