@@ -36,14 +36,6 @@ export function registerCollections(
         },
     })
 
-    const mail_labels = newCollection('mail_labels', {
-        omitOnInsert: ['created', 'updated'] as const,
-        collectionOptions: {
-            autoIndex: 'eager' as const,
-            defaultIndexType: BasicIndex,
-        },
-    })
-
     const mail_threads = newCollection('mail_threads', {
         omitOnInsert: ['created', 'updated'] as const,
         expand: { mailbox: mail_mailboxes },
@@ -67,7 +59,6 @@ export function registerCollections(
         expand: {
             thread: mail_threads,
             user_org: coreStores.user_org,
-            labels: mail_labels,
         },
         collectionOptions: {
             autoIndex: 'eager' as const,
@@ -88,7 +79,6 @@ export function registerCollections(
         mail_domains,
         mail_mailboxes,
         mail_mailbox_members,
-        mail_labels,
         mail_threads,
         mail_messages,
         mail_thread_state,

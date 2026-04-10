@@ -1,4 +1,4 @@
-import type { Orgs, UserOrg } from '~/types/pbSchema'
+import type { UserOrg } from '~/types/pbSchema'
 
 export interface MailDomains {
     id: string
@@ -25,15 +25,6 @@ export interface MailMailboxMembers {
     mailbox: string
     user_org: string
     role: 'owner' | 'member'
-    created: string
-    updated: string
-}
-
-export interface MailLabels {
-    id: string
-    org: string
-    name: string
-    color: string
     created: string
     updated: string
 }
@@ -81,7 +72,6 @@ export interface MailThreadState {
     folder: 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam' | 'archive'
     is_read: boolean
     is_starred: boolean
-    labels: string[]
     created: string
     updated: string
 }
@@ -99,7 +89,7 @@ export type MailSchema = {
     mail_domains: {
         type: MailDomains
         relations: {
-            org: Orgs
+            org: import('~/types/pbSchema').Orgs
         }
     }
     mail_mailboxes: {
@@ -113,12 +103,6 @@ export type MailSchema = {
         relations: {
             mailbox: MailMailboxes
             user_org: UserOrg
-        }
-    }
-    mail_labels: {
-        type: MailLabels
-        relations: {
-            org: Orgs
         }
     }
     mail_threads: {
@@ -138,7 +122,6 @@ export type MailSchema = {
         relations: {
             thread: MailThreads
             user_org: UserOrg
-            labels: MailLabels[]
         }
     }
     mail_imap_mailbox_state: {
