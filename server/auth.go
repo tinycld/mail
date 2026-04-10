@@ -45,7 +45,8 @@ func verifyOrgAdmin(app *pocketbase.PocketBase, userID, orgID string) error {
 	if err != nil {
 		return err
 	}
-	if userOrg.GetString("role") != "admin" {
+	role := userOrg.GetString("role")
+	if role != "admin" && role != "owner" {
 		return fmt.Errorf("user %s is not an admin of org %s", userID, orgID)
 	}
 	return nil
