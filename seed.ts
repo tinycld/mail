@@ -26,10 +26,14 @@ function htmlBlob(html: string) {
 }
 
 const LABELS = [
-    { name: 'Work', color: '#4285f4' },
-    { name: 'Personal', color: '#0f9d58' },
-    { name: 'Finance', color: '#f4b400' },
-    { name: 'Travel', color: '#db4437' },
+    { name: 'Work', color: '#3949ab' },
+    { name: 'Personal', color: '#43a047' },
+    { name: 'Finance', color: '#f4511e' },
+    { name: 'Travel', color: '#e53935' },
+    { name: 'Urgent', color: '#d81b60' },
+    { name: 'Clients', color: '#00acc1' },
+    { name: 'Newsletters', color: '#8e24aa' },
+    { name: 'Receipts', color: '#00897b' },
 ] as const
 
 const THREADS: {
@@ -57,7 +61,7 @@ const THREADS: {
         folder: 'inbox',
         is_read: false,
         is_starred: true,
-        labels: ['Work'],
+        labels: ['Work', 'Urgent'],
         messages: [
             {
                 sender_name: 'Alice Chen',
@@ -104,7 +108,7 @@ const THREADS: {
         folder: 'inbox',
         is_read: true,
         is_starred: false,
-        labels: [],
+        labels: ['Newsletters'],
         messages: [
             {
                 sender_name: 'GitHub',
@@ -152,7 +156,7 @@ const THREADS: {
         folder: 'inbox',
         is_read: true,
         is_starred: false,
-        labels: ['Finance'],
+        labels: ['Finance', 'Receipts'],
         messages: [
             {
                 sender_name: 'Stripe',
@@ -181,7 +185,7 @@ const THREADS: {
         folder: 'inbox',
         is_read: false,
         is_starred: true,
-        labels: ['Work', 'Travel'],
+        labels: ['Work', 'Travel', 'Clients'],
         messages: [
             {
                 sender_name: 'David Lee',
