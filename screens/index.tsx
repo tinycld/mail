@@ -71,7 +71,6 @@ function searchResultToThreadListItem(result: MailSearchResult): ThreadListItem 
         participants,
         isRead: true,
         isStarred: false,
-        isImportant: false,
         labels: [],
         folder: 'search',
         hasDraft: false,
@@ -139,17 +138,17 @@ export default function MailListScreen() {
     })
 
     const archiveThread = useMutation({
-        mutationFn: function* ({ stateId }: { stateId: string }) {
+        mutationFn: function* ({ stateId, folder }: { stateId: string; folder: string }) {
             yield threadStateCollection.update(stateId, draft => {
-                draft.folder = 'archive'
+                draft.folder = folder === 'archive' ? 'inbox' : 'archive'
             })
         },
     })
 
     const trashThread = useMutation({
-        mutationFn: function* ({ stateId }: { stateId: string }) {
+        mutationFn: function* ({ stateId, folder }: { stateId: string; folder: string }) {
             yield threadStateCollection.update(stateId, draft => {
-                draft.folder = 'trash'
+                draft.folder = folder === 'trash' ? 'inbox' : 'trash'
             })
         },
     })
@@ -266,10 +265,11 @@ export default function MailListScreen() {
                 <FlatList
                     data={items}
                     keyExtractor={item => item.stateId}
-                    renderItem={({ item }) => (
+                    renderItem={({ item, index }) => (
                         <EmailRow
                             email={item}
                             isMobile={isMobile}
+                            index={index}
                             isSelected={selection.selectedIds.has(item.stateId)}
                             onToggleSelect={() => selection.toggle(item.stateId)}
                             onToggleStar={() =>
@@ -279,8 +279,12 @@ export default function MailListScreen() {
                                 })
                             }
                             onPress={item.hasDraft ? () => handleDraftPress(item) : undefined}
-                            onArchive={() => archiveThread.mutate({ stateId: item.stateId })}
-                            onTrash={() => trashThread.mutate({ stateId: item.stateId })}
+                            onArchive={() =>
+                                archiveThread.mutate({ stateId: item.stateId, folder: item.folder })
+                            }
+                            onTrash={() =>
+                                trashThread.mutate({ stateId: item.stateId, folder: item.folder })
+                            }
                             onToggleRead={() =>
                                 toggleRead.mutate({
                                     stateId: item.stateId,
