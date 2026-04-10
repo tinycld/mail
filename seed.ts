@@ -433,17 +433,17 @@ export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedC
         )
     }
 
-    // Create labels (find or create)
+    // Create labels (find or create) — uses core 'labels' collection
     log(`Setting up ${LABELS.length} labels...`)
     const labelMap: Record<string, string> = {}
     for (const label of LABELS) {
         let record: { id: string }
         try {
             record = await pb
-                .collection('mail_labels')
+                .collection('labels')
                 .getFirstListItem(`org = "${org.id}" && name = "${label.name}"`)
         } catch {
-            record = await pb.collection('mail_labels').create({
+            record = await pb.collection('labels').create({
                 org: org.id,
                 name: label.name,
                 color: label.color,
@@ -501,14 +501,22 @@ export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedC
 
         const labelIds = thread.labels.map(name => labelMap[name]).filter(Boolean)
 
-        await pb.collection('mail_thread_state').create({
+        const threadState = await pb.collection('mail_thread_state').create({
             thread: threadRecord.id,
             user_org: userOrg.id,
             folder: thread.folder,
             is_read: thread.is_read,
             is_starred: thread.is_starred,
-            labels: labelIds,
         })
+
+        for (const labelId of labelIds) {
+            await pb.collection('label_assignments').create({
+                label: labelId,
+                record_id: threadState.id,
+                collection: 'mail_thread_state',
+                user_org: userOrg.id,
+            })
+        }
     }
 
     log(`Created ${THREADS.length} threads`)

@@ -106,22 +106,22 @@ export function EmailDetailToolbar({
                                 />
                             ))}
                         </ToolbarMenu>
-                        <ToolbarMenu icon={Tag} label="Labels">
-                            {labels.map(lbl => {
-                                const isActive = threadLabelIds.has(lbl.id)
-                                return (
-                                    <MenuActionItem
-                                        key={lbl.id}
-                                        label={lbl.name}
-                                        colorDot={lbl.color}
-                                        isActive={isActive}
-                                        onPress={() => onUpdateLabel(lbl.id, !isActive)}
-                                    />
-                                )
-                            })}
-                        </ToolbarMenu>
                     </>
                 )}
+                <ToolbarMenu icon={Tag} label="Labels">
+                    {labels.map(lbl => {
+                        const isActive = threadLabelIds.has(lbl.id)
+                        return (
+                            <MenuActionItem
+                                key={lbl.id}
+                                label={lbl.name}
+                                colorDot={lbl.color}
+                                isActive={isActive}
+                                onPress={() => onUpdateLabel(lbl.id, !isActive)}
+                            />
+                        )
+                    })}
+                </ToolbarMenu>
                 <ToolbarIconButton icon={ReadIcon} label={readLabel} onPress={onToggleRead} />
                 <ToolbarMenu icon={MoreVertical} label="More options">
                     <MenuActionItem

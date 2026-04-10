@@ -1,7 +1,7 @@
 import { and, eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useParams, useRouter } from 'one'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useTheme, YStack } from 'tamagui'
 import { useMutation } from '~/lib/mutations'
@@ -14,7 +14,7 @@ import { MessageHeader, ThreadSubjectHeader } from '../components/EmailHeader'
 import { InlineReply } from '../components/InlineReply'
 import { NotFoundState } from '../components/NotFoundState'
 import { useCompose } from '../hooks/useComposeState'
-import { useLabels } from '../hooks/useLabels'
+import { useLabels, useThreadLabels } from '../hooks/useLabels'
 import { useThreadActions } from '../hooks/useThreadActions'
 import { useThreadNavigation } from '../hooks/useThreadNavigation'
 import type { MailMessages } from '../types'
@@ -72,17 +72,8 @@ export default function MailDetailScreen() {
         [id]
     )
 
-    const { labels: allLabels, labelsForIds } = useLabels()
-
-    const labels = useMemo(
-        () => labelsForIds(threadState?.labels ?? []),
-        [threadState?.labels, labelsForIds]
-    )
-
-    const threadLabelIds = useMemo(
-        () => new Set<string>(threadState?.labels ?? []),
-        [threadState?.labels]
-    )
+    const { labels: allLabels } = useLabels()
+    const { labels, labelIds: threadLabelIds } = useThreadLabels(threadState?.id ?? '')
 
     useAutoMarkAsRead(threadStateCollection, threadState, id)
 

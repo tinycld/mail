@@ -1,4 +1,5 @@
 import type { Transaction } from '@tanstack/react-db'
+import { useLabelMutations } from '~/hooks/useLabelMutations'
 import { useMutation } from '~/lib/mutations'
 import type { ThreadListItem } from '../components/thread-list-item'
 import type { MailThreadState } from '../types'
@@ -17,6 +18,7 @@ export function useMailBulkActions(
     clearSelection: () => void
 ) {
     const col: ThreadStateCollection = threadStateCollection
+    const { assignLabel, unassignLabel } = useLabelMutations()
 
     const archiveSelected = useMutation({
         mutationFn: function* () {
@@ -84,23 +86,26 @@ export function useMailBulkActions(
         onSuccess: clearSelection,
     })
 
-    const updateLabelsSelected = useMutation<void, Error, { labelId: string; add: boolean }>({
-        mutationFn: function* ({ labelId, add }) {
-            yield selectedItems.map(item =>
-                col.update(item.stateId, draft => {
-                    const labels: string[] = draft.labels ?? []
-                    if (add) {
-                        if (!labels.includes(labelId)) {
-                            draft.labels = [...labels, labelId]
-                        }
-                    } else {
-                        draft.labels = labels.filter(id => id !== labelId)
-                    }
-                })
-            )
+    const updateLabelsSelected = {
+        mutate: ({ labelId, add }: { labelId: string; add: boolean }) => {
+            for (const item of selectedItems) {
+                if (add) {
+                    assignLabel.mutate({
+                        labelId,
+                        recordId: item.stateId,
+                        collection: 'mail_thread_state',
+                    })
+                } else {
+                    unassignLabel.mutate({
+                        labelId,
+                        recordId: item.stateId,
+                        collection: 'mail_thread_state',
+                    })
+                }
+            }
+            clearSelection()
         },
-        onSuccess: clearSelection,
-    })
+    }
 
     return {
         archiveSelected,

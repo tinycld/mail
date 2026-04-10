@@ -9,10 +9,10 @@ import {
 } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { LabelBadge } from '~/components/LabelBadge'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { formatRelativeDate } from '~/lib/format-utils'
 import { MenuActionItem, ToolbarMenu } from './DropdownMenu'
-import { LabelBadge } from './LabelBadge'
 
 interface ThreadSubjectHeaderProps {
     subject: string

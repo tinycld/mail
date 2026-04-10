@@ -11,13 +11,10 @@ export function useThreadListItems(
     userOrgId: string,
     filter: { folder: string | null; label: string | null }
 ) {
-    const [threadStateCollection, threadsCollection, messagesCollection] = useStore(
-        'mail_thread_state',
-        'mail_threads',
-        'mail_messages'
-    )
+    const [threadStateCollection, threadsCollection, messagesCollection, assignmentsCollection] =
+        useStore('mail_thread_state', 'mail_threads', 'mail_messages', 'label_assignments')
 
-    const { labels, labelMap, labelsForIds } = useLabels()
+    const { labels, labelMap } = useLabels()
 
     const { data: threadStates } = useLiveQuery(
         query =>
@@ -49,6 +46,29 @@ export function useThreadListItems(
         []
     )
 
+    const { data: allAssignments } = useLiveQuery(
+        query =>
+            query
+                .from({ label_assignments: assignmentsCollection })
+                .where(({ label_assignments }) =>
+                    eq(label_assignments.collection, 'mail_thread_state')
+                ),
+        []
+    )
+
+    const assignmentsByRecord = useMemo(() => {
+        const map = new Map<string, string[]>()
+        for (const a of allAssignments ?? []) {
+            const existing = map.get(a.record_id)
+            if (existing) {
+                existing.push(a.label)
+            } else {
+                map.set(a.record_id, [a.label])
+            }
+        }
+        return map
+    }, [allAssignments])
+
     const draftByThread = useMemo(() => {
         const map = new Map<string, MailMessages>()
         for (const msg of (draftMessages ?? []) as MailMessages[]) {
@@ -78,7 +98,10 @@ export function useThreadListItems(
 
         const mapped = threadStates.map(state => {
             const thread = threadMap.get(state.thread)
-            const stateLabels = labelsForIds(state.labels ?? [])
+            const labelIds = assignmentsByRecord.get(state.id) ?? []
+            const stateLabels = labelIds
+                .map(id => labelMap.get(id))
+                .filter((l): l is { id: string; name: string; color: string } => l != null)
             const hasDraft = draftByThread.has(state.thread)
             const hasAttachments = threadsWithAttachments.has(state.thread)
             return toThreadListItem(state, thread, stateLabels, hasDraft, hasAttachments)
@@ -101,7 +124,15 @@ export function useThreadListItems(
         }
 
         return mapped.filter(item => item.folder === activeFolder)
-    }, [threadStates, threadMap, labelsForIds, draftByThread, threadsWithAttachments, filter])
+    }, [
+        threadStates,
+        threadMap,
+        assignmentsByRecord,
+        labelMap,
+        draftByThread,
+        threadsWithAttachments,
+        filter,
+    ])
 
     return {
         items,

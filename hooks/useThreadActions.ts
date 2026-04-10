@@ -1,4 +1,5 @@
 import type { Transaction } from '@tanstack/react-db'
+import { useLabelMutations } from '~/hooks/useLabelMutations'
 import { captureException } from '~/lib/errors'
 import { useMutation } from '~/lib/mutations'
 import type { MailThreadState } from '../types'
@@ -17,6 +18,7 @@ export function useThreadActions(
     onNavigateBack: () => void
 ) {
     const col: ThreadStateCollection = threadStateCollection
+    const { assignLabel, unassignLabel } = useLabelMutations()
 
     const onError = (error: unknown) => {
         captureException('Thread action failed', error)
@@ -86,22 +88,24 @@ export function useThreadActions(
         onError,
     })
 
-    const updateLabel = useMutation({
-        mutationFn: function* ({ labelId, add }: { labelId: string; add: boolean }) {
+    const updateLabel = {
+        mutate: ({ labelId, add }: { labelId: string; add: boolean }) => {
             if (!threadState) return
-            yield col.update(threadState.id, draft => {
-                const current: string[] = draft.labels ?? []
-                if (add) {
-                    if (!current.includes(labelId)) {
-                        draft.labels = [...current, labelId]
-                    }
-                } else {
-                    draft.labels = current.filter(lid => lid !== labelId)
-                }
-            })
+            if (add) {
+                assignLabel.mutate({
+                    labelId,
+                    recordId: threadState.id,
+                    collection: 'mail_thread_state',
+                })
+            } else {
+                unassignLabel.mutate({
+                    labelId,
+                    recordId: threadState.id,
+                    collection: 'mail_thread_state',
+                })
+            }
         },
-        onError,
-    })
+    }
 
     return {
         archiveThread,

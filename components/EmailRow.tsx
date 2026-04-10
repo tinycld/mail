@@ -1,5 +1,6 @@
 import {
     Archive,
+    Inbox,
     Mail,
     MailOpen,
     Paperclip,
@@ -14,9 +15,45 @@ import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { LabelBadge, LabelDots } from '~/components/LabelBadge'
+import { hexToRgba } from '~/lib/color-utils'
 import { formatRelativeDate } from '~/lib/format-utils'
 import { useOrgHref } from '~/lib/org-routes'
+import { useWebStyles } from '~/lib/use-web-styles'
 import type { ThreadListItem } from './thread-list-item'
+
+const tooltipCSS = `
+    .hover-action-tooltip {
+        position: relative;
+        display: inline-flex;
+    }
+    .hover-action-tooltip::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        line-height: 1;
+        white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s ease-in;
+        background: var(--tooltip-bg);
+        color: var(--tooltip-fg);
+        z-index: 10;
+    }
+    .hover-action-tooltip.tooltip-above::after {
+        bottom: calc(100% + 6px);
+    }
+    .hover-action-tooltip.tooltip-below::after {
+        top: calc(100% + 6px);
+    }
+    .hover-action-tooltip:hover::after {
+        opacity: 1;
+    }
+`
 
 interface EmailRowProps {
     email: ThreadListItem
@@ -28,6 +65,7 @@ interface EmailRowProps {
     onArchive?: () => void
     onTrash?: () => void
     onToggleRead?: () => void
+    index?: number
 }
 
 export function EmailRow({
@@ -40,6 +78,7 @@ export function EmailRow({
     onArchive,
     onTrash,
     onToggleRead,
+    index,
 }: EmailRowProps) {
     if (isMobile)
         return <MobileEmailRow email={email} onToggleStar={onToggleStar} onPress={onPress} />
@@ -53,6 +92,7 @@ export function EmailRow({
             onArchive={onArchive}
             onTrash={onTrash}
             onToggleRead={onToggleRead}
+            index={index}
         />
     )
 }
@@ -123,15 +163,15 @@ function HoverAction({
     label,
     onPress,
     theme,
+    tooltipPosition = 'above',
 }: {
     icon: typeof Archive
     label: string
     onPress?: () => void
     theme: ReturnType<typeof useTheme>
+    tooltipPosition?: 'above' | 'below'
 }) {
-    const webProps = Platform.OS === 'web' ? { title: label } : {}
-
-    return (
+    const button = (
         <Pressable
             style={hoverActionStyles.button}
             onPress={e => {
@@ -140,10 +180,26 @@ function HoverAction({
                 onPress?.()
             }}
             accessibilityLabel={label}
-            {...webProps}
         >
             <Icon size={16} color={theme.color8.val} />
         </Pressable>
+    )
+
+    if (Platform.OS !== 'web') return button
+
+    const tooltipStyle = {
+        '--tooltip-bg': theme.color2.val,
+        '--tooltip-fg': theme.color12.val,
+    }
+
+    return (
+        <div
+            data-tooltip={label}
+            className={`hover-action-tooltip tooltip-${tooltipPosition}`}
+            style={tooltipStyle as never}
+        >
+            {button}
+        </div>
     )
 }
 
@@ -237,6 +293,13 @@ function MobileEmailRow({ email, onToggleStar, onPress }: EmailRowProps) {
                     >
                         {email.snippet}
                     </Text>
+                    {email.labels.length > 0 ? (
+                        <View style={mobileStyles.labelRow}>
+                            {email.labels.slice(0, 3).map(label => (
+                                <LabelBadge key={label.id} name={label.name} color={label.color} />
+                            ))}
+                        </View>
+                    ) : null}
                 </View>
             </View>
         </RowWrapper>
@@ -249,20 +312,41 @@ function RowHoverActions({
     onArchive,
     onTrash,
     onToggleRead,
-}: Pick<EmailRowProps, 'email' | 'isSelected' | 'onArchive' | 'onTrash' | 'onToggleRead'>) {
+    tooltipPosition = 'above',
+}: Pick<EmailRowProps, 'email' | 'isSelected' | 'onArchive' | 'onTrash' | 'onToggleRead'> & {
+    tooltipPosition?: 'above' | 'below'
+}) {
     const theme = useTheme()
     const ReadIcon = email.isRead ? Mail : MailOpen
-    const bg = isSelected ? `${theme.accentBackground.val}18` : theme.background.val
+    const bg = isSelected ? hexToRgba(theme.accentBackground.val, 0.09) : theme.background.val
+
+    const isTrashed = email.folder === 'trash'
+    const isArchived = email.folder === 'archive'
+    const ArchiveIcon = isArchived ? Inbox : Archive
+    const archiveLabel = isArchived ? 'Move to Inbox' : 'Archive'
 
     return (
         <View style={[styles.hoverActions, { backgroundColor: bg }]}>
-            <HoverAction icon={Archive} label="Archive" onPress={onArchive} theme={theme} />
-            <HoverAction icon={Trash2} label="Delete" onPress={onTrash} theme={theme} />
+            <HoverAction
+                icon={ArchiveIcon}
+                label={archiveLabel}
+                onPress={onArchive}
+                theme={theme}
+                tooltipPosition={tooltipPosition}
+            />
+            <HoverAction
+                icon={isTrashed ? Inbox : Trash2}
+                label={isTrashed ? 'Move to Inbox' : 'Delete'}
+                onPress={onTrash}
+                theme={theme}
+                tooltipPosition={tooltipPosition}
+            />
             <HoverAction
                 icon={ReadIcon}
                 label={email.isRead ? 'Mark as unread' : 'Mark as read'}
                 onPress={onToggleRead}
                 theme={theme}
+                tooltipPosition={tooltipPosition}
             />
         </View>
     )
@@ -277,13 +361,15 @@ function DesktopEmailRow({
     onArchive,
     onTrash,
     onToggleRead,
+    index,
 }: EmailRowProps) {
+    useWebStyles('hover-action-tooltip', tooltipCSS)
     const theme = useTheme()
     const orgHref = useOrgHref()
     const [isHovered, setIsHovered] = useState(false)
 
     const rowBg = isSelected
-        ? `${theme.accentBackground.val}18`
+        ? hexToRgba(theme.accentBackground.val, 0.09)
         : email.isRead
           ? 'transparent'
           : theme.backgroundHover.val
@@ -302,12 +388,12 @@ function DesktopEmailRow({
               }
             : {}
 
+    const borderInset = hexToRgba(theme.borderColor.val, 0.6)
     const hoverShadow =
         isHovered && Platform.OS === 'web'
             ? ({
-                  boxShadow:
-                      '0 2px 6px 0 rgba(0,0,0,0.12), inset 1px 0 0 #dadce0, inset -1px 0 0 #dadce0',
-                  zIndex: 1,
+                  boxShadow: `0 2px 6px 0 rgba(0,0,0,0.12), inset 1px 0 0 ${borderInset}, inset -1px 0 0 ${borderInset}`,
+                  zIndex: 2,
               } as Record<string, unknown>)
             : null
 
@@ -376,6 +462,7 @@ function DesktopEmailRow({
                         {email.snippet}
                     </Text>
                 </View>
+                {email.labels.length > 0 ? <LabelDots labels={email.labels} max={3} /> : null}
                 {email.hasAttachments ? <Paperclip size={14} color={theme.color8.val} /> : null}
                 {isHovered ? (
                     <RowHoverActions
@@ -384,6 +471,7 @@ function DesktopEmailRow({
                         onArchive={onArchive}
                         onTrash={onTrash}
                         onToggleRead={onToggleRead}
+                        tooltipPosition={index === 0 ? 'below' : 'above'}
                     />
                 ) : (
                     <Text style={[styles.date, { color: theme.color8.val }]}>{dateDisplay}</Text>
@@ -442,6 +530,12 @@ const mobileStyles = StyleSheet.create({
     preview: {
         fontSize: 13,
         lineHeight: 18,
+    },
+    labelRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 4,
+        marginTop: 2,
     },
 })
 

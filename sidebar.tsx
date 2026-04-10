@@ -9,13 +9,13 @@ import {
     Pencil,
     Send,
     Star,
-    Tag,
     Trash2,
 } from 'lucide-react-native'
 import { useActiveParams, usePathname, useRouter } from 'one'
 import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { LabelDialog } from '~/components/LabelDialog'
 import {
     SidebarActionButton,
     SidebarDivider,
@@ -26,7 +26,6 @@ import {
 import { useOrgHref } from '~/lib/org-routes'
 import { useStore } from '~/lib/pocketbase'
 import { useCurrentRole } from '~/lib/use-current-role'
-import { LabelCreateDialog } from './components/LabelCreateDialog'
 import { composeEvents } from './hooks/composeEvents'
 import { useLabels } from './hooks/useLabels'
 
@@ -85,11 +84,19 @@ export default function MailSidebar(_props: MailSidebarProps) {
         router.push(orgHref('mail', { label: labelId }))
     }
 
+    const handleOpenCreate = () => {
+        setLabelDialogOpen(true)
+    }
+
+    const handleCloseDialog = () => {
+        setLabelDialogOpen(false)
+    }
+
     const labelItems = orgLabels.map(label => (
         <SidebarItem
             key={label.id}
             label={label.name}
-            icon={Tag}
+            colorDot={label.color}
             isActive={activeFolder === `label:${label.id}`}
             onPress={() => navigateToLabel(label.id)}
         />
@@ -160,16 +167,17 @@ export default function MailSidebar(_props: MailSidebarProps) {
 
             <View style={styles.labelsHeader}>
                 <SidebarHeading>Labels</SidebarHeading>
-                <Pressable style={styles.addLabelButton} onPress={() => setLabelDialogOpen(true)}>
+                <Pressable style={styles.addLabelButton} onPress={handleOpenCreate}>
                     <Text style={[styles.addLabelText, { color: theme.color8.val }]}>+</Text>
                 </Pressable>
             </View>
 
             {labelItems}
 
-            <LabelCreateDialog
+            <LabelDialog
                 isVisible={labelDialogOpen}
-                onClose={() => setLabelDialogOpen(false)}
+                onClose={handleCloseDialog}
+                label={undefined}
             />
         </SidebarNav>
     )

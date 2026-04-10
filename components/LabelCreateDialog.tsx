@@ -33,7 +33,7 @@ interface LabelCreateDialogProps {
 export function LabelCreateDialog({ isVisible, onClose }: LabelCreateDialogProps) {
     const theme = useTheme()
     const { orgId } = useOrgInfo()
-    const [labelsCollection] = useStore('mail_labels')
+    const [labelsCollection] = useStore('labels')
 
     const {
         control,
