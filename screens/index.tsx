@@ -2,10 +2,12 @@ import { useParams } from 'one'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FlatList } from 'react-native'
 import { SizableText, Spinner, YStack } from 'tamagui'
+import { ScreenHeader } from '~/components/ScreenHeader'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { useMutation } from '~/lib/mutations'
 import { pb, queryClient } from '~/lib/pocketbase'
 import { useCurrentRole } from '~/lib/use-current-role'
+import { useScrollShadow } from '~/lib/use-scroll-shadow'
 import { ComposeFAB } from '../components/ComposeFAB'
 import { EmailListToolbar } from '../components/EmailListToolbar'
 import { EmailRow } from '../components/EmailRow'
@@ -82,6 +84,7 @@ export default function MailListScreen() {
     const { folder, label } = useQueryParams()
     const breakpoint = useBreakpoint()
     const { userOrgId } = useCurrentRole()
+    const { isScrolled, onScroll } = useScrollShadow()
     const { openDraft } = useCompose()
     const search = useMailSearchState()
 
@@ -237,34 +240,40 @@ export default function MailListScreen() {
 
     return (
         <YStack flex={1}>
-            <EmailListToolbar
-                emailCount={items.length}
-                hasSelection={selection.hasSelection}
-                selectedCount={selection.selectedCount}
-                allSelected={selection.allSelected}
-                someSelected={selection.someSelected}
-                allSelectedRead={selection.allSelectedRead}
-                allSelectedStarred={selection.allSelectedStarred}
-                labels={labels}
-                selectedItemLabelIds={selectedItemLabelIds}
-                onToggleAll={selection.toggleAll}
-                onArchive={() => bulkActions.archiveSelected.mutate()}
-                onSpam={() => bulkActions.spamSelected.mutate()}
-                onTrash={() => bulkActions.trashSelected.mutate()}
-                onToggleRead={markAsRead => bulkActions.toggleReadSelected.mutate({ markAsRead })}
-                onMove={folder => bulkActions.moveSelected.mutate(folder)}
-                onToggleStar={star => bulkActions.toggleStarSelected.mutate({ star })}
-                onUpdateLabel={(labelId, add) =>
-                    bulkActions.updateLabelsSelected.mutate({ labelId, add })
-                }
-                onRefresh={handleRefresh}
-                isRefreshing={isRefreshing}
-            />
+            <ScreenHeader isScrolled={isScrolled}>
+                <EmailListToolbar
+                    emailCount={items.length}
+                    hasSelection={selection.hasSelection}
+                    selectedCount={selection.selectedCount}
+                    allSelected={selection.allSelected}
+                    someSelected={selection.someSelected}
+                    allSelectedRead={selection.allSelectedRead}
+                    allSelectedStarred={selection.allSelectedStarred}
+                    labels={labels}
+                    selectedItemLabelIds={selectedItemLabelIds}
+                    onToggleAll={selection.toggleAll}
+                    onArchive={() => bulkActions.archiveSelected.mutate()}
+                    onSpam={() => bulkActions.spamSelected.mutate()}
+                    onTrash={() => bulkActions.trashSelected.mutate()}
+                    onToggleRead={markAsRead =>
+                        bulkActions.toggleReadSelected.mutate({ markAsRead })
+                    }
+                    onMove={folder => bulkActions.moveSelected.mutate(folder)}
+                    onToggleStar={star => bulkActions.toggleStarSelected.mutate({ star })}
+                    onUpdateLabel={(labelId, add) =>
+                        bulkActions.updateLabelsSelected.mutate({ labelId, add })
+                    }
+                    onRefresh={handleRefresh}
+                    isRefreshing={isRefreshing}
+                />
+            </ScreenHeader>
             <EmptyState folderTitle={folderTitle} isVisible={isEmpty} />
             {isEmpty ? null : (
                 <FlatList
                     data={items}
                     keyExtractor={item => item.stateId}
+                    onScroll={onScroll}
+                    scrollEventThrottle={16}
                     renderItem={({ item, index }) => (
                         <EmailRow
                             email={item}

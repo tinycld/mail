@@ -4,9 +4,11 @@ import { useParams, useRouter } from 'one'
 import { useCallback, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useTheme, YStack } from 'tamagui'
+import { ScreenHeader } from '~/components/ScreenHeader'
 import { useMutation } from '~/lib/mutations'
 import { useStore } from '~/lib/pocketbase'
 import { useCurrentRole } from '~/lib/use-current-role'
+import { useScrollShadow } from '~/lib/use-scroll-shadow'
 import { EmailAttachments } from '../components/EmailAttachments'
 import { EmailBody } from '../components/EmailBody'
 import { EmailDetailToolbar } from '../components/EmailDetailToolbar'
@@ -92,6 +94,7 @@ export default function MailDetailScreen() {
     const { threadIds } = useThreadListContext()
     const { hasPrevious, hasNext, goToPrevious, goToNext } = useThreadNavigation(threadIds, id)
 
+    const { isScrolled, onScroll } = useScrollShadow()
     const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set())
 
     const messageList = messages ?? []
@@ -136,24 +139,31 @@ export default function MailDetailScreen() {
 
     return (
         <YStack flex={1} backgroundColor="$background">
-            <EmailDetailToolbar
-                threadState={threadState}
-                labels={allLabels}
-                threadLabelIds={threadLabelIds}
-                onArchive={() => archiveThread.mutate()}
-                onSpam={() => spamThread.mutate()}
-                onTrash={() => trashThread.mutate()}
-                onMove={folder => moveThread.mutate(folder)}
-                onUpdateLabel={(labelId, add) => updateLabel.mutate({ labelId, add })}
-                onToggleRead={() => toggleRead.mutate()}
-                onToggleStar={() => toggleStar.mutate()}
-                onForwardAll={handleForwardAll}
-                onNewer={goToPrevious}
-                onOlder={goToNext}
-                hasNewer={hasPrevious}
-                hasOlder={hasNext}
-            />
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>
+            <ScreenHeader isScrolled={isScrolled}>
+                <EmailDetailToolbar
+                    threadState={threadState}
+                    labels={allLabels}
+                    threadLabelIds={threadLabelIds}
+                    onArchive={() => archiveThread.mutate()}
+                    onSpam={() => spamThread.mutate()}
+                    onTrash={() => trashThread.mutate()}
+                    onMove={folder => moveThread.mutate(folder)}
+                    onUpdateLabel={(labelId, add) => updateLabel.mutate({ labelId, add })}
+                    onToggleRead={() => toggleRead.mutate()}
+                    onToggleStar={() => toggleStar.mutate()}
+                    onForwardAll={handleForwardAll}
+                    onNewer={goToPrevious}
+                    onOlder={goToNext}
+                    hasNewer={hasPrevious}
+                    hasOlder={hasNext}
+                />
+            </ScreenHeader>
+            <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ flexGrow: 1 }}
+                onScroll={onScroll}
+                scrollEventThrottle={16}
+            >
                 <ThreadSubjectHeader subject={subject} labels={labels} />
                 {messageList.map((msg, index) => {
                     const expanded = isMessageExpanded(msg, index)

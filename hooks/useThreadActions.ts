@@ -1,7 +1,7 @@
 import type { Transaction } from '@tanstack/react-db'
-import { useLabelMutations } from '~/hooks/useLabelMutations'
 import { captureException } from '~/lib/errors'
 import { useMutation } from '~/lib/mutations'
+import { useLabelMutations } from '~/ui/hooks/useLabelMutations'
 import type { MailThreadState } from '../types'
 
 interface ThreadStateCollection {

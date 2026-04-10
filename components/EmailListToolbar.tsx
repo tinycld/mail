@@ -17,6 +17,7 @@ import {
 } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from 'tamagui'
+import { ToolbarSeparator } from '~/components/ToolbarSeparator'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import type { MailThreadState } from '../types'
 import { MenuActionItem, ToolbarMenu } from './DropdownMenu'
@@ -71,7 +72,7 @@ function DefaultToolbar({
         emailCount > 0 ? `1\u2013${emailCount} of ${emailCount}` : 'No conversations'
 
     return (
-        <View style={[styles.toolbar, { borderBottomColor: theme.borderColor.val }]}>
+        <View style={styles.toolbar}>
             <View style={styles.left}>
                 <Pressable style={styles.checkbox} onPress={onToggleAll}>
                     <Square size={18} color={theme.color8.val} />
@@ -133,7 +134,7 @@ function BulkActionsToolbar({
     const readLabel = allSelectedRead ? 'Mark as unread' : 'Mark as read'
 
     return (
-        <View style={[styles.toolbar, { borderBottomColor: theme.borderColor.val }]}>
+        <View style={styles.toolbar}>
             <View style={styles.left}>
                 <Pressable style={styles.checkbox} onPress={onToggleAll}>
                     <SelectIcon size={18} color={theme.accentBackground.val} />
@@ -144,7 +145,7 @@ function BulkActionsToolbar({
                 <ToolbarIconButton icon={Archive} label="Archive" onPress={onArchive} />
                 <ToolbarIconButton icon={CircleAlert} label="Report spam" onPress={onSpam} />
                 <ToolbarIconButton icon={Trash2} label="Delete" onPress={onTrash} />
-                <Text style={[styles.separator, { color: theme.color8.val }]}>|</Text>
+                <ToolbarSeparator />
                 <ToolbarIconButton
                     icon={ReadIcon}
                     label={readLabel}
@@ -200,9 +201,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         height: 44,
         paddingHorizontal: 8,
-        borderBottomWidth: 1,
         overflow: 'visible',
-        zIndex: 1,
     },
     left: {
         flexDirection: 'row',
@@ -220,10 +219,6 @@ const styles = StyleSheet.create({
     },
     selectedText: {
         fontSize: 13,
-        marginHorizontal: 4,
-    },
-    separator: {
-        fontSize: 18,
         marginHorizontal: 4,
     },
     paginationText: {

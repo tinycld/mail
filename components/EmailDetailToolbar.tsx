@@ -16,7 +16,7 @@ import {
 } from 'lucide-react-native'
 import { useRouter } from 'one'
 import { StyleSheet, View } from 'react-native'
-import { useTheme } from 'tamagui'
+import { ToolbarSeparator } from '~/components/ToolbarSeparator'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import type { MailThreadState } from '../types'
 import { MenuActionItem, ToolbarMenu } from './DropdownMenu'
@@ -72,7 +72,6 @@ export function EmailDetailToolbar({
     hasNewer = false,
     hasOlder = false,
 }: EmailDetailToolbarProps) {
-    const theme = useTheme()
     const router = useRouter()
     const breakpoint = useBreakpoint()
     const isMobile = breakpoint === 'mobile'
@@ -84,7 +83,7 @@ export function EmailDetailToolbar({
     const readLabel = isRead ? 'Mark as unread' : 'Mark as read'
 
     return (
-        <View style={[styles.toolbar, { borderBottomColor: theme.borderColor.val }]}>
+        <View style={styles.toolbar}>
             <View style={styles.left}>
                 <ToolbarIconButton icon={ArrowLeft} label="Back" onPress={() => router.back()} />
                 <ToolbarIconButton icon={Archive} label="Archive" onPress={onArchive} />
@@ -94,9 +93,7 @@ export function EmailDetailToolbar({
                 <ToolbarIconButton icon={Trash2} label="Delete" onPress={onTrash} />
                 {isMobile ? null : (
                     <>
-                        <View
-                            style={[styles.separator, { backgroundColor: theme.borderColor.val }]}
-                        />
+                        <ToolbarSeparator />
                         <ToolbarMenu icon={FolderInput} label="Move to">
                             {MOVE_FOLDERS.map(({ label, folder }) => (
                                 <MenuActionItem
@@ -170,9 +167,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         height: 44,
         paddingHorizontal: 8,
-        borderBottomWidth: 1,
         overflow: 'visible',
-        zIndex: 1,
     },
     left: {
         flexDirection: 'row',
@@ -184,10 +179,5 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 2,
-    },
-    separator: {
-        width: 1,
-        height: 20,
-        marginHorizontal: 4,
     },
 })
