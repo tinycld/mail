@@ -8,14 +8,15 @@ import {
     Mail,
     Pencil,
     Send,
+    Settings,
     Star,
     Trash2,
 } from 'lucide-react-native'
 import { useActiveParams, usePathname, useRouter } from 'one'
 import { useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable } from 'react-native'
 import { useTheme } from 'tamagui'
-import { LabelDialog } from '~/components/LabelDialog'
+import { LabelManagerDialog } from '~/components/LabelManagerDialog'
 import {
     SidebarActionButton,
     SidebarDivider,
@@ -47,7 +48,7 @@ export default function MailSidebar(_props: MailSidebarProps) {
     const activeFolder = useActiveFolder()
     const { userOrgId } = useCurrentRole()
     const orgHref = useOrgHref()
-    const [labelDialogOpen, setLabelDialogOpen] = useState(false)
+    const [labelManagerOpen, setLabelManagerOpen] = useState(false)
 
     const [threadStateCollection] = useStore('mail_thread_state')
     const { labels: orgLabels } = useLabels()
@@ -82,14 +83,6 @@ export default function MailSidebar(_props: MailSidebarProps) {
 
     const navigateToLabel = (labelId: string) => {
         router.push(orgHref('mail', { label: labelId }))
-    }
-
-    const handleOpenCreate = () => {
-        setLabelDialogOpen(true)
-    }
-
-    const handleCloseDialog = () => {
-        setLabelDialogOpen(false)
     }
 
     const labelItems = orgLabels.map(label => (
@@ -165,36 +158,25 @@ export default function MailSidebar(_props: MailSidebarProps) {
 
             <SidebarDivider />
 
-            <View style={styles.labelsHeader}>
-                <SidebarHeading>Labels</SidebarHeading>
-                <Pressable style={styles.addLabelButton} onPress={handleOpenCreate}>
-                    <Text style={[styles.addLabelText, { color: theme.color8.val }]}>+</Text>
-                </Pressable>
-            </View>
+            <SidebarHeading
+                action={
+                    <Pressable
+                        onPress={() => setLabelManagerOpen(true)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <Settings size={14} color={theme.color8.val} />
+                    </Pressable>
+                }
+            >
+                Labels
+            </SidebarHeading>
 
             {labelItems}
 
-            <LabelDialog
-                isVisible={labelDialogOpen}
-                onClose={handleCloseDialog}
-                label={undefined}
+            <LabelManagerDialog
+                isVisible={labelManagerOpen}
+                onClose={() => setLabelManagerOpen(false)}
             />
         </SidebarNav>
     )
 }
-
-const styles = StyleSheet.create({
-    labelsHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingRight: 12,
-    },
-    addLabelButton: {
-        padding: 4,
-    },
-    addLabelText: {
-        fontSize: 18,
-        fontWeight: '600',
-    },
-})
