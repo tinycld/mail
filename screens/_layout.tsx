@@ -1,4 +1,4 @@
-import { Slot } from 'one'
+import { Slot } from 'expo-router'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { YStack } from 'tamagui'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'

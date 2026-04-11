@@ -1,4 +1,4 @@
-import { useParams } from 'one'
+import { useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FlatList } from 'react-native'
 import { SizableText, Spinner, YStack } from 'tamagui'
@@ -21,7 +21,7 @@ import { useThreadListItems } from '../hooks/useThreadListItems'
 import { useThreadListContext } from './_layout'
 
 function useQueryParams() {
-    const { folder, label } = useParams<{ folder?: string; label?: string }>()
+    const { folder, label } = useLocalSearchParams<{ folder?: string; label?: string }>()
     return { folder: folder ?? null, label: label ?? null }
 }
 

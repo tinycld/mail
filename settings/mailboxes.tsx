@@ -1,7 +1,7 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
+import { Link } from 'expo-router'
 import { Lock, Mail, Plus, Trash2, UserPlus, X } from 'lucide-react-native'
-import { Link } from 'one'
 import { newRecordId } from 'pbtsdb'
 import { useState } from 'react'
 import { Button, H4, ScrollView, Separator, SizableText, useTheme, XStack, YStack } from 'tamagui'

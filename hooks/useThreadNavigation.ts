@@ -1,4 +1,4 @@
-import { useRouter } from 'one'
+import { useRouter } from 'expo-router'
 import { useCallback, useMemo } from 'react'
 import { useOrgHref } from '~/lib/org-routes'
 

@@ -1,3 +1,5 @@
+import type { Href } from 'expo-router'
+import { Link } from 'expo-router'
 import {
     Archive,
     Inbox,
@@ -9,8 +11,6 @@ import {
     Star,
     Trash2,
 } from 'lucide-react-native'
-import type { OneRouter } from 'one'
-import { Link } from 'one'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
@@ -102,7 +102,7 @@ function RowWrapper({
     onPress,
     children,
 }: {
-    href: OneRouter.Href
+    href: Href
     onPress?: () => void
     children: ReactNode
 }) {

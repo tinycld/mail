@@ -1,6 +1,6 @@
 import { and, eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
-import { useParams, useRouter } from 'one'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useTheme, YStack } from 'tamagui'
@@ -43,7 +43,7 @@ function useAutoMarkAsRead(
 }
 
 export default function MailDetailScreen() {
-    const { id = '' } = useParams<{ id: string }>()
+    const { id = '' } = useLocalSearchParams<{ id: string }>()
     const { userOrgId } = useCurrentRole()
     const router = useRouter()
     const { openReply } = useCompose()

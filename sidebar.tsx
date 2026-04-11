@@ -1,5 +1,6 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
+import { useLocalSearchParams, usePathname, useRouter } from 'expo-router'
 import {
     AlertTriangle,
     Archive,
@@ -12,7 +13,6 @@ import {
     Star,
     Trash2,
 } from 'lucide-react-native'
-import { useActiveParams, usePathname, useRouter } from 'one'
 import { useMemo, useState } from 'react'
 import { Pressable } from 'react-native'
 import { useTheme } from 'tamagui'
@@ -36,7 +36,7 @@ interface MailSidebarProps {
 
 function useActiveFolder() {
     const pathname = usePathname()
-    const { folder, label } = useActiveParams<{ folder?: string; label?: string }>()
+    const { folder, label } = useLocalSearchParams<{ folder?: string; label?: string }>()
     if (pathname.includes('/mail/')) return null
     if (label) return `label:${label}`
     return folder ?? 'inbox'
