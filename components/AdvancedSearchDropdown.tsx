@@ -547,7 +547,6 @@ const styles = StyleSheet.create({
         zIndex: 200,
     },
     pickerOverlayWeb: {
-        // @ts-expect-error 'fixed' is valid on web but not in RN types
         position: 'fixed',
     },
     pickerMenu: {
