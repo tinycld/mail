@@ -10,7 +10,7 @@ test.describe('Mail — Navigation', () => {
     test('navigate to Sent', async ({ page }) => {
         await clickSidebarItem(page, 'Sent')
         await expect(page).toHaveURL(/folder=sent/)
-        await expect(page.getByText('Team standup notes')).toBeVisible()
+        await expect(page.getByText('Team standup notes').first()).toBeVisible()
     })
 
     test('navigate to Drafts', async ({ page }) => {
@@ -27,16 +27,16 @@ test.describe('Mail — Navigation', () => {
         await expect(page.getByText('Conference travel arrangements')).toBeVisible()
     })
 
-    test('navigate to Trash shows empty state', async ({ page }) => {
+    test('navigate to Trash shows trash items', async ({ page }) => {
         await clickSidebarItem(page, 'Trash')
         await expect(page).toHaveURL(/folder=trash/)
-        await expect(page.getByText('No conversations in Trash')).toBeVisible()
+        await expect(page.getByText('Old project files').first()).toBeVisible()
     })
 
-    test('navigate to Spam shows empty state', async ({ page }) => {
+    test('navigate to Spam shows spam items', async ({ page }) => {
         await clickSidebarItem(page, 'Spam')
         await expect(page).toHaveURL(/folder=spam/)
-        await expect(page.getByText('No conversations in Spam')).toBeVisible()
+        await expect(page.getByText('won a free cruise').first()).toBeVisible()
     })
 
     test('navigate to All Mail', async ({ page }) => {
