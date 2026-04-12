@@ -1,6 +1,6 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
-import { useLocalSearchParams, usePathname, useRouter } from 'expo-router'
+import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
 import {
     AlertTriangle,
     Archive,
@@ -34,18 +34,18 @@ interface MailSidebarProps {
     isCollapsed: boolean
 }
 
-function useActiveFolder() {
+function useActiveView() {
     const pathname = usePathname()
-    const { folder, label } = useLocalSearchParams<{ folder?: string; label?: string }>()
-    if (pathname.includes('/mail/')) return null
-    if (label) return `label:${label}`
-    return folder ?? 'inbox'
+    const { folder, label } = useGlobalSearchParams<{ folder?: string; label?: string }>()
+    if (pathname.includes('/mail/')) return { folder: null, activeLabels: new Set<string>() }
+    const activeLabels = new Set(label ? label.split(',').filter(Boolean) : [])
+    return { folder: activeLabels.size > 0 ? null : (folder ?? 'inbox'), activeLabels }
 }
 
 export default function MailSidebar(_props: MailSidebarProps) {
     const router = useRouter()
     const theme = useTheme()
-    const activeFolder = useActiveFolder()
+    const { folder: activeFolder, activeLabels } = useActiveView()
     const { userOrgId } = useCurrentRole()
     const orgHref = useOrgHref()
     const [labelManagerOpen, setLabelManagerOpen] = useState(false)
@@ -81,8 +81,18 @@ export default function MailSidebar(_props: MailSidebarProps) {
         }
     }
 
-    const navigateToLabel = (labelId: string) => {
-        router.push(orgHref('mail', { label: labelId }))
+    const toggleLabel = (labelId: string) => {
+        const next = new Set(activeLabels)
+        if (next.has(labelId)) {
+            next.delete(labelId)
+        } else {
+            next.add(labelId)
+        }
+        if (next.size === 0) {
+            router.push(orgHref('mail'))
+        } else {
+            router.push(orgHref('mail', { label: Array.from(next).join(',') }))
+        }
     }
 
     const labelItems = orgLabels.map(label => (
@@ -90,8 +100,9 @@ export default function MailSidebar(_props: MailSidebarProps) {
             key={label.id}
             label={label.name}
             colorDot={label.color}
-            isActive={activeFolder === `label:${label.id}`}
-            onPress={() => navigateToLabel(label.id)}
+            isActive={activeLabels.has(label.id)}
+            closesDrawer
+            onPress={() => toggleLabel(label.id)}
         />
     ))
 
@@ -108,18 +119,21 @@ export default function MailSidebar(_props: MailSidebarProps) {
                 icon={Inbox}
                 badge={folderCounts.inbox || undefined}
                 isActive={activeFolder === 'inbox'}
+                closesDrawer
                 onPress={() => navigateToFolder('inbox')}
             />
             <SidebarItem
                 label="Starred"
                 icon={Star}
                 isActive={activeFolder === 'starred'}
+                closesDrawer
                 onPress={() => navigateToFolder('starred')}
             />
             <SidebarItem
                 label="Sent"
                 icon={Send}
                 isActive={activeFolder === 'sent'}
+                closesDrawer
                 onPress={() => navigateToFolder('sent')}
             />
             <SidebarItem
@@ -127,12 +141,14 @@ export default function MailSidebar(_props: MailSidebarProps) {
                 icon={File}
                 badge={folderCounts.drafts || undefined}
                 isActive={activeFolder === 'drafts'}
+                closesDrawer
                 onPress={() => navigateToFolder('drafts')}
             />
             <SidebarItem
                 label="All Mail"
                 icon={Mail}
                 isActive={activeFolder === 'all'}
+                closesDrawer
                 onPress={() => navigateToFolder('all')}
             />
             <SidebarItem
@@ -140,6 +156,7 @@ export default function MailSidebar(_props: MailSidebarProps) {
                 icon={AlertTriangle}
                 badge={folderCounts.spam || undefined}
                 isActive={activeFolder === 'spam'}
+                closesDrawer
                 onPress={() => navigateToFolder('spam')}
             />
             <SidebarItem
@@ -147,12 +164,14 @@ export default function MailSidebar(_props: MailSidebarProps) {
                 icon={Trash2}
                 badge={folderCounts.trash || undefined}
                 isActive={activeFolder === 'trash'}
+                closesDrawer
                 onPress={() => navigateToFolder('trash')}
             />
             <SidebarItem
                 label="Archive"
                 icon={Archive}
                 isActive={activeFolder === 'archive'}
+                closesDrawer
                 onPress={() => navigateToFolder('archive')}
             />
 
