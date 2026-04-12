@@ -2,10 +2,10 @@ import { and, eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { useTheme, YStack } from 'tamagui'
+import { Pressable, ScrollView } from 'react-native'
+import { SizableText, View, YStack } from 'tamagui'
 import { ScreenHeader } from '~/components/ScreenHeader'
-import { useMutation } from '~/lib/mutations'
+import { mutation, useMutation } from '~/lib/mutations'
 import { useStore } from '~/lib/pocketbase'
 import { useCurrentRole } from '~/lib/use-current-role'
 import { useScrollShadow } from '~/lib/use-scroll-shadow'
@@ -30,11 +30,11 @@ function useAutoMarkAsRead(
 ) {
     const markedRef = useRef<string | null>(null)
     const markAsRead = useMutation({
-        mutationFn: function* (stateId: string) {
+        mutationFn: mutation(function* (stateId: string) {
             yield threadStateCollection.update(stateId, draft => {
                 draft.is_read = true
             })
-        },
+        }),
     })
     if (threadState && !threadState.is_read && markedRef.current !== threadId) {
         markedRef.current = threadId
@@ -249,25 +249,18 @@ export default function MailDetailScreen() {
 }
 
 function CollapsedSnippet({ snippet, onPress }: { snippet: string; onPress: () => void }) {
-    const theme = useTheme()
     return (
         <Pressable onPress={onPress}>
-            <View style={[collapsedStyles.container, { borderBottomColor: theme.borderColor.val }]}>
-                <Text style={[collapsedStyles.text, { color: theme.color8.val }]} numberOfLines={1}>
+            <View
+                paddingHorizontal={16}
+                paddingVertical={8}
+                borderBottomWidth={1}
+                borderBottomColor="$borderColor"
+            >
+                <SizableText fontSize={13} color="$color8" numberOfLines={1}>
                     {snippet}
-                </Text>
+                </SizableText>
             </View>
         </Pressable>
     )
 }
-
-const collapsedStyles = StyleSheet.create({
-    container: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderBottomWidth: 1,
-    },
-    text: {
-        fontSize: 13,
-    },
-})

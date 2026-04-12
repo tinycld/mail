@@ -1,6 +1,6 @@
 import type { Transaction } from '@tanstack/react-db'
 import { captureException } from '~/lib/errors'
-import { useMutation } from '~/lib/mutations'
+import { mutation, useMutation } from '~/lib/mutations'
 import { useLabelMutations } from '~/ui/hooks/useLabelMutations'
 import type { MailThreadState } from '../types'
 
@@ -25,66 +25,66 @@ export function useThreadActions(
     }
 
     const archiveThread = useMutation({
-        mutationFn: function* () {
+        mutationFn: mutation(function* () {
             if (!threadState) return
             yield col.update(threadState.id, draft => {
                 draft.folder = 'archive'
             })
-        },
+        }),
         onSuccess: onNavigateBack,
         onError,
     })
 
     const spamThread = useMutation({
-        mutationFn: function* () {
+        mutationFn: mutation(function* () {
             if (!threadState) return
             yield col.update(threadState.id, draft => {
                 draft.folder = 'spam'
             })
-        },
+        }),
         onSuccess: onNavigateBack,
         onError,
     })
 
     const trashThread = useMutation({
-        mutationFn: function* () {
+        mutationFn: mutation(function* () {
             if (!threadState) return
             yield col.update(threadState.id, draft => {
                 draft.folder = 'trash'
             })
-        },
+        }),
         onSuccess: onNavigateBack,
         onError,
     })
 
     const moveThread = useMutation({
-        mutationFn: function* (folder: MailThreadState['folder']) {
+        mutationFn: mutation(function* (folder: MailThreadState['folder']) {
             if (!threadState) return
             yield col.update(threadState.id, draft => {
                 draft.folder = folder
             })
-        },
+        }),
         onSuccess: onNavigateBack,
         onError,
     })
 
     const toggleRead = useMutation({
-        mutationFn: function* () {
+        mutationFn: mutation(function* () {
             if (!threadState) return
             yield col.update(threadState.id, draft => {
                 draft.is_read = !draft.is_read
             })
-        },
+        }),
         onError,
     })
 
     const toggleStar = useMutation({
-        mutationFn: function* () {
+        mutationFn: mutation(function* () {
             if (!threadState) return
             yield col.update(threadState.id, draft => {
                 draft.is_starred = !draft.is_starred
             })
-        },
+        }),
         onError,
     })
 

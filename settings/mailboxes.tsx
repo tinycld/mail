@@ -6,7 +6,7 @@ import { newRecordId } from 'pbtsdb'
 import { useState } from 'react'
 import { Button, H4, ScrollView, Separator, SizableText, useTheme, XStack, YStack } from 'tamagui'
 import { handleMutationErrorsWithForm } from '~/lib/errors'
-import { useMutation } from '~/lib/mutations'
+import { mutation, useMutation } from '~/lib/mutations'
 import { useOrgHref } from '~/lib/org-routes'
 import { useStore } from '~/lib/pocketbase'
 import { useCurrentRole } from '~/lib/use-current-role'
@@ -288,9 +288,9 @@ function DeleteMailboxButton({ mailboxId, isVisible }: { mailboxId: string; isVi
     const [confirming, setConfirming] = useState(false)
 
     const deleteMutation = useMutation({
-        mutationFn: function* () {
+        mutationFn: mutation(function* () {
             yield mailboxesCollection.delete(mailboxId)
-        },
+        }),
         onSuccess: () => setConfirming(false),
     })
 
@@ -342,14 +342,14 @@ function MailboxMemberPanel({
     const availableMembers = orgMembers.filter(uo => !existingUserOrgIds.has(uo.userOrgId))
 
     const addMemberMutation = useMutation({
-        mutationFn: function* () {
+        mutationFn: mutation(function* () {
             yield membersCollection.insert({
                 id: newRecordId(),
                 mailbox: mailboxId,
                 user_org: selectedUserOrg,
                 role: 'member',
             })
-        },
+        }),
         onSuccess: () => {
             setAddingMember(false)
             setSelectedUserOrg('')
@@ -357,17 +357,23 @@ function MailboxMemberPanel({
     })
 
     const removeMemberMutation = useMutation({
-        mutationFn: function* (memberId: string) {
+        mutationFn: mutation(function* (memberId: string) {
             yield membersCollection.delete(memberId)
-        },
+        }),
     })
 
     const toggleRoleMutation = useMutation({
-        mutationFn: function* ({ memberId, newRole }: { memberId: string; newRole: string }) {
+        mutationFn: mutation(function* ({
+            memberId,
+            newRole,
+        }: {
+            memberId: string
+            newRole: string
+        }) {
             yield membersCollection.update(memberId, draft => {
                 draft.role = newRole as 'owner' | 'member'
             })
-        },
+        }),
     })
 
     if (!isVisible) return null
@@ -578,7 +584,7 @@ function CreateMailboxForm({
     })
 
     const createMutation = useMutation({
-        mutationFn: function* (data: z.infer<typeof createMailboxSchema>) {
+        mutationFn: mutation(function* (data: z.infer<typeof createMailboxSchema>) {
             const mailboxId = newRecordId()
             yield mailboxesCollection.insert({
                 id: mailboxId,
@@ -594,7 +600,7 @@ function CreateMailboxForm({
                 user_org: userOrgId,
                 role: 'owner',
             })
-        },
+        }),
         onSuccess: () => reset(),
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })

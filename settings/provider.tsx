@@ -5,7 +5,7 @@ import { newRecordId } from 'pbtsdb'
 import { useState } from 'react'
 import { Button, H4, ScrollView, Separator, SizableText, useTheme, XStack, YStack } from 'tamagui'
 import { handleMutationErrorsWithForm } from '~/lib/errors'
-import { useMutation } from '~/lib/mutations'
+import { mutation, useMutation } from '~/lib/mutations'
 import { useStore } from '~/lib/pocketbase'
 import { useOrgInfo } from '~/lib/use-org-info'
 import { useSettings } from '~/lib/use-settings'
@@ -56,7 +56,7 @@ export default function ProviderSettings() {
     })
 
     const saveMutation = useMutation({
-        mutationFn: function* (data: z.infer<typeof mailSettingsSchema>) {
+        mutationFn: mutation(function* (data: z.infer<typeof mailSettingsSchema>) {
             const entries = [
                 { key: 'provider', value: data.provider },
                 { key: 'postmark_server_token', value: data.postmark_server_token },
@@ -78,7 +78,7 @@ export default function ProviderSettings() {
                     })
                 }
             }
-        },
+        }),
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
 
@@ -198,18 +198,18 @@ function DomainRowItem({ domain }: { domain: DomainRow }) {
     const [confirming, setConfirming] = useState(false)
 
     const deleteMutation = useMutation({
-        mutationFn: function* () {
+        mutationFn: mutation(function* () {
             yield domainsCollection.delete(domain.id)
-        },
+        }),
         onSuccess: () => setConfirming(false),
     })
 
     const toggleVerifiedMutation = useMutation({
-        mutationFn: function* () {
+        mutationFn: mutation(function* () {
             yield domainsCollection.update(domain.id, draft => {
                 draft.verified = !domain.verified
             })
-        },
+        }),
     })
 
     const VerifiedIcon = domain.verified ? CheckCircle : Circle
@@ -296,14 +296,14 @@ function AddDomainForm({ orgId }: { orgId: string }) {
     })
 
     const addMutation = useMutation({
-        mutationFn: function* (data: z.infer<typeof addDomainSchema>) {
+        mutationFn: mutation(function* (data: z.infer<typeof addDomainSchema>) {
             yield domainsCollection.insert({
                 id: newRecordId(),
                 domain: data.domain,
                 org: orgId,
                 verified: false,
             })
-        },
+        }),
         onSuccess: () => reset(),
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })

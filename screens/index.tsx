@@ -3,8 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FlatList } from 'react-native'
 import { SizableText, Spinner, YStack } from 'tamagui'
 import { ScreenHeader } from '~/components/ScreenHeader'
+import { SwipeableRowProvider } from '~/components/SwipeableRow'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
-import { useMutation } from '~/lib/mutations'
+import { mutation, useMutation } from '~/lib/mutations'
 import { pb, queryClient } from '~/lib/pocketbase'
 import { useCurrentRole } from '~/lib/use-current-role'
 import { useScrollShadow } from '~/lib/use-scroll-shadow'
@@ -127,7 +128,7 @@ export default function MailListScreen() {
     }, [selection.selectedItems])
 
     const toggleStar = useMutation({
-        mutationFn: function* ({
+        mutationFn: mutation(function* ({
             stateId,
             currentStarred,
         }: {
@@ -137,27 +138,27 @@ export default function MailListScreen() {
             yield threadStateCollection.update(stateId, draft => {
                 draft.is_starred = !currentStarred
             })
-        },
+        }),
     })
 
     const archiveThread = useMutation({
-        mutationFn: function* ({ stateId, folder }: { stateId: string; folder: string }) {
+        mutationFn: mutation(function* ({ stateId, folder }: { stateId: string; folder: string }) {
             yield threadStateCollection.update(stateId, draft => {
                 draft.folder = folder === 'archive' ? 'inbox' : 'archive'
             })
-        },
+        }),
     })
 
     const trashThread = useMutation({
-        mutationFn: function* ({ stateId, folder }: { stateId: string; folder: string }) {
+        mutationFn: mutation(function* ({ stateId, folder }: { stateId: string; folder: string }) {
             yield threadStateCollection.update(stateId, draft => {
                 draft.folder = folder === 'trash' ? 'inbox' : 'trash'
             })
-        },
+        }),
     })
 
     const toggleRead = useMutation({
-        mutationFn: function* ({
+        mutationFn: mutation(function* ({
             stateId,
             currentRead,
         }: {
@@ -167,7 +168,7 @@ export default function MailListScreen() {
             yield threadStateCollection.update(stateId, draft => {
                 draft.is_read = !currentRead
             })
-        },
+        }),
     })
 
     const handleDraftPress = useCallback(
@@ -226,11 +227,13 @@ export default function MailListScreen() {
                         </SizableText>
                     </YStack>
                 ) : (
-                    <FlatList
-                        data={searchItems}
-                        keyExtractor={item => item.threadId}
-                        renderItem={({ item }) => <EmailRow email={item} isMobile={isMobile} />}
-                    />
+                    <SwipeableRowProvider>
+                        <FlatList
+                            data={searchItems}
+                            keyExtractor={item => item.threadId}
+                            renderItem={({ item }) => <EmailRow email={item} isMobile={isMobile} />}
+                        />
+                    </SwipeableRowProvider>
                 )}
             </YStack>
         )
@@ -269,40 +272,48 @@ export default function MailListScreen() {
             </ScreenHeader>
             <EmptyState folderTitle={folderTitle} isVisible={isEmpty} />
             {isEmpty ? null : (
-                <FlatList
-                    data={items}
-                    keyExtractor={item => item.stateId}
-                    onScroll={onScroll}
-                    scrollEventThrottle={16}
-                    renderItem={({ item, index }) => (
-                        <EmailRow
-                            email={item}
-                            isMobile={isMobile}
-                            index={index}
-                            isSelected={selection.selectedIds.has(item.stateId)}
-                            onToggleSelect={() => selection.toggle(item.stateId)}
-                            onToggleStar={() =>
-                                toggleStar.mutate({
-                                    stateId: item.stateId,
-                                    currentStarred: item.isStarred,
-                                })
-                            }
-                            onPress={item.hasDraft ? () => handleDraftPress(item) : undefined}
-                            onArchive={() =>
-                                archiveThread.mutate({ stateId: item.stateId, folder: item.folder })
-                            }
-                            onTrash={() =>
-                                trashThread.mutate({ stateId: item.stateId, folder: item.folder })
-                            }
-                            onToggleRead={() =>
-                                toggleRead.mutate({
-                                    stateId: item.stateId,
-                                    currentRead: item.isRead,
-                                })
-                            }
-                        />
-                    )}
-                />
+                <SwipeableRowProvider>
+                    <FlatList
+                        data={items}
+                        keyExtractor={item => item.stateId}
+                        onScroll={onScroll}
+                        scrollEventThrottle={16}
+                        renderItem={({ item, index }) => (
+                            <EmailRow
+                                email={item}
+                                isMobile={isMobile}
+                                index={index}
+                                isSelected={selection.selectedIds.has(item.stateId)}
+                                onToggleSelect={() => selection.toggle(item.stateId)}
+                                onToggleStar={() =>
+                                    toggleStar.mutate({
+                                        stateId: item.stateId,
+                                        currentStarred: item.isStarred,
+                                    })
+                                }
+                                onPress={item.hasDraft ? () => handleDraftPress(item) : undefined}
+                                onArchive={() =>
+                                    archiveThread.mutate({
+                                        stateId: item.stateId,
+                                        folder: item.folder,
+                                    })
+                                }
+                                onTrash={() =>
+                                    trashThread.mutate({
+                                        stateId: item.stateId,
+                                        folder: item.folder,
+                                    })
+                                }
+                                onToggleRead={() =>
+                                    toggleRead.mutate({
+                                        stateId: item.stateId,
+                                        currentRead: item.isRead,
+                                    })
+                                }
+                            />
+                        )}
+                    />
+                </SwipeableRowProvider>
             )}
             <ComposeFAB isVisible={isMobile} />
         </YStack>

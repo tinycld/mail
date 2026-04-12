@@ -1,5 +1,5 @@
 import type { Transaction } from '@tanstack/react-db'
-import { useMutation } from '~/lib/mutations'
+import { mutation, useMutation } from '~/lib/mutations'
 import { useLabelMutations } from '~/ui/hooks/useLabelMutations'
 import type { ThreadListItem } from '../components/thread-list-item'
 import type { MailThreadState } from '../types'
@@ -21,68 +21,68 @@ export function useMailBulkActions(
     const { assignLabel, unassignLabel } = useLabelMutations()
 
     const archiveSelected = useMutation({
-        mutationFn: function* () {
+        mutationFn: mutation(function* () {
             yield selectedItems.map(item =>
                 col.update(item.stateId, draft => {
                     draft.folder = 'archive'
                 })
             )
-        },
+        }),
         onSuccess: clearSelection,
     })
 
     const spamSelected = useMutation({
-        mutationFn: function* () {
+        mutationFn: mutation(function* () {
             yield selectedItems.map(item =>
                 col.update(item.stateId, draft => {
                     draft.folder = 'spam'
                 })
             )
-        },
+        }),
         onSuccess: clearSelection,
     })
 
     const trashSelected = useMutation({
-        mutationFn: function* () {
+        mutationFn: mutation(function* () {
             yield selectedItems.map(item =>
                 col.update(item.stateId, draft => {
                     draft.folder = 'trash'
                 })
             )
-        },
+        }),
         onSuccess: clearSelection,
     })
 
     const toggleReadSelected = useMutation<void, Error, { markAsRead: boolean }>({
-        mutationFn: function* ({ markAsRead }) {
+        mutationFn: mutation(function* ({ markAsRead }) {
             yield selectedItems.map(item =>
                 col.update(item.stateId, draft => {
                     draft.is_read = markAsRead
                 })
             )
-        },
+        }),
         onSuccess: clearSelection,
     })
 
     const moveSelected = useMutation<void, Error, MailThreadState['folder']>({
-        mutationFn: function* (folder) {
+        mutationFn: mutation(function* (folder) {
             yield selectedItems.map(item =>
                 col.update(item.stateId, draft => {
                     draft.folder = folder
                 })
             )
-        },
+        }),
         onSuccess: clearSelection,
     })
 
     const toggleStarSelected = useMutation<void, Error, { star: boolean }>({
-        mutationFn: function* ({ star }) {
+        mutationFn: mutation(function* ({ star }) {
             yield selectedItems.map(item =>
                 col.update(item.stateId, draft => {
                     draft.is_starred = star
                 })
             )
-        },
+        }),
         onSuccess: clearSelection,
     })
 
