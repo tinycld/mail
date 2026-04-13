@@ -1,4 +1,3 @@
-import { useThemeColor } from 'heroui-native'
 import {
     Archive,
     ChevronLeft,
@@ -19,6 +18,7 @@ import {
 import { Pressable, Text, View } from 'react-native'
 import { ToolbarSeparator } from '~/components/ToolbarSeparator'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
+import { useThemeColor } from '~/lib/use-app-theme'
 import type { MailThreadState } from '../types'
 import { MenuActionItem, ToolbarMenu } from './DropdownMenu'
 import { ToolbarIconButton } from './ToolbarIconButton'
@@ -134,11 +134,9 @@ function BulkActionsToolbar({
     onToggleStar,
     onUpdateLabel,
 }: EmailListToolbarProps) {
-    const [foregroundColor, mutedColor, accentColor] = useThemeColor([
-        'foreground',
-        'muted',
-        'accent',
-    ])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
+    const accentColor = useThemeColor('accent')
 
     const SelectIcon = allSelected ? SquareCheck : someSelected ? SquareMinus : Square
 

@@ -1,7 +1,7 @@
-import { useThemeColor } from 'heroui-native'
 import { useState } from 'react'
 import { type Control, type FieldErrors, useController } from 'react-hook-form'
 import { Pressable, Text, View } from 'react-native'
+import { useThemeColor } from '~/lib/use-app-theme'
 import { PlainInput } from '~/ui/PlainInput'
 import type { ComposeFormData } from '../hooks/composeSchema'
 import { RecipientField } from './RecipientField'
@@ -21,7 +21,8 @@ function ComposeFieldInput({
     name: keyof ComposeFormData
     onBlur?: () => void
 }) {
-    const [foregroundColor, placeholderColor] = useThemeColor(['foreground', 'field-placeholder'])
+    const foregroundColor = useThemeColor('foreground')
+    const placeholderColor = useThemeColor('field-placeholder')
     const { field } = useController({ control, name })
 
     return (
@@ -39,7 +40,9 @@ function ComposeFieldInput({
 }
 
 export function ComposeFields({ control, errors, onSubjectBlur }: ComposeFieldsProps) {
-    const [mutedColor, borderColor, dangerColor] = useThemeColor(['muted', 'border', 'danger'])
+    const mutedColor = useThemeColor('muted')
+    const borderColor = useThemeColor('border')
+    const dangerColor = useThemeColor('danger')
     const [showCc, setShowCc] = useState(false)
     const [showBcc, setShowBcc] = useState(false)
 

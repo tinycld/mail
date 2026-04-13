@@ -1,9 +1,9 @@
-import { useThemeColor } from 'heroui-native'
 import { Forward, Reply, ReplyAll } from 'lucide-react-native'
 import { useRef } from 'react'
 import { Platform, Pressable, Text, View } from 'react-native'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { captureException } from '~/lib/errors'
+import { useThemeColor } from '~/lib/use-app-theme'
 import { useForm, zodResolver } from '~/ui/form'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
@@ -36,7 +36,8 @@ export function InlineReply({
     recipientsTo,
     recipientsCc,
 }: InlineReplyProps) {
-    const [mutedColor, borderColor] = useThemeColor(['muted', 'border'])
+    const mutedColor = useThemeColor('muted')
+    const borderColor = useThemeColor('border')
     const breakpoint = useBreakpoint()
     const isMobile = breakpoint === 'mobile'
     const { mode, replyContext, openReply, close } = useCompose()
@@ -152,11 +153,9 @@ function InlineComposeForm({
     replyContext: NonNullable<ReturnType<typeof useCompose>['replyContext']>
     onClose: () => void
 }) {
-    const [borderColor, backgroundColor, _dangerColor] = useThemeColor([
-        'border',
-        'background',
-        'danger',
-    ])
+    const borderColor = useThemeColor('border')
+    const backgroundColor = useThemeColor('background')
+    const _dangerColor = useThemeColor('danger')
     const editorRef = useRef<RichTextEditorHandle>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const mailboxId = useDefaultMailbox()

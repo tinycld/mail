@@ -1,5 +1,4 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useThemeColor } from 'heroui-native'
 import { ChevronDown, Search, Square, SquareCheck, X } from 'lucide-react-native'
 import { useCallback, useMemo, useState } from 'react'
 import { useController, useForm } from 'react-hook-form'
@@ -14,6 +13,7 @@ import {
     View,
 } from 'react-native'
 import { z } from 'zod'
+import { useThemeColor } from '~/lib/use-app-theme'
 import { PlainInput } from '~/ui/PlainInput'
 import type { AdvancedSearchFilters } from '../hooks/useSearchState'
 
@@ -82,25 +82,14 @@ export function AdvancedSearchDropdown({
     onClose,
     initialFilters,
 }: AdvancedSearchDropdownProps) {
-    const [
-        foregroundColor,
-        mutedColor,
-        borderColor,
-        backgroundColor,
-        accentColor,
-        accentFgColor,
-        shadowColor,
-        focusBgColor,
-    ] = useThemeColor([
-        'foreground',
-        'muted',
-        'border',
-        'background',
-        'accent',
-        'accent-foreground',
-        'border',
-        'surface-secondary',
-    ])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
+    const borderColor = useThemeColor('border')
+    const backgroundColor = useThemeColor('background')
+    const accentColor = useThemeColor('accent')
+    const accentFgColor = useThemeColor('accent-foreground')
+    const shadowColor = useThemeColor('border')
+    const focusBgColor = useThemeColor('surface-secondary')
 
     const defaults = useMemo(
         () => ({ ...makeDefaultValues(), ...initialFilters }),

@@ -1,7 +1,7 @@
-import { useThemeColor } from 'heroui-native'
 import { X } from 'lucide-react-native'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { formatBytes } from '~/lib/format-utils'
+import { useThemeColor } from '~/lib/use-app-theme'
 import type { AttachmentFile } from '../hooks/useAttachments'
 
 interface AttachmentRibbonProps {
@@ -46,12 +46,10 @@ function AttachmentChip({
     attachment: AttachmentFile
     onRemove: () => void
 }) {
-    const [foregroundColor, mutedColor, surfaceColor, borderColor] = useThemeColor([
-        'foreground',
-        'muted',
-        'surface-secondary',
-        'border',
-    ])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
+    const surfaceColor = useThemeColor('surface-secondary')
+    const borderColor = useThemeColor('border')
 
     const truncatedName =
         attachment.name.length > 24 ? `${attachment.name.slice(0, 21)}...` : attachment.name

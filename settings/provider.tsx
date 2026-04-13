@@ -1,6 +1,5 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
-import { Separator, useThemeColor } from 'heroui-native'
 import { CheckCircle, Circle, Globe, Plus, Trash2 } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb'
 import { useState } from 'react'
@@ -8,8 +7,10 @@ import { Pressable, ScrollView, Text, View } from 'react-native'
 import { handleMutationErrorsWithForm } from '~/lib/errors'
 import { mutation, useMutation } from '~/lib/mutations'
 import { useStore } from '~/lib/pocketbase'
+import { useThemeColor } from '~/lib/use-app-theme'
 import { useOrgInfo } from '~/lib/use-org-info'
 import { useSettings } from '~/lib/use-settings'
+import { Divider } from '~/ui/divider'
 import { FormErrorSummary, SelectInput, TextInput, useForm, z, zodResolver } from '~/ui/form'
 
 const PROVIDER_OPTIONS = [{ label: 'Postmark', value: 'postmark' }]
@@ -31,12 +32,10 @@ const addDomainSchema = z.object({
 })
 
 export default function ProviderSettings() {
-    const [foregroundColor, mutedColor, accentColor, backgroundColor] = useThemeColor([
-        'foreground',
-        'muted',
-        'accent',
-        'background',
-    ])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
+    const accentColor = useThemeColor('accent')
+    const backgroundColor = useThemeColor('background')
     const { orgId } = useOrgInfo()
     const settings = useSettings('mail', orgId)
     const [settingsCollection] = useStore('settings')
@@ -144,7 +143,7 @@ export default function ProviderSettings() {
                     </Text>
                 </Pressable>
 
-                <Separator />
+                <Divider />
 
                 <DomainsSection orgId={orgId} />
             </View>
@@ -159,7 +158,8 @@ interface DomainRow {
 }
 
 function DomainsSection({ orgId }: { orgId: string }) {
-    const [foregroundColor, mutedColor] = useThemeColor(['foreground', 'muted'])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
     const [domainsCollection] = useStore('mail_domains')
 
     const { data: domains } = useLiveQuery(
@@ -209,11 +209,9 @@ function NoDomainsBanner({ isVisible }: { isVisible: boolean }) {
 }
 
 function DomainRowItem({ domain }: { domain: DomainRow }) {
-    const [foregroundColor, mutedColor, borderColor] = useThemeColor([
-        'foreground',
-        'muted',
-        'border',
-    ])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
+    const borderColor = useThemeColor('border')
     const [domainsCollection] = useStore('mail_domains')
     const [confirming, setConfirming] = useState(false)
 
@@ -282,7 +280,8 @@ function DeleteDomainButton({
     onStartConfirm: () => void
     onCancel: () => void
 }) {
-    const [_accentColor, dangerColor] = useThemeColor(['accent', 'danger'])
+    const _accentColor = useThemeColor('accent')
+    const dangerColor = useThemeColor('danger')
 
     if (confirming) {
         return (

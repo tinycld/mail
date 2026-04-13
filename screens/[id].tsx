@@ -1,12 +1,12 @@
 import { and, eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useThemeColor } from 'heroui-native'
 import { useCallback, useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { ScreenHeader } from '~/components/ScreenHeader'
 import { mutation, useMutation } from '~/lib/mutations'
 import { useStore } from '~/lib/pocketbase'
+import { useThemeColor } from '~/lib/use-app-theme'
 import { useCurrentRole } from '~/lib/use-current-role'
 import { useScrollShadow } from '~/lib/use-scroll-shadow'
 import { EmailAttachments } from '../components/EmailAttachments'
@@ -47,11 +47,9 @@ export default function MailDetailScreen() {
     const { userOrgId } = useCurrentRole()
     const router = useRouter()
     const { openReply } = useCompose()
-    const [_mutedColor, _borderColor, backgroundColor] = useThemeColor([
-        'muted',
-        'border',
-        'background',
-    ])
+    const _mutedColor = useThemeColor('muted')
+    const _borderColor = useThemeColor('border')
+    const backgroundColor = useThemeColor('background')
 
     const [threadStateCollection, messagesCollection] = useStore(
         'mail_thread_state',
@@ -254,7 +252,8 @@ export default function MailDetailScreen() {
 }
 
 function CollapsedSnippet({ snippet, onPress }: { snippet: string; onPress: () => void }) {
-    const [mutedColor, borderColor] = useThemeColor(['muted', 'border'])
+    const mutedColor = useThemeColor('muted')
+    const borderColor = useThemeColor('border')
     return (
         <Pressable onPress={onPress}>
             <View

@@ -1,10 +1,10 @@
-import { useThemeColor } from 'heroui-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Platform, Text, View } from 'react-native'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { captureException } from '~/lib/errors'
 import { performMutations } from '~/lib/mutations'
 import { useStore } from '~/lib/pocketbase'
+import { useThemeColor } from '~/lib/use-app-theme'
 import { useForm, zodResolver } from '~/ui/form'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
@@ -40,11 +40,9 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const draftIdRef = useRef<string | null>(null)
     const [headerTitle, setHeaderTitle] = useState('')
     const { attachments, addFiles, removeFile, clearAll: clearAttachments } = useAttachments()
-    const [backgroundColor, borderColor, dangerColor] = useThemeColor([
-        'background',
-        'border',
-        'danger',
-    ])
+    const backgroundColor = useThemeColor('background')
+    const borderColor = useThemeColor('border')
+    const dangerColor = useThemeColor('danger')
 
     const editor = useMailEditor({ placeholder: 'Compose email' })
     const editorBridgeRef = useRef(editor)

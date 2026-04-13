@@ -1,5 +1,4 @@
 import { type EditorBridge, useBridgeState } from '@10play/tentap-editor'
-import { useThemeColor } from 'heroui-native'
 import {
     Bold,
     Italic,
@@ -12,6 +11,7 @@ import {
     Underline,
 } from 'lucide-react-native'
 import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from 'react-native'
+import { useThemeColor } from '~/lib/use-app-theme'
 
 interface ComposeToolbarProps {
     editor: EditorBridge
@@ -28,12 +28,10 @@ export function ComposeToolbar({
     onAttach,
     isPending,
 }: ComposeToolbarProps) {
-    const [iconColor, activeColor, accentFgColor, borderColor] = useThemeColor([
-        'muted',
-        'accent',
-        'accent-foreground',
-        'border',
-    ])
+    const iconColor = useThemeColor('muted')
+    const activeColor = useThemeColor('accent')
+    const accentFgColor = useThemeColor('accent-foreground')
+    const borderColor = useThemeColor('border')
     const editorState = useBridgeState(editor)
 
     const handleLink = () => {

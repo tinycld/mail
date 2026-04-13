@@ -1,6 +1,5 @@
 import type { Href } from 'expo-router'
 import { Link } from 'expo-router'
-import { useThemeColor } from 'heroui-native'
 import {
     Archive,
     Inbox,
@@ -21,6 +20,7 @@ import { SwipeableRow } from '~/components/SwipeableRow'
 import { hexToRgba } from '~/lib/color-utils'
 import { formatRelativeDate } from '~/lib/format-utils'
 import { useOrgHref } from '~/lib/org-routes'
+import { useThemeColor } from '~/lib/use-app-theme'
 import type { ThreadListItem } from './thread-list-item'
 
 interface EmailRowProps {
@@ -143,27 +143,15 @@ function MobileEmailRow({
     onTrash,
     onToggleRead,
 }: EmailRowProps) {
-    const [
-        foregroundColor,
-        mutedColor,
-        backgroundColor,
-        surfaceColor,
-        borderColor,
-        accentBgColor,
-        accentFgColor,
-        yellowColor,
-        dangerColor,
-    ] = useThemeColor([
-        'foreground',
-        'muted',
-        'background',
-        'surface-secondary',
-        'border',
-        'accent',
-        'accent-foreground',
-        'warning',
-        'danger',
-    ])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
+    const backgroundColor = useThemeColor('background')
+    const surfaceColor = useThemeColor('surface-secondary')
+    const borderColor = useThemeColor('border')
+    const accentBgColor = useThemeColor('accent')
+    const accentFgColor = useThemeColor('accent-foreground')
+    const yellowColor = useThemeColor('warning')
+    const dangerColor = useThemeColor('danger')
     const orgHref = useOrgHref()
 
     const senderWeight = email.isRead ? ('400' as const) : ('700' as const)
@@ -295,7 +283,8 @@ function RowHoverActions({
 }: Pick<EmailRowProps, 'email' | 'isSelected' | 'onArchive' | 'onTrash' | 'onToggleRead'> & {
     tooltipPosition?: 'above' | 'below'
 }) {
-    const [accentBgColor, backgroundColor] = useThemeColor(['accent', 'background'])
+    const accentBgColor = useThemeColor('accent')
+    const backgroundColor = useThemeColor('background')
     const ReadIcon = email.isRead ? Mail : MailOpen
     const bg = isSelected ? hexToRgba(accentBgColor, 0.09) : backgroundColor
 
@@ -347,23 +336,13 @@ function DesktopEmailRow({
     onToggleRead,
     index,
 }: EmailRowProps) {
-    const [
-        foregroundColor,
-        mutedColor,
-        surfaceColor,
-        borderColor,
-        accentBgColor,
-        yellowColor,
-        dangerColor,
-    ] = useThemeColor([
-        'foreground',
-        'muted',
-        'surface-secondary',
-        'border',
-        'accent',
-        'warning',
-        'danger',
-    ])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
+    const surfaceColor = useThemeColor('surface-secondary')
+    const borderColor = useThemeColor('border')
+    const accentBgColor = useThemeColor('accent')
+    const yellowColor = useThemeColor('warning')
+    const dangerColor = useThemeColor('danger')
     const orgHref = useOrgHref()
     const [isHovered, setIsHovered] = useState(false)
 

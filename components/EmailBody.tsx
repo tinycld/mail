@@ -1,7 +1,7 @@
-import { useThemeColor } from 'heroui-native'
 import { useEffect, useState } from 'react'
 import { Platform, Text, View } from 'react-native'
 import { pb } from '~/lib/pocketbase'
+import { useThemeColor } from '~/lib/use-app-theme'
 
 interface EmailBodyProps {
     collectionId: string

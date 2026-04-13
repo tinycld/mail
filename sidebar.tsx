@@ -1,7 +1,6 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
-import { useThemeColor } from 'heroui-native'
 import {
     AlertTriangle,
     Archive,
@@ -26,6 +25,7 @@ import {
 } from '~/components/sidebar-primitives'
 import { useOrgHref } from '~/lib/org-routes'
 import { useStore } from '~/lib/pocketbase'
+import { useThemeColor } from '~/lib/use-app-theme'
 import { useCurrentRole } from '~/lib/use-current-role'
 import { composeEvents } from './hooks/composeEvents'
 import { useLabels } from './hooks/useLabels'

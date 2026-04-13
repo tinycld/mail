@@ -1,6 +1,6 @@
-import { useThemeColor } from 'heroui-native'
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native'
 import { NameAvatar as ContactAvatar } from '~/components/NameAvatar'
+import { useThemeColor } from '~/lib/use-app-theme'
 
 interface Suggestion {
     id: string
@@ -73,11 +73,9 @@ export function RecipientSuggestionList({
     query,
     onSelect,
 }: RecipientSuggestionListProps) {
-    const [backgroundColor, borderColor, hoverBgColor] = useThemeColor([
-        'background',
-        'border',
-        'surface-secondary',
-    ])
+    const backgroundColor = useThemeColor('background')
+    const borderColor = useThemeColor('border')
+    const hoverBgColor = useThemeColor('surface-secondary')
 
     if (suggestions.length === 0) return null
 

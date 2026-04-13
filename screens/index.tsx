@@ -1,5 +1,4 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useThemeColor } from 'heroui-native'
 import { Archive, type Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
@@ -9,6 +8,7 @@ import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { mutation, useMutation } from '~/lib/mutations'
 import { useOrgHref } from '~/lib/org-routes'
 import { pb, queryClient } from '~/lib/pocketbase'
+import { useThemeColor } from '~/lib/use-app-theme'
 import { useCurrentRole } from '~/lib/use-current-role'
 import { useScrollShadow } from '~/lib/use-scroll-shadow'
 import { ComposeFAB } from '../components/ComposeFAB'
@@ -223,11 +223,9 @@ export default function MailListScreen() {
     const { isScrolled, onScroll } = useScrollShadow()
     const { openDraft } = useCompose()
     const search = useMailSearchState()
-    const [mutedColor, accentColor, _backgroundColor] = useThemeColor([
-        'muted',
-        'accent',
-        'background',
-    ])
+    const mutedColor = useThemeColor('muted')
+    const accentColor = useThemeColor('accent')
+    const _backgroundColor = useThemeColor('background')
 
     const {
         items,

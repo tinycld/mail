@@ -1,7 +1,6 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { Link } from 'expo-router'
-import { Separator, useThemeColor } from 'heroui-native'
 import { Lock, Mail, Plus, Trash2, UserPlus, X } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb'
 import { useState } from 'react'
@@ -10,8 +9,10 @@ import { handleMutationErrorsWithForm } from '~/lib/errors'
 import { mutation, useMutation } from '~/lib/mutations'
 import { useOrgHref } from '~/lib/org-routes'
 import { useStore } from '~/lib/pocketbase'
+import { useThemeColor } from '~/lib/use-app-theme'
 import { useCurrentRole } from '~/lib/use-current-role'
 import { useOrgInfo } from '~/lib/use-org-info'
+import { Divider } from '~/ui/divider'
 import { FormErrorSummary, SelectInput, TextInput, useForm, z, zodResolver } from '~/ui/form'
 
 const createMailboxSchema = z.object({
@@ -133,12 +134,10 @@ function useMailboxData(orgId: string) {
 }
 
 export default function MailboxesSettings() {
-    const [foregroundColor, mutedColor, accentColor, backgroundColor] = useThemeColor([
-        'foreground',
-        'muted',
-        'accent',
-        'background',
-    ])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
+    const accentColor = useThemeColor('accent')
+    const backgroundColor = useThemeColor('background')
     const { orgId } = useOrgInfo()
     const { isAdmin, userOrgId } = useCurrentRole()
     const [expandedMailbox, setExpandedMailbox] = useState<string | null>(null)
@@ -193,7 +192,7 @@ export default function MailboxesSettings() {
                             ))}
                         </View>
 
-                        <Separator />
+                        <Divider />
 
                         <CreateMailboxForm domainOptions={domainOptions} userOrgId={userOrgId} />
                     </>
@@ -204,7 +203,8 @@ export default function MailboxesSettings() {
 }
 
 function NoDomainsBanner({ isVisible }: { isVisible: boolean }) {
-    const [mutedColor, accentColor] = useThemeColor(['muted', 'accent'])
+    const mutedColor = useThemeColor('muted')
+    const accentColor = useThemeColor('accent')
     const orgHref = useOrgHref()
 
     if (!isVisible) return null
@@ -240,11 +240,9 @@ function MailboxCard({
     isExpanded: boolean
     onToggle: () => void
 }) {
-    const [foregroundColor, mutedColor, borderColor] = useThemeColor([
-        'foreground',
-        'muted',
-        'border',
-    ])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
+    const borderColor = useThemeColor('border')
     const isPersonal = mailbox.type === 'personal'
     const fullAddress = `${mailbox.address}@${mailbox.domainName}`
 
@@ -303,7 +301,8 @@ function TypeBadge({ type }: { type: string }) {
 }
 
 function DeleteMailboxButton({ mailboxId, isVisible }: { mailboxId: string; isVisible: boolean }) {
-    const [dangerColor, _accentColor] = useThemeColor(['danger', 'accent'])
+    const dangerColor = useThemeColor('danger')
+    const _accentColor = useThemeColor('accent')
     const [mailboxesCollection] = useStore('mail_mailboxes')
     const [confirming, setConfirming] = useState(false)
 
@@ -364,12 +363,10 @@ function MailboxMemberPanel({
     members: MemberRow[]
     orgMembers: OrgMemberRow[]
 }) {
-    const [foregroundColor, mutedColor, borderColor, dangerColor] = useThemeColor([
-        'foreground',
-        'muted',
-        'border',
-        'danger',
-    ])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
+    const borderColor = useThemeColor('border')
+    const dangerColor = useThemeColor('danger')
     const [membersCollection] = useStore('mail_mailbox_members')
     const [addingMember, setAddingMember] = useState(false)
     const [selectedUserOrg, setSelectedUserOrg] = useState('')
@@ -519,7 +516,9 @@ function AddMemberSection({
     onCancel: () => void
     isPending: boolean
 }) {
-    const [mutedColor, accentColor, borderColor] = useThemeColor(['muted', 'accent', 'border'])
+    const mutedColor = useThemeColor('muted')
+    const accentColor = useThemeColor('accent')
+    const borderColor = useThemeColor('border')
 
     if (!isVisible) return null
 
@@ -608,7 +607,8 @@ function CreateMailboxForm({
     domainOptions: { label: string; value: string }[]
     userOrgId: string
 }) {
-    const [foregroundColor, accentColor] = useThemeColor(['foreground', 'accent'])
+    const foregroundColor = useThemeColor('foreground')
+    const accentColor = useThemeColor('accent')
     const [mailboxesCollection, membersCollection] = useStore(
         'mail_mailboxes',
         'mail_mailbox_members'

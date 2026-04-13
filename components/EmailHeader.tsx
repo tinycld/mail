@@ -1,4 +1,3 @@
-import { useThemeColor } from 'heroui-native'
 import {
     ChevronDown,
     ChevronUp,
@@ -12,6 +11,7 @@ import { Pressable, Text, View } from 'react-native'
 import { LabelBadge } from '~/components/LabelBadge'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { formatRelativeDate } from '~/lib/format-utils'
+import { useThemeColor } from '~/lib/use-app-theme'
 import { MenuActionItem, ToolbarMenu } from './DropdownMenu'
 
 interface ThreadSubjectHeaderProps {
@@ -111,8 +111,12 @@ export function MessageHeader({
     onForward,
     onToggleStar,
 }: MessageHeaderProps) {
-    const [foregroundColor, mutedColor, borderColor, accentBgColor, accentFgColor, yellowColor] =
-        useThemeColor(['foreground', 'muted', 'border', 'accent', 'accent-foreground', 'warning'])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
+    const borderColor = useThemeColor('border')
+    const accentBgColor = useThemeColor('accent')
+    const accentFgColor = useThemeColor('accent-foreground')
+    const yellowColor = useThemeColor('warning')
     const breakpoint = useBreakpoint()
     const isMobile = breakpoint === 'mobile'
 

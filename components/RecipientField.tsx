@@ -1,7 +1,7 @@
-import { useThemeColor } from 'heroui-native'
 import { type Control, type Path, useController } from 'react-hook-form'
 import { Pressable, Text, View } from 'react-native'
 import { NameAvatar as ContactAvatar } from '~/components/NameAvatar'
+import { useThemeColor } from '~/lib/use-app-theme'
 import { PlainInput } from '~/ui/PlainInput'
 import type { ComposeFormData } from '../hooks/composeSchema'
 import { useRecipientSuggestions } from '../hooks/useRecipientSuggestions'
@@ -22,12 +22,10 @@ function RecipientChip({
     email: string
     onRemove: () => void
 }) {
-    const [foregroundColor, mutedColor, surfaceColor, borderColor] = useThemeColor([
-        'foreground',
-        'muted',
-        'surface-secondary',
-        'border',
-    ])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
+    const surfaceColor = useThemeColor('surface-secondary')
+    const borderColor = useThemeColor('border')
     const displayName = name || email
     const firstName = name.split(' ')[0] || email.split('@')[0]
     const lastName = name.split(' ').slice(1).join(' ')
@@ -63,7 +61,8 @@ function RecipientChip({
 }
 
 export function RecipientField({ control, name, placeholder }: RecipientFieldProps) {
-    const [foregroundColor, placeholderColor] = useThemeColor(['foreground', 'field-placeholder'])
+    const foregroundColor = useThemeColor('foreground')
+    const placeholderColor = useThemeColor('field-placeholder')
     const { field } = useController({ control, name })
 
     const { committedRecipients, activeQuery, committedRaw, suggestions, showSuggestions } =

@@ -1,7 +1,7 @@
-import { useThemeColor } from 'heroui-native'
 import { Maximize2, Minimize2, X } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
+import { useThemeColor } from '~/lib/use-app-theme'
 import type { ComposeMode } from '../hooks/useComposeState'
 
 interface ComposeHeaderProps {
@@ -19,7 +19,8 @@ export function ComposeHeader({
     onMaximize,
     onClose,
 }: ComposeHeaderProps) {
-    const [foregroundColor, backgroundColor] = useThemeColor(['foreground', 'background'])
+    const foregroundColor = useThemeColor('foreground')
+    const backgroundColor = useThemeColor('background')
     const breakpoint = useBreakpoint()
     const showWindowControls = breakpoint === 'desktop'
     const displayTitle = title?.trim() || 'New Message'

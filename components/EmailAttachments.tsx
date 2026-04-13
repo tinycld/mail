@@ -1,4 +1,3 @@
-import { useThemeColor } from 'heroui-native'
 import {
     Download,
     File,
@@ -9,6 +8,7 @@ import {
 } from 'lucide-react-native'
 import { Linking, Platform, Pressable, Text, View } from 'react-native'
 import { pb } from '~/lib/pocketbase'
+import { useThemeColor } from '~/lib/use-app-theme'
 
 interface EmailAttachmentsProps {
     isVisible: boolean
@@ -23,7 +23,8 @@ export function EmailAttachments({
     recordId,
     filenames,
 }: EmailAttachmentsProps) {
-    const [borderColor, mutedColor] = useThemeColor(['border', 'muted'])
+    const borderColor = useThemeColor('border')
+    const mutedColor = useThemeColor('muted')
 
     if (!isVisible) return null
 
@@ -71,12 +72,10 @@ function AttachmentThumbnail({
     recordId: string
     filename: string
 }) {
-    const [borderColor, mutedColor, foregroundColor, surfaceColor] = useThemeColor([
-        'border',
-        'muted',
-        'foreground',
-        'surface-secondary',
-    ])
+    const borderColor = useThemeColor('border')
+    const mutedColor = useThemeColor('muted')
+    const foregroundColor = useThemeColor('foreground')
+    const surfaceColor = useThemeColor('surface-secondary')
     const url = pb.files.getURL({ collectionId, id: recordId }, filename)
     const isImage = /\.(jpe?g|png|gif|webp|svg|bmp)$/i.test(filename)
     const displayName = cleanFilename(filename)

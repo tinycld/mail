@@ -1,6 +1,6 @@
-import { useThemeColor } from 'heroui-native'
 import { Menu, Search, SlidersHorizontal } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
+import { useThemeColor } from '~/lib/use-app-theme'
 import { PlainInput } from '~/ui/PlainInput'
 import type { AdvancedSearchFilters } from '../hooks/useSearchState'
 import { AdvancedSearchDropdown } from './AdvancedSearchDropdown'
@@ -26,21 +26,12 @@ export function SearchBar({
     activeFilterCount,
     currentFilters,
 }: SearchBarProps) {
-    const [
-        foregroundColor,
-        mutedColor,
-        accentColor,
-        borderColor,
-        sidebarBgColor,
-        placeholderColor,
-    ] = useThemeColor([
-        'foreground',
-        'muted',
-        'accent',
-        'border',
-        'surface-secondary',
-        'field-placeholder',
-    ])
+    const foregroundColor = useThemeColor('foreground')
+    const mutedColor = useThemeColor('muted')
+    const accentColor = useThemeColor('accent')
+    const borderColor = useThemeColor('border')
+    const sidebarBgColor = useThemeColor('surface-secondary')
+    const placeholderColor = useThemeColor('field-placeholder')
     const hasActiveFilters = activeFilterCount > 0
     const filterIconColor = hasActiveFilters ? accentColor : mutedColor
 
