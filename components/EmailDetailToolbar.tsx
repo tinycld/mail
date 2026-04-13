@@ -15,7 +15,7 @@ import {
     Tag,
     Trash2,
 } from 'lucide-react-native'
-import { StyleSheet, View } from 'react-native'
+import { View } from 'react-native'
 import { ToolbarSeparator } from '~/components/ToolbarSeparator'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import type { MailThreadState } from '../types'
@@ -83,8 +83,19 @@ export function EmailDetailToolbar({
     const readLabel = isRead ? 'Mark as unread' : 'Mark as read'
 
     return (
-        <View style={styles.toolbar}>
-            <View style={styles.left}>
+        <View
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                height: 44,
+                paddingHorizontal: 8,
+                overflow: 'visible',
+            }}
+        >
+            <View
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 2, overflow: 'visible' }}
+            >
                 <ToolbarIconButton icon={ArrowLeft} label="Back" onPress={() => router.back()} />
                 <ToolbarIconButton icon={Archive} label="Archive" onPress={onArchive} />
                 {isMobile ? null : (
@@ -141,7 +152,7 @@ export function EmailDetailToolbar({
                 </ToolbarMenu>
             </View>
             {isMobile ? null : (
-                <View style={styles.right}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                     <ToolbarIconButton
                         icon={ChevronLeft}
                         label="Newer"
@@ -159,25 +170,3 @@ export function EmailDetailToolbar({
         </View>
     )
 }
-
-const styles = StyleSheet.create({
-    toolbar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        height: 44,
-        paddingHorizontal: 8,
-        overflow: 'visible',
-    },
-    left: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-        overflow: 'visible',
-    },
-    right: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-    },
-})

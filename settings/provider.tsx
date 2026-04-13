@@ -1,9 +1,10 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
+import { Separator, useThemeColor } from 'heroui-native'
 import { CheckCircle, Circle, Globe, Plus, Trash2 } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb'
 import { useState } from 'react'
-import { Button, H4, ScrollView, Separator, SizableText, useTheme, XStack, YStack } from 'tamagui'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { handleMutationErrorsWithForm } from '~/lib/errors'
 import { mutation, useMutation } from '~/lib/mutations'
 import { useStore } from '~/lib/pocketbase'
@@ -30,7 +31,12 @@ const addDomainSchema = z.object({
 })
 
 export default function ProviderSettings() {
-    const theme = useTheme()
+    const [foregroundColor, mutedColor, accentColor, backgroundColor] = useThemeColor([
+        'foreground',
+        'muted',
+        'accent',
+        'background',
+    ])
     const { orgId } = useOrgInfo()
     const settings = useSettings('mail', orgId)
     const [settingsCollection] = useStore('settings')
@@ -86,21 +92,21 @@ export default function ProviderSettings() {
     const canSubmit = !saveMutation.isPending && isDirty
 
     return (
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }} backgroundColor="$background">
-            <YStack flex={1} padding="$5" gap="$5" maxWidth={600}>
-                <YStack gap="$2">
-                    <Globe size={32} color={theme.colorFocus.val} />
-                    <SizableText size="$6" fontWeight="bold" color="$color">
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} style={{ backgroundColor }}>
+            <View style={{ flex: 1, padding: 20, gap: 20, maxWidth: 600 }}>
+                <View style={{ gap: 8 }}>
+                    <Globe size={32} color={accentColor} />
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: foregroundColor }}>
                         Mail Provider
-                    </SizableText>
-                    <SizableText size="$3" color="$color8">
+                    </Text>
+                    <Text style={{ fontSize: 13, color: mutedColor }}>
                         Configure the email provider and domains for your organization.
-                    </SizableText>
-                </YStack>
+                    </Text>
+                </View>
 
                 <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
 
-                <YStack gap="$4">
+                <View style={{ gap: 16 }}>
                     <SelectInput
                         control={control}
                         name="provider"
@@ -119,24 +125,29 @@ export default function ProviderSettings() {
                         label="Postmark Account Token"
                         secureTextEntry
                     />
-                </YStack>
+                </View>
 
-                <Button
-                    theme="accent"
-                    size="$4"
+                <Pressable
                     onPress={onSubmit}
                     disabled={!canSubmit}
-                    opacity={canSubmit ? 1 : 0.5}
+                    style={{
+                        backgroundColor: accentColor,
+                        height: 44,
+                        borderRadius: 8,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: canSubmit ? 1 : 0.5,
+                    }}
                 >
-                    <Button.Text fontWeight="600">
+                    <Text style={{ fontWeight: '600', color: '#fff' }}>
                         {saveMutation.isPending ? 'Saving...' : 'Save'}
-                    </Button.Text>
-                </Button>
+                    </Text>
+                </Pressable>
 
                 <Separator />
 
                 <DomainsSection orgId={orgId} />
-            </YStack>
+            </View>
         </ScrollView>
     )
 }
@@ -148,6 +159,7 @@ interface DomainRow {
 }
 
 function DomainsSection({ orgId }: { orgId: string }) {
+    const [foregroundColor, mutedColor] = useThemeColor(['foreground', 'muted'])
     const [domainsCollection] = useStore('mail_domains')
 
     const { data: domains } = useLiveQuery(
@@ -166,12 +178,14 @@ function DomainsSection({ orgId }: { orgId: string }) {
     }))
 
     return (
-        <YStack gap="$3">
-            <H4 color="$color">Domains</H4>
-            <SizableText size="$3" color="$color8">
+        <View style={{ gap: 12 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: foregroundColor }}>
+                Domains
+            </Text>
+            <Text style={{ fontSize: 13, color: mutedColor }}>
                 Add domains your organization can send and receive email on. Mark domains as
                 verified once DNS records are configured.
-            </SizableText>
+            </Text>
 
             <NoDomainsBanner isVisible={domainRows.length === 0} />
 
@@ -180,20 +194,26 @@ function DomainsSection({ orgId }: { orgId: string }) {
             ))}
 
             <AddDomainForm orgId={orgId} />
-        </YStack>
+        </View>
     )
 }
 
 function NoDomainsBanner({ isVisible }: { isVisible: boolean }) {
+    const mutedColor = useThemeColor('muted')
     if (!isVisible) return null
     return (
-        <SizableText size="$3" color="$color8" fontStyle="italic">
+        <Text style={{ fontSize: 13, color: mutedColor, fontStyle: 'italic' }}>
             No domains added yet.
-        </SizableText>
+        </Text>
     )
 }
 
 function DomainRowItem({ domain }: { domain: DomainRow }) {
+    const [foregroundColor, mutedColor, borderColor] = useThemeColor([
+        'foreground',
+        'muted',
+        'border',
+    ])
     const [domainsCollection] = useStore('mail_domains')
     const [confirming, setConfirming] = useState(false)
 
@@ -213,30 +233,33 @@ function DomainRowItem({ domain }: { domain: DomainRow }) {
     })
 
     const VerifiedIcon = domain.verified ? CheckCircle : Circle
-    const verifiedColor = domain.verified ? '$green10' : '$color8'
+    const verifiedColor = domain.verified ? '#16a34a' : mutedColor
 
     return (
-        <XStack
-            justifyContent="space-between"
-            alignItems="center"
-            borderWidth={1}
-            borderColor="$borderColor"
-            borderRadius="$3"
-            padding="$3"
+        <View
+            style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor,
+                borderRadius: 12,
+                padding: 12,
+            }}
         >
-            <XStack gap="$2" alignItems="center" flex={1}>
-                <Button size="$2" chromeless onPress={() => toggleVerifiedMutation.mutate()}>
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flex: 1 }}>
+                <Pressable style={{ padding: 4 }} onPress={() => toggleVerifiedMutation.mutate()}>
                     <VerifiedIcon size={18} color={verifiedColor} />
-                </Button>
-                <YStack>
-                    <SizableText fontWeight="600" color="$color">
+                </Pressable>
+                <View>
+                    <Text style={{ fontWeight: '600', color: foregroundColor }}>
                         {domain.domain}
-                    </SizableText>
-                    <SizableText size="$1" color={verifiedColor}>
+                    </Text>
+                    <Text style={{ fontSize: 11, color: verifiedColor }}>
                         {domain.verified ? 'Verified' : 'Unverified'}
-                    </SizableText>
-                </YStack>
-            </XStack>
+                    </Text>
+                </View>
+            </View>
 
             <DeleteDomainButton
                 confirming={confirming}
@@ -244,7 +267,7 @@ function DomainRowItem({ domain }: { domain: DomainRow }) {
                 onStartConfirm={() => setConfirming(true)}
                 onCancel={() => setConfirming(false)}
             />
-        </XStack>
+        </View>
     )
 }
 
@@ -259,27 +282,45 @@ function DeleteDomainButton({
     onStartConfirm: () => void
     onCancel: () => void
 }) {
+    const [_accentColor, dangerColor] = useThemeColor(['accent', 'danger'])
+
     if (confirming) {
         return (
-            <XStack gap="$2">
-                <Button size="$2" theme="red" onPress={onConfirm}>
-                    <Button.Text>Remove</Button.Text>
-                </Button>
-                <Button size="$2" onPress={onCancel}>
-                    <Button.Text>Cancel</Button.Text>
-                </Button>
-            </XStack>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable
+                    onPress={onConfirm}
+                    style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        backgroundColor: dangerColor,
+                    }}
+                >
+                    <Text style={{ fontSize: 13, color: '#fff' }}>Remove</Text>
+                </Pressable>
+                <Pressable
+                    onPress={onCancel}
+                    style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                    }}
+                >
+                    <Text style={{ fontSize: 13 }}>Cancel</Text>
+                </Pressable>
+            </View>
         )
     }
 
     return (
-        <Button size="$2" chromeless onPress={onStartConfirm}>
-            <Trash2 size={16} color="$red10" />
-        </Button>
+        <Pressable style={{ padding: 4 }} onPress={onStartConfirm}>
+            <Trash2 size={16} color={dangerColor} />
+        </Pressable>
     )
 }
 
 function AddDomainForm({ orgId }: { orgId: string }) {
+    const accentColor = useThemeColor('accent')
     const [domainsCollection] = useStore('mail_domains')
 
     const {
@@ -312,24 +353,29 @@ function AddDomainForm({ orgId }: { orgId: string }) {
     const canSubmit = !addMutation.isPending && isDirty
 
     const addButton = (
-        <Button
-            theme="accent"
-            size="$4"
+        <Pressable
             onPress={onSubmit}
             disabled={!canSubmit}
-            opacity={canSubmit ? 1 : 0.5}
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: accentColor,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                borderRadius: 8,
+                opacity: canSubmit ? 1 : 0.5,
+            }}
         >
-            <XStack gap="$1" alignItems="center">
-                <Plus size={16} />
-                <Button.Text fontWeight="600">
-                    {addMutation.isPending ? 'Adding...' : 'Add'}
-                </Button.Text>
-            </XStack>
-        </Button>
+            <Plus size={16} color="#fff" />
+            <Text style={{ fontWeight: '600', color: '#fff' }}>
+                {addMutation.isPending ? 'Adding...' : 'Add'}
+            </Text>
+        </Pressable>
     )
 
     return (
-        <YStack gap="$3">
+        <View style={{ gap: 12 }}>
             <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
 
             <TextInput
@@ -337,9 +383,9 @@ function AddDomainForm({ orgId }: { orgId: string }) {
                 name="domain"
                 label="Add Domain"
                 placeholder="example.com"
-                wrapperProps={{ marginBottom: 0 }}
+                wrapperProps={{ style: { marginBottom: 0 } }}
                 addon={addButton}
             />
-        </YStack>
+        </View>
     )
 }

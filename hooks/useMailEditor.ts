@@ -14,9 +14,9 @@ import {
     UnderlineBridge,
     useEditorBridge,
 } from '@10play/tentap-editor'
+import { useThemeColor } from 'heroui-native'
 import { type RefObject, useMemo } from 'react'
 import { Platform } from 'react-native'
-import { useTheme } from 'tamagui'
 import type { RichTextEditorHandle } from '../components/RichTextEditor'
 
 function buildEditorCSS(colors: { bg: string; fg: string; placeholder: string; accent: string }) {
@@ -76,12 +76,12 @@ interface UseMailEditorOptions {
 }
 
 export function useMailEditor(options: UseMailEditorOptions = {}) {
-    const theme = useTheme()
-
-    const bgColor = theme.background.val
-    const fgColor = theme.color.val
-    const placeholderColor = theme.placeholderColor.val
-    const accentColor = theme.accentBackground.val
+    const [bgColor, fgColor, placeholderColor, accentColor] = useThemeColor([
+        'background',
+        'foreground',
+        'field-placeholder',
+        'accent',
+    ])
     const placeholder = options.placeholder ?? ''
 
     const bridgeExtensions = useMemo(() => {

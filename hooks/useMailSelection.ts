@@ -1,19 +1,16 @@
 import { useRef, useState } from 'react'
 import type { ThreadListItem } from '../components/thread-list-item'
 
-export function useMailSelection(
-    items: ThreadListItem[],
-    folder: string | null,
-    label: string | null
-) {
+export function useMailSelection(items: ThreadListItem[], folder: string | null, labels: string[]) {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
     const prevFolderRef = useRef(folder)
-    const prevLabelRef = useRef(label)
+    const prevLabelsRef = useRef(labels.join(','))
 
-    if (folder !== prevFolderRef.current || label !== prevLabelRef.current) {
+    const labelsKey = labels.join(',')
+    if (folder !== prevFolderRef.current || labelsKey !== prevLabelsRef.current) {
         prevFolderRef.current = folder
-        prevLabelRef.current = label
+        prevLabelsRef.current = labelsKey
         if (selectedIds.size > 0) {
             setSelectedIds(new Set())
         }

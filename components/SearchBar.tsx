@@ -1,6 +1,6 @@
+import { useThemeColor } from 'heroui-native'
 import { Menu, Search, SlidersHorizontal } from 'lucide-react-native'
-import { Pressable, StyleSheet, View } from 'react-native'
-import { useTheme } from 'tamagui'
+import { Pressable, View } from 'react-native'
 import { PlainInput } from '~/ui/PlainInput'
 import type { AdvancedSearchFilters } from '../hooks/useSearchState'
 import { AdvancedSearchDropdown } from './AdvancedSearchDropdown'
@@ -26,38 +26,53 @@ export function SearchBar({
     activeFilterCount,
     currentFilters,
 }: SearchBarProps) {
-    const theme = useTheme()
+    const [
+        foregroundColor,
+        mutedColor,
+        accentColor,
+        borderColor,
+        sidebarBgColor,
+        placeholderColor,
+    ] = useThemeColor([
+        'foreground',
+        'muted',
+        'accent',
+        'border',
+        'surface-secondary',
+        'field-placeholder',
+    ])
     const hasActiveFilters = activeFilterCount > 0
-    const filterIconColor = hasActiveFilters ? theme.accentBackground.val : theme.color8.val
+    const filterIconColor = hasActiveFilters ? accentColor : mutedColor
 
     return (
-        <View style={styles.wrapper}>
+        <View style={{ position: 'relative', zIndex: 100 }}>
             <View
-                style={[
-                    styles.container,
-                    {
-                        backgroundColor: theme.sidebarBackground.val,
-                        borderColor: theme.borderColor.val,
-                    },
-                ]}
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    height: 44,
+                    borderRadius: 22,
+                    paddingHorizontal: 16,
+                    gap: 10,
+                    borderWidth: 1,
+                    backgroundColor: sidebarBgColor,
+                    borderColor,
+                }}
             >
                 {onMenuPress ? (
-                    <Pressable onPress={onMenuPress} style={styles.menuButton}>
-                        <Menu size={20} color={theme.color8.val} />
+                    <Pressable onPress={onMenuPress} style={{ padding: 2 }}>
+                        <Menu size={20} color={mutedColor} />
                     </Pressable>
                 ) : null}
-                <Search size={18} color={theme.color8.val} />
+                <Search size={18} color={mutedColor} />
                 <PlainInput
-                    style={[styles.input, { color: theme.color.val }]}
+                    style={{ flex: 1, fontSize: 15, color: foregroundColor }}
                     placeholder="Search mail"
-                    placeholderTextColor={theme.placeholderColor.val}
+                    placeholderTextColor={placeholderColor}
                     value={value}
                     onChangeText={onChangeText}
                 />
-                <Pressable
-                    style={styles.filterButton}
-                    onPress={() => onFilterOpenChange(!isFilterOpen)}
-                >
+                <Pressable style={{ padding: 4 }} onPress={() => onFilterOpenChange(!isFilterOpen)}>
                     <SlidersHorizontal size={18} color={filterIconColor} />
                 </Pressable>
             </View>
@@ -71,29 +86,3 @@ export function SearchBar({
         </View>
     )
 }
-
-const styles = StyleSheet.create({
-    wrapper: {
-        position: 'relative',
-        zIndex: 100,
-    },
-    container: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        height: 44,
-        borderRadius: 22,
-        paddingHorizontal: 16,
-        gap: 10,
-        borderWidth: 1,
-    },
-    input: {
-        flex: 1,
-        fontSize: 15,
-    },
-    filterButton: {
-        padding: 4,
-    },
-    menuButton: {
-        padding: 2,
-    },
-})

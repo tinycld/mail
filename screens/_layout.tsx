@@ -1,6 +1,6 @@
 import { Slot } from 'expo-router'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { YStack } from 'tamagui'
+import { View } from 'react-native'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { useWorkspaceLayout } from '~/components/workspace/useWorkspaceLayout'
 import { ComposeWindow } from '../components/ComposeWindow'
@@ -120,8 +120,8 @@ export default function MailLayout() {
         <ComposeContext.Provider value={composeValue}>
             <SearchContext.Provider value={searchValue}>
                 <ThreadListContext.Provider value={threadListValue}>
-                    <YStack flex={1} backgroundColor="$background">
-                        <YStack paddingHorizontal="$4" paddingVertical="$2">
+                    <View className="flex-1 bg-background">
+                        <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
                             <SearchBar
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
@@ -132,12 +132,12 @@ export default function MailLayout() {
                                 activeFilterCount={activeFilterCount}
                                 currentFilters={advancedFilters}
                             />
-                        </YStack>
-                        <YStack flex={1}>
+                        </View>
+                        <View style={{ flex: 1 }}>
                             <Slot />
-                        </YStack>
+                        </View>
                         <ComposeWindow isVisible={isComposeVisible} />
-                    </YStack>
+                    </View>
                 </ThreadListContext.Provider>
             </SearchContext.Provider>
         </ComposeContext.Provider>

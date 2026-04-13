@@ -9,7 +9,7 @@ import { useLabels } from './useLabels'
 
 export function useThreadListItems(
     userOrgId: string,
-    filter: { folder: string | null; label: string | null }
+    filter: { folder: string | null; labels: string[] }
 ) {
     const [threadStateCollection, threadsCollection, messagesCollection, assignmentsCollection] =
         useStore('mail_thread_state', 'mail_threads', 'mail_messages', 'label_assignments')
@@ -107,9 +107,9 @@ export function useThreadListItems(
             return toThreadListItem(state, thread, stateLabels, hasDraft, hasAttachments)
         })
 
-        const { folder, label } = filter
-        if (label) {
-            return mapped.filter(item => item.labels.some(l => l.id === label))
+        const { folder, labels } = filter
+        if (labels.length > 0) {
+            return mapped.filter(item => item.labels.some(l => labels.includes(l.id)))
         }
 
         const activeFolder = folder ?? 'inbox'

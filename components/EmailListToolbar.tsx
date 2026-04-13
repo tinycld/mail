@@ -1,3 +1,4 @@
+import { useThemeColor } from 'heroui-native'
 import {
     Archive,
     ChevronLeft,
@@ -15,8 +16,7 @@ import {
     Tag,
     Trash2,
 } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useTheme } from 'tamagui'
+import { Pressable, Text, View } from 'react-native'
 import { ToolbarSeparator } from '~/components/ToolbarSeparator'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import type { MailThreadState } from '../types'
@@ -66,16 +66,27 @@ function DefaultToolbar({
     onRefresh,
     isRefreshing,
 }: EmailListToolbarProps) {
-    const theme = useTheme()
+    const mutedColor = useThemeColor('muted')
 
     const paginationText =
         emailCount > 0 ? `1\u2013${emailCount} of ${emailCount}` : 'No conversations'
 
     return (
-        <View style={styles.toolbar}>
-            <View style={styles.left}>
-                <Pressable style={styles.checkbox} onPress={onToggleAll}>
-                    <Square size={18} color={theme.color8.val} />
+        <View
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                height: 44,
+                paddingHorizontal: 8,
+                overflow: 'visible',
+            }}
+        >
+            <View
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 2, overflow: 'visible' }}
+            >
+                <Pressable style={{ padding: 8 }} onPress={onToggleAll}>
+                    <Square size={18} color={mutedColor} />
                 </Pressable>
                 <ToolbarIconButton
                     icon={RefreshCw}
@@ -85,8 +96,8 @@ function DefaultToolbar({
                 />
                 <ToolbarIconButton icon={MoreVertical} label="More" onPress={() => {}} />
             </View>
-            <View style={styles.right}>
-                <Text style={[styles.paginationText, { color: theme.color8.val }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>
                     {paginationText}
                 </Text>
                 <ToolbarIconButton icon={ChevronLeft} label="Newer" onPress={() => {}} />
@@ -123,7 +134,11 @@ function BulkActionsToolbar({
     onToggleStar,
     onUpdateLabel,
 }: EmailListToolbarProps) {
-    const theme = useTheme()
+    const [foregroundColor, mutedColor, accentColor] = useThemeColor([
+        'foreground',
+        'muted',
+        'accent',
+    ])
 
     const SelectIcon = allSelected ? SquareCheck : someSelected ? SquareMinus : Square
 
@@ -134,12 +149,23 @@ function BulkActionsToolbar({
     const readLabel = allSelectedRead ? 'Mark as unread' : 'Mark as read'
 
     return (
-        <View style={styles.toolbar}>
-            <View style={styles.left}>
-                <Pressable style={styles.checkbox} onPress={onToggleAll}>
-                    <SelectIcon size={18} color={theme.accentBackground.val} />
+        <View
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                height: 44,
+                paddingHorizontal: 8,
+                overflow: 'visible',
+            }}
+        >
+            <View
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 2, overflow: 'visible' }}
+            >
+                <Pressable style={{ padding: 8 }} onPress={onToggleAll}>
+                    <SelectIcon size={18} color={accentColor} />
                 </Pressable>
-                <Text style={[styles.selectedText, { color: theme.color.val }]}>
+                <Text style={{ fontSize: 13, marginHorizontal: 4, color: foregroundColor }}>
                     {selectedCount} selected
                 </Text>
                 <ToolbarIconButton icon={Archive} label="Archive" onPress={onArchive} />
@@ -183,8 +209,8 @@ function BulkActionsToolbar({
                     />
                 </ToolbarMenu>
             </View>
-            <View style={styles.right}>
-                <Text style={[styles.paginationText, { color: theme.color8.val }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>
                     {paginationText}
                 </Text>
                 <ToolbarIconButton icon={ChevronLeft} label="Newer" onPress={() => {}} />
@@ -193,36 +219,3 @@ function BulkActionsToolbar({
         </View>
     )
 }
-
-const styles = StyleSheet.create({
-    toolbar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        height: 44,
-        paddingHorizontal: 8,
-        overflow: 'visible',
-    },
-    left: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-        overflow: 'visible',
-    },
-    right: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-    },
-    checkbox: {
-        padding: 8,
-    },
-    selectedText: {
-        fontSize: 13,
-        marginHorizontal: 4,
-    },
-    paginationText: {
-        fontSize: 12,
-        marginRight: 4,
-    },
-})

@@ -1,7 +1,7 @@
+import { useThemeColor } from 'heroui-native'
 import { Forward, Reply, ReplyAll } from 'lucide-react-native'
 import { useRef } from 'react'
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
-import { useTheme } from 'tamagui'
+import { Platform, Pressable, Text, View } from 'react-native'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { captureException } from '~/lib/errors'
 import { useForm, zodResolver } from '~/ui/form'
@@ -36,7 +36,7 @@ export function InlineReply({
     recipientsTo,
     recipientsCc,
 }: InlineReplyProps) {
-    const theme = useTheme()
+    const [mutedColor, borderColor] = useThemeColor(['muted', 'border'])
     const breakpoint = useBreakpoint()
     const isMobile = breakpoint === 'mobile'
     const { mode, replyContext, openReply, close } = useCompose()
@@ -82,32 +82,64 @@ export function InlineReply({
 
     return (
         <View
-            style={[
-                styles.container,
-                isMobile && styles.containerMobile,
-                { borderTopColor: theme.borderColor.val },
-            ]}
+            style={{
+                flexDirection: 'row',
+                gap: 8,
+                padding: 16,
+                borderTopWidth: 1,
+                borderTopColor: borderColor,
+                flexWrap: isMobile ? 'wrap' : undefined,
+            }}
         >
             <Pressable
-                style={[styles.actionButton, { borderColor: theme.borderColor.val }]}
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor,
+                }}
                 onPress={handleReply}
             >
-                <Reply size={16} color={theme.color8.val} />
-                <Text style={[styles.actionText, { color: theme.color8.val }]}>Reply</Text>
+                <Reply size={16} color={mutedColor} />
+                <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>Reply</Text>
             </Pressable>
             <Pressable
-                style={[styles.actionButton, { borderColor: theme.borderColor.val }]}
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor,
+                }}
                 onPress={handleReplyAll}
             >
-                <ReplyAll size={16} color={theme.color8.val} />
-                <Text style={[styles.actionText, { color: theme.color8.val }]}>Reply all</Text>
+                <ReplyAll size={16} color={mutedColor} />
+                <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>
+                    Reply all
+                </Text>
             </Pressable>
             <Pressable
-                style={[styles.actionButton, { borderColor: theme.borderColor.val }]}
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor,
+                }}
                 onPress={handleForward}
             >
-                <Forward size={16} color={theme.color8.val} />
-                <Text style={[styles.actionText, { color: theme.color8.val }]}>Forward</Text>
+                <Forward size={16} color={mutedColor} />
+                <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>Forward</Text>
             </Pressable>
         </View>
     )
@@ -120,7 +152,11 @@ function InlineComposeForm({
     replyContext: NonNullable<ReturnType<typeof useCompose>['replyContext']>
     onClose: () => void
 }) {
-    const theme = useTheme()
+    const [borderColor, backgroundColor, _dangerColor] = useThemeColor([
+        'border',
+        'background',
+        'danger',
+    ])
     const editorRef = useRef<RichTextEditorHandle>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const mailboxId = useDefaultMailbox()
@@ -198,16 +234,17 @@ function InlineComposeForm({
 
     return (
         <View
-            style={[
-                inlineStyles.container,
-                {
-                    borderColor: theme.borderColor.val,
-                    backgroundColor: theme.background.val,
-                },
-            ]}
+            style={{
+                margin: 16,
+                borderWidth: 1,
+                borderRadius: 8,
+                minHeight: 200,
+                borderColor,
+                backgroundColor,
+            }}
         >
             <ComposeFields control={control} errors={errors} />
-            <View style={inlineStyles.body}>
+            <View style={{ flex: 1, padding: 12, minHeight: 120 }}>
                 <RichTextEditor editor={editor} />
             </View>
             <AttachmentRibbon
@@ -234,42 +271,3 @@ function InlineComposeForm({
         </View>
     )
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flexDirection: 'row',
-        gap: 8,
-        padding: 16,
-        borderTopWidth: 1,
-    },
-    containerMobile: {
-        flexWrap: 'wrap',
-    },
-    actionButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1,
-    },
-    actionText: {
-        fontSize: 13,
-        fontWeight: '500',
-    },
-})
-
-const inlineStyles = StyleSheet.create({
-    container: {
-        margin: 16,
-        borderWidth: 1,
-        borderRadius: 8,
-        minHeight: 200,
-    },
-    body: {
-        flex: 1,
-        padding: 12,
-        minHeight: 120,
-    },
-})

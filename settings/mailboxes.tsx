@@ -1,10 +1,11 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { Link } from 'expo-router'
+import { Separator, useThemeColor } from 'heroui-native'
 import { Lock, Mail, Plus, Trash2, UserPlus, X } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb'
 import { useState } from 'react'
-import { Button, H4, ScrollView, Separator, SizableText, useTheme, XStack, YStack } from 'tamagui'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { handleMutationErrorsWithForm } from '~/lib/errors'
 import { mutation, useMutation } from '~/lib/mutations'
 import { useOrgHref } from '~/lib/org-routes'
@@ -132,7 +133,12 @@ function useMailboxData(orgId: string) {
 }
 
 export default function MailboxesSettings() {
-    const theme = useTheme()
+    const [foregroundColor, mutedColor, accentColor, backgroundColor] = useThemeColor([
+        'foreground',
+        'muted',
+        'accent',
+        'background',
+    ])
     const { orgId } = useOrgInfo()
     const { isAdmin, userOrgId } = useCurrentRole()
     const [expandedMailbox, setExpandedMailbox] = useState<string | null>(null)
@@ -140,9 +146,9 @@ export default function MailboxesSettings() {
 
     if (!isAdmin) {
         return (
-            <YStack flex={1} padding="$5" justifyContent="center" alignItems="center">
-                <SizableText color="$color8">Admin access required</SizableText>
-            </YStack>
+            <View style={{ flex: 1, padding: 20, justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ color: mutedColor }}>Admin access required</Text>
+            </View>
         )
     }
 
@@ -150,24 +156,28 @@ export default function MailboxesSettings() {
     const hasDomains = data.domains.length > 0
 
     return (
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }} backgroundColor="$background">
-            <YStack flex={1} padding="$5" gap="$5" maxWidth={600}>
-                <YStack gap="$2">
-                    <Mail size={32} color={theme.colorFocus.val} />
-                    <SizableText size="$6" fontWeight="bold" color="$color">
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} style={{ backgroundColor }}>
+            <View style={{ flex: 1, padding: 20, gap: 20, maxWidth: 600 }}>
+                <View style={{ gap: 8 }}>
+                    <Mail size={32} color={accentColor} />
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: foregroundColor }}>
                         Mailboxes
-                    </SizableText>
-                    <SizableText size="$3" color="$color8">
+                    </Text>
+                    <Text style={{ fontSize: 13, color: mutedColor }}>
                         Manage mailboxes and member assignments for your organization.
-                    </SizableText>
-                </YStack>
+                    </Text>
+                </View>
 
                 <NoDomainsBanner isVisible={!hasDomains} />
 
                 {hasDomains && (
                     <>
-                        <YStack gap="$3">
-                            <H4 color="$color">Mailboxes</H4>
+                        <View style={{ gap: 12 }}>
+                            <Text
+                                style={{ fontSize: 18, fontWeight: 'bold', color: foregroundColor }}
+                            >
+                                Mailboxes
+                            </Text>
                             <NoMailboxesBanner isVisible={data.mailboxRows.length === 0} />
                             {data.mailboxRows.map(mb => (
                                 <MailboxCard
@@ -181,38 +191,40 @@ export default function MailboxesSettings() {
                                     }
                                 />
                             ))}
-                        </YStack>
+                        </View>
 
                         <Separator />
 
                         <CreateMailboxForm domainOptions={domainOptions} userOrgId={userOrgId} />
                     </>
                 )}
-            </YStack>
+            </View>
         </ScrollView>
     )
 }
 
 function NoDomainsBanner({ isVisible }: { isVisible: boolean }) {
+    const [mutedColor, accentColor] = useThemeColor(['muted', 'accent'])
     const orgHref = useOrgHref()
 
     if (!isVisible) return null
     return (
-        <SizableText color="$color8">
+        <Text style={{ color: mutedColor }}>
             No mail domains configured.{' '}
             <Link href={orgHref('settings/[...section]', { section: ['mail', 'provider'] })}>
-                <SizableText color="$blue10" textDecorationLine="underline">
+                <Text style={{ color: accentColor, textDecorationLine: 'underline' }}>
                     Add a domain in Provider settings
-                </SizableText>
+                </Text>
             </Link>{' '}
             first.
-        </SizableText>
+        </Text>
     )
 }
 
 function NoMailboxesBanner({ isVisible }: { isVisible: boolean }) {
+    const mutedColor = useThemeColor('muted')
     if (!isVisible) return null
-    return <SizableText color="$color8">No mailboxes yet.</SizableText>
+    return <Text style={{ color: mutedColor }}>No mailboxes yet.</Text>
 }
 
 function MailboxCard({
@@ -228,35 +240,41 @@ function MailboxCard({
     isExpanded: boolean
     onToggle: () => void
 }) {
+    const [foregroundColor, mutedColor, borderColor] = useThemeColor([
+        'foreground',
+        'muted',
+        'border',
+    ])
     const isPersonal = mailbox.type === 'personal'
     const fullAddress = `${mailbox.address}@${mailbox.domainName}`
 
     return (
-        <YStack borderWidth={1} borderColor="$borderColor" borderRadius="$3" padding="$3">
-            <XStack
-                justifyContent="space-between"
-                alignItems="center"
-                pressStyle={{ opacity: 0.7 }}
+        <View style={{ borderWidth: 1, borderColor, borderRadius: 12, padding: 12 }}>
+            <Pressable
+                style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                }}
                 onPress={onToggle}
-                cursor="pointer"
             >
-                <YStack gap="$1" flex={1}>
-                    <XStack gap="$2" alignItems="center">
-                        {isPersonal && <Lock size={14} color="$color8" />}
-                        <SizableText fontWeight="600" color="$color">
+                <View style={{ gap: 4, flex: 1 }}>
+                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                        {isPersonal && <Lock size={14} color={mutedColor} />}
+                        <Text style={{ fontWeight: '600', color: foregroundColor }}>
                             {fullAddress}
-                        </SizableText>
+                        </Text>
                         <TypeBadge type={mailbox.type} />
-                    </XStack>
-                    <SizableText size="$2" color="$color8">
-                        {mailbox.name ? `${mailbox.name} · ` : ''}
-                        {mailbox.displayName || 'No display name'} · {members.length} member
+                    </View>
+                    <Text style={{ fontSize: 13, color: mutedColor }}>
+                        {mailbox.name ? `${mailbox.name} \u00b7 ` : ''}
+                        {mailbox.displayName || 'No display name'} \u00b7 {members.length} member
                         {members.length !== 1 ? 's' : ''}
-                    </SizableText>
-                </YStack>
+                    </Text>
+                </View>
 
                 <DeleteMailboxButton mailboxId={mailbox.id} isVisible={!isPersonal} />
-            </XStack>
+            </Pressable>
 
             <MailboxMemberPanel
                 isVisible={isExpanded}
@@ -264,26 +282,28 @@ function MailboxCard({
                 members={members}
                 orgMembers={orgMembers}
             />
-        </YStack>
+        </View>
     )
 }
 
 function TypeBadge({ type }: { type: string }) {
+    const isPersonal = type === 'personal'
     return (
-        <XStack
-            backgroundColor={type === 'personal' ? '$blue3' : '$green3'}
-            paddingHorizontal="$2"
-            paddingVertical="$0.5"
-            borderRadius="$2"
+        <View
+            style={{
+                backgroundColor: isPersonal ? '#dbeafe' : '#dcfce7',
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 8,
+            }}
         >
-            <SizableText size="$1" color={type === 'personal' ? '$blue10' : '$green10'}>
-                {type}
-            </SizableText>
-        </XStack>
+            <Text style={{ fontSize: 11, color: isPersonal ? '#2563eb' : '#16a34a' }}>{type}</Text>
+        </View>
     )
 }
 
 function DeleteMailboxButton({ mailboxId, isVisible }: { mailboxId: string; isVisible: boolean }) {
+    const [dangerColor, _accentColor] = useThemeColor(['danger', 'accent'])
     const [mailboxesCollection] = useStore('mail_mailboxes')
     const [confirming, setConfirming] = useState(false)
 
@@ -298,28 +318,38 @@ function DeleteMailboxButton({ mailboxId, isVisible }: { mailboxId: string; isVi
 
     if (confirming) {
         return (
-            <XStack gap="$2">
-                <Button size="$2" theme="red" onPress={() => deleteMutation.mutate()}>
-                    <Button.Text>Confirm</Button.Text>
-                </Button>
-                <Button size="$2" onPress={() => setConfirming(false)}>
-                    <Button.Text>Cancel</Button.Text>
-                </Button>
-            </XStack>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable
+                    onPress={() => deleteMutation.mutate()}
+                    style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        backgroundColor: dangerColor,
+                    }}
+                >
+                    <Text style={{ fontSize: 13, color: '#fff' }}>Confirm</Text>
+                </Pressable>
+                <Pressable
+                    onPress={() => setConfirming(false)}
+                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}
+                >
+                    <Text style={{ fontSize: 13 }}>Cancel</Text>
+                </Pressable>
+            </View>
         )
     }
 
     return (
-        <Button
-            size="$2"
-            chromeless
+        <Pressable
+            style={{ padding: 4 }}
             onPress={e => {
                 e.stopPropagation()
                 setConfirming(true)
             }}
         >
-            <Trash2 size={16} color="$red10" />
-        </Button>
+            <Trash2 size={16} color={dangerColor} />
+        </Pressable>
     )
 }
 
@@ -334,6 +364,12 @@ function MailboxMemberPanel({
     members: MemberRow[]
     orgMembers: OrgMemberRow[]
 }) {
+    const [foregroundColor, mutedColor, borderColor, dangerColor] = useThemeColor([
+        'foreground',
+        'muted',
+        'border',
+        'danger',
+    ])
     const [membersCollection] = useStore('mail_mailbox_members')
     const [addingMember, setAddingMember] = useState(false)
     const [selectedUserOrg, setSelectedUserOrg] = useState('')
@@ -381,41 +417,40 @@ function MailboxMemberPanel({
     const ownerCount = members.filter(m => m.role === 'owner').length
 
     return (
-        <YStack
-            gap="$2"
-            marginTop="$3"
-            paddingTop="$3"
-            borderTopWidth={1}
-            borderColor="$borderColor"
+        <View
+            style={{
+                gap: 8,
+                marginTop: 12,
+                paddingTop: 12,
+                borderTopWidth: 1,
+                borderColor,
+            }}
         >
-            <SizableText size="$3" fontWeight="600" color="$color">
-                Members
-            </SizableText>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: foregroundColor }}>Members</Text>
 
             {members.map(m => {
                 const isOwner = m.role === 'owner'
                 const canRemove = !(isOwner && ownerCount <= 1)
 
                 return (
-                    <XStack
+                    <View
                         key={m.id}
-                        justifyContent="space-between"
-                        alignItems="center"
-                        paddingVertical="$1"
+                        style={{
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            paddingVertical: 4,
+                        }}
                     >
-                        <YStack flex={1}>
-                            <SizableText size="$3" color="$color">
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 13, color: foregroundColor }}>
                                 {m.userName}
-                            </SizableText>
-                            <SizableText size="$1" color="$color8">
-                                {m.role}
-                            </SizableText>
-                        </YStack>
+                            </Text>
+                            <Text style={{ fontSize: 11, color: mutedColor }}>{m.role}</Text>
+                        </View>
 
-                        <XStack gap="$2">
-                            <Button
-                                size="$2"
-                                chromeless
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <Pressable
                                 onPress={() =>
                                     toggleRoleMutation.mutate({
                                         memberId: m.id,
@@ -423,24 +458,25 @@ function MailboxMemberPanel({
                                     })
                                 }
                                 disabled={isOwner && ownerCount <= 1}
-                                opacity={isOwner && ownerCount <= 1 ? 0.4 : 1}
+                                style={{
+                                    padding: 4,
+                                    opacity: isOwner && ownerCount <= 1 ? 0.4 : 1,
+                                }}
                             >
-                                <Button.Text size="$2">
+                                <Text style={{ fontSize: 13 }}>
                                     {isOwner ? 'Make member' : 'Make owner'}
-                                </Button.Text>
-                            </Button>
+                                </Text>
+                            </Pressable>
 
-                            <Button
-                                size="$2"
-                                chromeless
+                            <Pressable
                                 onPress={() => removeMemberMutation.mutate(m.id)}
                                 disabled={!canRemove}
-                                opacity={canRemove ? 1 : 0.4}
+                                style={{ padding: 4, opacity: canRemove ? 1 : 0.4 }}
                             >
-                                <X size={14} color="$red10" />
-                            </Button>
-                        </XStack>
-                    </XStack>
+                                <X size={14} color={dangerColor} />
+                            </Pressable>
+                        </View>
+                    </View>
                 )
             })}
 
@@ -462,7 +498,7 @@ function MailboxMemberPanel({
                 onPress={() => setAddingMember(true)}
                 disabled={availableMembers.length === 0}
             />
-        </YStack>
+        </View>
     )
 }
 
@@ -483,46 +519,56 @@ function AddMemberSection({
     onCancel: () => void
     isPending: boolean
 }) {
+    const [mutedColor, accentColor, borderColor] = useThemeColor(['muted', 'accent', 'border'])
+
     if (!isVisible) return null
 
     return (
-        <YStack gap="$2">
-            <SizableText size="$2" color="$color8">
-                Select a member to add:
-            </SizableText>
-            <XStack gap="$1" flexWrap="wrap">
+        <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 13, color: mutedColor }}>Select a member to add:</Text>
+            <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
                 {availableMembers.map(uo => {
                     const isSelected = selectedUserOrg === uo.userOrgId
                     return (
-                        <Button
+                        <Pressable
                             key={uo.userOrgId}
                             onPress={() => onSelect(uo.userOrgId)}
-                            theme={isSelected ? 'accent' : undefined}
-                            borderColor={isSelected ? '$accentBackground' : '$borderColor'}
-                            borderWidth={1}
-                            borderRadius="$3"
-                            size="$2"
+                            style={{
+                                borderWidth: 1,
+                                borderColor: isSelected ? accentColor : borderColor,
+                                borderRadius: 12,
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                backgroundColor: isSelected ? `${accentColor}14` : undefined,
+                            }}
                         >
-                            <Button.Text size="$2">{uo.userName}</Button.Text>
-                        </Button>
+                            <Text style={{ fontSize: 13 }}>{uo.userName}</Text>
+                        </Pressable>
                     )
                 })}
-            </XStack>
-            <XStack gap="$2">
-                <Button
-                    size="$3"
-                    theme="accent"
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable
                     onPress={onAdd}
                     disabled={!selectedUserOrg || isPending}
-                    opacity={!selectedUserOrg || isPending ? 0.5 : 1}
+                    style={{
+                        backgroundColor: accentColor,
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                        borderRadius: 8,
+                        opacity: !selectedUserOrg || isPending ? 0.5 : 1,
+                    }}
                 >
-                    <Button.Text>Add</Button.Text>
-                </Button>
-                <Button size="$3" onPress={onCancel}>
-                    <Button.Text>Cancel</Button.Text>
-                </Button>
-            </XStack>
-        </YStack>
+                    <Text style={{ color: '#fff' }}>Add</Text>
+                </Pressable>
+                <Pressable
+                    onPress={onCancel}
+                    style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 }}
+                >
+                    <Text>Cancel</Text>
+                </Pressable>
+            </View>
+        </View>
     )
 }
 
@@ -538,18 +584,20 @@ function AddMemberTrigger({
     if (!isVisible) return null
 
     return (
-        <Button
-            size="$2"
-            chromeless
+        <Pressable
             onPress={onPress}
             disabled={disabled}
-            opacity={disabled ? 0.4 : 1}
+            style={{
+                flexDirection: 'row',
+                gap: 4,
+                alignItems: 'center',
+                padding: 4,
+                opacity: disabled ? 0.4 : 1,
+            }}
         >
-            <XStack gap="$1" alignItems="center">
-                <UserPlus size={14} />
-                <SizableText size="$2">Add member</SizableText>
-            </XStack>
-        </Button>
+            <UserPlus size={14} />
+            <Text style={{ fontSize: 13 }}>Add member</Text>
+        </Pressable>
     )
 }
 
@@ -560,6 +608,7 @@ function CreateMailboxForm({
     domainOptions: { label: string; value: string }[]
     userOrgId: string
 }) {
+    const [foregroundColor, accentColor] = useThemeColor(['foreground', 'accent'])
     const [mailboxesCollection, membersCollection] = useStore(
         'mail_mailboxes',
         'mail_mailbox_members'
@@ -609,8 +658,10 @@ function CreateMailboxForm({
     const canSubmit = !createMutation.isPending && isDirty
 
     return (
-        <YStack gap="$3">
-            <H4 color="$color">Create Shared Mailbox</H4>
+        <View style={{ gap: 12 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: foregroundColor }}>
+                Create Shared Mailbox
+            </Text>
 
             <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
 
@@ -627,20 +678,25 @@ function CreateMailboxForm({
 
             <TextInput control={control} name="name" label="Mailbox Name" placeholder="Acme Corp" />
 
-            <Button
-                theme="accent"
-                size="$4"
+            <Pressable
                 onPress={onSubmit}
                 disabled={!canSubmit}
-                opacity={canSubmit ? 1 : 0.5}
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    backgroundColor: accentColor,
+                    height: 44,
+                    borderRadius: 8,
+                    opacity: canSubmit ? 1 : 0.5,
+                }}
             >
-                <XStack gap="$2" alignItems="center">
-                    <Plus size={16} />
-                    <Button.Text fontWeight="600">
-                        {createMutation.isPending ? 'Creating...' : 'Create Mailbox'}
-                    </Button.Text>
-                </XStack>
-            </Button>
-        </YStack>
+                <Plus size={16} color="#fff" />
+                <Text style={{ fontWeight: '600', color: '#fff' }}>
+                    {createMutation.isPending ? 'Creating...' : 'Create Mailbox'}
+                </Text>
+            </Pressable>
+        </View>
     )
 }

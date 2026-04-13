@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useThemeColor } from 'heroui-native'
 import { ChevronDown, Search, Square, SquareCheck, X } from 'lucide-react-native'
 import { useCallback, useMemo, useState } from 'react'
 import { useController, useForm } from 'react-hook-form'
@@ -12,7 +13,6 @@ import {
     type TextStyle,
     View,
 } from 'react-native'
-import { useTheme } from 'tamagui'
 import { z } from 'zod'
 import { PlainInput } from '~/ui/PlainInput'
 import type { AdvancedSearchFilters } from '../hooks/useSearchState'
@@ -82,7 +82,25 @@ export function AdvancedSearchDropdown({
     onClose,
     initialFilters,
 }: AdvancedSearchDropdownProps) {
-    const theme = useTheme()
+    const [
+        foregroundColor,
+        mutedColor,
+        borderColor,
+        backgroundColor,
+        accentColor,
+        accentFgColor,
+        shadowColor,
+        focusBgColor,
+    ] = useThemeColor([
+        'foreground',
+        'muted',
+        'border',
+        'background',
+        'accent',
+        'accent-foreground',
+        'border',
+        'surface-secondary',
+    ])
 
     const defaults = useMemo(
         () => ({ ...makeDefaultValues(), ...initialFilters }),
@@ -114,40 +132,44 @@ export function AdvancedSearchDropdown({
     const inputStyle = [
         styles.input,
         {
-            color: theme.color.val,
-            borderColor: theme.borderColor.val,
+            color: foregroundColor,
+            borderColor,
         },
     ]
-
-    const labelColor = theme.color8.val
-    const shadowColor = theme.shadowColor.val
 
     return (
         <>
             <Pressable style={styles.overlay} onPress={onClose} />
             <View
                 style={[
-                    styles.panel,
                     {
-                        backgroundColor: theme.background.val,
-                        borderColor: theme.borderColor.val,
-                        ...Platform.select({
-                            web: {
-                                boxShadow: `0 4px 24px ${shadowColor}`,
-                            },
-                            default: {
-                                shadowColor: shadowColor,
-                                shadowOffset: { width: 0, height: 4 },
-                                shadowOpacity: 0.15,
-                                shadowRadius: 12,
-                                elevation: 8,
-                            },
-                        }),
+                        position: 'absolute',
+                        top: 4,
+                        left: 0,
+                        right: 0,
+                        zIndex: 100,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        maxHeight: 480,
+                        backgroundColor,
+                        borderColor,
                     },
+                    Platform.select({
+                        web: {
+                            boxShadow: `0 4px 24px ${shadowColor}`,
+                        },
+                        default: {
+                            shadowColor,
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.15,
+                            shadowRadius: 12,
+                            elevation: 8,
+                        },
+                    }),
                 ]}
             >
-                <ScrollView style={styles.scrollContent} keyboardShouldPersistTaps="handled">
-                    <FieldRow label="From" labelColor={labelColor}>
+                <ScrollView style={{ padding: 16 }} keyboardShouldPersistTaps="handled">
+                    <FieldRow label="From" labelColor={mutedColor}>
                         <FormInput
                             control={control}
                             name="from"
@@ -155,10 +177,10 @@ export function AdvancedSearchDropdown({
                             placeholder=""
                         />
                     </FieldRow>
-                    <FieldRow label="To" labelColor={labelColor}>
+                    <FieldRow label="To" labelColor={mutedColor}>
                         <FormInput control={control} name="to" style={inputStyle} placeholder="" />
                     </FieldRow>
-                    <FieldRow label="Subject" labelColor={labelColor}>
+                    <FieldRow label="Subject" labelColor={mutedColor}>
                         <FormInput
                             control={control}
                             name="subject"
@@ -166,7 +188,7 @@ export function AdvancedSearchDropdown({
                             placeholder=""
                         />
                     </FieldRow>
-                    <FieldRow label="Has the words" labelColor={labelColor}>
+                    <FieldRow label="Has the words" labelColor={mutedColor}>
                         <FormInput
                             control={control}
                             name="hasWords"
@@ -174,7 +196,7 @@ export function AdvancedSearchDropdown({
                             placeholder=""
                         />
                     </FieldRow>
-                    <FieldRow label="Doesn't have" labelColor={labelColor}>
+                    <FieldRow label="Doesn't have" labelColor={mutedColor}>
                         <FormInput
                             control={control}
                             name="doesntHave"
@@ -182,13 +204,17 @@ export function AdvancedSearchDropdown({
                             placeholder=""
                         />
                     </FieldRow>
-                    <FieldRow label="Size" labelColor={labelColor}>
-                        <View style={styles.compoundRow}>
+                    <FieldRow label="Size" labelColor={mutedColor}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <PickerButton
                                 control={control}
                                 name="sizeOp"
                                 options={SIZE_OP_OPTIONS}
-                                theme={theme}
+                                foregroundColor={foregroundColor}
+                                mutedColor={mutedColor}
+                                borderColor={borderColor}
+                                backgroundColor={backgroundColor}
+                                focusBgColor={focusBgColor}
                             />
                             <FormInput
                                 control={control}
@@ -201,17 +227,25 @@ export function AdvancedSearchDropdown({
                                 control={control}
                                 name="sizeUnit"
                                 options={SIZE_UNIT_OPTIONS}
-                                theme={theme}
+                                foregroundColor={foregroundColor}
+                                mutedColor={mutedColor}
+                                borderColor={borderColor}
+                                backgroundColor={backgroundColor}
+                                focusBgColor={focusBgColor}
                             />
                         </View>
                     </FieldRow>
-                    <FieldRow label="Date within" labelColor={labelColor}>
-                        <View style={styles.compoundRow}>
+                    <FieldRow label="Date within" labelColor={mutedColor}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <PickerButton
                                 control={control}
                                 name="dateWithin"
                                 options={DATE_WITHIN_OPTIONS}
-                                theme={theme}
+                                foregroundColor={foregroundColor}
+                                mutedColor={mutedColor}
+                                borderColor={borderColor}
+                                backgroundColor={backgroundColor}
+                                focusBgColor={focusBgColor}
                             />
                             <FormInput
                                 control={control}
@@ -221,40 +255,74 @@ export function AdvancedSearchDropdown({
                             />
                         </View>
                     </FieldRow>
-                    <FieldRow label="Search" labelColor={labelColor}>
+                    <FieldRow label="Search" labelColor={mutedColor}>
                         <PickerButton
                             control={control}
                             name="folder"
                             options={FOLDER_OPTIONS}
-                            theme={theme}
+                            foregroundColor={foregroundColor}
+                            mutedColor={mutedColor}
+                            borderColor={borderColor}
+                            backgroundColor={backgroundColor}
+                            focusBgColor={focusBgColor}
                         />
                     </FieldRow>
-                    <FieldRow label="Has attachment" labelColor={labelColor}>
-                        <Pressable onPress={toggleAttachment} style={styles.checkboxRow}>
+                    <FieldRow label="Has attachment" labelColor={mutedColor}>
+                        <Pressable
+                            onPress={toggleAttachment}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                paddingVertical: 4,
+                            }}
+                        >
                             {hasAttachment ? (
-                                <SquareCheck size={20} color={theme.accentBackground.val} />
+                                <SquareCheck size={20} color={accentColor} />
                             ) : (
-                                <Square size={20} color={theme.color8.val} />
+                                <Square size={20} color={mutedColor} />
                             )}
                         </Pressable>
                     </FieldRow>
                 </ScrollView>
-                <View style={[styles.footer, { borderTopColor: theme.borderColor.val }]}>
-                    <Pressable onPress={onClear} style={styles.clearButton}>
-                        <X size={14} color={theme.color8.val} />
-                        <Text style={[styles.clearButtonText, { color: theme.color8.val }]}>
-                            Clear
-                        </Text>
+                <View
+                    style={{
+                        flexDirection: 'row',
+                        justifyContent: 'flex-end',
+                        alignItems: 'center',
+                        gap: 12,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                        borderTopWidth: StyleSheet.hairlineWidth,
+                        borderTopColor: borderColor,
+                    }}
+                >
+                    <Pressable
+                        onPress={onClear}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            paddingHorizontal: 12,
+                            paddingVertical: 8,
+                        }}
+                    >
+                        <X size={14} color={mutedColor} />
+                        <Text style={{ fontSize: 14, color: mutedColor }}>Clear</Text>
                     </Pressable>
                     <Pressable
                         onPress={onSubmit}
-                        style={[
-                            styles.searchButton,
-                            { backgroundColor: theme.accentBackground.val },
-                        ]}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                            paddingHorizontal: 20,
+                            paddingVertical: 8,
+                            borderRadius: 20,
+                            backgroundColor: accentColor,
+                        }}
                     >
-                        <Search size={16} color={theme.accentColor.val} />
-                        <Text style={[styles.searchButtonText, { color: theme.accentColor.val }]}>
+                        <Search size={16} color={accentFgColor} />
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: accentFgColor }}>
                             Search
                         </Text>
                     </Pressable>
@@ -274,9 +342,13 @@ function FieldRow({
     children: React.ReactNode
 }) {
     return (
-        <View style={styles.fieldRow}>
-            <Text style={[styles.fieldLabel, { color: labelColor }]}>{label}</Text>
-            <View style={styles.fieldValue}>{children}</View>
+        <View
+            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, minHeight: 36 }}
+        >
+            <Text style={{ width: 110, fontSize: 13, flexShrink: 0, color: labelColor }}>
+                {label}
+            </Text>
+            <View style={{ flex: 1 }}>{children}</View>
         </View>
     )
 }
@@ -349,12 +421,20 @@ function PickerButton({
     control,
     name,
     options,
-    theme,
+    foregroundColor,
+    mutedColor,
+    borderColor,
+    backgroundColor,
+    focusBgColor,
 }: {
     control: ReturnType<typeof useForm<FormValues>>['control']
     name: keyof FormValues
     options: PickerOption[]
-    theme: ReturnType<typeof useTheme>
+    foregroundColor: string
+    mutedColor: string
+    borderColor: string
+    backgroundColor: string
+    focusBgColor: string
 }) {
     const { field } = useController({ control, name })
     const [isOpen, setIsOpen] = useState(false)
@@ -362,15 +442,23 @@ function PickerButton({
     const selectedLabel = options.find(o => o.value === field.value)?.label ?? options[0].label
 
     return (
-        <View style={styles.pickerContainer}>
+        <View style={{ position: 'relative' }}>
             <Pressable
                 onPress={() => setIsOpen(!isOpen)}
-                style={[styles.pickerButton, { borderColor: theme.borderColor.val }]}
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    borderBottomWidth: 1,
+                    paddingVertical: 4,
+                    paddingHorizontal: 2,
+                    borderBottomColor: borderColor,
+                }}
             >
-                <Text style={[styles.pickerText, { color: theme.color.val }]} numberOfLines={1}>
+                <Text style={{ fontSize: 14, color: foregroundColor }} numberOfLines={1}>
                     {selectedLabel}
                 </Text>
-                <ChevronDown size={14} color={theme.color8.val} />
+                <ChevronDown size={14} color={mutedColor} />
             </Pressable>
             {isOpen ? (
                 <PickerMenu
@@ -381,7 +469,10 @@ function PickerButton({
                         setIsOpen(false)
                     }}
                     onClose={() => setIsOpen(false)}
-                    theme={theme}
+                    foregroundColor={foregroundColor}
+                    borderColor={borderColor}
+                    backgroundColor={backgroundColor}
+                    focusBgColor={focusBgColor}
                 />
             ) : null}
         </View>
@@ -393,13 +484,19 @@ function PickerMenu({
     value,
     onSelect,
     onClose,
-    theme,
+    foregroundColor,
+    borderColor,
+    backgroundColor,
+    focusBgColor,
 }: {
     options: PickerOption[]
     value: string
     onSelect: (value: string) => void
     onClose: () => void
-    theme: ReturnType<typeof useTheme>
+    foregroundColor: string
+    borderColor: string
+    backgroundColor: string
+    focusBgColor: string
 }) {
     return (
         <>
@@ -408,28 +505,32 @@ function PickerMenu({
                 onPress={onClose}
             />
             <View
-                style={[
-                    styles.pickerMenu,
-                    {
-                        backgroundColor: theme.background.val,
-                        borderColor: theme.borderColor.val,
-                    },
-                ]}
+                style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    zIndex: 201,
+                    minWidth: 140,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    paddingVertical: 4,
+                    marginTop: 2,
+                    backgroundColor,
+                    borderColor,
+                }}
             >
                 {options.map(option => (
                     <Pressable
                         key={option.value}
                         onPress={() => onSelect(option.value)}
                         style={[
-                            styles.pickerMenuItem,
+                            { paddingHorizontal: 12, paddingVertical: 8 },
                             option.value === value && {
-                                backgroundColor: theme.backgroundFocus.val,
+                                backgroundColor: focusBgColor,
                             },
                         ]}
                     >
-                        <Text style={[styles.pickerMenuText, { color: theme.color.val }]}>
-                            {option.label}
-                        </Text>
+                        <Text style={{ fontSize: 13, color: foregroundColor }}>{option.label}</Text>
                     </Pressable>
                 ))}
             </View>
@@ -446,33 +547,6 @@ const styles = StyleSheet.create({
         bottom: 0,
         zIndex: 99,
     },
-    panel: {
-        position: 'absolute',
-        top: 4,
-        left: 0,
-        right: 0,
-        zIndex: 100,
-        borderRadius: 12,
-        borderWidth: 1,
-        maxHeight: 480,
-    },
-    scrollContent: {
-        padding: 16,
-    },
-    fieldRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-        minHeight: 36,
-    },
-    fieldLabel: {
-        width: 110,
-        fontSize: 13,
-        flexShrink: 0,
-    },
-    fieldValue: {
-        flex: 1,
-    },
     input: {
         flex: 1,
         fontSize: 14,
@@ -483,61 +557,6 @@ const styles = StyleSheet.create({
     numberInput: {
         maxWidth: 80,
     },
-    compoundRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    checkboxRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 4,
-    },
-    footer: {
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        gap: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderTopWidth: StyleSheet.hairlineWidth,
-    },
-    clearButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-    },
-    clearButtonText: {
-        fontSize: 14,
-    },
-    searchButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 20,
-        paddingVertical: 8,
-        borderRadius: 20,
-    },
-    searchButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    pickerContainer: {
-        position: 'relative',
-    },
-    pickerButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        borderBottomWidth: 1,
-        paddingVertical: 4,
-        paddingHorizontal: 2,
-    },
-    pickerText: {
-        fontSize: 14,
-    },
     pickerOverlay: {
         position: 'absolute',
         top: 0,
@@ -547,24 +566,6 @@ const styles = StyleSheet.create({
         zIndex: 200,
     },
     pickerOverlayWeb: {
-        position: 'fixed',
-    },
-    pickerMenu: {
-        position: 'absolute',
-        top: '100%',
-        left: 0,
-        zIndex: 201,
-        minWidth: 140,
-        borderRadius: 8,
-        borderWidth: 1,
-        paddingVertical: 4,
-        marginTop: 2,
-    },
-    pickerMenuItem: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-    },
-    pickerMenuText: {
-        fontSize: 13,
+        position: 'fixed' as 'absolute',
     },
 })

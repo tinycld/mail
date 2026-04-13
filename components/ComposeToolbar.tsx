@@ -1,4 +1,5 @@
 import { type EditorBridge, useBridgeState } from '@10play/tentap-editor'
+import { useThemeColor } from 'heroui-native'
 import {
     Bold,
     Italic,
@@ -10,8 +11,7 @@ import {
     Trash2,
     Underline,
 } from 'lucide-react-native'
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
-import { useTheme } from 'tamagui'
+import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from 'react-native'
 
 interface ComposeToolbarProps {
     editor: EditorBridge
@@ -28,10 +28,13 @@ export function ComposeToolbar({
     onAttach,
     isPending,
 }: ComposeToolbarProps) {
-    const theme = useTheme()
+    const [iconColor, activeColor, accentFgColor, borderColor] = useThemeColor([
+        'muted',
+        'accent',
+        'accent-foreground',
+        'border',
+    ])
     const editorState = useBridgeState(editor)
-    const iconColor = theme.color8.val
-    const activeColor = theme.accentBackground.val
 
     const handleLink = () => {
         const defaultUrl = editorState.activeLink ?? 'https://'
@@ -57,24 +60,42 @@ export function ComposeToolbar({
     }
 
     return (
-        <View style={[styles.toolbar, { borderTopColor: theme.borderColor.val }]}>
+        <View
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                height: 44,
+                paddingHorizontal: 12,
+                borderTopWidth: 1,
+                borderTopColor: borderColor,
+                gap: 2,
+            }}
+        >
             <Pressable
                 style={[
-                    styles.sendButton,
-                    { backgroundColor: activeColor },
-                    isPending && styles.sendButtonDisabled,
+                    {
+                        paddingHorizontal: 20,
+                        paddingVertical: 6,
+                        borderRadius: 20,
+                        minWidth: 72,
+                        alignItems: 'center',
+                        backgroundColor: activeColor,
+                    },
+                    isPending && { opacity: 0.6 },
                 ]}
                 onPress={onSend}
                 disabled={isPending}
             >
                 {isPending ? (
-                    <ActivityIndicator size="small" color={theme.accentColor.val} />
+                    <ActivityIndicator size="small" color={accentFgColor} />
                 ) : (
-                    <Text style={[styles.sendText, { color: theme.accentColor.val }]}>Send</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: accentFgColor }}>
+                        Send
+                    </Text>
                 )}
             </Pressable>
 
-            <View style={styles.formatGroup}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <FormatButton
                     icon={Bold}
                     isActive={editorState.isBoldActive}
@@ -98,9 +119,11 @@ export function ComposeToolbar({
                 />
             </View>
 
-            <View style={[styles.separator, { backgroundColor: theme.borderColor.val }]} />
+            <View
+                style={{ width: 1, height: 20, marginHorizontal: 4, backgroundColor: borderColor }}
+            />
 
-            <View style={styles.formatGroup}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <FormatButton
                     icon={List}
                     isActive={editorState.isBulletListActive}
@@ -117,9 +140,11 @@ export function ComposeToolbar({
                 />
             </View>
 
-            <View style={[styles.separator, { backgroundColor: theme.borderColor.val }]} />
+            <View
+                style={{ width: 1, height: 20, marginHorizontal: 4, backgroundColor: borderColor }}
+            />
 
-            <View style={styles.formatGroup}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <FormatButton
                     icon={Quote}
                     isActive={editorState.isBlockquoteActive}
@@ -136,15 +161,17 @@ export function ComposeToolbar({
                 />
             </View>
 
-            <View style={[styles.separator, { backgroundColor: theme.borderColor.val }]} />
+            <View
+                style={{ width: 1, height: 20, marginHorizontal: 4, backgroundColor: borderColor }}
+            />
 
-            <Pressable style={styles.iconButton} onPress={onAttach}>
+            <Pressable style={{ padding: 6, borderRadius: 6 }} onPress={onAttach}>
                 <Paperclip size={16} color={iconColor} />
             </Pressable>
 
-            <View style={styles.spacer} />
+            <View style={{ flex: 1 }} />
 
-            <Pressable style={styles.iconButton} onPress={onDiscard}>
+            <Pressable style={{ padding: 6, borderRadius: 6 }} onPress={onDiscard}>
                 <Trash2 size={16} color={iconColor} />
             </Pressable>
         </View>
@@ -168,51 +195,13 @@ function FormatButton({
 }: FormatButtonProps) {
     return (
         <Pressable
-            style={[styles.iconButton, isActive && { backgroundColor: `${activeColor}22` }]}
+            style={[
+                { padding: 6, borderRadius: 6 },
+                isActive && { backgroundColor: `${activeColor}22` },
+            ]}
             onPress={onPress}
         >
             <Icon size={16} color={isActive ? activeColor : iconColor} />
         </Pressable>
     )
 }
-
-const styles = StyleSheet.create({
-    toolbar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        height: 44,
-        paddingHorizontal: 12,
-        borderTopWidth: 1,
-        gap: 2,
-    },
-    sendButton: {
-        paddingHorizontal: 20,
-        paddingVertical: 6,
-        borderRadius: 20,
-        minWidth: 72,
-        alignItems: 'center',
-    },
-    sendButtonDisabled: {
-        opacity: 0.6,
-    },
-    sendText: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    formatGroup: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    separator: {
-        width: 1,
-        height: 20,
-        marginHorizontal: 4,
-    },
-    iconButton: {
-        padding: 6,
-        borderRadius: 6,
-    },
-    spacer: {
-        flex: 1,
-    },
-})

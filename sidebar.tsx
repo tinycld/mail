@@ -1,6 +1,7 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
+import { useThemeColor } from 'heroui-native'
 import {
     AlertTriangle,
     Archive,
@@ -15,7 +16,6 @@ import {
 } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { Pressable } from 'react-native'
-import { useTheme } from 'tamagui'
 import { LabelManagerDialog } from '~/components/LabelManagerDialog'
 import {
     SidebarActionButton,
@@ -44,7 +44,7 @@ function useActiveView() {
 
 export default function MailSidebar(_props: MailSidebarProps) {
     const router = useRouter()
-    const theme = useTheme()
+    const mutedColor = useThemeColor('muted')
     const { folder: activeFolder, activeLabels } = useActiveView()
     const { userOrgId } = useCurrentRole()
     const orgHref = useOrgHref()
@@ -183,7 +183,7 @@ export default function MailSidebar(_props: MailSidebarProps) {
                         onPress={() => setLabelManagerOpen(true)}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
-                        <Settings size={14} color={theme.color8.val} />
+                        <Settings size={14} color={mutedColor} />
                     </Pressable>
                 }
             >

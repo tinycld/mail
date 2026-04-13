@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 
 interface LabelBadgeProps {
     name: string
@@ -13,27 +13,21 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 export function LabelBadge({ name, color }: LabelBadgeProps) {
+    const bgColor = hexToRgba(color, 0.12)
+    const bdColor = hexToRgba(color, 0.25)
+
     return (
         <View
-            style={[
-                styles.badge,
-                { backgroundColor: hexToRgba(color, 0.12), borderColor: hexToRgba(color, 0.25) },
-            ]}
+            style={{
+                paddingHorizontal: 6,
+                paddingVertical: 1,
+                borderRadius: 4,
+                borderWidth: 1,
+                backgroundColor: bgColor,
+                borderColor: bdColor,
+            }}
         >
-            <Text style={[styles.text, { color }]}>{name}</Text>
+            <Text style={{ fontSize: 11, fontWeight: '500', color }}>{name}</Text>
         </View>
     )
 }
-
-const styles = StyleSheet.create({
-    badge: {
-        paddingHorizontal: 6,
-        paddingVertical: 1,
-        borderRadius: 4,
-        borderWidth: 1,
-    },
-    text: {
-        fontSize: 11,
-        fontWeight: '500',
-    },
-})

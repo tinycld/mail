@@ -1,6 +1,6 @@
+import { useThemeColor } from 'heroui-native'
 import { type Control, type Path, useController } from 'react-hook-form'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useTheme } from 'tamagui'
+import { Pressable, Text, View } from 'react-native'
 import { NameAvatar as ContactAvatar } from '~/components/NameAvatar'
 import { PlainInput } from '~/ui/PlainInput'
 import type { ComposeFormData } from '../hooks/composeSchema'
@@ -22,31 +22,48 @@ function RecipientChip({
     email: string
     onRemove: () => void
 }) {
-    const theme = useTheme()
+    const [foregroundColor, mutedColor, surfaceColor, borderColor] = useThemeColor([
+        'foreground',
+        'muted',
+        'surface-secondary',
+        'border',
+    ])
     const displayName = name || email
     const firstName = name.split(' ')[0] || email.split('@')[0]
     const lastName = name.split(' ').slice(1).join(' ')
 
     return (
         <View
-            style={[
-                styles.chip,
-                { backgroundColor: theme.backgroundHover.val, borderColor: theme.borderColor.val },
-            ]}
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                paddingLeft: 2,
+                paddingRight: 6,
+                paddingVertical: 2,
+                borderRadius: 12,
+                borderWidth: 1,
+                backgroundColor: surfaceColor,
+                borderColor,
+            }}
         >
             <ContactAvatar firstName={firstName} lastName={lastName} size={18} />
-            <Text style={[styles.chipText, { color: theme.color.val }]} numberOfLines={1}>
+            <Text style={{ fontSize: 12, maxWidth: 140, color: foregroundColor }} numberOfLines={1}>
                 {displayName}
             </Text>
             <Pressable onPress={onRemove} hitSlop={4}>
-                <Text style={[styles.chipRemove, { color: theme.color8.val }]}>×</Text>
+                <Text
+                    style={{ fontSize: 15, lineHeight: 16, fontWeight: '600', color: mutedColor }}
+                >
+                    x
+                </Text>
             </Pressable>
         </View>
     )
 }
 
 export function RecipientField({ control, name, placeholder }: RecipientFieldProps) {
-    const theme = useTheme()
+    const [foregroundColor, placeholderColor] = useThemeColor(['foreground', 'field-placeholder'])
     const { field } = useController({ control, name })
 
     const { committedRecipients, activeQuery, committedRaw, suggestions, showSuggestions } =
@@ -70,8 +87,16 @@ export function RecipientField({ control, name, placeholder }: RecipientFieldPro
     }
 
     return (
-        <View style={styles.wrapper}>
-            <View style={styles.chipRow}>
+        <View style={{ position: 'relative', flex: 1 }}>
+            <View
+                style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: 4,
+                    minHeight: 28,
+                }}
+            >
                 {committedRecipients.map((r, i) => {
                     return (
                         <RecipientChip
@@ -83,8 +108,14 @@ export function RecipientField({ control, name, placeholder }: RecipientFieldPro
                     )
                 })}
                 <PlainInput
-                    style={[styles.input, { color: theme.color.val }]}
-                    placeholderTextColor={theme.placeholderColor.val}
+                    style={{
+                        flex: 1,
+                        fontSize: 13,
+                        minWidth: 80,
+                        paddingHorizontal: 4,
+                        color: foregroundColor,
+                    }}
+                    placeholderTextColor={placeholderColor}
                     value={activeQuery}
                     onChangeText={handleChangeText}
                     onBlur={field.onBlur}
@@ -101,42 +132,3 @@ export function RecipientField({ control, name, placeholder }: RecipientFieldPro
         </View>
     )
 }
-
-const styles = StyleSheet.create({
-    wrapper: {
-        position: 'relative',
-        flex: 1,
-    },
-    chipRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        gap: 4,
-        minHeight: 28,
-    },
-    chip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingLeft: 2,
-        paddingRight: 6,
-        paddingVertical: 2,
-        borderRadius: 12,
-        borderWidth: 1,
-    },
-    chipText: {
-        fontSize: 12,
-        maxWidth: 140,
-    },
-    chipRemove: {
-        fontSize: 15,
-        lineHeight: 16,
-        fontWeight: '600',
-    },
-    input: {
-        flex: 1,
-        fontSize: 13,
-        minWidth: 80,
-        paddingHorizontal: 4,
-    },
-})

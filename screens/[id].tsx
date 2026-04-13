@@ -1,9 +1,9 @@
 import { and, eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useThemeColor } from 'heroui-native'
 import { useCallback, useRef, useState } from 'react'
-import { Pressable, ScrollView } from 'react-native'
-import { SizableText, View, YStack } from 'tamagui'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { ScreenHeader } from '~/components/ScreenHeader'
 import { mutation, useMutation } from '~/lib/mutations'
 import { useStore } from '~/lib/pocketbase'
@@ -47,6 +47,11 @@ export default function MailDetailScreen() {
     const { userOrgId } = useCurrentRole()
     const router = useRouter()
     const { openReply } = useCompose()
+    const [_mutedColor, _borderColor, backgroundColor] = useThemeColor([
+        'muted',
+        'border',
+        'background',
+    ])
 
     const [threadStateCollection, messagesCollection] = useStore(
         'mail_thread_state',
@@ -138,7 +143,7 @@ export default function MailDetailScreen() {
     }
 
     return (
-        <YStack flex={1} backgroundColor="$background">
+        <View style={{ flex: 1, backgroundColor }}>
             <ScreenHeader isScrolled={isScrolled}>
                 <EmailDetailToolbar
                     threadState={threadState}
@@ -244,22 +249,25 @@ export default function MailDetailScreen() {
                     recipientsCc={lastMessage.recipients_cc ?? []}
                 />
             ) : null}
-        </YStack>
+        </View>
     )
 }
 
 function CollapsedSnippet({ snippet, onPress }: { snippet: string; onPress: () => void }) {
+    const [mutedColor, borderColor] = useThemeColor(['muted', 'border'])
     return (
         <Pressable onPress={onPress}>
             <View
-                paddingHorizontal={16}
-                paddingVertical={8}
-                borderBottomWidth={1}
-                borderBottomColor="$borderColor"
+                style={{
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderBottomWidth: 1,
+                    borderBottomColor: borderColor,
+                }}
             >
-                <SizableText fontSize={13} color="$color8" numberOfLines={1}>
+                <Text style={{ fontSize: 13, color: mutedColor }} numberOfLines={1}>
                     {snippet}
-                </SizableText>
+                </Text>
             </View>
         </Pressable>
     )

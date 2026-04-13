@@ -1,6 +1,6 @@
+import { useThemeColor } from 'heroui-native'
 import { useEffect, useState } from 'react'
-import { Platform, StyleSheet, Text, View } from 'react-native'
-import { useTheme } from 'tamagui'
+import { Platform, Text, View } from 'react-native'
 import { pb } from '~/lib/pocketbase'
 
 interface EmailBodyProps {
@@ -26,14 +26,14 @@ function useEmailHtml(collectionId: string, recordId: string, filename: string) 
 }
 
 export function EmailBody({ collectionId, recordId, filename }: EmailBodyProps) {
-    const theme = useTheme()
     const html = useEmailHtml(collectionId, recordId, filename)
+    const foregroundColor = useThemeColor('foreground')
 
     if (!filename) return null
 
     if (Platform.OS === 'web') {
         return (
-            <View style={styles.container}>
+            <View style={{ padding: 16, flex: 1 }}>
                 <iframe
                     sandbox=""
                     srcDoc={html}
@@ -51,21 +51,10 @@ export function EmailBody({ collectionId, recordId, filename }: EmailBodyProps) 
     }
 
     return (
-        <View style={styles.container}>
-            <Text style={[styles.fallback, { color: theme.color.val }]}>
+        <View style={{ padding: 16, flex: 1 }}>
+            <Text style={{ fontSize: 14, lineHeight: 22, color: foregroundColor }}>
                 {html.replace(/<[^>]*>/g, '')}
             </Text>
         </View>
     )
 }
-
-const styles = StyleSheet.create({
-    container: {
-        padding: 16,
-        flex: 1,
-    },
-    fallback: {
-        fontSize: 14,
-        lineHeight: 22,
-    },
-})

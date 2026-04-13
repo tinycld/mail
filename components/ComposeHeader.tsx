@@ -1,6 +1,6 @@
+import { useThemeColor } from 'heroui-native'
 import { Maximize2, Minimize2, X } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useTheme } from 'tamagui'
+import { Pressable, Text, View } from 'react-native'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import type { ComposeMode } from '../hooks/useComposeState'
 
@@ -19,64 +19,47 @@ export function ComposeHeader({
     onMaximize,
     onClose,
 }: ComposeHeaderProps) {
-    const theme = useTheme()
+    const [foregroundColor, backgroundColor] = useThemeColor(['foreground', 'background'])
     const breakpoint = useBreakpoint()
     const showWindowControls = breakpoint === 'desktop'
     const displayTitle = title?.trim() || 'New Message'
 
     return (
-        <View style={[styles.header, { backgroundColor: theme.color.val }]}>
-            <Pressable
-                style={styles.titleArea}
-                onPress={mode === 'minimized' ? onMinimize : undefined}
-            >
-                <Text style={[styles.title, { color: theme.background.val }]} numberOfLines={1}>
+        <View
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                height: 40,
+                paddingHorizontal: 12,
+                borderTopLeftRadius: 8,
+                borderTopRightRadius: 8,
+                backgroundColor: foregroundColor,
+            }}
+        >
+            <Pressable style={{ flex: 1 }} onPress={mode === 'minimized' ? onMinimize : undefined}>
+                <Text
+                    style={{ fontSize: 14, fontWeight: '600', color: backgroundColor }}
+                    numberOfLines={1}
+                >
                     {displayTitle}
                 </Text>
             </Pressable>
-            <View style={styles.actions}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 {showWindowControls ? (
                     <>
-                        <Pressable style={styles.headerButton} onPress={onMinimize}>
-                            <Minimize2 size={14} color={theme.background.val} />
+                        <Pressable style={{ padding: 6, borderRadius: 4 }} onPress={onMinimize}>
+                            <Minimize2 size={14} color={backgroundColor} />
                         </Pressable>
-                        <Pressable style={styles.headerButton} onPress={onMaximize}>
-                            <Maximize2 size={14} color={theme.background.val} />
+                        <Pressable style={{ padding: 6, borderRadius: 4 }} onPress={onMaximize}>
+                            <Maximize2 size={14} color={backgroundColor} />
                         </Pressable>
                     </>
                 ) : null}
-                <Pressable style={styles.headerButton} onPress={onClose}>
-                    <X size={14} color={theme.background.val} />
+                <Pressable style={{ padding: 6, borderRadius: 4 }} onPress={onClose}>
+                    <X size={14} color={backgroundColor} />
                 </Pressable>
             </View>
         </View>
     )
 }
-
-const styles = StyleSheet.create({
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        height: 40,
-        paddingHorizontal: 12,
-        borderTopLeftRadius: 8,
-        borderTopRightRadius: 8,
-    },
-    titleArea: {
-        flex: 1,
-    },
-    title: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    actions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    headerButton: {
-        padding: 6,
-        borderRadius: 4,
-    },
-})

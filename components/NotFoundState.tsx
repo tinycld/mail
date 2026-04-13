@@ -1,4 +1,4 @@
-import { SizableText, YStack } from 'tamagui'
+import { Text, View } from 'react-native'
 
 interface NotFoundStateProps {
     message: string
@@ -6,10 +6,8 @@ interface NotFoundStateProps {
 
 export function NotFoundState({ message }: NotFoundStateProps) {
     return (
-        <YStack flex={1} alignItems="center" justifyContent="center" backgroundColor="$background">
-            <SizableText size="$4" color="$color8">
-                {message}
-            </SizableText>
-        </YStack>
+        <View className="flex-1 items-center justify-center bg-background">
+            <Text className="text-base text-muted">{message}</Text>
+        </View>
     )
 }

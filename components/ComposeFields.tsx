@@ -1,7 +1,7 @@
+import { useThemeColor } from 'heroui-native'
 import { useState } from 'react'
 import { type Control, type FieldErrors, useController } from 'react-hook-form'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useTheme } from 'tamagui'
+import { Pressable, Text, View } from 'react-native'
 import { PlainInput } from '~/ui/PlainInput'
 import type { ComposeFormData } from '../hooks/composeSchema'
 import { RecipientField } from './RecipientField'
@@ -21,13 +21,13 @@ function ComposeFieldInput({
     name: keyof ComposeFormData
     onBlur?: () => void
 }) {
-    const theme = useTheme()
+    const [foregroundColor, placeholderColor] = useThemeColor(['foreground', 'field-placeholder'])
     const { field } = useController({ control, name })
 
     return (
         <PlainInput
-            style={[styles.fieldInput, { color: theme.color.val }]}
-            placeholderTextColor={theme.placeholderColor.val}
+            style={{ flex: 1, fontSize: 13, paddingHorizontal: 4, color: foregroundColor }}
+            placeholderTextColor={placeholderColor}
             value={field.value}
             onChangeText={field.onChange}
             onBlur={() => {
@@ -39,35 +39,43 @@ function ComposeFieldInput({
 }
 
 export function ComposeFields({ control, errors, onSubjectBlur }: ComposeFieldsProps) {
-    const theme = useTheme()
+    const [mutedColor, borderColor, dangerColor] = useThemeColor(['muted', 'border', 'danger'])
     const [showCc, setShowCc] = useState(false)
     const [showBcc, setShowBcc] = useState(false)
 
-    const borderStyle = { borderBottomColor: theme.borderColor.val }
-
     return (
-        <View style={styles.fieldsWrapper}>
+        <View style={{ zIndex: 10, overflow: 'visible' }}>
             <View
-                style={[
-                    styles.recipientRow,
-                    borderStyle,
-                    errors.to ? { borderBottomColor: theme.red8.val } : undefined,
-                ]}
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 12,
+                    minHeight: 36,
+                    paddingVertical: 4,
+                    borderBottomWidth: 1,
+                    zIndex: 11,
+                    overflow: 'visible',
+                    borderBottomColor: errors.to ? dangerColor : borderColor,
+                }}
             >
-                <Text style={[styles.fieldLabel, { color: theme.color8.val }]}>To</Text>
+                <Text style={{ fontSize: 13, width: 56, color: mutedColor }}>To</Text>
                 <RecipientField control={control} name="to" />
                 {!showCc || !showBcc ? (
-                    <View style={styles.ccBccButtons}>
+                    <View style={{ flexDirection: 'row', gap: 8, marginLeft: 8 }}>
                         {showCc ? null : (
                             <Pressable onPress={() => setShowCc(true)}>
-                                <Text style={[styles.ccBccText, { color: theme.color8.val }]}>
+                                <Text
+                                    style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}
+                                >
                                     Cc
                                 </Text>
                             </Pressable>
                         )}
                         {showBcc ? null : (
                             <Pressable onPress={() => setShowBcc(true)}>
-                                <Text style={[styles.ccBccText, { color: theme.color8.val }]}>
+                                <Text
+                                    style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}
+                                >
                                     Bcc
                                 </Text>
                             </Pressable>
@@ -77,80 +85,53 @@ export function ComposeFields({ control, errors, onSubjectBlur }: ComposeFieldsP
             </View>
             {showCc ? (
                 <View
-                    style={[
-                        styles.recipientRow,
-                        borderStyle,
-                        errors.cc ? { borderBottomColor: theme.red8.val } : undefined,
-                    ]}
+                    style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingHorizontal: 12,
+                        minHeight: 36,
+                        paddingVertical: 4,
+                        borderBottomWidth: 1,
+                        zIndex: 11,
+                        overflow: 'visible',
+                        borderBottomColor: errors.cc ? dangerColor : borderColor,
+                    }}
                 >
-                    <Text style={[styles.fieldLabel, { color: theme.color8.val }]}>Cc</Text>
+                    <Text style={{ fontSize: 13, width: 56, color: mutedColor }}>Cc</Text>
                     <RecipientField control={control} name="cc" />
                 </View>
             ) : null}
             {showBcc ? (
                 <View
-                    style={[
-                        styles.recipientRow,
-                        borderStyle,
-                        errors.bcc ? { borderBottomColor: theme.red8.val } : undefined,
-                    ]}
+                    style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingHorizontal: 12,
+                        minHeight: 36,
+                        paddingVertical: 4,
+                        borderBottomWidth: 1,
+                        zIndex: 11,
+                        overflow: 'visible',
+                        borderBottomColor: errors.bcc ? dangerColor : borderColor,
+                    }}
                 >
-                    <Text style={[styles.fieldLabel, { color: theme.color8.val }]}>Bcc</Text>
+                    <Text style={{ fontSize: 13, width: 56, color: mutedColor }}>Bcc</Text>
                     <RecipientField control={control} name="bcc" />
                 </View>
             ) : null}
             <View
-                style={[
-                    styles.fieldRow,
-                    borderStyle,
-                    errors.subject ? { borderBottomColor: theme.red8.val } : undefined,
-                ]}
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 12,
+                    height: 36,
+                    borderBottomWidth: 1,
+                    borderBottomColor: errors.subject ? dangerColor : borderColor,
+                }}
             >
-                <Text style={[styles.fieldLabel, { color: theme.color8.val }]}>Subject</Text>
+                <Text style={{ fontSize: 13, width: 56, color: mutedColor }}>Subject</Text>
                 <ComposeFieldInput control={control} name="subject" onBlur={onSubjectBlur} />
             </View>
         </View>
     )
 }
-
-const styles = StyleSheet.create({
-    fieldsWrapper: {
-        zIndex: 10,
-        overflow: 'visible' as 'visible',
-    },
-    recipientRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        minHeight: 36,
-        paddingVertical: 4,
-        borderBottomWidth: 1,
-        zIndex: 11,
-        overflow: 'visible' as 'visible',
-    },
-    fieldRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        height: 36,
-        borderBottomWidth: 1,
-    },
-    fieldLabel: {
-        fontSize: 13,
-        width: 56,
-    },
-    fieldInput: {
-        flex: 1,
-        fontSize: 13,
-        paddingHorizontal: 4,
-    },
-    ccBccButtons: {
-        flexDirection: 'row',
-        gap: 8,
-        marginLeft: 8,
-    },
-    ccBccText: {
-        fontSize: 13,
-        fontWeight: '500',
-    },
-})

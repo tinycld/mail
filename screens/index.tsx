@@ -1,11 +1,13 @@
-import { useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useThemeColor } from 'heroui-native'
+import { Archive, type Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FlatList } from 'react-native'
-import { SizableText, Spinner, YStack } from 'tamagui'
+import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
 import { ScreenHeader } from '~/components/ScreenHeader'
 import { SwipeableRowProvider } from '~/components/SwipeableRow'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { mutation, useMutation } from '~/lib/mutations'
+import { useOrgHref } from '~/lib/org-routes'
 import { pb, queryClient } from '~/lib/pocketbase'
 import { useCurrentRole } from '~/lib/use-current-role'
 import { useScrollShadow } from '~/lib/use-scroll-shadow'
@@ -23,27 +25,158 @@ import { useThreadListContext } from './_layout'
 
 function useQueryParams() {
     const { folder, label } = useLocalSearchParams<{ folder?: string; label?: string }>()
-    return { folder: folder ?? null, label: label ?? null }
+    const labels = label ? label.split(',').filter(Boolean) : []
+    return { folder: folder ?? null, labels }
 }
 
 function EmptyState({ folderTitle, isVisible }: { folderTitle: string; isVisible: boolean }) {
+    const mutedColor = useThemeColor('muted')
     if (!isVisible) return null
     return (
-        <YStack flex={1} alignItems="center" justifyContent="center" padding="$8">
-            <SizableText size="$4" color="$color8">
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+            <Text style={{ fontSize: 16, color: mutedColor }}>
                 No conversations in {folderTitle}
-            </SizableText>
-        </YStack>
+            </Text>
+        </View>
+    )
+}
+
+const FOLDER_ICONS: Record<string, typeof Inbox> = {
+    sent: Send,
+    drafts: Archive,
+    spam: TriangleAlert,
+    trash: Trash2,
+    starred: Star,
+    archive: Archive,
+}
+
+function LabelChip({
+    label,
+    onDismiss,
+}: {
+    label: { id: string; name: string; color: string }
+    onDismiss: () => void
+}) {
+    return (
+        <View
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
+                borderWidth: 1,
+                backgroundColor: `${label.color}14`,
+                borderColor: `${label.color}30`,
+            }}
+        >
+            <View
+                style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: label.color,
+                }}
+            />
+            <Text style={{ fontSize: 13, fontWeight: '600', color: label.color }}>
+                {label.name}
+            </Text>
+            <Pressable onPress={onDismiss} hitSlop={8}>
+                <X size={14} color={label.color} />
+            </Pressable>
+        </View>
+    )
+}
+
+function ActiveViewBanner({
+    isVisible,
+    folder,
+    labels,
+    onDismissLabel,
+}: {
+    isVisible: boolean
+    folder: string | null
+    labels: { id: string; name: string; color: string }[]
+    onDismissLabel: (labelId: string) => void
+}) {
+    const accentColor = useThemeColor('accent')
+    const router = useRouter()
+    const orgHref = useOrgHref()
+
+    if (!isVisible) return null
+
+    const isLabelView = labels.length > 0
+
+    if (isLabelView) {
+        return (
+            <View
+                style={{
+                    flexDirection: 'row',
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    alignItems: 'center',
+                    gap: 8,
+                    flexWrap: 'wrap',
+                }}
+            >
+                {labels.map(label => (
+                    <LabelChip
+                        key={label.id}
+                        label={label}
+                        onDismiss={() => onDismissLabel(label.id)}
+                    />
+                ))}
+            </View>
+        )
+    }
+
+    const displayName = (folder ?? '').charAt(0).toUpperCase() + (folder ?? '').slice(1)
+    const FolderIcon = folder ? (FOLDER_ICONS[folder] ?? Tag) : Tag
+
+    return (
+        <View
+            style={{
+                flexDirection: 'row',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                alignItems: 'center',
+                gap: 8,
+            }}
+        >
+            <View
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    backgroundColor: `${accentColor}14`,
+                    borderColor: `${accentColor}30`,
+                }}
+            >
+                <FolderIcon size={14} color={accentColor} />
+                <Text style={{ fontSize: 13, fontWeight: '600', color: accentColor }}>
+                    {displayName}
+                </Text>
+                <Pressable onPress={() => router.replace(orgHref('mail'))} hitSlop={8}>
+                    <X size={14} color={accentColor} />
+                </Pressable>
+            </View>
+        </View>
     )
 }
 
 function SearchResultsHeader({ total, isSearching }: { total: number; isSearching: boolean }) {
+    const mutedColor = useThemeColor('muted')
     return (
-        <YStack paddingHorizontal="$3" paddingVertical="$2">
-            <SizableText size="$3" color="$color8">
+        <View style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
+            <Text style={{ fontSize: 13, color: mutedColor }}>
                 {isSearching ? 'Searching...' : `${total} result${total !== 1 ? 's' : ''}`}
-            </SizableText>
-        </YStack>
+            </Text>
+        </View>
     )
 }
 
@@ -82,16 +215,29 @@ function searchResultToThreadListItem(result: MailSearchResult): ThreadListItem 
 }
 
 export default function MailListScreen() {
-    const { folder, label } = useQueryParams()
+    const { folder, labels } = useQueryParams()
+    const router = useRouter()
+    const orgHref = useOrgHref()
     const breakpoint = useBreakpoint()
     const { userOrgId } = useCurrentRole()
     const { isScrolled, onScroll } = useScrollShadow()
     const { openDraft } = useCompose()
     const search = useMailSearchState()
+    const [mutedColor, accentColor, _backgroundColor] = useThemeColor([
+        'muted',
+        'accent',
+        'background',
+    ])
 
-    const { items, labels, draftByThread, threadStateCollection } = useThreadListItems(userOrgId, {
+    const {
+        items,
+        labels: allLabels,
+        labelMap,
+        draftByThread,
+        threadStateCollection,
+    } = useThreadListItems(userOrgId, {
         folder,
-        label,
+        labels,
     })
 
     const { setThreadIds } = useThreadListContext()
@@ -112,7 +258,7 @@ export default function MailListScreen() {
         setTimeout(() => setIsRefreshing(false), 800)
     }, [])
 
-    const selection = useMailSelection(items, folder, label)
+    const selection = useMailSelection(items, folder, labels)
     const bulkActions = useMailBulkActions(
         threadStateCollection,
         selection.selectedItems,
@@ -206,26 +352,49 @@ export default function MailListScreen() {
         [search.results]
     )
 
-    const folderTitle = label
-        ? 'Label'
-        : (folder ?? 'inbox').charAt(0).toUpperCase() + (folder ?? 'inbox').slice(1)
+    const activeLabels = labels
+        .map(id => labelMap.get(id))
+        .filter((l): l is { id: string; name: string; color: string } => l != null)
+    const folderTitle =
+        activeLabels.length > 0
+            ? activeLabels.map(l => l.name).join(', ')
+            : (folder ?? 'inbox').charAt(0).toUpperCase() + (folder ?? 'inbox').slice(1)
+
+    const isNonDefaultView = labels.length > 0 || (!!folder && folder !== 'inbox')
+
+    const dismissLabel = useCallback(
+        (labelId: string) => {
+            const remaining = labels.filter(id => id !== labelId)
+            if (remaining.length === 0) {
+                router.replace(orgHref('mail'))
+            } else {
+                router.replace(orgHref('mail', { label: remaining.join(',') }))
+            }
+        },
+        [labels, router, orgHref]
+    )
 
     const isMobile = breakpoint === 'mobile'
 
     if (search.isActive) {
         return (
-            <YStack flex={1}>
+            <View style={{ flex: 1 }}>
                 <SearchResultsHeader total={search.total} isSearching={search.isSearching} />
                 {search.isSearching && searchItems.length === 0 ? (
-                    <YStack flex={1} alignItems="center" justifyContent="center">
-                        <Spinner size="large" color="$accentColor" />
-                    </YStack>
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                        <ActivityIndicator size="large" color={accentColor} />
+                    </View>
                 ) : searchItems.length === 0 ? (
-                    <YStack flex={1} alignItems="center" justifyContent="center" padding="$8">
-                        <SizableText size="$4" color="$color8">
-                            No results found
-                        </SizableText>
-                    </YStack>
+                    <View
+                        style={{
+                            flex: 1,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 32,
+                        }}
+                    >
+                        <Text style={{ fontSize: 16, color: mutedColor }}>No results found</Text>
+                    </View>
                 ) : (
                     <SwipeableRowProvider>
                         <FlatList
@@ -235,14 +404,20 @@ export default function MailListScreen() {
                         />
                     </SwipeableRowProvider>
                 )}
-            </YStack>
+            </View>
         )
     }
 
     const isEmpty = items.length === 0
 
     return (
-        <YStack flex={1}>
+        <View style={{ flex: 1 }}>
+            <ActiveViewBanner
+                isVisible={isNonDefaultView}
+                folder={folder}
+                labels={activeLabels}
+                onDismissLabel={dismissLabel}
+            />
             <ScreenHeader isScrolled={isScrolled}>
                 <EmailListToolbar
                     emailCount={items.length}
@@ -252,7 +427,7 @@ export default function MailListScreen() {
                     someSelected={selection.someSelected}
                     allSelectedRead={selection.allSelectedRead}
                     allSelectedStarred={selection.allSelectedStarred}
-                    labels={labels}
+                    labels={allLabels}
                     selectedItemLabelIds={selectedItemLabelIds}
                     onToggleAll={selection.toggleAll}
                     onArchive={() => bulkActions.archiveSelected.mutate()}
@@ -316,6 +491,6 @@ export default function MailListScreen() {
                 </SwipeableRowProvider>
             )}
             <ComposeFAB isVisible={isMobile} />
-        </YStack>
+        </View>
     )
 }

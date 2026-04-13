@@ -1,6 +1,6 @@
+import { useThemeColor } from 'heroui-native'
 import { X } from 'lucide-react-native'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { useTheme } from 'tamagui'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { formatBytes } from '~/lib/format-utils'
 import type { AttachmentFile } from '../hooks/useAttachments'
 
@@ -11,14 +11,21 @@ interface AttachmentRibbonProps {
 }
 
 export function AttachmentRibbon({ isVisible, attachments, onRemove }: AttachmentRibbonProps) {
-    const theme = useTheme()
+    const borderColor = useThemeColor('border')
 
     if (!isVisible) return null
 
     return (
-        <View style={[styles.container, { borderTopColor: theme.borderColor.val }]}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scroll}>
-                <View style={styles.chipRow}>
+        <View
+            style={{
+                borderTopWidth: 1,
+                borderTopColor: borderColor,
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+            }}
+        >
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
                     {attachments.map(att => (
                         <AttachmentChip
                             key={att.id}
@@ -39,65 +46,45 @@ function AttachmentChip({
     attachment: AttachmentFile
     onRemove: () => void
 }) {
-    const theme = useTheme()
+    const [foregroundColor, mutedColor, surfaceColor, borderColor] = useThemeColor([
+        'foreground',
+        'muted',
+        'surface-secondary',
+        'border',
+    ])
 
     const truncatedName =
         attachment.name.length > 24 ? `${attachment.name.slice(0, 21)}...` : attachment.name
 
     return (
         <View
-            style={[
-                styles.chip,
-                {
-                    backgroundColor: theme.color3.val,
-                    borderColor: theme.borderColor.val,
-                },
-            ]}
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 6,
+                borderWidth: 1,
+                backgroundColor: surfaceColor,
+                borderColor,
+            }}
         >
-            <Text style={[styles.chipName, { color: theme.color.val }]} numberOfLines={1}>
+            <Text
+                style={{
+                    fontSize: 12,
+                    fontWeight: '500',
+                    maxWidth: 160,
+                    color: foregroundColor,
+                }}
+                numberOfLines={1}
+            >
                 {truncatedName}
             </Text>
-            <Text style={[styles.chipSize, { color: theme.color8.val }]}>
-                {formatBytes(attachment.size)}
-            </Text>
-            <Pressable onPress={onRemove} style={styles.chipRemove} hitSlop={4}>
-                <X size={12} color={theme.color8.val} />
+            <Text style={{ fontSize: 11, color: mutedColor }}>{formatBytes(attachment.size)}</Text>
+            <Pressable onPress={onRemove} style={{ padding: 2 }} hitSlop={4}>
+                <X size={12} color={mutedColor} />
             </Pressable>
         </View>
     )
 }
-
-const styles = StyleSheet.create({
-    container: {
-        borderTopWidth: 1,
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-    },
-    scroll: {
-        flexGrow: 0,
-    },
-    chipRow: {
-        flexDirection: 'row',
-        gap: 6,
-    },
-    chip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-        borderWidth: 1,
-    },
-    chipName: {
-        fontSize: 12,
-        fontWeight: '500',
-        maxWidth: 160,
-    },
-    chipSize: {
-        fontSize: 11,
-    },
-    chipRemove: {
-        padding: 2,
-    },
-})

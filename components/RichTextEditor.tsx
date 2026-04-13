@@ -1,5 +1,5 @@
 import { type EditorBridge, RichText } from '@10play/tentap-editor'
-import { StyleSheet, View } from 'react-native'
+import { View } from 'react-native'
 
 export interface RichTextEditorHandle {
     getHTML: () => Promise<string>
@@ -14,15 +14,8 @@ interface RichTextEditorProps {
 
 export function RichTextEditor({ editor }: RichTextEditorProps) {
     return (
-        <View style={styles.container}>
+        <View style={{ flex: 1, minHeight: 100 }}>
             <RichText editor={editor} scrollEnabled={false} />
         </View>
     )
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        minHeight: 100,
-    },
-})

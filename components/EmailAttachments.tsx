@@ -1,3 +1,4 @@
+import { useThemeColor } from 'heroui-native'
 import {
     Download,
     File,
@@ -6,8 +7,7 @@ import {
     FileSpreadsheet,
     FileText,
 } from 'lucide-react-native'
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
-import { useTheme } from 'tamagui'
+import { Linking, Platform, Pressable, Text, View } from 'react-native'
 import { pb } from '~/lib/pocketbase'
 
 interface EmailAttachmentsProps {
@@ -23,16 +23,32 @@ export function EmailAttachments({
     recordId,
     filenames,
 }: EmailAttachmentsProps) {
-    const theme = useTheme()
+    const [borderColor, mutedColor] = useThemeColor(['border', 'muted'])
 
     if (!isVisible) return null
 
     return (
-        <View style={[styles.container, { borderTopColor: theme.borderColor.val }]}>
-            <Text style={[styles.heading, { color: theme.color8.val }]}>
+        <View
+            style={{
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                borderTopWidth: 1,
+                borderTopColor: borderColor,
+                gap: 8,
+            }}
+        >
+            <Text
+                style={{
+                    fontSize: 12,
+                    fontWeight: '600',
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    color: mutedColor,
+                }}
+            >
                 {filenames.length} attachment{filenames.length !== 1 ? 's' : ''}
             </Text>
-            <View style={styles.grid}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {filenames.map(filename => (
                     <AttachmentThumbnail
                         key={filename}
@@ -55,7 +71,12 @@ function AttachmentThumbnail({
     recordId: string
     filename: string
 }) {
-    const theme = useTheme()
+    const [borderColor, mutedColor, foregroundColor, surfaceColor] = useThemeColor([
+        'border',
+        'muted',
+        'foreground',
+        'surface-secondary',
+    ])
     const url = pb.files.getURL({ collectionId, id: recordId }, filename)
     const isImage = /\.(jpe?g|png|gif|webp|svg|bmp)$/i.test(filename)
     const displayName = cleanFilename(filename)
@@ -71,45 +92,86 @@ function AttachmentThumbnail({
 
     return (
         <Pressable
-            style={[
-                styles.thumbnail,
-                {
-                    borderColor: theme.borderColor.val,
-                    backgroundColor: theme.color2.val,
-                },
-            ]}
+            style={{
+                width: 160,
+                borderRadius: 8,
+                borderWidth: 1,
+                overflow: 'hidden',
+                borderColor,
+                backgroundColor: surfaceColor,
+            }}
             onPress={handlePress}
         >
             {isImage ? (
-                <ImagePreview url={url} theme={theme} />
+                <ImagePreview url={url} mutedColor={mutedColor} surfaceColor={surfaceColor} />
             ) : (
-                <View style={[styles.iconPreview, { backgroundColor: theme.color3.val }]}>
-                    <Icon size={24} color={theme.color8.val} />
+                <View
+                    style={{
+                        width: '100%',
+                        height: 90,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: surfaceColor,
+                    }}
+                >
+                    <Icon size={24} color={mutedColor} />
                 </View>
             )}
-            <View style={styles.info}>
-                <Text style={[styles.filename, { color: theme.color.val }]} numberOfLines={1}>
+            <View
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 8,
+                    paddingVertical: 6,
+                    gap: 4,
+                }}
+            >
+                <Text
+                    style={{
+                        fontSize: 12,
+                        fontWeight: '500',
+                        flex: 1,
+                        color: foregroundColor,
+                    }}
+                    numberOfLines={1}
+                >
                     {displayName}
                 </Text>
-                <View style={styles.actions}>
-                    <Download size={14} color={theme.color8.val} />
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                    <Download size={14} color={mutedColor} />
                 </View>
             </View>
         </Pressable>
     )
 }
 
-function ImagePreview({ url, theme }: { url: string; theme: ReturnType<typeof useTheme> }) {
+function ImagePreview({
+    url,
+    mutedColor,
+    surfaceColor,
+}: {
+    url: string
+    mutedColor: string
+    surfaceColor: string
+}) {
     if (Platform.OS !== 'web') {
         return (
-            <View style={[styles.iconPreview, { backgroundColor: theme.color3.val }]}>
-                <FileImage size={24} color={theme.color8.val} />
+            <View
+                style={{
+                    width: '100%',
+                    height: 90,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: surfaceColor,
+                }}
+            >
+                <FileImage size={24} color={mutedColor} />
             </View>
         )
     }
 
     return (
-        <View style={styles.imageContainer}>
+        <View style={{ width: '100%', height: 90, overflow: 'hidden' }}>
             <img
                 src={url}
                 alt=""
@@ -141,56 +203,3 @@ function cleanFilename(filename: string) {
     const match = filename.match(/^(.+)_[a-zA-Z0-9]{10}(\.\w+)$/)
     return match ? match[1] + match[2] : filename
 }
-
-const styles = StyleSheet.create({
-    container: {
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderTopWidth: 1,
-        gap: 8,
-    },
-    heading: {
-        fontSize: 12,
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    grid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-    },
-    thumbnail: {
-        width: 160,
-        borderRadius: 8,
-        borderWidth: 1,
-        overflow: 'hidden',
-    },
-    imageContainer: {
-        width: '100%',
-        height: 90,
-        overflow: 'hidden',
-    },
-    iconPreview: {
-        width: '100%',
-        height: 90,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    info: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 8,
-        paddingVertical: 6,
-        gap: 4,
-    },
-    filename: {
-        fontSize: 12,
-        fontWeight: '500',
-        flex: 1,
-    },
-    actions: {
-        flexDirection: 'row',
-        gap: 4,
-    },
-})

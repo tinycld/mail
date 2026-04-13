@@ -1,5 +1,5 @@
-import { Platform, ScrollView, StyleSheet } from 'react-native'
-import { ListItem, SizableText, YStack } from 'tamagui'
+import { useThemeColor } from 'heroui-native'
+import { Platform, Pressable, ScrollView, Text, View } from 'react-native'
 import { NameAvatar as ContactAvatar } from '~/components/NameAvatar'
 
 interface Suggestion {
@@ -21,11 +21,19 @@ const webShadow =
         : {}
 
 function HighlightText({ text, query, bold }: { text: string; query: string; bold?: boolean }) {
+    const foregroundColor = useThemeColor('foreground')
+
     if (!query) {
         return (
-            <SizableText size="$3" fontWeight={bold ? '500' : undefined}>
+            <Text
+                style={{
+                    fontSize: 13,
+                    fontWeight: bold ? '500' : undefined,
+                    color: foregroundColor,
+                }}
+            >
                 {text}
-            </SizableText>
+            </Text>
         )
     }
 
@@ -35,20 +43,28 @@ function HighlightText({ text, query, bold }: { text: string; query: string; bol
 
     if (index === -1) {
         return (
-            <SizableText size="$3" fontWeight={bold ? '500' : undefined}>
+            <Text
+                style={{
+                    fontSize: 13,
+                    fontWeight: bold ? '500' : undefined,
+                    color: foregroundColor,
+                }}
+            >
                 {text}
-            </SizableText>
+            </Text>
         )
     }
 
     return (
-        <SizableText size="$3" fontWeight={bold ? '500' : undefined}>
+        <Text
+            style={{ fontSize: 13, fontWeight: bold ? '500' : undefined, color: foregroundColor }}
+        >
             {text.slice(0, index)}
-            <SizableText size="$3" fontWeight="700">
+            <Text style={{ fontSize: 13, fontWeight: '700' }}>
                 {text.slice(index, index + query.length)}
-            </SizableText>
+            </Text>
             {text.slice(index + query.length)}
-        </SizableText>
+        </Text>
     )
 }
 
@@ -57,57 +73,64 @@ export function RecipientSuggestionList({
     query,
     onSelect,
 }: RecipientSuggestionListProps) {
+    const [backgroundColor, borderColor, hoverBgColor] = useThemeColor([
+        'background',
+        'border',
+        'surface-secondary',
+    ])
+
     if (suggestions.length === 0) return null
 
     return (
-        <YStack
-            position="absolute"
-            top="100%"
-            left={0}
-            right={0}
-            zIndex={2000}
-            marginTop={2}
-            borderWidth={1}
-            borderRadius="$2"
-            borderColor="$borderColor"
-            backgroundColor="$background"
-            overflow="hidden"
-            {...(webShadow as object)}
+        <View
+            style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                zIndex: 2000,
+                marginTop: 2,
+                borderWidth: 1,
+                borderRadius: 8,
+                borderColor,
+                backgroundColor,
+                overflow: 'hidden',
+                ...webShadow,
+            }}
         >
-            <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
+            <ScrollView style={{ maxHeight: 250 }} keyboardShouldPersistTaps="handled">
                 {suggestions.map(contact => {
                     const fullName = [contact.first_name, contact.last_name]
                         .filter(Boolean)
                         .join(' ')
 
                     return (
-                        <ListItem
+                        <Pressable
                             key={contact.id}
-                            size="$3"
-                            icon={
-                                <ContactAvatar
-                                    firstName={contact.first_name}
-                                    lastName={contact.last_name}
-                                    size={32}
-                                />
-                            }
-                            title={<HighlightText text={fullName} query={query} bold />}
-                            subTitle={<HighlightText text={contact.email ?? ''} query={query} />}
                             onPress={() => onSelect(contact)}
-                            hoverStyle={{ backgroundColor: '$backgroundHover' }}
-                            pressStyle={{ backgroundColor: '$backgroundPress' }}
-                            cursor="pointer"
-                            gap="$2"
-                        />
+                            style={({ pressed }) => ({
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 8,
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                backgroundColor: pressed ? hoverBgColor : undefined,
+                                cursor: 'pointer' as 'auto',
+                            })}
+                        >
+                            <ContactAvatar
+                                firstName={contact.first_name}
+                                lastName={contact.last_name}
+                                size={32}
+                            />
+                            <View style={{ flex: 1, gap: 2 }}>
+                                <HighlightText text={fullName} query={query} bold />
+                                <HighlightText text={contact.email ?? ''} query={query} />
+                            </View>
+                        </Pressable>
                     )
                 })}
             </ScrollView>
-        </YStack>
+        </View>
     )
 }
-
-const styles = StyleSheet.create({
-    scroll: {
-        maxHeight: 250,
-    },
-})

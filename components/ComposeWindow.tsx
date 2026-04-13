@@ -1,6 +1,6 @@
+import { useThemeColor } from 'heroui-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Platform, StyleSheet, Text, View } from 'react-native'
-import { useTheme } from 'tamagui'
+import { Platform, Text, View } from 'react-native'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { captureException } from '~/lib/errors'
 import { performMutations } from '~/lib/mutations'
@@ -32,7 +32,6 @@ interface ComposeWindowProps {
 }
 
 export function ComposeWindow({ isVisible }: ComposeWindowProps) {
-    const theme = useTheme()
     const { mode, replyContext, draftContext, minimize, maximize, open, close } = useCompose()
     const breakpoint = useBreakpoint()
     const editorRef = useRef<RichTextEditorHandle>(null)
@@ -41,6 +40,11 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const draftIdRef = useRef<string | null>(null)
     const [headerTitle, setHeaderTitle] = useState('')
     const { attachments, addFiles, removeFile, clearAll: clearAttachments } = useAttachments()
+    const [backgroundColor, borderColor, dangerColor] = useThemeColor([
+        'background',
+        'border',
+        'danger',
+    ])
 
     const editor = useMailEditor({ placeholder: 'Compose email' })
     const editorBridgeRef = useRef(editor)
@@ -159,14 +163,22 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const isNotDesktop = breakpoint !== 'desktop'
     const hasMailbox = mailboxId != null
 
-    const modeStyleMap = {
-        open: styles.normal,
-        minimized: styles.minimized,
-        maximized: styles.maximized,
-        closed: styles.normal,
-        inline: styles.normal,
+    const modeStyles = {
+        open: { bottom: 0, right: 16, width: 500, height: 560 },
+        minimized: { bottom: 0, right: 16, width: 300, height: 40 },
+        maximized: {
+            position: 'relative' as const,
+            width: '75%' as const,
+            maxWidth: 900,
+            height: '85%' as const,
+            maxHeight: 800,
+        },
+        closed: { bottom: 0, right: 16, width: 500, height: 560 },
+        inline: { bottom: 0, right: 16, width: 500, height: 560 },
     }
-    const windowStyle = isNotDesktop ? styles.fullscreen : modeStyleMap[mode]
+
+    const fullscreenStyle = { top: 0, left: 0, right: 0, bottom: 0 }
+    const windowStyle = isNotDesktop ? fullscreenStyle : modeStyles[mode]
 
     const onSend = handleSubmit(async data => {
         if (!mailboxId) {
@@ -211,13 +223,16 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const composeWindow = (
         <View
             style={[
-                styles.container,
-                windowStyle,
                 {
-                    backgroundColor: theme.background.val,
-                    borderColor: theme.borderColor.val,
-                    ...webShadow,
+                    position: 'absolute',
+                    borderWidth: 1,
+                    borderRadius: 8,
+                    zIndex: 1000,
+                    backgroundColor,
+                    borderColor,
                 },
+                windowStyle,
+                webShadow,
             ]}
         >
             <ComposeHeader
@@ -227,16 +242,21 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                 onMaximize={isMaximized ? open : maximize}
                 onClose={handleClose}
             />
-            <View style={isMinimized ? styles.hidden : styles.composeBody}>
+            <View
+                style={{
+                    flex: isMinimized ? undefined : 1,
+                    display: isMinimized ? 'none' : 'flex',
+                }}
+            >
                 <ComposeFields control={control} errors={errors} onSubjectBlur={onSubjectBlur} />
                 {hasMailbox ? null : (
-                    <View style={styles.mailboxWarning}>
-                        <Text style={[styles.mailboxWarningText, { color: theme.red10.val }]}>
+                    <View style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
+                        <Text style={{ fontSize: 12, color: dangerColor }}>
                             No mailbox found. Ask your admin to add you to a mailbox.
                         </Text>
                     </View>
                 )}
-                <View style={styles.body}>
+                <View style={{ flex: 1, padding: 12 }}>
                     <RichTextEditor editor={editor} />
                 </View>
                 <AttachmentRibbon
@@ -268,80 +288,20 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
     return (
         <View
-            style={showBackdrop ? styles.backdrop : styles.noBackdrop}
+            style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 1000,
+                alignItems: showBackdrop ? 'center' : undefined,
+                justifyContent: showBackdrop ? 'center' : undefined,
+                backgroundColor: showBackdrop ? 'rgba(0,0,0,0.3)' : undefined,
+            }}
             pointerEvents={showBackdrop ? 'auto' : 'box-none'}
         >
             {composeWindow}
         </View>
     )
 }
-
-const styles = StyleSheet.create({
-    container: {
-        position: 'absolute',
-        borderWidth: 1,
-        borderRadius: 8,
-        zIndex: 1000,
-    },
-    normal: {
-        bottom: 0,
-        right: 16,
-        width: 500,
-        height: 560,
-    },
-    minimized: {
-        bottom: 0,
-        right: 16,
-        width: 300,
-        height: 40,
-    },
-    maximized: {
-        position: 'relative',
-        width: '75%',
-        maxWidth: 900,
-        height: '85%',
-        maxHeight: 800,
-    },
-    backdrop: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.3)',
-        zIndex: 1000,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    noBackdrop: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 1000,
-    },
-    fullscreen: {
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-    },
-    composeBody: {
-        flex: 1,
-    },
-    hidden: {
-        display: 'none',
-    },
-    body: {
-        flex: 1,
-        padding: 12,
-    },
-    mailboxWarning: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-    },
-    mailboxWarningText: {
-        fontSize: 12,
-    },
-})
