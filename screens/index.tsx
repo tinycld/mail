@@ -21,7 +21,7 @@ import type { MailSearchResult } from '../hooks/useMailSearch'
 import { useMailSelection } from '../hooks/useMailSelection'
 import { useMailSearchState } from '../hooks/useSearchState'
 import { useThreadListItems } from '../hooks/useThreadListItems'
-import { useThreadListContext } from './_layout'
+import { useThreadListContext } from '../stores/thread-list-store'
 
 function useQueryParams() {
     const { folder, label } = useLocalSearchParams<{ folder?: string; label?: string }>()
@@ -30,7 +30,7 @@ function useQueryParams() {
 }
 
 function EmptyState({ folderTitle, isVisible }: { folderTitle: string; isVisible: boolean }) {
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     if (!isVisible) return null
     return (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
@@ -170,7 +170,7 @@ function ActiveViewBanner({
 }
 
 function SearchResultsHeader({ total, isSearching }: { total: number; isSearching: boolean }) {
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     return (
         <View style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
             <Text style={{ fontSize: 13, color: mutedColor }}>
@@ -223,7 +223,7 @@ export default function MailListScreen() {
     const { isScrolled, onScroll } = useScrollShadow()
     const { openDraft } = useCompose()
     const search = useMailSearchState()
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const accentColor = useThemeColor('accent')
     const _backgroundColor = useThemeColor('background')
 

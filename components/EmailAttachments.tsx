@@ -24,7 +24,7 @@ export function EmailAttachments({
     filenames,
 }: EmailAttachmentsProps) {
     const borderColor = useThemeColor('border')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
 
     if (!isVisible) return null
 
@@ -73,7 +73,7 @@ function AttachmentThumbnail({
     filename: string
 }) {
     const borderColor = useThemeColor('border')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const foregroundColor = useThemeColor('foreground')
     const surfaceColor = useThemeColor('surface-secondary')
     const url = pb.files.getURL({ collectionId, id: recordId }, filename)

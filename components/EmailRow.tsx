@@ -144,7 +144,7 @@ function MobileEmailRow({
     onToggleRead,
 }: EmailRowProps) {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const backgroundColor = useThemeColor('background')
     const surfaceColor = useThemeColor('surface-secondary')
     const borderColor = useThemeColor('border')
@@ -337,7 +337,7 @@ function DesktopEmailRow({
     index,
 }: EmailRowProps) {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const surfaceColor = useThemeColor('surface-secondary')
     const borderColor = useThemeColor('border')
     const accentBgColor = useThemeColor('accent')

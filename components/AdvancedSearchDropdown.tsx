@@ -83,7 +83,7 @@ export function AdvancedSearchDropdown({
     initialFilters,
 }: AdvancedSearchDropdownProps) {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
     const backgroundColor = useThemeColor('background')
     const accentColor = useThemeColor('accent')

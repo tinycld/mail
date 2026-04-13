@@ -28,7 +28,7 @@ export function ComposeToolbar({
     onAttach,
     isPending,
 }: ComposeToolbarProps) {
-    const iconColor = useThemeColor('muted')
+    const iconColor = useThemeColor('muted-foreground')
     const activeColor = useThemeColor('accent')
     const accentFgColor = useThemeColor('accent-foreground')
     const borderColor = useThemeColor('border')

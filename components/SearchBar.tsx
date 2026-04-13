@@ -27,7 +27,7 @@ export function SearchBar({
     currentFilters,
 }: SearchBarProps) {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const accentColor = useThemeColor('accent')
     const borderColor = useThemeColor('border')
     const sidebarBgColor = useThemeColor('surface-secondary')

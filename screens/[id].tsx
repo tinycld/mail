@@ -19,8 +19,8 @@ import { useCompose } from '../hooks/useComposeState'
 import { useLabels, useThreadLabels } from '../hooks/useLabels'
 import { useThreadActions } from '../hooks/useThreadActions'
 import { useThreadNavigation } from '../hooks/useThreadNavigation'
+import { useThreadListContext } from '../stores/thread-list-store'
 import type { MailMessages } from '../types'
-import { useThreadListContext } from './_layout'
 
 function useAutoMarkAsRead(
     // biome-ignore lint/suspicious/noExplicitAny: pbtsdb collection type is deeply generic
@@ -47,7 +47,7 @@ export default function MailDetailScreen() {
     const { userOrgId } = useCurrentRole()
     const router = useRouter()
     const { openReply } = useCompose()
-    const _mutedColor = useThemeColor('muted')
+    const _mutedColor = useThemeColor('muted-foreground')
     const _borderColor = useThemeColor('border')
     const backgroundColor = useThemeColor('background')
 
@@ -252,7 +252,7 @@ export default function MailDetailScreen() {
 }
 
 function CollapsedSnippet({ snippet, onPress }: { snippet: string; onPress: () => void }) {
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
     return (
         <Pressable onPress={onPress}>

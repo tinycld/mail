@@ -33,7 +33,7 @@ const addDomainSchema = z.object({
 
 export default function ProviderSettings() {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const accentColor = useThemeColor('accent')
     const backgroundColor = useThemeColor('background')
     const { orgId } = useOrgInfo()
@@ -159,7 +159,7 @@ interface DomainRow {
 
 function DomainsSection({ orgId }: { orgId: string }) {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const [domainsCollection] = useStore('mail_domains')
 
     const { data: domains } = useLiveQuery(
@@ -199,7 +199,7 @@ function DomainsSection({ orgId }: { orgId: string }) {
 }
 
 function NoDomainsBanner({ isVisible }: { isVisible: boolean }) {
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     if (!isVisible) return null
     return (
         <Text style={{ fontSize: 13, color: mutedColor, fontStyle: 'italic' }}>
@@ -210,7 +210,7 @@ function NoDomainsBanner({ isVisible }: { isVisible: boolean }) {
 
 function DomainRowItem({ domain }: { domain: DomainRow }) {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
     const [domainsCollection] = useStore('mail_domains')
     const [confirming, setConfirming] = useState(false)

@@ -44,7 +44,7 @@ function useActiveView() {
 
 export default function MailSidebar(_props: MailSidebarProps) {
     const router = useRouter()
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const { folder: activeFolder, activeLabels } = useActiveView()
     const { userOrgId } = useCurrentRole()
     const orgHref = useOrgHref()

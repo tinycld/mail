@@ -66,7 +66,7 @@ function DefaultToolbar({
     onRefresh,
     isRefreshing,
 }: EmailListToolbarProps) {
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
 
     const paginationText =
         emailCount > 0 ? `1\u2013${emailCount} of ${emailCount}` : 'No conversations'
@@ -135,7 +135,7 @@ function BulkActionsToolbar({
     onUpdateLabel,
 }: EmailListToolbarProps) {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const accentColor = useThemeColor('accent')
 
     const SelectIcon = allSelected ? SquareCheck : someSelected ? SquareMinus : Square

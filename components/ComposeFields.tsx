@@ -40,7 +40,7 @@ function ComposeFieldInput({
 }
 
 export function ComposeFields({ control, errors, onSubjectBlur }: ComposeFieldsProps) {
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
     const dangerColor = useThemeColor('danger')
     const [showCc, setShowCc] = useState(false)

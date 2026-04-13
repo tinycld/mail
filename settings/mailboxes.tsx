@@ -135,7 +135,7 @@ function useMailboxData(orgId: string) {
 
 export default function MailboxesSettings() {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const accentColor = useThemeColor('accent')
     const backgroundColor = useThemeColor('background')
     const { orgId } = useOrgInfo()
@@ -203,7 +203,7 @@ export default function MailboxesSettings() {
 }
 
 function NoDomainsBanner({ isVisible }: { isVisible: boolean }) {
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const accentColor = useThemeColor('accent')
     const orgHref = useOrgHref()
 
@@ -222,7 +222,7 @@ function NoDomainsBanner({ isVisible }: { isVisible: boolean }) {
 }
 
 function NoMailboxesBanner({ isVisible }: { isVisible: boolean }) {
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     if (!isVisible) return null
     return <Text style={{ color: mutedColor }}>No mailboxes yet.</Text>
 }
@@ -241,7 +241,7 @@ function MailboxCard({
     onToggle: () => void
 }) {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
     const isPersonal = mailbox.type === 'personal'
     const fullAddress = `${mailbox.address}@${mailbox.domainName}`
@@ -364,7 +364,7 @@ function MailboxMemberPanel({
     orgMembers: OrgMemberRow[]
 }) {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
     const dangerColor = useThemeColor('danger')
     const [membersCollection] = useStore('mail_mailbox_members')
@@ -516,7 +516,7 @@ function AddMemberSection({
     onCancel: () => void
     isPending: boolean
 }) {
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const accentColor = useThemeColor('accent')
     const borderColor = useThemeColor('border')
 

@@ -47,7 +47,7 @@ function AttachmentChip({
     onRemove: () => void
 }) {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const surfaceColor = useThemeColor('surface-secondary')
     const borderColor = useThemeColor('border')
 

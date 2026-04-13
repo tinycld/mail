@@ -36,7 +36,7 @@ export function InlineReply({
     recipientsTo,
     recipientsCc,
 }: InlineReplyProps) {
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
     const breakpoint = useBreakpoint()
     const isMobile = breakpoint === 'mobile'

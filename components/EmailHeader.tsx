@@ -112,7 +112,7 @@ export function MessageHeader({
     onToggleStar,
 }: MessageHeaderProps) {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted')
+    const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
     const accentBgColor = useThemeColor('accent')
     const accentFgColor = useThemeColor('accent-foreground')
