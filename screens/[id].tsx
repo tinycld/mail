@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { ScreenHeader } from '~/components/ScreenHeader'
 import { mutation, useMutation } from '~/lib/mutations'
+import { useOrgHref } from '~/lib/org-routes'
 import { useOrgLiveQuery, useStore } from '~/lib/pocketbase'
 import { useThemeColor } from '~/lib/use-app-theme'
 import { useScrollShadow } from '~/lib/use-scroll-shadow'
@@ -79,7 +80,18 @@ export default function MailDetailScreen() {
 
     useAutoMarkAsRead(threadStateCollection, threadState, id)
 
-    const navigateBack = useCallback(() => router.back(), [router])
+    const orgHref = useOrgHref()
+    const initialFolderRef = useRef<string | null>(null)
+    if (threadState?.folder && !initialFolderRef.current) {
+        initialFolderRef.current = threadState.folder
+    }
+    const navigateBack = useCallback(() => {
+        if (router.canGoBack()) {
+            router.back()
+        } else {
+            router.replace(orgHref('mail', { folder: initialFolderRef.current ?? 'inbox' }))
+        }
+    }, [router, orgHref])
 
     const {
         archiveThread,
@@ -144,6 +156,7 @@ export default function MailDetailScreen() {
                     threadState={threadState}
                     labels={allLabels}
                     threadLabelIds={threadLabelIds}
+                    onBack={navigateBack}
                     onArchive={() => archiveThread.mutate()}
                     onSpam={() => spamThread.mutate()}
                     onTrash={() => trashThread.mutate()}

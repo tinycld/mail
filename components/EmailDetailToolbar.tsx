@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router'
 import {
     Archive,
     ArrowLeft,
@@ -32,6 +31,7 @@ interface EmailDetailToolbarProps {
     threadState: MailThreadState | undefined
     labels: LabelInfo[]
     threadLabelIds: Set<string>
+    onBack: () => void
     onArchive: () => void
     onSpam: () => void
     onTrash: () => void
@@ -59,6 +59,7 @@ export function EmailDetailToolbar({
     threadState,
     labels,
     threadLabelIds,
+    onBack,
     onArchive,
     onSpam,
     onTrash,
@@ -72,7 +73,6 @@ export function EmailDetailToolbar({
     hasNewer = false,
     hasOlder = false,
 }: EmailDetailToolbarProps) {
-    const router = useRouter()
     const breakpoint = useBreakpoint()
     const isMobile = breakpoint === 'mobile'
 
@@ -88,7 +88,7 @@ export function EmailDetailToolbar({
             style={{ overflow: 'visible' }}
         >
             <View className="flex-row items-center gap-0.5" style={{ overflow: 'visible' }}>
-                <ToolbarIconButton icon={ArrowLeft} label="Back" onPress={() => router.back()} />
+                <ToolbarIconButton icon={ArrowLeft} label="Back" onPress={onBack} />
                 <ToolbarIconButton icon={Archive} label="Archive" onPress={onArchive} />
                 {isMobile ? null : (
                     <ToolbarIconButton icon={CircleAlert} label="Report spam" onPress={onSpam} />
