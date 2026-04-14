@@ -1,7 +1,7 @@
-import { eq } from '@tanstack/db'
+import { and, eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useMemo } from 'react'
-import { useStore } from '~/lib/pocketbase'
+import { useOrgLiveQuery, useStore } from '~/lib/pocketbase'
 import type { ThreadListItem } from '../components/thread-list-item'
 import { toThreadListItem } from '../components/thread-list-item'
 import type { MailMessages } from '../types'
@@ -11,8 +11,21 @@ export function useThreadListItems(
     userOrgId: string,
     filter: { folder: string | null; labels: string[] }
 ) {
-    const [threadStateCollection, threadsCollection, messagesCollection, assignmentsCollection] =
-        useStore('mail_thread_state', 'mail_threads', 'mail_messages', 'label_assignments')
+    const [
+        threadStateCollection,
+        threadsCollection,
+        messagesCollection,
+        assignmentsCollection,
+        mailboxesCollection,
+        domainsCollection,
+    ] = useStore(
+        'mail_thread_state',
+        'mail_threads',
+        'mail_messages',
+        'label_assignments',
+        'mail_mailboxes',
+        'mail_domains'
+    )
 
     const { labels, labelMap } = useLabels()
 
@@ -25,35 +38,44 @@ export function useThreadListItems(
         [userOrgId]
     )
 
-    const { data: threads } = useLiveQuery(
-        query => query.from({ mail_threads: threadsCollection }),
-        []
+    const { data: threads } = useOrgLiveQuery((query, { orgId }) =>
+        query
+            .from({ t: threadsCollection })
+            .join({ mb: mailboxesCollection }, ({ t, mb }) => eq(t.mailbox, mb.id))
+            .join({ d: domainsCollection }, ({ mb, d }) => eq(mb.domain, d.id))
+            .where(({ d }) => eq(d.org, orgId))
+            .select(({ t }) => t)
     )
 
-    const { data: draftMessages } = useLiveQuery(
-        query =>
-            query
-                .from({ mail_messages: messagesCollection })
-                .where(({ mail_messages }) => eq(mail_messages.delivery_status, 'draft')),
-        []
+    const { data: draftMessages } = useOrgLiveQuery((query, { orgId }) =>
+        query
+            .from({ msg: messagesCollection })
+            .join({ t: threadsCollection }, ({ msg, t }) => eq(msg.thread, t.id))
+            .join({ mb: mailboxesCollection }, ({ t, mb }) => eq(t.mailbox, mb.id))
+            .join({ d: domainsCollection }, ({ mb, d }) => eq(mb.domain, d.id))
+            .where(({ msg, d }) => and(eq(d.org, orgId), eq(msg.delivery_status, 'draft')))
+            .select(({ msg }) => msg)
     )
 
-    const { data: attachmentMessages } = useLiveQuery(
-        query =>
-            query
-                .from({ mail_messages: messagesCollection })
-                .where(({ mail_messages }) => eq(mail_messages.has_attachments, true)),
-        []
+    const { data: attachmentMessages } = useOrgLiveQuery((query, { orgId }) =>
+        query
+            .from({ msg: messagesCollection })
+            .join({ t: threadsCollection }, ({ msg, t }) => eq(msg.thread, t.id))
+            .join({ mb: mailboxesCollection }, ({ t, mb }) => eq(t.mailbox, mb.id))
+            .join({ d: domainsCollection }, ({ mb, d }) => eq(mb.domain, d.id))
+            .where(({ msg, d }) => and(eq(d.org, orgId), eq(msg.has_attachments, true)))
+            .select(({ msg }) => msg)
     )
 
-    const { data: allAssignments } = useLiveQuery(
-        query =>
-            query
-                .from({ label_assignments: assignmentsCollection })
-                .where(({ label_assignments }) =>
-                    eq(label_assignments.collection, 'mail_thread_state')
-                ),
-        []
+    const { data: allAssignments } = useOrgLiveQuery((query, { userOrgId }) =>
+        query
+            .from({ label_assignments: assignmentsCollection })
+            .where(({ label_assignments }) =>
+                and(
+                    eq(label_assignments.collection, 'mail_thread_state'),
+                    eq(label_assignments.user_org, userOrgId)
+                )
+            )
     )
 
     const assignmentsByRecord = useMemo(() => {
@@ -86,7 +108,7 @@ export function useThreadListItems(
     }, [attachmentMessages])
 
     const threadMap = useMemo(() => {
-        const map = new Map<string, (typeof threads)[number]>()
+        const map = new Map<string, NonNullable<typeof threads>[number]>()
         for (const t of threads ?? []) {
             map.set(t.id, t)
         }

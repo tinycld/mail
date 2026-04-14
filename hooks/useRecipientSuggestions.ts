@@ -1,6 +1,6 @@
-import { useLiveQuery } from '@tanstack/react-db'
+import { eq } from '@tanstack/db'
 import { useMemo } from 'react'
-import { useStore } from '~/lib/pocketbase'
+import { useOrgLiveQuery, useStore } from '~/lib/pocketbase'
 
 interface Recipient {
     name: string
@@ -51,9 +51,10 @@ function parseCommittedRecipients(formValue: string): {
 export function useRecipientSuggestions(formValue: string) {
     const [contactsCollection] = useStore('contacts')
 
-    const { data: contacts } = useLiveQuery(query =>
+    const { data: contacts } = useOrgLiveQuery((query, { userOrgId }) =>
         query
             .from({ contacts: contactsCollection })
+            .where(({ contacts }) => eq(contacts.owner, userOrgId))
             .orderBy(({ contacts }) => contacts.first_name, 'asc')
     )
 
