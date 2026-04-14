@@ -231,6 +231,7 @@ function MobileEmailRow({
                                 style={mobileStyles.starButton}
                                 onPress={e => {
                                     e.stopPropagation()
+                                    e.preventDefault()
                                     onToggleStar?.()
                                 }}
                             >
@@ -397,6 +398,7 @@ function DesktopEmailRow({
                     style={styles.starButton}
                     onPress={e => {
                         e.stopPropagation()
+                        e.preventDefault()
                         onToggleStar?.()
                     }}
                 >

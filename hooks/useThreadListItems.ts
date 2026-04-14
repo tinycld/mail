@@ -32,8 +32,7 @@ export function useThreadListItems(
         query =>
             query
                 .from({ mail_thread_state: threadStateCollection })
-                .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, userOrgId))
-                .orderBy(({ mail_thread_state }) => mail_thread_state.updated, 'desc'),
+                .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, userOrgId)),
         [userOrgId]
     )
 
@@ -117,16 +116,18 @@ export function useThreadListItems(
     const items: ThreadListItem[] = useMemo(() => {
         if (!threadStates) return []
 
-        const mapped = threadStates.map(state => {
-            const thread = threadMap.get(state.thread)
-            const labelIds = assignmentsByRecord.get(state.id) ?? []
-            const stateLabels = labelIds
-                .map(id => labelMap.get(id))
-                .filter((l): l is { id: string; name: string; color: string } => l != null)
-            const hasDraft = draftByThread.has(state.thread)
-            const hasAttachments = threadsWithAttachments.has(state.thread)
-            return toThreadListItem(state, thread, stateLabels, hasDraft, hasAttachments)
-        })
+        const mapped = threadStates
+            .map(state => {
+                const thread = threadMap.get(state.thread)
+                const labelIds = assignmentsByRecord.get(state.id) ?? []
+                const stateLabels = labelIds
+                    .map(id => labelMap.get(id))
+                    .filter((l): l is { id: string; name: string; color: string } => l != null)
+                const hasDraft = draftByThread.has(state.thread)
+                const hasAttachments = threadsWithAttachments.has(state.thread)
+                return toThreadListItem(state, thread, stateLabels, hasDraft, hasAttachments)
+            })
+            .sort((a, b) => new Date(b.latestDate).getTime() - new Date(a.latestDate).getTime())
 
         const { folder, labels } = filter
         if (labels.length > 0) {
