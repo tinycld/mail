@@ -1,5 +1,4 @@
 import { and, eq } from '@tanstack/db'
-import { useLiveQuery } from '@tanstack/react-db'
 import { useMemo } from 'react'
 import { useOrgLiveQuery, useStore } from '~/lib/pocketbase'
 import type { ThreadListItem } from '../components/thread-list-item'
@@ -29,7 +28,7 @@ export function useThreadListItems(
 
     const { labels, labelMap } = useLabels()
 
-    const { data: threadStates } = useLiveQuery(
+    const { data: threadStates } = useOrgLiveQuery(
         query =>
             query
                 .from({ mail_thread_state: threadStateCollection })

@@ -1,5 +1,4 @@
 import { eq } from '@tanstack/db'
-import { useLiveQuery } from '@tanstack/react-db'
 import { Link } from 'expo-router'
 import { Lock, Mail, Plus, Trash2, UserPlus, X } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb'
@@ -8,10 +7,9 @@ import { Pressable, ScrollView, Text, View } from 'react-native'
 import { handleMutationErrorsWithForm } from '~/lib/errors'
 import { mutation, useMutation } from '~/lib/mutations'
 import { useOrgHref } from '~/lib/org-routes'
-import { useStore } from '~/lib/pocketbase'
+import { useOrgLiveQuery, useStore } from '~/lib/pocketbase'
 import { useThemeColor } from '~/lib/use-app-theme'
 import { useCurrentRole } from '~/lib/use-current-role'
-import { useOrgInfo } from '~/lib/use-org-info'
 import { Divider } from '~/ui/divider'
 import { FormErrorSummary, SelectInput, TextInput, useForm, z, zodResolver } from '~/ui/form'
 
@@ -50,7 +48,7 @@ interface OrgMemberRow {
     userName: string
 }
 
-function useMailboxData(orgId: string) {
+function useMailboxData() {
     const [domainsCollection, mailboxesCollection, membersCollection, userOrgCollection] = useStore(
         'mail_domains',
         'mail_mailboxes',
@@ -58,15 +56,13 @@ function useMailboxData(orgId: string) {
         'user_org'
     )
 
-    const { data: domains } = useLiveQuery(
-        query =>
-            query
-                .from({ mail_domains: domainsCollection })
-                .where(({ mail_domains }) => eq(mail_domains.org, orgId)),
-        [orgId]
+    const { data: domains } = useOrgLiveQuery((query, { orgId }) =>
+        query
+            .from({ mail_domains: domainsCollection })
+            .where(({ mail_domains }) => eq(mail_domains.org, orgId))
     )
 
-    const { data: mailboxes } = useLiveQuery(
+    const { data: mailboxes } = useOrgLiveQuery(
         query =>
             query
                 .from({ mail_mailboxes: mailboxesCollection })
@@ -76,17 +72,12 @@ function useMailboxData(orgId: string) {
         [domains]
     )
 
-    const { data: members } = useLiveQuery(
-        query => query.from({ mail_mailbox_members: membersCollection }),
-        []
+    const { data: members } = useOrgLiveQuery(query =>
+        query.from({ mail_mailbox_members: membersCollection })
     )
 
-    const { data: orgUserOrgs } = useLiveQuery(
-        query =>
-            query
-                .from({ user_org: userOrgCollection })
-                .where(({ user_org }) => eq(user_org.org, orgId)),
-        [orgId]
+    const { data: orgUserOrgs } = useOrgLiveQuery((query, { orgId }) =>
+        query.from({ user_org: userOrgCollection }).where(({ user_org }) => eq(user_org.org, orgId))
     )
 
     const domainMap = new Map((domains ?? []).map(d => [d.id, d.domain]))
@@ -138,14 +129,13 @@ export default function MailboxesSettings() {
     const mutedColor = useThemeColor('muted-foreground')
     const primaryColor = useThemeColor('primary')
     const backgroundColor = useThemeColor('background')
-    const { orgId } = useOrgInfo()
     const { isAdmin, userOrgId } = useCurrentRole()
     const [expandedMailbox, setExpandedMailbox] = useState<string | null>(null)
-    const data = useMailboxData(orgId)
+    const data = useMailboxData()
 
     if (!isAdmin) {
         return (
-            <View style={{ flex: 1, padding: 20, justifyContent: 'center', alignItems: 'center' }}>
+            <View className="flex-1 items-center justify-center p-5">
                 <Text style={{ color: mutedColor }}>Admin access required</Text>
             </View>
         )
@@ -156,8 +146,8 @@ export default function MailboxesSettings() {
 
     return (
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} style={{ backgroundColor }}>
-            <View style={{ flex: 1, padding: 20, gap: 20, maxWidth: 600 }}>
-                <View style={{ gap: 8 }}>
+            <View className="flex-1 gap-5 p-5" style={{ maxWidth: 600 }}>
+                <View className="gap-2">
                     <Mail size={32} color={primaryColor} />
                     <Text style={{ fontSize: 20, fontWeight: 'bold', color: foregroundColor }}>
                         Mailboxes
@@ -171,7 +161,7 @@ export default function MailboxesSettings() {
 
                 {hasDomains && (
                     <>
-                        <View style={{ gap: 12 }}>
+                        <View className="gap-3">
                             <Text
                                 style={{ fontSize: 18, fontWeight: 'bold', color: foregroundColor }}
                             >
@@ -247,17 +237,10 @@ function MailboxCard({
     const fullAddress = `${mailbox.address}@${mailbox.domainName}`
 
     return (
-        <View style={{ borderWidth: 1, borderColor, borderRadius: 12, padding: 12 }}>
-            <Pressable
-                style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                }}
-                onPress={onToggle}
-            >
-                <View style={{ gap: 4, flex: 1 }}>
-                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+        <View className="border rounded-xl p-3" style={{ borderColor }}>
+            <Pressable className="flex-row justify-between items-center" onPress={onToggle}>
+                <View className="gap-1 flex-1">
+                    <View className="flex-row gap-2 items-center">
                         {isPersonal && <Lock size={14} color={mutedColor} />}
                         <Text style={{ fontWeight: '600', color: foregroundColor }}>
                             {fullAddress}
@@ -287,15 +270,10 @@ function MailboxCard({
 function TypeBadge({ type }: { type: string }) {
     const isPersonal = type === 'personal'
     return (
-        <View
-            style={{
-                backgroundColor: isPersonal ? '#dbeafe' : '#dcfce7',
-                paddingHorizontal: 8,
-                paddingVertical: 2,
-                borderRadius: 8,
-            }}
-        >
-            <Text style={{ fontSize: 11, color: isPersonal ? '#2563eb' : '#16a34a' }}>{type}</Text>
+        <View className={`px-2 py-0.5 rounded-lg ${isPersonal ? 'bg-[#dbeafe]' : 'bg-[#dcfce7]'}`}>
+            <Text className={`text-[11px] ${isPersonal ? 'text-[#2563eb]' : 'text-[#16a34a]'}`}>
+                {type}
+            </Text>
         </View>
     )
 }
@@ -317,21 +295,18 @@ function DeleteMailboxButton({ mailboxId, isVisible }: { mailboxId: string; isVi
 
     if (confirming) {
         return (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View className="flex-row gap-2">
                 <Pressable
                     onPress={() => deleteMutation.mutate()}
-                    style={{
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        borderRadius: 6,
-                        backgroundColor: dangerColor,
-                    }}
+                    className="px-3 rounded-md"
+                    style={{ paddingVertical: 6, backgroundColor: dangerColor }}
                 >
                     <Text style={{ fontSize: 13, color: '#fff' }}>Confirm</Text>
                 </Pressable>
                 <Pressable
                     onPress={() => setConfirming(false)}
-                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}
+                    className="px-3 rounded-md"
+                    style={{ paddingVertical: 6 }}
                 >
                     <Text style={{ fontSize: 13 }}>Cancel</Text>
                 </Pressable>
@@ -341,7 +316,7 @@ function DeleteMailboxButton({ mailboxId, isVisible }: { mailboxId: string; isVi
 
     return (
         <Pressable
-            style={{ padding: 4 }}
+            className="p-1"
             onPress={e => {
                 e.stopPropagation()
                 setConfirming(true)
@@ -415,10 +390,8 @@ function MailboxMemberPanel({
 
     return (
         <View
+            className="gap-2 mt-3 pt-3"
             style={{
-                gap: 8,
-                marginTop: 12,
-                paddingTop: 12,
                 borderTopWidth: 1,
                 borderColor,
             }}
@@ -430,23 +403,15 @@ function MailboxMemberPanel({
                 const canRemove = !(isOwner && ownerCount <= 1)
 
                 return (
-                    <View
-                        key={m.id}
-                        style={{
-                            flexDirection: 'row',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            paddingVertical: 4,
-                        }}
-                    >
-                        <View style={{ flex: 1 }}>
+                    <View key={m.id} className="flex-row justify-between items-center py-1">
+                        <View className="flex-1">
                             <Text style={{ fontSize: 13, color: foregroundColor }}>
                                 {m.userName}
                             </Text>
                             <Text style={{ fontSize: 11, color: mutedColor }}>{m.role}</Text>
                         </View>
 
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <View className="flex-row gap-2">
                             <Pressable
                                 onPress={() =>
                                     toggleRoleMutation.mutate({
@@ -455,10 +420,7 @@ function MailboxMemberPanel({
                                     })
                                 }
                                 disabled={isOwner && ownerCount <= 1}
-                                style={{
-                                    padding: 4,
-                                    opacity: isOwner && ownerCount <= 1 ? 0.4 : 1,
-                                }}
+                                className={`p-1 ${isOwner && ownerCount <= 1 ? 'opacity-40' : 'opacity-100'}`}
                             >
                                 <Text style={{ fontSize: 13 }}>
                                     {isOwner ? 'Make member' : 'Make owner'}
@@ -468,7 +430,7 @@ function MailboxMemberPanel({
                             <Pressable
                                 onPress={() => removeMemberMutation.mutate(m.id)}
                                 disabled={!canRemove}
-                                style={{ padding: 4, opacity: canRemove ? 1 : 0.4 }}
+                                className={`p-1 ${canRemove ? 'opacity-100' : 'opacity-40'}`}
                             >
                                 <X size={14} color={dangerColor} />
                             </Pressable>
@@ -525,20 +487,18 @@ function AddMemberSection({
     if (!isVisible) return null
 
     return (
-        <View style={{ gap: 8 }}>
+        <View className="gap-2">
             <Text style={{ fontSize: 13, color: mutedColor }}>Select a member to add:</Text>
-            <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
+            <View className="flex-row gap-1 flex-wrap">
                 {availableMembers.map(uo => {
                     const isSelected = selectedUserOrg === uo.userOrgId
                     return (
                         <Pressable
                             key={uo.userOrgId}
                             onPress={() => onSelect(uo.userOrgId)}
+                            className="border rounded-xl px-3"
                             style={{
-                                borderWidth: 1,
                                 borderColor: isSelected ? accentColor : borderColor,
-                                borderRadius: 12,
-                                paddingHorizontal: 12,
                                 paddingVertical: 6,
                                 backgroundColor: isSelected ? `${accentColor}14` : undefined,
                             }}
@@ -548,23 +508,19 @@ function AddMemberSection({
                     )
                 })}
             </View>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View className="flex-row gap-2">
                 <Pressable
                     onPress={onAdd}
                     disabled={!selectedUserOrg || isPending}
-                    style={{
-                        backgroundColor: primaryColor,
-                        paddingHorizontal: 16,
-                        paddingVertical: 10,
-                        borderRadius: 8,
-                        opacity: !selectedUserOrg || isPending ? 0.5 : 1,
-                    }}
+                    className={`px-4 rounded-lg py-2.5 ${!selectedUserOrg || isPending ? 'opacity-50' : 'opacity-100'}`}
+                    style={{ backgroundColor: primaryColor }}
                 >
                     <Text style={{ color: primaryFgColor }}>Add</Text>
                 </Pressable>
                 <Pressable
                     onPress={onCancel}
-                    style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 }}
+                    className="px-4 rounded-lg"
+                    style={{ paddingVertical: 10 }}
                 >
                     <Text>Cancel</Text>
                 </Pressable>
@@ -588,13 +544,7 @@ function AddMemberTrigger({
         <Pressable
             onPress={onPress}
             disabled={disabled}
-            style={{
-                flexDirection: 'row',
-                gap: 4,
-                alignItems: 'center',
-                padding: 4,
-                opacity: disabled ? 0.4 : 1,
-            }}
+            className={`flex-row gap-1 items-center p-1 ${disabled ? 'opacity-40' : 'opacity-100'}`}
         >
             <UserPlus size={14} />
             <Text style={{ fontSize: 13 }}>Add member</Text>
@@ -661,7 +611,7 @@ function CreateMailboxForm({
     const canSubmit = !createMutation.isPending && isDirty
 
     return (
-        <View style={{ gap: 12 }}>
+        <View className="gap-3">
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: foregroundColor }}>
                 Create Shared Mailbox
             </Text>
@@ -684,16 +634,8 @@ function CreateMailboxForm({
             <Pressable
                 onPress={onSubmit}
                 disabled={!canSubmit}
-                style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    backgroundColor: primaryColor,
-                    height: 44,
-                    borderRadius: 8,
-                    opacity: canSubmit ? 1 : 0.5,
-                }}
+                className={`flex-row items-center justify-center gap-2 rounded-lg h-11 ${canSubmit ? 'opacity-100' : 'opacity-50'}`}
+                style={{ backgroundColor: primaryColor }}
             >
                 <Plus size={16} color={primaryFgColor} />
                 <Text style={{ fontWeight: '600', color: primaryFgColor }}>

@@ -1,12 +1,11 @@
 import { eq } from '@tanstack/db'
-import { useLiveQuery } from '@tanstack/react-db'
 import { CheckCircle, Circle, Globe, Plus, Trash2 } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { handleMutationErrorsWithForm } from '~/lib/errors'
 import { mutation, useMutation } from '~/lib/mutations'
-import { useStore } from '~/lib/pocketbase'
+import { useOrgLiveQuery, useStore } from '~/lib/pocketbase'
 import { useThemeColor } from '~/lib/use-app-theme'
 import { useOrgInfo } from '~/lib/use-org-info'
 import { useSettings } from '~/lib/use-settings'
@@ -93,8 +92,8 @@ export default function ProviderSettings() {
 
     return (
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} style={{ backgroundColor }}>
-            <View style={{ flex: 1, padding: 20, gap: 20, maxWidth: 600 }}>
-                <View style={{ gap: 8 }}>
+            <View className="flex-1 gap-5 p-5" style={{ maxWidth: 600 }}>
+                <View className="gap-2">
                     <Globe size={32} color={primaryColor} />
                     <Text style={{ fontSize: 20, fontWeight: 'bold', color: foregroundColor }}>
                         Mail Provider
@@ -106,7 +105,7 @@ export default function ProviderSettings() {
 
                 <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
 
-                <View style={{ gap: 16 }}>
+                <View className="gap-4">
                     <SelectInput
                         control={control}
                         name="provider"
@@ -130,14 +129,8 @@ export default function ProviderSettings() {
                 <Pressable
                     onPress={onSubmit}
                     disabled={!canSubmit}
-                    style={{
-                        backgroundColor: primaryColor,
-                        height: 44,
-                        borderRadius: 8,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: canSubmit ? 1 : 0.5,
-                    }}
+                    className={`items-center justify-center rounded-lg h-11 ${canSubmit ? 'opacity-100' : 'opacity-50'}`}
+                    style={{ backgroundColor: primaryColor }}
                 >
                     <Text style={{ fontWeight: '600', color: primaryFgColor }}>
                         {saveMutation.isPending ? 'Saving...' : 'Save'}
@@ -163,13 +156,11 @@ function DomainsSection({ orgId }: { orgId: string }) {
     const mutedColor = useThemeColor('muted-foreground')
     const [domainsCollection] = useStore('mail_domains')
 
-    const { data: domains } = useLiveQuery(
-        query =>
-            query
-                .from({ mail_domains: domainsCollection })
-                .where(({ mail_domains }) => eq(mail_domains.org, orgId))
-                .orderBy(({ mail_domains }) => mail_domains.created, 'asc'),
-        [orgId]
+    const { data: domains } = useOrgLiveQuery((query, { orgId }) =>
+        query
+            .from({ mail_domains: domainsCollection })
+            .where(({ mail_domains }) => eq(mail_domains.org, orgId))
+            .orderBy(({ mail_domains }) => mail_domains.created, 'asc')
     )
 
     const domainRows: DomainRow[] = (domains ?? []).map(d => ({
@@ -179,7 +170,7 @@ function DomainsSection({ orgId }: { orgId: string }) {
     }))
 
     return (
-        <View style={{ gap: 12 }}>
+        <View className="gap-3">
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: foregroundColor }}>
                 Domains
             </Text>
@@ -236,18 +227,13 @@ function DomainRowItem({ domain }: { domain: DomainRow }) {
 
     return (
         <View
+            className="flex-row justify-between items-center border rounded-xl p-3"
             style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderWidth: 1,
                 borderColor,
-                borderRadius: 12,
-                padding: 12,
             }}
         >
-            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flex: 1 }}>
-                <Pressable style={{ padding: 4 }} onPress={() => toggleVerifiedMutation.mutate()}>
+            <View className="flex-row gap-2 items-center flex-1">
+                <Pressable className="p-1" onPress={() => toggleVerifiedMutation.mutate()}>
                     <VerifiedIcon size={18} color={verifiedColor} />
                 </Pressable>
                 <View>
@@ -286,13 +272,12 @@ function DeleteDomainButton({
 
     if (confirming) {
         return (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View className="flex-row gap-2">
                 <Pressable
                     onPress={onConfirm}
+                    className="px-3 rounded-md"
                     style={{
-                        paddingHorizontal: 12,
                         paddingVertical: 6,
-                        borderRadius: 6,
                         backgroundColor: dangerColor,
                     }}
                 >
@@ -300,10 +285,9 @@ function DeleteDomainButton({
                 </Pressable>
                 <Pressable
                     onPress={onCancel}
+                    className="px-3 rounded-md"
                     style={{
-                        paddingHorizontal: 12,
                         paddingVertical: 6,
-                        borderRadius: 6,
                     }}
                 >
                     <Text style={{ fontSize: 13 }}>Cancel</Text>
@@ -313,7 +297,7 @@ function DeleteDomainButton({
     }
 
     return (
-        <Pressable style={{ padding: 4 }} onPress={onStartConfirm}>
+        <Pressable className="p-1" onPress={onStartConfirm}>
             <Trash2 size={16} color={dangerColor} />
         </Pressable>
     )
@@ -357,16 +341,8 @@ function AddDomainForm({ orgId }: { orgId: string }) {
         <Pressable
             onPress={onSubmit}
             disabled={!canSubmit}
-            style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 4,
-                backgroundColor: primaryColor,
-                paddingHorizontal: 16,
-                paddingVertical: 10,
-                borderRadius: 8,
-                opacity: canSubmit ? 1 : 0.5,
-            }}
+            className={`flex-row items-center gap-1 px-4 rounded-lg py-2.5 ${canSubmit ? 'opacity-100' : 'opacity-50'}`}
+            style={{ backgroundColor: primaryColor }}
         >
             <Plus size={16} color={primaryFgColor} />
             <Text style={{ fontWeight: '600', color: primaryFgColor }}>
@@ -376,7 +352,7 @@ function AddDomainForm({ orgId }: { orgId: string }) {
     )
 
     return (
-        <View style={{ gap: 12 }}>
+        <View className="gap-3">
             <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
 
             <TextInput

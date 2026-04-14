@@ -1,5 +1,4 @@
 import { eq } from '@tanstack/db'
-import { useLiveQuery } from '@tanstack/react-db'
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
 import {
     AlertTriangle,
@@ -24,9 +23,8 @@ import {
     SidebarNav,
 } from '~/components/sidebar-primitives'
 import { useOrgHref } from '~/lib/org-routes'
-import { useStore } from '~/lib/pocketbase'
+import { useOrgLiveQuery, useStore } from '~/lib/pocketbase'
 import { useThemeColor } from '~/lib/use-app-theme'
-import { useCurrentRole } from '~/lib/use-current-role'
 import { composeEvents } from './hooks/composeEvents'
 import { useLabels } from './hooks/useLabels'
 
@@ -46,19 +44,16 @@ export default function MailSidebar(_props: MailSidebarProps) {
     const router = useRouter()
     const mutedColor = useThemeColor('muted-foreground')
     const { folder: activeFolder, activeLabels } = useActiveView()
-    const { userOrgId } = useCurrentRole()
     const orgHref = useOrgHref()
     const [labelManagerOpen, setLabelManagerOpen] = useState(false)
 
     const [threadStateCollection] = useStore('mail_thread_state')
     const { labels: orgLabels } = useLabels()
 
-    const { data: threadStates } = useLiveQuery(
-        query =>
-            query
-                .from({ mail_thread_state: threadStateCollection })
-                .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, userOrgId)),
-        [userOrgId]
+    const { data: threadStates } = useOrgLiveQuery((query, { userOrgId }) =>
+        query
+            .from({ mail_thread_state: threadStateCollection })
+            .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, userOrgId))
     )
 
     const folderCounts = useMemo(() => {

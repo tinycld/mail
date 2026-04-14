@@ -1,13 +1,11 @@
 import { and, eq } from '@tanstack/db'
-import { useLiveQuery } from '@tanstack/react-db'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { ScreenHeader } from '~/components/ScreenHeader'
 import { mutation, useMutation } from '~/lib/mutations'
-import { useStore } from '~/lib/pocketbase'
+import { useOrgLiveQuery, useStore } from '~/lib/pocketbase'
 import { useThemeColor } from '~/lib/use-app-theme'
-import { useCurrentRole } from '~/lib/use-current-role'
 import { useScrollShadow } from '~/lib/use-scroll-shadow'
 import { EmailAttachments } from '../components/EmailAttachments'
 import { EmailBody } from '../components/EmailBody'
@@ -44,7 +42,6 @@ function useAutoMarkAsRead(
 
 export default function MailDetailScreen() {
     const { id = '' } = useLocalSearchParams<{ id: string }>()
-    const { userOrgId } = useCurrentRole()
     const router = useRouter()
     const { openReply } = useCompose()
     const _mutedColor = useThemeColor('muted-foreground')
@@ -56,19 +53,19 @@ export default function MailDetailScreen() {
         'mail_messages'
     )
 
-    const { data: threadStates } = useLiveQuery(
-        query =>
+    const { data: threadStates } = useOrgLiveQuery(
+        (query, { userOrgId }) =>
             query
                 .from({ mail_thread_state: threadStateCollection })
                 .where(({ mail_thread_state }) =>
                     and(eq(mail_thread_state.thread, id), eq(mail_thread_state.user_org, userOrgId))
                 ),
-        [id, userOrgId]
+        [id]
     )
 
     const threadState = threadStates?.[0]
 
-    const { data: messages } = useLiveQuery(
+    const { data: messages } = useOrgLiveQuery(
         query =>
             query
                 .from({ mail_messages: messagesCollection })
@@ -141,7 +138,7 @@ export default function MailDetailScreen() {
     }
 
     return (
-        <View style={{ flex: 1, backgroundColor }}>
+        <View className="flex-1" style={{ backgroundColor }}>
             <ScreenHeader isScrolled={isScrolled}>
                 <EmailDetailToolbar
                     threadState={threadState}
@@ -162,7 +159,7 @@ export default function MailDetailScreen() {
                 />
             </ScreenHeader>
             <ScrollView
-                style={{ flex: 1 }}
+                className="flex-1"
                 contentContainerStyle={{ flexGrow: 1 }}
                 onScroll={onScroll}
                 scrollEventThrottle={16}
@@ -257,9 +254,8 @@ function CollapsedSnippet({ snippet, onPress }: { snippet: string; onPress: () =
     return (
         <Pressable onPress={onPress}>
             <View
+                className="px-4 py-2"
                 style={{
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
                     borderBottomWidth: 1,
                     borderBottomColor: borderColor,
                 }}
