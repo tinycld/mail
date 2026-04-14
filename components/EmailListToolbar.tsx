@@ -6,7 +6,6 @@ import {
     FolderInput,
     Mail,
     MailOpen,
-    MoreVertical,
     RefreshCw,
     Square,
     SquareCheck,
@@ -15,13 +14,13 @@ import {
     Tag,
     Trash2,
 } from 'lucide-react-native'
-import { Pressable, Text, View } from 'react-native'
-import { ToolbarSeparator } from '~/components/ToolbarSeparator'
+import { useMemo } from 'react'
+import { Pressable, Text } from 'react-native'
+import { ResponsiveToolbar, type ToolbarItem } from '~/components/ResponsiveToolbar'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { useThemeColor } from '~/lib/use-app-theme'
 import type { MailThreadState } from '../types'
-import { MenuActionItem, ToolbarMenu } from './DropdownMenu'
-import { ToolbarIconButton } from './ToolbarIconButton'
+import { MenuActionItem } from './DropdownMenu'
 
 interface LabelInfo {
     id: string
@@ -71,32 +70,47 @@ function DefaultToolbar({
     const paginationText =
         emailCount > 0 ? `1\u2013${emailCount} of ${emailCount}` : 'No conversations'
 
-    return (
-        <View
-            className="flex-row items-center justify-between px-2 overflow-visible"
-            style={{ height: 44 }}
-        >
-            <View className="flex-row items-center overflow-visible" style={{ gap: 2 }}>
-                <Pressable className="p-2" onPress={onToggleAll}>
-                    <Square size={18} color={mutedColor} />
-                </Pressable>
-                <ToolbarIconButton
-                    icon={RefreshCw}
-                    label="Refresh"
-                    onPress={onRefresh ?? (() => {})}
-                    disabled={isRefreshing}
-                />
-                <ToolbarIconButton icon={MoreVertical} label="More" onPress={() => {}} />
-            </View>
-            <View className="flex-row items-center" style={{ gap: 2 }}>
-                <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>
-                    {paginationText}
-                </Text>
-                <ToolbarIconButton icon={ChevronLeft} label="Newer" onPress={() => {}} />
-                <ToolbarIconButton icon={ChevronRight} label="Older" onPress={() => {}} />
-            </View>
-        </View>
+    const items: ToolbarItem[] = useMemo(
+        () => [
+            {
+                type: 'custom',
+                key: 'select-all',
+                element: (
+                    <Pressable className="p-2" onPress={onToggleAll}>
+                        <Square size={18} color={mutedColor} />
+                    </Pressable>
+                ),
+            },
+            {
+                type: 'button',
+                key: 'refresh',
+                icon: RefreshCw,
+                label: 'Refresh',
+                onPress: onRefresh ?? (() => {}),
+                disabled: isRefreshing,
+            },
+        ],
+        [onToggleAll, mutedColor, onRefresh, isRefreshing]
     )
+
+    const rightItems: ToolbarItem[] = useMemo(
+        () => [
+            {
+                type: 'custom',
+                key: 'pagination-text',
+                element: (
+                    <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>
+                        {paginationText}
+                    </Text>
+                ),
+            },
+            { type: 'button', key: 'newer', icon: ChevronLeft, label: 'Newer', onPress: () => {} },
+            { type: 'button', key: 'older', icon: ChevronRight, label: 'Older', onPress: () => {} },
+        ],
+        [mutedColor, paginationText]
+    )
+
+    return <ResponsiveToolbar items={items} rightItems={rightItems} />
 }
 
 const MOVE_FOLDERS: { label: string; folder: MailThreadState['folder'] }[] = [
@@ -138,66 +152,116 @@ function BulkActionsToolbar({
     const ReadIcon = allSelectedRead ? MailOpen : Mail
     const readLabel = allSelectedRead ? 'Mark as unread' : 'Mark as read'
 
-    return (
-        <View
-            className="flex-row items-center justify-between px-2 overflow-visible"
-            style={{ height: 44 }}
-        >
-            <View className="flex-row items-center overflow-visible" style={{ gap: 2 }}>
-                <Pressable className="p-2" onPress={onToggleAll}>
-                    <SelectIcon size={18} color={primaryColor} />
-                </Pressable>
-                <Text style={{ fontSize: 13, marginHorizontal: 4, color: foregroundColor }}>
-                    {selectedCount} selected
-                </Text>
-                <ToolbarIconButton icon={Archive} label="Archive" onPress={onArchive} />
-                <ToolbarIconButton icon={CircleAlert} label="Report spam" onPress={onSpam} />
-                <ToolbarIconButton icon={Trash2} label="Delete" onPress={onTrash} />
-                <ToolbarSeparator />
-                <ToolbarIconButton
-                    icon={ReadIcon}
-                    label={readLabel}
-                    onPress={() => onToggleRead(!allSelectedRead)}
-                />
-                <ToolbarMenu icon={FolderInput} label="Move to">
-                    {MOVE_FOLDERS.map(({ label, folder }) => (
-                        <MenuActionItem key={folder} label={label} onPress={() => onMove(folder)} />
-                    ))}
-                </ToolbarMenu>
-                <ToolbarMenu icon={Tag} label="Labels">
-                    {labels.map(lbl => {
-                        const isActive = selectedItemLabelIds.has(lbl.id)
-                        return (
-                            <MenuActionItem
-                                key={lbl.id}
-                                label={lbl.name}
-                                colorDot={lbl.color}
-                                isActive={isActive}
-                                onPress={() => onUpdateLabel(lbl.id, !isActive)}
-                            />
-                        )
-                    })}
-                </ToolbarMenu>
-                <ToolbarMenu icon={MoreVertical} label="More">
-                    <MenuActionItem
-                        label={allSelectedRead ? 'Mark as unread' : 'Mark as read'}
-                        icon={allSelectedRead ? MailOpen : Mail}
-                        onPress={() => onToggleRead(!allSelectedRead)}
-                    />
-                    <MenuActionItem
-                        label={allSelectedStarred ? 'Remove star' : 'Add star'}
-                        icon={Star}
-                        onPress={() => onToggleStar(!allSelectedStarred)}
-                    />
-                </ToolbarMenu>
-            </View>
-            <View className="flex-row items-center" style={{ gap: 2 }}>
-                <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>
-                    {paginationText}
-                </Text>
-                <ToolbarIconButton icon={ChevronLeft} label="Newer" onPress={() => {}} />
-                <ToolbarIconButton icon={ChevronRight} label="Older" onPress={() => {}} />
-            </View>
-        </View>
+    const items: ToolbarItem[] = useMemo(
+        () => [
+            {
+                type: 'custom',
+                key: 'select-all',
+                element: (
+                    <Pressable className="p-2" onPress={onToggleAll}>
+                        <SelectIcon size={18} color={primaryColor} />
+                    </Pressable>
+                ),
+            },
+            {
+                type: 'custom',
+                key: 'selected-count',
+                element: (
+                    <Text style={{ fontSize: 13, marginHorizontal: 4, color: foregroundColor }}>
+                        {selectedCount} selected
+                    </Text>
+                ),
+            },
+            { type: 'button', key: 'archive', icon: Archive, label: 'Archive', onPress: onArchive },
+            {
+                type: 'button',
+                key: 'spam',
+                icon: CircleAlert,
+                label: 'Report spam',
+                onPress: onSpam,
+            },
+            { type: 'button', key: 'trash', icon: Trash2, label: 'Delete', onPress: onTrash },
+            { type: 'separator' },
+            {
+                type: 'button',
+                key: 'read',
+                icon: ReadIcon,
+                label: readLabel,
+                onPress: () => onToggleRead(!allSelectedRead),
+            },
+            {
+                type: 'menu',
+                key: 'move',
+                icon: FolderInput,
+                label: 'Move to',
+                children: MOVE_FOLDERS.map(({ label, folder }) => (
+                    <MenuActionItem key={folder} label={label} onPress={() => onMove(folder)} />
+                )),
+            },
+            {
+                type: 'menu',
+                key: 'labels',
+                icon: Tag,
+                label: 'Labels',
+                children: labels.map(lbl => {
+                    const isActive = selectedItemLabelIds.has(lbl.id)
+                    return (
+                        <MenuActionItem
+                            key={lbl.id}
+                            label={lbl.name}
+                            colorDot={lbl.color}
+                            isActive={isActive}
+                            onPress={() => onUpdateLabel(lbl.id, !isActive)}
+                        />
+                    )
+                }),
+            },
+            {
+                type: 'button',
+                key: 'star',
+                icon: Star,
+                label: allSelectedStarred ? 'Remove star' : 'Add star',
+                onPress: () => onToggleStar(!allSelectedStarred),
+            },
+        ],
+        [
+            onToggleAll,
+            SelectIcon,
+            primaryColor,
+            foregroundColor,
+            selectedCount,
+            onArchive,
+            onSpam,
+            onTrash,
+            ReadIcon,
+            readLabel,
+            allSelectedRead,
+            onToggleRead,
+            onMove,
+            labels,
+            selectedItemLabelIds,
+            onUpdateLabel,
+            allSelectedStarred,
+            onToggleStar,
+        ]
     )
+
+    const rightItems: ToolbarItem[] = useMemo(
+        () => [
+            {
+                type: 'custom',
+                key: 'pagination-text',
+                element: (
+                    <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>
+                        {paginationText}
+                    </Text>
+                ),
+            },
+            { type: 'button', key: 'newer', icon: ChevronLeft, label: 'Newer', onPress: () => {} },
+            { type: 'button', key: 'older', icon: ChevronRight, label: 'Older', onPress: () => {} },
+        ],
+        [mutedColor, paginationText]
+    )
+
+    return <ResponsiveToolbar items={items} rightItems={rightItems} />
 }

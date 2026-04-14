@@ -10,7 +10,9 @@ import {
     Trash2,
     Underline,
 } from 'lucide-react-native'
+import { useCallback, useMemo } from 'react'
 import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from 'react-native'
+import { ResponsiveToolbar, type ToolbarItem } from '~/components/ResponsiveToolbar'
 import { useThemeColor } from '~/lib/use-app-theme'
 
 interface ComposeToolbarProps {
@@ -35,7 +37,7 @@ export function ComposeToolbar({
     const borderColor = useThemeColor('border')
     const editorState = useBridgeState(editor)
 
-    const handleLink = () => {
+    const handleLink = useCallback(() => {
         const defaultUrl = editorState.activeLink ?? 'https://'
 
         if (Platform.OS === 'web') {
@@ -56,114 +58,187 @@ export function ComposeToolbar({
                 defaultUrl
             )
         }
-    }
+    }, [editor, editorState.activeLink])
+
+    const items: ToolbarItem[] = useMemo(
+        () => [
+            {
+                type: 'custom',
+                key: 'send',
+                element: (
+                    <Pressable
+                        className="rounded-full items-center"
+                        style={[
+                            {
+                                paddingHorizontal: 20,
+                                paddingVertical: 6,
+                                minWidth: 72,
+                                backgroundColor: primaryColor,
+                            },
+                            isPending && { opacity: 0.6 },
+                        ]}
+                        onPress={onSend}
+                        disabled={isPending}
+                    >
+                        {isPending ? (
+                            <ActivityIndicator size="small" color={primaryFgColor} />
+                        ) : (
+                            <Text
+                                style={{ fontSize: 14, fontWeight: '600', color: primaryFgColor }}
+                            >
+                                Send
+                            </Text>
+                        )}
+                    </Pressable>
+                ),
+            },
+            {
+                type: 'custom',
+                key: 'bold',
+                element: (
+                    <FormatButton
+                        icon={Bold}
+                        isActive={editorState.isBoldActive}
+                        onPress={() => editor.toggleBold()}
+                        iconColor={iconColor}
+                        activeColor={activeColor}
+                    />
+                ),
+                overflowLabel: 'Bold',
+                overflowIcon: Bold,
+                overflowPress: () => editor.toggleBold(),
+            },
+            {
+                type: 'custom',
+                key: 'italic',
+                element: (
+                    <FormatButton
+                        icon={Italic}
+                        isActive={editorState.isItalicActive}
+                        onPress={() => editor.toggleItalic()}
+                        iconColor={iconColor}
+                        activeColor={activeColor}
+                    />
+                ),
+                overflowLabel: 'Italic',
+                overflowIcon: Italic,
+                overflowPress: () => editor.toggleItalic(),
+            },
+            {
+                type: 'custom',
+                key: 'underline',
+                element: (
+                    <FormatButton
+                        icon={Underline}
+                        isActive={editorState.isUnderlineActive}
+                        onPress={() => editor.toggleUnderline()}
+                        iconColor={iconColor}
+                        activeColor={activeColor}
+                    />
+                ),
+                overflowLabel: 'Underline',
+                overflowIcon: Underline,
+                overflowPress: () => editor.toggleUnderline(),
+            },
+            { type: 'separator' },
+            {
+                type: 'custom',
+                key: 'bullet-list',
+                element: (
+                    <FormatButton
+                        icon={List}
+                        isActive={editorState.isBulletListActive}
+                        onPress={() => editor.toggleBulletList()}
+                        iconColor={iconColor}
+                        activeColor={activeColor}
+                    />
+                ),
+                overflowLabel: 'Bullet list',
+                overflowIcon: List,
+                overflowPress: () => editor.toggleBulletList(),
+            },
+            {
+                type: 'custom',
+                key: 'ordered-list',
+                element: (
+                    <FormatButton
+                        icon={ListOrdered}
+                        isActive={editorState.isOrderedListActive}
+                        onPress={() => editor.toggleOrderedList()}
+                        iconColor={iconColor}
+                        activeColor={activeColor}
+                    />
+                ),
+                overflowLabel: 'Numbered list',
+                overflowIcon: ListOrdered,
+                overflowPress: () => editor.toggleOrderedList(),
+            },
+            { type: 'separator' },
+            {
+                type: 'custom',
+                key: 'blockquote',
+                element: (
+                    <FormatButton
+                        icon={Quote}
+                        isActive={editorState.isBlockquoteActive}
+                        onPress={() => editor.toggleBlockquote()}
+                        iconColor={iconColor}
+                        activeColor={activeColor}
+                    />
+                ),
+                overflowLabel: 'Blockquote',
+                overflowIcon: Quote,
+                overflowPress: () => editor.toggleBlockquote(),
+            },
+            {
+                type: 'custom',
+                key: 'link',
+                element: (
+                    <FormatButton
+                        icon={Link2}
+                        isActive={editorState.isLinkActive}
+                        onPress={handleLink}
+                        iconColor={iconColor}
+                        activeColor={activeColor}
+                    />
+                ),
+                overflowLabel: 'Link',
+                overflowIcon: Link2,
+                overflowPress: handleLink,
+            },
+            { type: 'separator' },
+            {
+                type: 'button',
+                key: 'attach',
+                icon: Paperclip,
+                label: 'Attach',
+                onPress: onAttach ?? (() => {}),
+            },
+        ],
+        [
+            primaryColor,
+            primaryFgColor,
+            isPending,
+            onSend,
+            editor,
+            editorState,
+            iconColor,
+            activeColor,
+            handleLink,
+            onAttach,
+        ]
+    )
+
+    const rightItems: ToolbarItem[] = useMemo(
+        () => [
+            { type: 'button', key: 'discard', icon: Trash2, label: 'Discard', onPress: onDiscard },
+        ],
+        [onDiscard]
+    )
 
     return (
-        <View
-            className="flex-row items-center px-3"
-            style={{
-                height: 44,
-                borderTopWidth: 1,
-                borderTopColor: borderColor,
-                gap: 2,
-            }}
-        >
-            <Pressable
-                className="rounded-full items-center"
-                style={[
-                    {
-                        paddingHorizontal: 20,
-                        paddingVertical: 6,
-                        minWidth: 72,
-                        backgroundColor: primaryColor,
-                    },
-                    isPending && { opacity: 0.6 },
-                ]}
-                onPress={onSend}
-                disabled={isPending}
-            >
-                {isPending ? (
-                    <ActivityIndicator size="small" color={primaryFgColor} />
-                ) : (
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: primaryFgColor }}>
-                        Send
-                    </Text>
-                )}
-            </Pressable>
-
-            <View className="flex-row items-center">
-                <FormatButton
-                    icon={Bold}
-                    isActive={editorState.isBoldActive}
-                    onPress={() => editor.toggleBold()}
-                    iconColor={iconColor}
-                    activeColor={activeColor}
-                />
-                <FormatButton
-                    icon={Italic}
-                    isActive={editorState.isItalicActive}
-                    onPress={() => editor.toggleItalic()}
-                    iconColor={iconColor}
-                    activeColor={activeColor}
-                />
-                <FormatButton
-                    icon={Underline}
-                    isActive={editorState.isUnderlineActive}
-                    onPress={() => editor.toggleUnderline()}
-                    iconColor={iconColor}
-                    activeColor={activeColor}
-                />
-            </View>
-
-            <View className="mx-1" style={{ width: 1, height: 20, backgroundColor: borderColor }} />
-
-            <View className="flex-row items-center">
-                <FormatButton
-                    icon={List}
-                    isActive={editorState.isBulletListActive}
-                    onPress={() => editor.toggleBulletList()}
-                    iconColor={iconColor}
-                    activeColor={activeColor}
-                />
-                <FormatButton
-                    icon={ListOrdered}
-                    isActive={editorState.isOrderedListActive}
-                    onPress={() => editor.toggleOrderedList()}
-                    iconColor={iconColor}
-                    activeColor={activeColor}
-                />
-            </View>
-
-            <View className="mx-1" style={{ width: 1, height: 20, backgroundColor: borderColor }} />
-
-            <View className="flex-row items-center">
-                <FormatButton
-                    icon={Quote}
-                    isActive={editorState.isBlockquoteActive}
-                    onPress={() => editor.toggleBlockquote()}
-                    iconColor={iconColor}
-                    activeColor={activeColor}
-                />
-                <FormatButton
-                    icon={Link2}
-                    isActive={editorState.isLinkActive}
-                    onPress={handleLink}
-                    iconColor={iconColor}
-                    activeColor={activeColor}
-                />
-            </View>
-
-            <View className="mx-1" style={{ width: 1, height: 20, backgroundColor: borderColor }} />
-
-            <Pressable className="rounded-md" style={{ padding: 6 }} onPress={onAttach}>
-                <Paperclip size={16} color={iconColor} />
-            </Pressable>
-
-            <View className="flex-1" />
-
-            <Pressable className="rounded-md" style={{ padding: 6 }} onPress={onDiscard}>
-                <Trash2 size={16} color={iconColor} />
-            </Pressable>
+        <View style={{ borderTopWidth: 1, borderTopColor: borderColor }}>
+            <ResponsiveToolbar items={items} rightItems={rightItems} />
         </View>
     )
 }

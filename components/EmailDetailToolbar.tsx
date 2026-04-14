@@ -9,17 +9,14 @@ import {
     ListFilter,
     Mail,
     MailOpen,
-    MoreVertical,
     Star,
     Tag,
     Trash2,
 } from 'lucide-react-native'
-import { View } from 'react-native'
-import { ToolbarSeparator } from '~/components/ToolbarSeparator'
-import { useBreakpoint } from '~/components/workspace/useBreakpoint'
+import { useMemo } from 'react'
+import { ResponsiveToolbar, type ToolbarItem } from '~/components/ResponsiveToolbar'
 import type { MailThreadState } from '../types'
-import { MenuActionItem, ToolbarMenu } from './DropdownMenu'
-import { ToolbarIconButton } from './ToolbarIconButton'
+import { MenuActionItem } from './DropdownMenu'
 
 interface LabelInfo {
     id: string
@@ -73,92 +70,121 @@ export function EmailDetailToolbar({
     hasNewer = false,
     hasOlder = false,
 }: EmailDetailToolbarProps) {
-    const breakpoint = useBreakpoint()
-    const isMobile = breakpoint === 'mobile'
-
     const isRead = threadState?.is_read ?? false
     const isStarred = threadState?.is_starred ?? false
 
     const ReadIcon = isRead ? MailOpen : Mail
     const readLabel = isRead ? 'Mark as unread' : 'Mark as read'
 
-    return (
-        <View
-            className="flex-row items-center justify-between h-[44px] px-2"
-            style={{ overflow: 'visible' }}
-        >
-            <View className="flex-row items-center gap-0.5" style={{ overflow: 'visible' }}>
-                <ToolbarIconButton icon={ArrowLeft} label="Back" onPress={onBack} />
-                <ToolbarIconButton icon={Archive} label="Archive" onPress={onArchive} />
-                {isMobile ? null : (
-                    <ToolbarIconButton icon={CircleAlert} label="Report spam" onPress={onSpam} />
-                )}
-                <ToolbarIconButton icon={Trash2} label="Delete" onPress={onTrash} />
-                {isMobile ? null : (
-                    <>
-                        <ToolbarSeparator />
-                        <ToolbarMenu icon={FolderInput} label="Move to">
-                            {MOVE_FOLDERS.map(({ label, folder }) => (
-                                <MenuActionItem
-                                    key={folder}
-                                    label={label}
-                                    onPress={() => onMove(folder)}
-                                />
-                            ))}
-                        </ToolbarMenu>
-                    </>
-                )}
-                <ToolbarMenu icon={Tag} label="Labels">
-                    {labels.map(lbl => {
-                        const isActive = threadLabelIds.has(lbl.id)
-                        return (
-                            <MenuActionItem
-                                key={lbl.id}
-                                label={lbl.name}
-                                colorDot={lbl.color}
-                                isActive={isActive}
-                                onPress={() => onUpdateLabel(lbl.id, !isActive)}
-                            />
-                        )
-                    })}
-                </ToolbarMenu>
-                <ToolbarIconButton icon={ReadIcon} label={readLabel} onPress={onToggleRead} />
-                <ToolbarMenu icon={MoreVertical} label="More options">
-                    <MenuActionItem
-                        label={isRead ? 'Mark as unread' : 'Mark as read'}
-                        icon={isRead ? MailOpen : Mail}
-                        onPress={onToggleRead}
-                    />
-                    <MenuActionItem
-                        label={isStarred ? 'Remove star' : 'Add star'}
-                        icon={Star}
-                        onPress={onToggleStar}
-                    />
-                    <MenuActionItem
-                        label="Filter messages like these"
-                        icon={ListFilter}
-                        onPress={() => {}}
-                        disabled
-                    />
-                    <MenuActionItem label="Forward all" icon={Forward} onPress={onForwardAll} />
-                </ToolbarMenu>
-            </View>
-            {isMobile ? null : (
-                <View className="flex-row items-center gap-0.5">
-                    <ToolbarIconButton
-                        icon={ChevronLeft}
-                        label="Newer"
-                        onPress={onNewer ?? (() => {})}
-                        disabled={!hasNewer}
-                    />
-                    <ToolbarIconButton
-                        icon={ChevronRight}
-                        label="Older"
-                        onPress={onOlder ?? (() => {})}
-                        disabled={!hasOlder}
-                    />
-                </View>
-            )}
-        </View>
+    const items: ToolbarItem[] = useMemo(
+        () => [
+            { type: 'button', key: 'back', icon: ArrowLeft, label: 'Back', onPress: onBack },
+            { type: 'button', key: 'archive', icon: Archive, label: 'Archive', onPress: onArchive },
+            {
+                type: 'button',
+                key: 'spam',
+                icon: CircleAlert,
+                label: 'Report spam',
+                onPress: onSpam,
+            },
+            { type: 'button', key: 'trash', icon: Trash2, label: 'Delete', onPress: onTrash },
+            { type: 'separator' },
+            {
+                type: 'menu',
+                key: 'move',
+                icon: FolderInput,
+                label: 'Move to',
+                children: MOVE_FOLDERS.map(({ label, folder }) => (
+                    <MenuActionItem key={folder} label={label} onPress={() => onMove(folder)} />
+                )),
+            },
+            {
+                type: 'menu',
+                key: 'labels',
+                icon: Tag,
+                label: 'Labels',
+                children: labels.map(lbl => {
+                    const isActive = threadLabelIds.has(lbl.id)
+                    return (
+                        <MenuActionItem
+                            key={lbl.id}
+                            label={lbl.name}
+                            colorDot={lbl.color}
+                            isActive={isActive}
+                            onPress={() => onUpdateLabel(lbl.id, !isActive)}
+                        />
+                    )
+                }),
+            },
+            {
+                type: 'button',
+                key: 'read',
+                icon: ReadIcon,
+                label: readLabel,
+                onPress: onToggleRead,
+            },
+            {
+                type: 'button',
+                key: 'star',
+                icon: Star,
+                label: isStarred ? 'Remove star' : 'Add star',
+                onPress: onToggleStar,
+            },
+            {
+                type: 'button',
+                key: 'filter',
+                icon: ListFilter,
+                label: 'Filter messages like these',
+                onPress: () => {},
+                disabled: true,
+            },
+            {
+                type: 'button',
+                key: 'forward-all',
+                icon: Forward,
+                label: 'Forward all',
+                onPress: onForwardAll,
+            },
+        ],
+        [
+            onBack,
+            onArchive,
+            onSpam,
+            onTrash,
+            onMove,
+            labels,
+            threadLabelIds,
+            onUpdateLabel,
+            ReadIcon,
+            readLabel,
+            onToggleRead,
+            isStarred,
+            onToggleStar,
+            onForwardAll,
+        ]
     )
+
+    const rightItems: ToolbarItem[] = useMemo(
+        () => [
+            {
+                type: 'button',
+                key: 'newer',
+                icon: ChevronLeft,
+                label: 'Newer',
+                onPress: onNewer ?? (() => {}),
+                disabled: !hasNewer,
+            },
+            {
+                type: 'button',
+                key: 'older',
+                icon: ChevronRight,
+                label: 'Older',
+                onPress: onOlder ?? (() => {}),
+                disabled: !hasOlder,
+            },
+        ],
+        [onNewer, onOlder, hasNewer, hasOlder]
+    )
+
+    return <ResponsiveToolbar items={items} rightItems={rightItems} />
 }
