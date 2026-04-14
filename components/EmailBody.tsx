@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Platform, Text, View } from 'react-native'
 import { pb } from '~/lib/pocketbase'
-import { useThemeColor } from '~/lib/use-app-theme'
 
 interface EmailBodyProps {
     collectionId: string
@@ -27,13 +26,12 @@ function useEmailHtml(collectionId: string, recordId: string, filename: string) 
 
 export function EmailBody({ collectionId, recordId, filename }: EmailBodyProps) {
     const html = useEmailHtml(collectionId, recordId, filename)
-    const foregroundColor = useThemeColor('foreground')
 
     if (!filename) return null
 
     if (Platform.OS === 'web') {
         return (
-            <View className="p-4 flex-1">
+            <View className="p-4 flex-1 rounded-lg" style={{ backgroundColor: '#fff' }}>
                 <iframe
                     sandbox=""
                     srcDoc={html}
@@ -42,7 +40,7 @@ export function EmailBody({ collectionId, recordId, filename }: EmailBodyProps) 
                         width: '100%',
                         minHeight: 300,
                         flex: 1,
-                        colorScheme: 'auto',
+                        colorScheme: 'light',
                     }}
                     title="Email body"
                 />
@@ -51,8 +49,8 @@ export function EmailBody({ collectionId, recordId, filename }: EmailBodyProps) 
     }
 
     return (
-        <View className="p-4 flex-1">
-            <Text style={{ fontSize: 14, lineHeight: 22, color: foregroundColor }}>
+        <View className="p-4 flex-1 rounded-lg" style={{ backgroundColor: '#fff' }}>
+            <Text style={{ fontSize: 14, lineHeight: 22, color: '#000' }}>
                 {html.replace(/<[^>]*>/g, '')}
             </Text>
         </View>
