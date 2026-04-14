@@ -28,12 +28,12 @@ export function SearchBar({
 }: SearchBarProps) {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
-    const accentColor = useThemeColor('accent')
+    const primaryColor = useThemeColor('primary')
     const borderColor = useThemeColor('border')
     const sidebarBgColor = useThemeColor('surface-secondary')
     const placeholderColor = useThemeColor('field-placeholder')
     const hasActiveFilters = activeFilterCount > 0
-    const filterIconColor = hasActiveFilters ? accentColor : mutedColor
+    const filterIconColor = hasActiveFilters ? primaryColor : mutedColor
 
     return (
         <View style={{ position: 'relative', zIndex: 100 }}>

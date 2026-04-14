@@ -30,7 +30,8 @@ export function ComposeToolbar({
 }: ComposeToolbarProps) {
     const iconColor = useThemeColor('muted-foreground')
     const activeColor = useThemeColor('accent')
-    const accentFgColor = useThemeColor('accent-foreground')
+    const primaryColor = useThemeColor('primary')
+    const primaryFgColor = useThemeColor('primary-foreground')
     const borderColor = useThemeColor('border')
     const editorState = useBridgeState(editor)
 
@@ -77,7 +78,7 @@ export function ComposeToolbar({
                         borderRadius: 20,
                         minWidth: 72,
                         alignItems: 'center',
-                        backgroundColor: activeColor,
+                        backgroundColor: primaryColor,
                     },
                     isPending && { opacity: 0.6 },
                 ]}
@@ -85,9 +86,9 @@ export function ComposeToolbar({
                 disabled={isPending}
             >
                 {isPending ? (
-                    <ActivityIndicator size="small" color={accentFgColor} />
+                    <ActivityIndicator size="small" color={primaryFgColor} />
                 ) : (
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: accentFgColor }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: primaryFgColor }}>
                         Send
                     </Text>
                 )}

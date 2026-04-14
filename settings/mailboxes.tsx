@@ -136,7 +136,7 @@ function useMailboxData(orgId: string) {
 export default function MailboxesSettings() {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
-    const accentColor = useThemeColor('accent')
+    const primaryColor = useThemeColor('primary')
     const backgroundColor = useThemeColor('background')
     const { orgId } = useOrgInfo()
     const { isAdmin, userOrgId } = useCurrentRole()
@@ -158,7 +158,7 @@ export default function MailboxesSettings() {
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} style={{ backgroundColor }}>
             <View style={{ flex: 1, padding: 20, gap: 20, maxWidth: 600 }}>
                 <View style={{ gap: 8 }}>
-                    <Mail size={32} color={accentColor} />
+                    <Mail size={32} color={primaryColor} />
                     <Text style={{ fontSize: 20, fontWeight: 'bold', color: foregroundColor }}>
                         Mailboxes
                     </Text>
@@ -302,7 +302,7 @@ function TypeBadge({ type }: { type: string }) {
 
 function DeleteMailboxButton({ mailboxId, isVisible }: { mailboxId: string; isVisible: boolean }) {
     const dangerColor = useThemeColor('danger')
-    const _accentColor = useThemeColor('accent')
+    const _primaryColor = useThemeColor('primary')
     const [mailboxesCollection] = useStore('mail_mailboxes')
     const [confirming, setConfirming] = useState(false)
 
@@ -518,6 +518,8 @@ function AddMemberSection({
 }) {
     const mutedColor = useThemeColor('muted-foreground')
     const accentColor = useThemeColor('accent')
+    const primaryColor = useThemeColor('primary')
+    const primaryFgColor = useThemeColor('primary-foreground')
     const borderColor = useThemeColor('border')
 
     if (!isVisible) return null
@@ -551,14 +553,14 @@ function AddMemberSection({
                     onPress={onAdd}
                     disabled={!selectedUserOrg || isPending}
                     style={{
-                        backgroundColor: accentColor,
+                        backgroundColor: primaryColor,
                         paddingHorizontal: 16,
                         paddingVertical: 10,
                         borderRadius: 8,
                         opacity: !selectedUserOrg || isPending ? 0.5 : 1,
                     }}
                 >
-                    <Text style={{ color: '#fff' }}>Add</Text>
+                    <Text style={{ color: primaryFgColor }}>Add</Text>
                 </Pressable>
                 <Pressable
                     onPress={onCancel}
@@ -608,7 +610,8 @@ function CreateMailboxForm({
     userOrgId: string
 }) {
     const foregroundColor = useThemeColor('foreground')
-    const accentColor = useThemeColor('accent')
+    const primaryColor = useThemeColor('primary')
+    const primaryFgColor = useThemeColor('primary-foreground')
     const [mailboxesCollection, membersCollection] = useStore(
         'mail_mailboxes',
         'mail_mailbox_members'
@@ -686,14 +689,14 @@ function CreateMailboxForm({
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
-                    backgroundColor: accentColor,
+                    backgroundColor: primaryColor,
                     height: 44,
                     borderRadius: 8,
                     opacity: canSubmit ? 1 : 0.5,
                 }}
             >
-                <Plus size={16} color="#fff" />
-                <Text style={{ fontWeight: '600', color: '#fff' }}>
+                <Plus size={16} color={primaryFgColor} />
+                <Text style={{ fontWeight: '600', color: primaryFgColor }}>
                     {createMutation.isPending ? 'Creating...' : 'Create Mailbox'}
                 </Text>
             </Pressable>

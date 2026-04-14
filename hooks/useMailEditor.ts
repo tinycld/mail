@@ -19,7 +19,7 @@ import { Platform } from 'react-native'
 import { useThemeColor } from '~/lib/use-app-theme'
 import type { RichTextEditorHandle } from '../components/RichTextEditor'
 
-function buildEditorCSS(colors: { bg: string; fg: string; placeholder: string; accent: string }) {
+function buildEditorCSS(colors: { bg: string; fg: string; placeholder: string; primary: string }) {
     return `
         * {
             background-color: ${colors.bg};
@@ -48,7 +48,7 @@ function buildEditorCSS(colors: { bg: string; fg: string; placeholder: string; a
             margin-left: 0;
         }
         a {
-            color: ${colors.accent};
+            color: ${colors.primary};
             text-decoration: underline;
         }
         ul, ol {
@@ -79,7 +79,7 @@ export function useMailEditor(options: UseMailEditorOptions = {}) {
     const bgColor = useThemeColor('background')
     const fgColor = useThemeColor('foreground')
     const placeholderColor = useThemeColor('field-placeholder')
-    const accentColor = useThemeColor('accent')
+    const primaryColor = useThemeColor('primary')
     const placeholder = options.placeholder ?? ''
 
     const bridgeExtensions = useMemo(() => {
@@ -87,14 +87,14 @@ export function useMailEditor(options: UseMailEditorOptions = {}) {
             bg: bgColor,
             fg: fgColor,
             placeholder: placeholderColor,
-            accent: accentColor,
+            primary: primaryColor,
         })
         return [
             CoreBridge.configureCSS(css),
             ...baseBridgeExtensions,
             PlaceholderBridge.configureExtension({ placeholder }),
         ]
-    }, [bgColor, fgColor, placeholderColor, accentColor, placeholder])
+    }, [bgColor, fgColor, placeholderColor, primaryColor, placeholder])
 
     const editorTheme = useMemo(() => ({ webview: { backgroundColor: bgColor } }), [bgColor])
 

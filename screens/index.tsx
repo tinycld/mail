@@ -224,7 +224,7 @@ export default function MailListScreen() {
     const { openDraft } = useCompose()
     const search = useMailSearchState()
     const mutedColor = useThemeColor('muted-foreground')
-    const accentColor = useThemeColor('accent')
+    const primaryColor = useThemeColor('primary')
     const _backgroundColor = useThemeColor('background')
 
     const {
@@ -380,7 +380,7 @@ export default function MailListScreen() {
                 <SearchResultsHeader total={search.total} isSearching={search.isSearching} />
                 {search.isSearching && searchItems.length === 0 ? (
                     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                        <ActivityIndicator size="large" color={accentColor} />
+                        <ActivityIndicator size="large" color={primaryColor} />
                     </View>
                 ) : searchItems.length === 0 ? (
                     <View

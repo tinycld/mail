@@ -136,7 +136,7 @@ function BulkActionsToolbar({
 }: EmailListToolbarProps) {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
-    const accentColor = useThemeColor('accent')
+    const primaryColor = useThemeColor('primary')
 
     const SelectIcon = allSelected ? SquareCheck : someSelected ? SquareMinus : Square
 
@@ -161,7 +161,7 @@ function BulkActionsToolbar({
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 2, overflow: 'visible' }}
             >
                 <Pressable style={{ padding: 8 }} onPress={onToggleAll}>
-                    <SelectIcon size={18} color={accentColor} />
+                    <SelectIcon size={18} color={primaryColor} />
                 </Pressable>
                 <Text style={{ fontSize: 13, marginHorizontal: 4, color: foregroundColor }}>
                     {selectedCount} selected

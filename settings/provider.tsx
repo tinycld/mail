@@ -34,7 +34,8 @@ const addDomainSchema = z.object({
 export default function ProviderSettings() {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
-    const accentColor = useThemeColor('accent')
+    const primaryColor = useThemeColor('primary')
+    const primaryFgColor = useThemeColor('primary-foreground')
     const backgroundColor = useThemeColor('background')
     const { orgId } = useOrgInfo()
     const settings = useSettings('mail', orgId)
@@ -94,7 +95,7 @@ export default function ProviderSettings() {
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} style={{ backgroundColor }}>
             <View style={{ flex: 1, padding: 20, gap: 20, maxWidth: 600 }}>
                 <View style={{ gap: 8 }}>
-                    <Globe size={32} color={accentColor} />
+                    <Globe size={32} color={primaryColor} />
                     <Text style={{ fontSize: 20, fontWeight: 'bold', color: foregroundColor }}>
                         Mail Provider
                     </Text>
@@ -130,7 +131,7 @@ export default function ProviderSettings() {
                     onPress={onSubmit}
                     disabled={!canSubmit}
                     style={{
-                        backgroundColor: accentColor,
+                        backgroundColor: primaryColor,
                         height: 44,
                         borderRadius: 8,
                         alignItems: 'center',
@@ -138,7 +139,7 @@ export default function ProviderSettings() {
                         opacity: canSubmit ? 1 : 0.5,
                     }}
                 >
-                    <Text style={{ fontWeight: '600', color: '#fff' }}>
+                    <Text style={{ fontWeight: '600', color: primaryFgColor }}>
                         {saveMutation.isPending ? 'Saving...' : 'Save'}
                     </Text>
                 </Pressable>
@@ -280,7 +281,7 @@ function DeleteDomainButton({
     onStartConfirm: () => void
     onCancel: () => void
 }) {
-    const _accentColor = useThemeColor('accent')
+    const _primaryColor = useThemeColor('primary')
     const dangerColor = useThemeColor('danger')
 
     if (confirming) {
@@ -319,7 +320,8 @@ function DeleteDomainButton({
 }
 
 function AddDomainForm({ orgId }: { orgId: string }) {
-    const accentColor = useThemeColor('accent')
+    const primaryColor = useThemeColor('primary')
+    const primaryFgColor = useThemeColor('primary-foreground')
     const [domainsCollection] = useStore('mail_domains')
 
     const {
@@ -359,15 +361,15 @@ function AddDomainForm({ orgId }: { orgId: string }) {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 4,
-                backgroundColor: accentColor,
+                backgroundColor: primaryColor,
                 paddingHorizontal: 16,
                 paddingVertical: 10,
                 borderRadius: 8,
                 opacity: canSubmit ? 1 : 0.5,
             }}
         >
-            <Plus size={16} color="#fff" />
-            <Text style={{ fontWeight: '600', color: '#fff' }}>
+            <Plus size={16} color={primaryFgColor} />
+            <Text style={{ fontWeight: '600', color: primaryFgColor }}>
                 {addMutation.isPending ? 'Adding...' : 'Add'}
             </Text>
         </Pressable>

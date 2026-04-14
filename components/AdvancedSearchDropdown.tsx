@@ -86,8 +86,8 @@ export function AdvancedSearchDropdown({
     const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
     const backgroundColor = useThemeColor('background')
-    const accentColor = useThemeColor('accent')
-    const accentFgColor = useThemeColor('accent-foreground')
+    const primaryColor = useThemeColor('primary')
+    const primaryFgColor = useThemeColor('primary-foreground')
     const shadowColor = useThemeColor('border')
     const focusBgColor = useThemeColor('surface-secondary')
 
@@ -266,7 +266,7 @@ export function AdvancedSearchDropdown({
                             }}
                         >
                             {hasAttachment ? (
-                                <SquareCheck size={20} color={accentColor} />
+                                <SquareCheck size={20} color={primaryColor} />
                             ) : (
                                 <Square size={20} color={mutedColor} />
                             )}
@@ -307,11 +307,11 @@ export function AdvancedSearchDropdown({
                             paddingHorizontal: 20,
                             paddingVertical: 8,
                             borderRadius: 20,
-                            backgroundColor: accentColor,
+                            backgroundColor: primaryColor,
                         }}
                     >
-                        <Search size={16} color={accentFgColor} />
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: accentFgColor }}>
+                        <Search size={16} color={primaryFgColor} />
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: primaryFgColor }}>
                             Search
                         </Text>
                     </Pressable>
