@@ -14,7 +14,7 @@ interface RichTextEditorProps {
 
 export function RichTextEditor({ editor }: RichTextEditorProps) {
     return (
-        <View style={{ flex: 1, minHeight: 100 }}>
+        <View className="flex-1 min-h-[100px]">
             <RichText editor={editor} scrollEnabled={false} />
         </View>
     )

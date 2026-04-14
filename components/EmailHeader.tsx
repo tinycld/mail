@@ -26,22 +26,13 @@ export function ThreadSubjectHeader({ subject, labels }: ThreadSubjectHeaderProp
     const foregroundColor = useThemeColor('foreground')
 
     return (
-        <View
-            style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                paddingHorizontal: 16,
-                paddingVertical: 12,
-                flexWrap: 'wrap',
-            }}
-        >
+        <View className="flex-row items-center gap-2 px-4 py-3 flex-wrap">
             <Text
                 style={{ fontSize: isMobile ? 18 : 22, fontWeight: '400', color: foregroundColor }}
             >
                 {subject}
             </Text>
-            <View style={{ flexDirection: 'row', gap: 4 }}>
+            <View className="flex-row gap-1">
                 {labels.map(label => (
                     <LabelBadge key={label.id} name={label.name} color={label.color} />
                 ))}
@@ -63,16 +54,10 @@ function DeliveryStatusBadge({ status, bounceReason }: { status?: string; bounce
 
     return (
         <View
+            className="flex-row items-center mx-4 mb-2 py-1 rounded self-start"
             style={{
-                flexDirection: 'row',
-                alignItems: 'center',
                 gap: 6,
-                marginHorizontal: 16,
-                marginBottom: 8,
                 paddingHorizontal: 10,
-                paddingVertical: 4,
-                borderRadius: 4,
-                alignSelf: 'flex-start',
                 backgroundColor,
             }}
         >
@@ -139,23 +124,15 @@ export function MessageHeader({
             <DeliveryStatusBadge status={deliveryStatus} bounceReason={bounceReason} />
             <Pressable onPress={onToggleExpand}>
                 <View
+                    className="flex-row items-center px-4 py-3 gap-2"
                     style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        paddingHorizontal: 16,
-                        paddingVertical: 12,
-                        gap: 8,
                         borderBottomWidth: 1,
                         borderBottomColor: borderColor,
                     }}
                 >
                     <View
+                        className="size-10 rounded-full items-center justify-center"
                         style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: 20,
-                            alignItems: 'center',
-                            justifyContent: 'center',
                             backgroundColor: accentBgColor,
                         }}
                     >
@@ -163,8 +140,8 @@ export function MessageHeader({
                             {initials}
                         </Text>
                     </View>
-                    <View style={{ flex: 1, gap: 2 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View className="flex-1" style={{ gap: 2 }}>
+                        <View className="flex-row items-center gap-1">
                             <Text
                                 style={{ fontSize: 14, fontWeight: '600', color: foregroundColor }}
                             >
@@ -184,7 +161,11 @@ export function MessageHeader({
                         {dateDisplay}
                     </Text>
                     {isStarred != null ? (
-                        <Pressable style={{ padding: 6, borderRadius: 20 }} onPress={onToggleStar}>
+                        <Pressable
+                            className="rounded-full"
+                            style={{ padding: 6 }}
+                            onPress={onToggleStar}
+                        >
                             <Star
                                 size={18}
                                 color={isStarred ? yellowColor : mutedColor}
@@ -192,10 +173,10 @@ export function MessageHeader({
                             />
                         </Pressable>
                     ) : null}
-                    <Pressable style={{ padding: 6, borderRadius: 20 }} onPress={onReply}>
+                    <Pressable className="rounded-full" style={{ padding: 6 }} onPress={onReply}>
                         <Reply size={18} color={mutedColor} />
                     </Pressable>
-                    <Pressable style={{ padding: 6, borderRadius: 20 }}>
+                    <Pressable className="rounded-full" style={{ padding: 6 }}>
                         {isExpanded ? (
                             <ChevronUp size={18} color={mutedColor} />
                         ) : (

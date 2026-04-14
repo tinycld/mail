@@ -84,18 +84,10 @@ export function EmailDetailToolbar({
 
     return (
         <View
-            style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                height: 44,
-                paddingHorizontal: 8,
-                overflow: 'visible',
-            }}
+            className="flex-row items-center justify-between h-[44px] px-2"
+            style={{ overflow: 'visible' }}
         >
-            <View
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 2, overflow: 'visible' }}
-            >
+            <View className="flex-row items-center gap-0.5" style={{ overflow: 'visible' }}>
                 <ToolbarIconButton icon={ArrowLeft} label="Back" onPress={() => router.back()} />
                 <ToolbarIconButton icon={Archive} label="Archive" onPress={onArchive} />
                 {isMobile ? null : (
@@ -152,7 +144,7 @@ export function EmailDetailToolbar({
                 </ToolbarMenu>
             </View>
             {isMobile ? null : (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                <View className="flex-row items-center gap-0.5">
                     <ToolbarIconButton
                         icon={ChevronLeft}
                         label="Newer"

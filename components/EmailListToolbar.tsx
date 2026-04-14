@@ -73,19 +73,11 @@ function DefaultToolbar({
 
     return (
         <View
-            style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                height: 44,
-                paddingHorizontal: 8,
-                overflow: 'visible',
-            }}
+            className="flex-row items-center justify-between px-2 overflow-visible"
+            style={{ height: 44 }}
         >
-            <View
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 2, overflow: 'visible' }}
-            >
-                <Pressable style={{ padding: 8 }} onPress={onToggleAll}>
+            <View className="flex-row items-center overflow-visible" style={{ gap: 2 }}>
+                <Pressable className="p-2" onPress={onToggleAll}>
                     <Square size={18} color={mutedColor} />
                 </Pressable>
                 <ToolbarIconButton
@@ -96,7 +88,7 @@ function DefaultToolbar({
                 />
                 <ToolbarIconButton icon={MoreVertical} label="More" onPress={() => {}} />
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+            <View className="flex-row items-center" style={{ gap: 2 }}>
                 <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>
                     {paginationText}
                 </Text>
@@ -148,19 +140,11 @@ function BulkActionsToolbar({
 
     return (
         <View
-            style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                height: 44,
-                paddingHorizontal: 8,
-                overflow: 'visible',
-            }}
+            className="flex-row items-center justify-between px-2 overflow-visible"
+            style={{ height: 44 }}
         >
-            <View
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 2, overflow: 'visible' }}
-            >
-                <Pressable style={{ padding: 8 }} onPress={onToggleAll}>
+            <View className="flex-row items-center overflow-visible" style={{ gap: 2 }}>
+                <Pressable className="p-2" onPress={onToggleAll}>
                     <SelectIcon size={18} color={primaryColor} />
                 </Pressable>
                 <Text style={{ fontSize: 13, marginHorizontal: 4, color: foregroundColor }}>
@@ -207,7 +191,7 @@ function BulkActionsToolbar({
                     />
                 </ToolbarMenu>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+            <View className="flex-row items-center" style={{ gap: 2 }}>
                 <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>
                     {paginationText}
                 </Text>

@@ -32,15 +32,8 @@ function RecipientChip({
 
     return (
         <View
+            className="flex-row items-center gap-1 pl-0.5 pr-1.5 py-0.5 rounded-xl border"
             style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 4,
-                paddingLeft: 2,
-                paddingRight: 6,
-                paddingVertical: 2,
-                borderRadius: 12,
-                borderWidth: 1,
                 backgroundColor: surfaceColor,
                 borderColor,
             }}
@@ -86,16 +79,8 @@ export function RecipientField({ control, name, placeholder }: RecipientFieldPro
     }
 
     return (
-        <View style={{ position: 'relative', flex: 1 }}>
-            <View
-                style={{
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    gap: 4,
-                    minHeight: 28,
-                }}
-            >
+        <View className="relative flex-1">
+            <View className="flex-row flex-wrap items-center gap-1 min-h-[28px]">
                 {committedRecipients.map((r, i) => {
                     return (
                         <RecipientChip
@@ -107,11 +92,9 @@ export function RecipientField({ control, name, placeholder }: RecipientFieldPro
                     )
                 })}
                 <PlainInput
+                    className="flex-1 px-1 min-w-[80px]"
                     style={{
-                        flex: 1,
                         fontSize: 13,
-                        minWidth: 80,
-                        paddingHorizontal: 4,
                         color: foregroundColor,
                     }}
                     placeholderTextColor={placeholderColor}

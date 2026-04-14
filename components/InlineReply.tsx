@@ -83,24 +83,17 @@ export function InlineReply({
 
     return (
         <View
+            className="flex-row gap-2 p-4"
             style={{
-                flexDirection: 'row',
-                gap: 8,
-                padding: 16,
                 borderTopWidth: 1,
                 borderTopColor: borderColor,
                 flexWrap: isMobile ? 'wrap' : undefined,
             }}
         >
             <Pressable
+                className="flex-row items-center px-4 py-2 rounded-full border"
                 style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
                     gap: 6,
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                    borderRadius: 20,
-                    borderWidth: 1,
                     borderColor,
                 }}
                 onPress={handleReply}
@@ -109,14 +102,9 @@ export function InlineReply({
                 <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>Reply</Text>
             </Pressable>
             <Pressable
+                className="flex-row items-center px-4 py-2 rounded-full border"
                 style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
                     gap: 6,
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                    borderRadius: 20,
-                    borderWidth: 1,
                     borderColor,
                 }}
                 onPress={handleReplyAll}
@@ -127,14 +115,9 @@ export function InlineReply({
                 </Text>
             </Pressable>
             <Pressable
+                className="flex-row items-center px-4 py-2 rounded-full border"
                 style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
                     gap: 6,
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                    borderRadius: 20,
-                    borderWidth: 1,
                     borderColor,
                 }}
                 onPress={handleForward}
@@ -233,17 +216,15 @@ function InlineComposeForm({
 
     return (
         <View
+            className="m-4 border rounded-lg"
             style={{
-                margin: 16,
-                borderWidth: 1,
-                borderRadius: 8,
                 minHeight: 200,
                 borderColor,
                 backgroundColor,
             }}
         >
             <ComposeFields control={control} errors={errors} />
-            <View style={{ flex: 1, padding: 12, minHeight: 120 }}>
+            <View className="flex-1 p-3" style={{ minHeight: 120 }}>
                 <RichTextEditor editor={editor} />
             </View>
             <AttachmentRibbon

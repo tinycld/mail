@@ -194,7 +194,7 @@ export function AdvancedSearchDropdown({
                         />
                     </FieldRow>
                     <FieldRow label="Size" labelColor={mutedColor}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View className="flex-row items-center gap-2">
                             <PickerButton
                                 control={control}
                                 name="sizeOp"
@@ -225,7 +225,7 @@ export function AdvancedSearchDropdown({
                         </View>
                     </FieldRow>
                     <FieldRow label="Date within" labelColor={mutedColor}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View className="flex-row items-center gap-2">
                             <PickerButton
                                 control={control}
                                 name="dateWithin"
@@ -259,11 +259,7 @@ export function AdvancedSearchDropdown({
                     <FieldRow label="Has attachment" labelColor={mutedColor}>
                         <Pressable
                             onPress={toggleAttachment}
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                paddingVertical: 4,
-                            }}
+                            className="flex-row items-center py-1"
                         >
                             {hasAttachment ? (
                                 <SquareCheck size={20} color={primaryColor} />
@@ -274,39 +270,22 @@ export function AdvancedSearchDropdown({
                     </FieldRow>
                 </ScrollView>
                 <View
+                    className="flex-row justify-end items-center gap-3 px-4 py-3"
                     style={{
-                        flexDirection: 'row',
-                        justifyContent: 'flex-end',
-                        alignItems: 'center',
-                        gap: 12,
-                        paddingHorizontal: 16,
-                        paddingVertical: 12,
                         borderTopWidth: StyleSheet.hairlineWidth,
                         borderTopColor: borderColor,
                     }}
                 >
-                    <Pressable
-                        onPress={onClear}
-                        style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 4,
-                            paddingHorizontal: 12,
-                            paddingVertical: 8,
-                        }}
-                    >
+                    <Pressable onPress={onClear} className="flex-row items-center gap-1 px-3 py-2">
                         <X size={14} color={mutedColor} />
                         <Text style={{ fontSize: 14, color: mutedColor }}>Clear</Text>
                     </Pressable>
                     <Pressable
                         onPress={onSubmit}
+                        className="flex-row items-center py-2 rounded-full"
                         style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
                             gap: 6,
                             paddingHorizontal: 20,
-                            paddingVertical: 8,
-                            borderRadius: 20,
                             backgroundColor: primaryColor,
                         }}
                     >
@@ -331,13 +310,11 @@ function FieldRow({
     children: React.ReactNode
 }) {
     return (
-        <View
-            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, minHeight: 36 }}
-        >
+        <View className="flex-row items-center mb-3" style={{ minHeight: 36 }}>
             <Text style={{ width: 110, fontSize: 13, flexShrink: 0, color: labelColor }}>
                 {label}
             </Text>
-            <View style={{ flex: 1 }}>{children}</View>
+            <View className="flex-1">{children}</View>
         </View>
     )
 }
@@ -431,15 +408,12 @@ function PickerButton({
     const selectedLabel = options.find(o => o.value === field.value)?.label ?? options[0].label
 
     return (
-        <View style={{ position: 'relative' }}>
+        <View className="relative">
             <Pressable
                 onPress={() => setIsOpen(!isOpen)}
+                className="flex-row items-center gap-1 py-1"
                 style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 4,
                     borderBottomWidth: 1,
-                    paddingVertical: 4,
                     paddingHorizontal: 2,
                     borderBottomColor: borderColor,
                 }}
@@ -494,15 +468,12 @@ function PickerMenu({
                 onPress={onClose}
             />
             <View
+                className="absolute border rounded-lg py-1"
                 style={{
-                    position: 'absolute',
                     top: '100%',
                     left: 0,
                     zIndex: 201,
                     minWidth: 140,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    paddingVertical: 4,
                     marginTop: 2,
                     backgroundColor,
                     borderColor,
@@ -512,8 +483,8 @@ function PickerMenu({
                     <Pressable
                         key={option.value}
                         onPress={() => onSelect(option.value)}
+                        className="px-3 py-2"
                         style={[
-                            { paddingHorizontal: 12, paddingVertical: 8 },
                             option.value === value && {
                                 backgroundColor: focusBgColor,
                             },

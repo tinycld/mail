@@ -30,12 +30,10 @@ export function EmailAttachments({
 
     return (
         <View
+            className="px-4 py-3 gap-2"
             style={{
-                paddingHorizontal: 16,
-                paddingVertical: 12,
                 borderTopWidth: 1,
                 borderTopColor: borderColor,
-                gap: 8,
             }}
         >
             <Text
@@ -49,7 +47,7 @@ export function EmailAttachments({
             >
                 {filenames.length} attachment{filenames.length !== 1 ? 's' : ''}
             </Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            <View className="flex-row flex-wrap gap-2">
                 {filenames.map(filename => (
                     <AttachmentThumbnail
                         key={filename}
@@ -91,11 +89,9 @@ function AttachmentThumbnail({
 
     return (
         <Pressable
+            className="rounded-lg border overflow-hidden"
             style={{
                 width: 160,
-                borderRadius: 8,
-                borderWidth: 1,
-                overflow: 'hidden',
                 borderColor,
                 backgroundColor: surfaceColor,
             }}
@@ -105,38 +101,28 @@ function AttachmentThumbnail({
                 <ImagePreview url={url} mutedColor={mutedColor} surfaceColor={surfaceColor} />
             ) : (
                 <View
+                    className="w-full items-center justify-center"
                     style={{
-                        width: '100%',
                         height: 90,
-                        alignItems: 'center',
-                        justifyContent: 'center',
                         backgroundColor: surfaceColor,
                     }}
                 >
                     <Icon size={24} color={mutedColor} />
                 </View>
             )}
-            <View
-                style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingHorizontal: 8,
-                    paddingVertical: 6,
-                    gap: 4,
-                }}
-            >
+            <View className="flex-row items-center px-2 gap-1" style={{ paddingVertical: 6 }}>
                 <Text
+                    className="flex-1"
                     style={{
                         fontSize: 12,
                         fontWeight: '500',
-                        flex: 1,
                         color: foregroundColor,
                     }}
                     numberOfLines={1}
                 >
                     {displayName}
                 </Text>
-                <View style={{ flexDirection: 'row', gap: 4 }}>
+                <View className="flex-row gap-1">
                     <Download size={14} color={mutedColor} />
                 </View>
             </View>
@@ -156,11 +142,9 @@ function ImagePreview({
     if (Platform.OS !== 'web') {
         return (
             <View
+                className="w-full items-center justify-center"
                 style={{
-                    width: '100%',
                     height: 90,
-                    alignItems: 'center',
-                    justifyContent: 'center',
                     backgroundColor: surfaceColor,
                 }}
             >
@@ -170,7 +154,7 @@ function ImagePreview({
     }
 
     return (
-        <View style={{ width: '100%', height: 90, overflow: 'hidden' }}>
+        <View className="w-full overflow-hidden" style={{ height: 90 }}>
             <img
                 src={url}
                 alt=""

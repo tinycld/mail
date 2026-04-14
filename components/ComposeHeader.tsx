@@ -27,18 +27,15 @@ export function ComposeHeader({
 
     return (
         <View
+            className="flex-row items-center justify-between px-3"
             style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
                 height: 40,
-                paddingHorizontal: 12,
                 borderTopLeftRadius: 8,
                 borderTopRightRadius: 8,
                 backgroundColor: foregroundColor,
             }}
         >
-            <Pressable style={{ flex: 1 }} onPress={mode === 'minimized' ? onMinimize : undefined}>
+            <Pressable className="flex-1" onPress={mode === 'minimized' ? onMinimize : undefined}>
                 <Text
                     style={{ fontSize: 14, fontWeight: '600', color: backgroundColor }}
                     numberOfLines={1}
@@ -46,18 +43,18 @@ export function ComposeHeader({
                     {displayTitle}
                 </Text>
             </Pressable>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View className="flex-row items-center gap-1">
                 {showWindowControls ? (
                     <>
-                        <Pressable style={{ padding: 6, borderRadius: 4 }} onPress={onMinimize}>
+                        <Pressable className="rounded" style={{ padding: 6 }} onPress={onMinimize}>
                             <Minimize2 size={14} color={backgroundColor} />
                         </Pressable>
-                        <Pressable style={{ padding: 6, borderRadius: 4 }} onPress={onMaximize}>
+                        <Pressable className="rounded" style={{ padding: 6 }} onPress={onMaximize}>
                             <Maximize2 size={14} color={backgroundColor} />
                         </Pressable>
                     </>
                 ) : null}
-                <Pressable style={{ padding: 6, borderRadius: 4 }} onPress={onClose}>
+                <Pressable className="rounded" style={{ padding: 6 }} onPress={onClose}>
                     <X size={14} color={backgroundColor} />
                 </Pressable>
             </View>

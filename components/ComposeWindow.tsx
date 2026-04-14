@@ -220,11 +220,9 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
     const composeWindow = (
         <View
+            className="absolute border rounded-lg"
             style={[
                 {
-                    position: 'absolute',
-                    borderWidth: 1,
-                    borderRadius: 8,
                     zIndex: 1000,
                     backgroundColor,
                     borderColor,
@@ -240,21 +238,16 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                 onMaximize={isMaximized ? open : maximize}
                 onClose={handleClose}
             />
-            <View
-                style={{
-                    flex: isMinimized ? undefined : 1,
-                    display: isMinimized ? 'none' : 'flex',
-                }}
-            >
+            <View className={isMinimized ? 'hidden' : 'flex-1'}>
                 <ComposeFields control={control} errors={errors} onSubjectBlur={onSubjectBlur} />
                 {hasMailbox ? null : (
-                    <View style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
+                    <View className="px-3 py-1.5">
                         <Text style={{ fontSize: 12, color: dangerColor }}>
                             No mailbox found. Ask your admin to add you to a mailbox.
                         </Text>
                     </View>
                 )}
-                <View style={{ flex: 1, padding: 12 }}>
+                <View className="flex-1 p-3">
                     <RichTextEditor editor={editor} />
                 </View>
                 <AttachmentRibbon
@@ -286,12 +279,8 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
     return (
         <View
+            className="absolute top-0 left-0 right-0 bottom-0"
             style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
                 zIndex: 1000,
                 alignItems: showBackdrop ? 'center' : undefined,
                 justifyContent: showBackdrop ? 'center' : undefined,

@@ -33,7 +33,7 @@ function EmptyState({ folderTitle, isVisible }: { folderTitle: string; isVisible
     const mutedColor = useThemeColor('muted-foreground')
     if (!isVisible) return null
     return (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+        <View className="flex-1 items-center justify-center p-8">
             <Text style={{ fontSize: 16, color: mutedColor }}>
                 No conversations in {folderTitle}
             </Text>
@@ -59,23 +59,16 @@ function LabelChip({
 }) {
     return (
         <View
+            className="flex-row items-center gap-2 px-3 rounded-lg border"
             style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                paddingHorizontal: 12,
                 paddingVertical: 6,
-                borderRadius: 8,
-                borderWidth: 1,
                 backgroundColor: `${label.color}14`,
                 borderColor: `${label.color}30`,
             }}
         >
             <View
+                className="size-2 rounded-full"
                 style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
                     backgroundColor: label.color,
                 }}
             />
@@ -110,16 +103,7 @@ function ActiveViewBanner({
 
     if (isLabelView) {
         return (
-            <View
-                style={{
-                    flexDirection: 'row',
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                    alignItems: 'center',
-                    gap: 8,
-                    flexWrap: 'wrap',
-                }}
-            >
+            <View className="flex-row px-4 py-2 items-center gap-2 flex-wrap">
                 {labels.map(label => (
                     <LabelChip
                         key={label.id}
@@ -135,24 +119,11 @@ function ActiveViewBanner({
     const FolderIcon = folder ? (FOLDER_ICONS[folder] ?? Tag) : Tag
 
     return (
-        <View
-            style={{
-                flexDirection: 'row',
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                alignItems: 'center',
-                gap: 8,
-            }}
-        >
+        <View className="flex-row px-4 py-2 items-center gap-2">
             <View
+                className="flex-row items-center gap-2 px-3 rounded-lg border"
                 style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 8,
-                    paddingHorizontal: 12,
                     paddingVertical: 6,
-                    borderRadius: 8,
-                    borderWidth: 1,
                     backgroundColor: `${accentColor}14`,
                     borderColor: `${accentColor}30`,
                 }}
@@ -172,7 +143,7 @@ function ActiveViewBanner({
 function SearchResultsHeader({ total, isSearching }: { total: number; isSearching: boolean }) {
     const mutedColor = useThemeColor('muted-foreground')
     return (
-        <View style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
+        <View className="px-3 py-2">
             <Text style={{ fontSize: 13, color: mutedColor }}>
                 {isSearching ? 'Searching...' : `${total} result${total !== 1 ? 's' : ''}`}
             </Text>
@@ -376,21 +347,14 @@ export default function MailListScreen() {
 
     if (search.isActive) {
         return (
-            <View style={{ flex: 1 }}>
+            <View className="flex-1">
                 <SearchResultsHeader total={search.total} isSearching={search.isSearching} />
                 {search.isSearching && searchItems.length === 0 ? (
-                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <View className="flex-1 items-center justify-center">
                         <ActivityIndicator size="large" color={primaryColor} />
                     </View>
                 ) : searchItems.length === 0 ? (
-                    <View
-                        style={{
-                            flex: 1,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: 32,
-                        }}
-                    >
+                    <View className="flex-1 items-center justify-center p-8">
                         <Text style={{ fontSize: 16, color: mutedColor }}>No results found</Text>
                     </View>
                 ) : (
@@ -409,7 +373,7 @@ export default function MailListScreen() {
     const isEmpty = items.length === 0
 
     return (
-        <View style={{ flex: 1 }}>
+        <View className="flex-1">
             <ActiveViewBanner
                 isVisible={isNonDefaultView}
                 folder={folder}

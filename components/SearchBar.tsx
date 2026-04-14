@@ -36,34 +36,29 @@ export function SearchBar({
     const filterIconColor = hasActiveFilters ? primaryColor : mutedColor
 
     return (
-        <View style={{ position: 'relative', zIndex: 100 }}>
+        <View className="relative" style={{ zIndex: 100 }}>
             <View
+                className="flex-row items-center h-[44px] rounded-[22px] px-4 gap-2.5 border"
                 style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    height: 44,
-                    borderRadius: 22,
-                    paddingHorizontal: 16,
-                    gap: 10,
-                    borderWidth: 1,
                     backgroundColor: sidebarBgColor,
                     borderColor,
                 }}
             >
                 {onMenuPress ? (
-                    <Pressable onPress={onMenuPress} style={{ padding: 2 }}>
+                    <Pressable onPress={onMenuPress} className="p-0.5">
                         <Menu size={20} color={mutedColor} />
                     </Pressable>
                 ) : null}
                 <Search size={18} color={mutedColor} />
                 <PlainInput
-                    style={{ flex: 1, fontSize: 15, color: foregroundColor }}
+                    className="flex-1"
+                    style={{ fontSize: 15, color: foregroundColor }}
                     placeholder="Search mail"
                     placeholderTextColor={placeholderColor}
                     value={value}
                     onChangeText={onChangeText}
                 />
-                <Pressable style={{ padding: 4 }} onPress={() => onFilterOpenChange(!isFilterOpen)}>
+                <Pressable className="p-1" onPress={() => onFilterOpenChange(!isFilterOpen)}>
                     <SlidersHorizontal size={18} color={filterIconColor} />
                 </Pressable>
             </View>

@@ -17,15 +17,15 @@ export function AttachmentRibbon({ isVisible, attachments, onRemove }: Attachmen
 
     return (
         <View
+            className="px-3"
             style={{
                 borderTopWidth: 1,
                 borderTopColor: borderColor,
                 paddingVertical: 6,
-                paddingHorizontal: 12,
             }}
         >
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
+                <View className="flex-row" style={{ gap: 6 }}>
                     {attachments.map(att => (
                         <AttachmentChip
                             key={att.id}
@@ -56,14 +56,8 @@ function AttachmentChip({
 
     return (
         <View
+            className="flex-row items-center gap-1 px-2 py-1 rounded-md border"
             style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 4,
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 6,
-                borderWidth: 1,
                 backgroundColor: surfaceColor,
                 borderColor,
             }}
@@ -80,7 +74,7 @@ function AttachmentChip({
                 {truncatedName}
             </Text>
             <Text style={{ fontSize: 11, color: mutedColor }}>{formatBytes(attachment.size)}</Text>
-            <Pressable onPress={onRemove} style={{ padding: 2 }} hitSlop={4}>
+            <Pressable onPress={onRemove} className="p-0.5" hitSlop={4}>
                 <X size={12} color={mutedColor} />
             </Pressable>
         </View>

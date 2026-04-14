@@ -47,24 +47,20 @@ export function ComposeFields({ control, errors, onSubjectBlur }: ComposeFieldsP
     const [showBcc, setShowBcc] = useState(false)
 
     return (
-        <View style={{ zIndex: 10, overflow: 'visible' }}>
+        <View className="overflow-visible" style={{ zIndex: 10 }}>
             <View
+                className="flex-row items-center px-3 py-1 overflow-visible"
                 style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingHorizontal: 12,
                     minHeight: 36,
-                    paddingVertical: 4,
                     borderBottomWidth: 1,
                     zIndex: 11,
-                    overflow: 'visible',
                     borderBottomColor: errors.to ? dangerColor : borderColor,
                 }}
             >
                 <Text style={{ fontSize: 13, width: 56, color: mutedColor }}>To</Text>
                 <RecipientField control={control} name="to" />
                 {!showCc || !showBcc ? (
-                    <View style={{ flexDirection: 'row', gap: 8, marginLeft: 8 }}>
+                    <View className="flex-row gap-2 ml-2">
                         {showCc ? null : (
                             <Pressable onPress={() => setShowCc(true)}>
                                 <Text
@@ -88,15 +84,11 @@ export function ComposeFields({ control, errors, onSubjectBlur }: ComposeFieldsP
             </View>
             {showCc ? (
                 <View
+                    className="flex-row items-center px-3 py-1 overflow-visible"
                     style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        paddingHorizontal: 12,
                         minHeight: 36,
-                        paddingVertical: 4,
                         borderBottomWidth: 1,
                         zIndex: 11,
-                        overflow: 'visible',
                         borderBottomColor: errors.cc ? dangerColor : borderColor,
                     }}
                 >
@@ -106,15 +98,11 @@ export function ComposeFields({ control, errors, onSubjectBlur }: ComposeFieldsP
             ) : null}
             {showBcc ? (
                 <View
+                    className="flex-row items-center px-3 py-1 overflow-visible"
                     style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        paddingHorizontal: 12,
                         minHeight: 36,
-                        paddingVertical: 4,
                         borderBottomWidth: 1,
                         zIndex: 11,
-                        overflow: 'visible',
                         borderBottomColor: errors.bcc ? dangerColor : borderColor,
                     }}
                 >
@@ -123,10 +111,8 @@ export function ComposeFields({ control, errors, onSubjectBlur }: ComposeFieldsP
                 </View>
             ) : null}
             <View
+                className="flex-row items-center px-3"
                 style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingHorizontal: 12,
                     height: 36,
                     borderBottomWidth: 1,
                     borderBottomColor: errors.subject ? dangerColor : borderColor,

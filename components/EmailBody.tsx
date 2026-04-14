@@ -33,7 +33,7 @@ export function EmailBody({ collectionId, recordId, filename }: EmailBodyProps) 
 
     if (Platform.OS === 'web') {
         return (
-            <View style={{ padding: 16, flex: 1 }}>
+            <View className="p-4 flex-1">
                 <iframe
                     sandbox=""
                     srcDoc={html}
@@ -51,7 +51,7 @@ export function EmailBody({ collectionId, recordId, filename }: EmailBodyProps) 
     }
 
     return (
-        <View style={{ padding: 16, flex: 1 }}>
+        <View className="p-4 flex-1">
             <Text style={{ fontSize: 14, lineHeight: 22, color: foregroundColor }}>
                 {html.replace(/<[^>]*>/g, '')}
             </Text>

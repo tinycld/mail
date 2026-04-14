@@ -85,13 +85,13 @@ function RowWrapper({
 }) {
     if (onPress) {
         return (
-            <Pressable onPress={onPress} style={{ display: 'flex', width: '100%' }}>
+            <Pressable onPress={onPress} className="flex w-full">
                 {children}
             </Pressable>
         )
     }
     return (
-        <Link href={href} style={{ display: 'flex', width: '100%' }}>
+        <Link href={href} className="flex w-full">
             {children}
         </Link>
     )
@@ -297,11 +297,8 @@ function RowHoverActions({
 
     return (
         <View
+            className="flex-row items-center ml-2 shrink-0"
             style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginLeft: 8,
-                flexShrink: 0,
                 backgroundColor: bg,
             }}
         >
@@ -372,8 +369,9 @@ function DesktopEmailRow({
     const hoverShadow =
         isHovered && Platform.OS === 'web'
             ? ({
-                  boxShadow: `0 2px 6px 0 rgba(0,0,0,0.12), inset 1px 0 0 ${borderInset}, inset -1px 0 0 ${borderInset}`,
-                  zIndex: 2,
+                  boxShadow: `inset 1px 0 0 ${borderInset}, inset -1px 0 0 ${borderInset}, inset 0 -1px 0 ${borderInset}, inset 0 1px 0 ${borderInset}`,
+                  backgroundColor: hexToRgba(borderColor, 0.12),
+                  borderBottomColor: 'transparent',
               } as Record<string, unknown>)
             : null
 
@@ -442,8 +440,12 @@ function DesktopEmailRow({
                         {email.snippet}
                     </Text>
                 </View>
-                {email.labels.length > 0 ? <LabelDots labels={email.labels} max={3} /> : null}
-                {email.hasAttachments ? <Paperclip size={14} color={mutedColor} /> : null}
+                {!isHovered && email.labels.length > 0 ? (
+                    <LabelDots labels={email.labels} max={3} />
+                ) : null}
+                {!isHovered && email.hasAttachments ? (
+                    <Paperclip size={14} color={mutedColor} />
+                ) : null}
                 {isHovered ? (
                     <RowHoverActions
                         email={email}

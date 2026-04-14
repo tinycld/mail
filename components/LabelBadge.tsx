@@ -18,11 +18,8 @@ export function LabelBadge({ name, color }: LabelBadgeProps) {
 
     return (
         <View
+            className="px-1.5 py-[1px] rounded border"
             style={{
-                paddingHorizontal: 6,
-                paddingVertical: 1,
-                borderRadius: 4,
-                borderWidth: 1,
                 backgroundColor: bgColor,
                 borderColor: bdColor,
             }}

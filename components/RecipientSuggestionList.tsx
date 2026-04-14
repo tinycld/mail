@@ -81,18 +81,15 @@ export function RecipientSuggestionList({
 
     return (
         <View
+            className="absolute border rounded-lg overflow-hidden"
             style={{
-                position: 'absolute',
                 top: '100%',
                 left: 0,
                 right: 0,
                 zIndex: 2000,
                 marginTop: 2,
-                borderWidth: 1,
-                borderRadius: 8,
                 borderColor,
                 backgroundColor,
-                overflow: 'hidden',
                 ...webShadow,
             }}
         >
@@ -121,7 +118,7 @@ export function RecipientSuggestionList({
                                 lastName={contact.last_name}
                                 size={32}
                             />
-                            <View style={{ flex: 1, gap: 2 }}>
+                            <View className="flex-1" style={{ gap: 2 }}>
                                 <HighlightText text={fullName} query={query} bold />
                                 <HighlightText text={contact.email ?? ''} query={query} />
                             </View>

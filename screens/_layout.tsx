@@ -56,7 +56,7 @@ export default function MailLayout() {
     return (
         <SearchContext.Provider value={searchValue}>
             <View className="flex-1 bg-background">
-                <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+                <View className="px-4 py-2">
                     <SearchBar
                         value={searchQuery}
                         onChangeText={setSearchQuery}
@@ -68,7 +68,7 @@ export default function MailLayout() {
                         currentFilters={advancedFilters}
                     />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View className="flex-1">
                     <Slot />
                 </View>
                 <ComposeWindow isVisible={isComposeVisible} />

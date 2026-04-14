@@ -60,24 +60,21 @@ export function ComposeToolbar({
 
     return (
         <View
+            className="flex-row items-center px-3"
             style={{
-                flexDirection: 'row',
-                alignItems: 'center',
                 height: 44,
-                paddingHorizontal: 12,
                 borderTopWidth: 1,
                 borderTopColor: borderColor,
                 gap: 2,
             }}
         >
             <Pressable
+                className="rounded-full items-center"
                 style={[
                     {
                         paddingHorizontal: 20,
                         paddingVertical: 6,
-                        borderRadius: 20,
                         minWidth: 72,
-                        alignItems: 'center',
                         backgroundColor: primaryColor,
                     },
                     isPending && { opacity: 0.6 },
@@ -94,7 +91,7 @@ export function ComposeToolbar({
                 )}
             </Pressable>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View className="flex-row items-center">
                 <FormatButton
                     icon={Bold}
                     isActive={editorState.isBoldActive}
@@ -118,11 +115,9 @@ export function ComposeToolbar({
                 />
             </View>
 
-            <View
-                style={{ width: 1, height: 20, marginHorizontal: 4, backgroundColor: borderColor }}
-            />
+            <View className="mx-1" style={{ width: 1, height: 20, backgroundColor: borderColor }} />
 
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View className="flex-row items-center">
                 <FormatButton
                     icon={List}
                     isActive={editorState.isBulletListActive}
@@ -139,11 +134,9 @@ export function ComposeToolbar({
                 />
             </View>
 
-            <View
-                style={{ width: 1, height: 20, marginHorizontal: 4, backgroundColor: borderColor }}
-            />
+            <View className="mx-1" style={{ width: 1, height: 20, backgroundColor: borderColor }} />
 
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View className="flex-row items-center">
                 <FormatButton
                     icon={Quote}
                     isActive={editorState.isBlockquoteActive}
@@ -160,17 +153,15 @@ export function ComposeToolbar({
                 />
             </View>
 
-            <View
-                style={{ width: 1, height: 20, marginHorizontal: 4, backgroundColor: borderColor }}
-            />
+            <View className="mx-1" style={{ width: 1, height: 20, backgroundColor: borderColor }} />
 
-            <Pressable style={{ padding: 6, borderRadius: 6 }} onPress={onAttach}>
+            <Pressable className="rounded-md" style={{ padding: 6 }} onPress={onAttach}>
                 <Paperclip size={16} color={iconColor} />
             </Pressable>
 
-            <View style={{ flex: 1 }} />
+            <View className="flex-1" />
 
-            <Pressable style={{ padding: 6, borderRadius: 6 }} onPress={onDiscard}>
+            <Pressable className="rounded-md" style={{ padding: 6 }} onPress={onDiscard}>
                 <Trash2 size={16} color={iconColor} />
             </Pressable>
         </View>
@@ -194,10 +185,8 @@ function FormatButton({
 }: FormatButtonProps) {
     return (
         <Pressable
-            style={[
-                { padding: 6, borderRadius: 6 },
-                isActive && { backgroundColor: `${activeColor}22` },
-            ]}
+            className="rounded-md p-1.5"
+            style={isActive ? { backgroundColor: `${activeColor}22` } : undefined}
             onPress={onPress}
         >
             <Icon size={16} color={isActive ? activeColor : iconColor} />
