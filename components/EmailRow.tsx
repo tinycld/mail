@@ -8,7 +8,6 @@ import {
     Paperclip,
     Square,
     SquareCheck,
-    Star,
     Trash2,
 } from 'lucide-react-native'
 import type { ReactNode } from 'react'
@@ -16,6 +15,7 @@ import { useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { HoverAction } from '~/components/HoverAction'
 import { LabelBadge, LabelDots } from '~/components/LabelBadge'
+import { StarIcon } from '~/components/StarIcon'
 import { SwipeableRow } from '~/components/SwipeableRow'
 import { hexToRgba } from '~/lib/color-utils'
 import { formatRelativeDate } from '~/lib/format-utils'
@@ -150,7 +150,6 @@ function MobileEmailRow({
     const borderColor = useThemeColor('border')
     const accentBgColor = useThemeColor('accent')
     const accentFgColor = useThemeColor('accent-foreground')
-    const yellowColor = useThemeColor('warning')
     const dangerColor = useThemeColor('danger')
     const infoColor = useThemeColor('info')
     const successColor = useThemeColor('success')
@@ -235,11 +234,7 @@ function MobileEmailRow({
                                     onToggleStar?.()
                                 }}
                             >
-                                <Star
-                                    size={16}
-                                    color={email.isStarred ? yellowColor : mutedColor}
-                                    fill={email.isStarred ? yellowColor : 'transparent'}
-                                />
+                                <StarIcon isStarred={email.isStarred} />
                             </Pressable>
                         </View>
                         <Text
@@ -340,7 +335,6 @@ function DesktopEmailRow({
     const surfaceColor = useThemeColor('surface-secondary')
     const borderColor = useThemeColor('border')
     const accentBgColor = useThemeColor('accent')
-    const yellowColor = useThemeColor('warning')
     const dangerColor = useThemeColor('danger')
     const orgHref = useOrgHref()
     const [isHovered, setIsHovered] = useState(false)
@@ -405,11 +399,7 @@ function DesktopEmailRow({
                         onToggleStar?.()
                     }}
                 >
-                    <Star
-                        size={16}
-                        color={email.isStarred ? yellowColor : mutedColor}
-                        fill={email.isStarred ? yellowColor : 'transparent'}
-                    />
+                    <StarIcon isStarred={email.isStarred} />
                 </Pressable>
                 <SenderWithDraft
                     email={email}

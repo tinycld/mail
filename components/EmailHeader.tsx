@@ -1,14 +1,7 @@
-import {
-    ChevronDown,
-    ChevronUp,
-    Forward,
-    MoreVertical,
-    Reply,
-    ReplyAll,
-    Star,
-} from 'lucide-react-native'
+import { ChevronDown, ChevronUp, Forward, MoreVertical, Reply, ReplyAll } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import { LabelBadge } from '~/components/LabelBadge'
+import { StarIcon } from '~/components/StarIcon'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { hexToRgba } from '~/lib/color-utils'
 import { formatRelativeDate } from '~/lib/format-utils'
@@ -105,7 +98,6 @@ export function MessageHeader({
     const borderColor = useThemeColor('border')
     const accentBgColor = useThemeColor('accent')
     const accentFgColor = useThemeColor('accent-foreground')
-    const yellowColor = useThemeColor('warning')
     const breakpoint = useBreakpoint()
     const isMobile = breakpoint === 'mobile'
 
@@ -166,11 +158,7 @@ export function MessageHeader({
                             style={{ padding: 6 }}
                             onPress={onToggleStar}
                         >
-                            <Star
-                                size={18}
-                                color={isStarred ? yellowColor : mutedColor}
-                                fill={isStarred ? yellowColor : 'transparent'}
-                            />
+                            <StarIcon isStarred={!!isStarred} size={18} />
                         </Pressable>
                     ) : null}
                     <Pressable className="rounded-full" style={{ padding: 6 }} onPress={onReply}>
