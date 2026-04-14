@@ -194,7 +194,7 @@ export default function MailboxesSettings() {
 
 function NoDomainsBanner({ isVisible }: { isVisible: boolean }) {
     const mutedColor = useThemeColor('muted-foreground')
-    const accentColor = useThemeColor('accent')
+    const accentColor = useThemeColor('primary')
     const orgHref = useOrgHref()
 
     if (!isVisible) return null
@@ -479,7 +479,7 @@ function AddMemberSection({
     isPending: boolean
 }) {
     const mutedColor = useThemeColor('muted-foreground')
-    const accentColor = useThemeColor('accent')
+    const accentColor = useThemeColor('primary')
     const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
     const borderColor = useThemeColor('border')

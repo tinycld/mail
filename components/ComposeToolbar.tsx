@@ -29,7 +29,7 @@ export function ComposeToolbar({
     isPending,
 }: ComposeToolbarProps) {
     const iconColor = useThemeColor('muted-foreground')
-    const activeColor = useThemeColor('accent')
+    const activeColor = useThemeColor('primary')
     const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
     const borderColor = useThemeColor('border')

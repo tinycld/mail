@@ -93,7 +93,7 @@ function ActiveViewBanner({
     labels: { id: string; name: string; color: string }[]
     onDismissLabel: (labelId: string) => void
 }) {
-    const accentColor = useThemeColor('accent')
+    const accentColor = useThemeColor('primary')
     const router = useRouter()
     const orgHref = useOrgHref()
 
