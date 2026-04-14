@@ -152,6 +152,8 @@ function MobileEmailRow({
     const accentFgColor = useThemeColor('accent-foreground')
     const yellowColor = useThemeColor('warning')
     const dangerColor = useThemeColor('danger')
+    const infoColor = useThemeColor('info')
+    const successColor = useThemeColor('success')
     const orgHref = useOrgHref()
 
     const senderWeight = email.isRead ? ('400' as const) : ('700' as const)
@@ -176,19 +178,19 @@ function MobileEmailRow({
             icon: isArchived ? Inbox : Archive,
             label: isArchived ? 'Inbox' : 'Archive',
             onPress: () => onArchive?.(),
-            backgroundColor: '#3b82f6',
+            backgroundColor: infoColor,
         },
         {
             icon: isTrashed ? Inbox : Trash2,
             label: isTrashed ? 'Inbox' : 'Trash',
             onPress: () => onTrash?.(),
-            backgroundColor: '#ef4444',
+            backgroundColor: dangerColor,
         },
         {
             icon: email.isRead ? Mail : MailOpen,
             label: email.isRead ? 'Unread' : 'Read',
             onPress: () => onToggleRead?.(),
-            backgroundColor: '#22c55e',
+            backgroundColor: successColor,
         },
     ]
 

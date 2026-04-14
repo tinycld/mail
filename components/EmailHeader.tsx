@@ -10,6 +10,7 @@ import {
 import { Pressable, Text, View } from 'react-native'
 import { LabelBadge } from '~/components/LabelBadge'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
+import { hexToRgba } from '~/lib/color-utils'
 import { formatRelativeDate } from '~/lib/format-utils'
 import { useThemeColor } from '~/lib/use-app-theme'
 import { MenuActionItem, ToolbarMenu } from './DropdownMenu'
@@ -50,11 +51,14 @@ export function ThreadSubjectHeader({ subject, labels }: ThreadSubjectHeaderProp
 }
 
 function DeliveryStatusBadge({ status, bounceReason }: { status?: string; bounceReason?: string }) {
+    const dangerColor = useThemeColor('danger')
+    const warningColor = useThemeColor('warning')
+
     if (!status || status === 'sent' || status === 'delivered' || status === 'sending') return null
 
     const isBounce = status === 'bounced'
-    const backgroundColor = isBounce ? '#fecaca' : '#fed7aa'
-    const textColor = isBounce ? '#dc2626' : '#ea580c'
+    const backgroundColor = isBounce ? hexToRgba(dangerColor, 0.15) : hexToRgba(warningColor, 0.15)
+    const textColor = isBounce ? dangerColor : warningColor
     const label = isBounce ? 'Bounced' : 'Spam complaint'
 
     return (
