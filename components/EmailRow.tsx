@@ -348,8 +348,9 @@ function DesktopEmailRow({
     const subjectWeight = email.isRead ? '400' : '600'
     const dateDisplay = formatRelativeDate(email.latestDate)
 
+    const primaryColor = useThemeColor('primary')
     const CheckboxIcon = isSelected ? SquareCheck : Square
-    const checkboxColor = isSelected ? accentBgColor : mutedColor
+    const checkboxColor = isSelected ? primaryColor : mutedColor
 
     const hoverWebProps =
         Platform.OS === 'web'
@@ -401,20 +402,25 @@ function DesktopEmailRow({
                 >
                     <StarIcon isStarred={email.isStarred} />
                 </Pressable>
-                <SenderWithDraft
-                    email={email}
-                    dangerColor={dangerColor}
-                    style={[
-                        styles.sender,
-                        { color: foregroundColor, fontWeight: senderWeight as '400' | '700' },
-                    ]}
-                    numberOfLines={1}
-                />
-                {email.messageCount > 1 ? (
-                    <Text style={[styles.threadBadge, { color: mutedColor }]}>
-                        {email.messageCount}
-                    </Text>
-                ) : null}
+                <View style={styles.senderArea}>
+                    <SenderWithDraft
+                        email={email}
+                        dangerColor={dangerColor}
+                        style={[
+                            styles.sender,
+                            {
+                                color: foregroundColor,
+                                fontWeight: senderWeight as '400' | '700',
+                            },
+                        ]}
+                        numberOfLines={1}
+                    />
+                    {email.messageCount > 1 ? (
+                        <Text style={[styles.threadBadge, { color: mutedColor }]}>
+                            {email.messageCount}
+                        </Text>
+                    ) : null}
+                </View>
                 <View style={styles.subjectArea}>
                     <Text
                         style={[
@@ -527,10 +533,16 @@ const styles = StyleSheet.create({
     starButton: {
         padding: 4,
     },
+    senderArea: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: 160,
+        flexShrink: 0,
+        gap: 4,
+    },
     sender: {
         fontSize: 13,
-        width: 140,
-        flexShrink: 0,
+        flexShrink: 1,
     },
     threadBadge: {
         fontSize: 11,
