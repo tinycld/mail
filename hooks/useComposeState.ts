@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { useComposeStore } from '../stores/compose-store'
 
 export type ComposeMode = 'closed' | 'minimized' | 'open' | 'maximized' | 'inline'
 
@@ -32,18 +32,6 @@ export interface ComposeState {
     openDraft: (context: DraftContext) => void
 }
 
-export const ComposeContext = createContext<ComposeState>({
-    mode: 'closed',
-    replyContext: null,
-    draftContext: null,
-    open: () => {},
-    minimize: () => {},
-    maximize: () => {},
-    close: () => {},
-    openReply: () => {},
-    openDraft: () => {},
-})
-
 export function useCompose() {
-    return useContext(ComposeContext)
+    return useComposeStore()
 }
