@@ -10,15 +10,13 @@ import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
 import { useCompose } from '../hooks/useComposeState'
 import { useDefaultMailbox } from '../hooks/useDefaultMailbox'
-import { setContentWhenReady, useEditorHandle, useMailEditor } from '../hooks/useMailEditor'
+import { setContentWhenReady, useMailEditor } from '../hooks/useMailEditor'
 import { useSaveDraft } from '../hooks/useSaveDraft'
 import { useSendEmail } from '../hooks/useSendEmail'
 import { AttachmentRibbon } from './AttachmentRibbon'
 import { ComposeFields } from './ComposeFields'
 import { ComposeHeader } from './ComposeHeader'
 import { ComposeToolbar } from './ComposeToolbar'
-import type { RichTextEditorHandle } from './RichTextEditor'
-import { RichTextEditor } from './RichTextEditor'
 
 export type { ComposeFormData } from '../hooks/composeSchema'
 
@@ -34,7 +32,6 @@ interface ComposeWindowProps {
 export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const { mode, replyContext, draftContext, minimize, maximize, open, close } = useCompose()
     const breakpoint = useBreakpoint()
-    const editorRef = useRef<RichTextEditorHandle>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const mailboxId = useDefaultMailbox()
     const draftIdRef = useRef<string | null>(null)
@@ -44,10 +41,11 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const borderColor = useThemeColor('border')
     const dangerColor = useThemeColor('danger')
 
-    const editor = useMailEditor({ placeholder: 'Compose email' })
-    const editorBridgeRef = useRef(editor)
-    editorBridgeRef.current = editor
-    useEditorHandle(editor, editorRef)
+    const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
+        placeholder: 'Compose email',
+    })
+    const editorRef = useRef(editor)
+    editorRef.current = editor
 
     const {
         control,
@@ -78,7 +76,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             })
             setHeaderTitle(draftContext.subject)
             cleanup = setContentWhenReady(
-                editorBridgeRef.current,
+                editorRef.current,
                 draftContext.htmlBody || draftContext.textBody || ''
             )
         } else if (replyContext) {
@@ -113,7 +111,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const { send, isPending } = useSendEmail({
         onSuccess: async () => {
             await deleteDraftMessage()
-            editorRef.current?.clear()
+            editor.clear()
             clearAttachments()
             reset({ to: '', cc: '', bcc: '', subject: '' })
             close()
@@ -123,14 +121,14 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const { saveDraft } = useSaveDraft()
 
     const handleClose = async () => {
-        const text = await editorRef.current?.getText()
+        const text = await editor.getText()
         if (!text?.trim() || !mailboxId) {
             close()
             return
         }
 
         const data = getValues()
-        const htmlBody = (await editorRef.current?.getHTML()) ?? ''
+        const htmlBody = await editor.getHTML()
         const to = data.to ? parseRecipients(data.to) : undefined
         const cc = data.cc ? parseRecipients(data.cc) : undefined
         const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
@@ -148,7 +146,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         })
 
         draftIdRef.current = null
-        editorRef.current?.clear()
+        editor.clear()
         clearAttachments()
         reset({ to: '', cc: '', bcc: '', subject: '' })
         close()
@@ -184,8 +182,8 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             return
         }
 
-        const htmlBody = (await editorRef.current?.getHTML()) ?? ''
-        const textBody = (await editorRef.current?.getText()) ?? ''
+        const htmlBody = await editor.getHTML()
+        const textBody = await editor.getText()
 
         const cc = data.cc ? parseRecipients(data.cc) : undefined
         const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
@@ -248,7 +246,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                     </View>
                 )}
                 <View className="flex-1 p-3">
-                    <RichTextEditor editor={editor} />
+                    <EditorComponent />
                 </View>
                 <AttachmentRibbon
                     isVisible={attachments.length > 0}
@@ -265,7 +263,8 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                     />
                 )}
                 <ComposeToolbar
-                    editor={editor}
+                    commands={commands}
+                    toolbarState={toolbarState}
                     onDiscard={close}
                     onSend={onSend}
                     onAttach={handleAttach}

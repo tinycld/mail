@@ -9,13 +9,11 @@ import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
 import { useCompose } from '../hooks/useComposeState'
 import { useDefaultMailbox } from '../hooks/useDefaultMailbox'
-import { useEditorHandle, useMailEditor } from '../hooks/useMailEditor'
+import { useMailEditor } from '../hooks/useMailEditor'
 import { useSendEmail } from '../hooks/useSendEmail'
 import { AttachmentRibbon } from './AttachmentRibbon'
 import { ComposeFields } from './ComposeFields'
 import { ComposeToolbar } from './ComposeToolbar'
-import type { RichTextEditorHandle } from './RichTextEditor'
-import { RichTextEditor } from './RichTextEditor'
 
 interface InlineReplyProps {
     messageId: string
@@ -139,11 +137,11 @@ function InlineComposeForm({
     const borderColor = useThemeColor('border')
     const backgroundColor = useThemeColor('background')
     const _dangerColor = useThemeColor('danger')
-    const editorRef = useRef<RichTextEditorHandle>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const mailboxId = useDefaultMailbox()
-    const editor = useMailEditor({ placeholder: 'Compose reply' })
-    useEditorHandle(editor, editorRef)
+    const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
+        placeholder: 'Compose reply',
+    })
     const { attachments, addFiles, removeFile, clearAll: clearAttachments } = useAttachments()
 
     const toValue =
@@ -167,7 +165,7 @@ function InlineComposeForm({
 
     const { send, isPending } = useSendEmail({
         onSuccess: () => {
-            editorRef.current?.clear()
+            editor.clear()
             clearAttachments()
             reset({ to: '', cc: '', bcc: '', subject: '' })
             onClose()
@@ -180,8 +178,8 @@ function InlineComposeForm({
             return
         }
 
-        const htmlBody = (await editorRef.current?.getHTML()) ?? ''
-        const textBody = (await editorRef.current?.getText()) ?? ''
+        const htmlBody = await editor.getHTML()
+        const textBody = await editor.getText()
 
         const cc = data.cc ? parseRecipients(data.cc) : undefined
         const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
@@ -225,7 +223,7 @@ function InlineComposeForm({
         >
             <ComposeFields control={control} errors={errors} />
             <View className="flex-1 p-3" style={{ minHeight: 120 }}>
-                <RichTextEditor editor={editor} />
+                <EditorComponent />
             </View>
             <AttachmentRibbon
                 isVisible={attachments.length > 0}
@@ -242,7 +240,8 @@ function InlineComposeForm({
                 />
             )}
             <ComposeToolbar
-                editor={editor}
+                commands={commands}
+                toolbarState={toolbarState}
                 onDiscard={onClose}
                 onSend={onSend}
                 onAttach={handleAttach}
