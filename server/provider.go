@@ -15,7 +15,7 @@ type SendResult = mailer.SendResult
 
 // Provider defines the pluggable email provider interface.
 // Send is delegated to the shared mailer package. The remaining methods
-// are mail-addon-specific (inbound parsing, bounces, domain management).
+// are mail-package-specific (inbound parsing, bounces, domain management).
 type Provider interface {
 	Send(ctx context.Context, req *SendRequest) (*SendResult, error)
 	ParseInbound(body []byte) (*InboundMessage, error)

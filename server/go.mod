@@ -1,4 +1,4 @@
-module tinycld.org/addons/mail
+module tinycld.org/packages/mail
 
 go 1.25.0
 
@@ -12,9 +12,12 @@ require (
 	github.com/pocketbase/dbx v1.12.0
 	github.com/pocketbase/pocketbase v0.36.8
 	golang.org/x/crypto v0.49.0
+	tinycld.org/audit v0.0.0
 	tinycld.org/mailer v0.0.0
 	tinycld.org/textextract v0.0.0
 )
+
+replace tinycld.org/audit => ../../../server/audit
 
 replace tinycld.org/textextract => ../../../server/textextract
 

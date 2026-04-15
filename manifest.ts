@@ -13,7 +13,7 @@ const manifest = {
     migrations: { directory: 'pb-migrations' },
     collections: { register: 'collections', types: 'types' },
     seed: { script: 'seed' },
-    server: { package: 'server', module: 'tinycld.org/addons/mail' },
+    server: { package: 'server', module: 'tinycld.org/packages/mail' },
 }
 
 export default manifest
