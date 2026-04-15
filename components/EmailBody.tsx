@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Platform, Text, View } from 'react-native'
 import { pb } from '~/lib/pocketbase'
 import { proxyImageUrls } from '~/lib/proxy-image-urls'
@@ -26,8 +26,51 @@ function useEmailHtml(collectionId: string, recordId: string, filename: string) 
     return html
 }
 
+function useIframeAutoHeight(html: string) {
+    const iframeRef = useRef<HTMLIFrameElement>(null)
+    const [height, setHeight] = useState(300)
+
+    const handleLoad = useCallback(() => {
+        const doc = iframeRef.current?.contentDocument
+        if (!doc) return
+
+        // Prevent infinite resize loop: without this, setting the iframe
+        // height to scrollHeight can cause the content to grow to match
+        const style = doc.createElement('style')
+        style.textContent = 'html, body { height: auto !important; }'
+        doc.head.appendChild(style)
+
+        const updateHeight = () => {
+            const scrollH = doc.documentElement.scrollHeight
+            const bodyStyle = doc.defaultView?.getComputedStyle(doc.body)
+            const marginTop = parseInt(bodyStyle?.marginTop || '0', 10)
+            const marginBottom = parseInt(bodyStyle?.marginBottom || '0', 10)
+            const h = scrollH + marginTop + marginBottom
+            if (h > 0) setHeight(h)
+        }
+
+        updateHeight()
+
+        const observer = new ResizeObserver(updateHeight)
+        observer.observe(doc.documentElement)
+        return () => observer.disconnect()
+    }, [])
+
+    // Re-measure when html changes after iframe is already loaded
+    useEffect(() => {
+        const doc = iframeRef.current?.contentDocument
+        if (doc?.documentElement) {
+            const h = doc.documentElement.scrollHeight
+            if (h > 0) setHeight(h)
+        }
+    }, [html])
+
+    return { iframeRef, height, handleLoad }
+}
+
 export function EmailBody({ collectionId, recordId, filename }: EmailBodyProps) {
     const html = useEmailHtml(collectionId, recordId, filename)
+    const { iframeRef, height, handleLoad } = useIframeAutoHeight(html)
 
     if (!filename) return null
 
@@ -35,13 +78,14 @@ export function EmailBody({ collectionId, recordId, filename }: EmailBodyProps) 
         return (
             <View className="p-4 flex-1 rounded-lg" style={{ backgroundColor: '#fff' }}>
                 <iframe
-                    sandbox=""
+                    ref={iframeRef}
+                    sandbox="allow-same-origin"
                     srcDoc={html}
+                    onLoad={handleLoad}
                     style={{
                         border: 'none',
                         width: '100%',
-                        minHeight: 300,
-                        flex: 1,
+                        height,
                         colorScheme: 'light',
                     }}
                     title="Email body"
