@@ -1,4 +1,3 @@
-import { type EditorBridge, useBridgeState } from '@10play/tentap-editor'
 import {
     Bold,
     Italic,
@@ -13,10 +12,12 @@ import {
 import { useCallback, useMemo } from 'react'
 import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from 'react-native'
 import { ResponsiveToolbar, type ToolbarItem } from '~/components/ResponsiveToolbar'
+import type { EditorCommands, EditorToolbarState } from '~/lib/editor-types'
 import { useThemeColor } from '~/lib/use-app-theme'
 
 interface ComposeToolbarProps {
-    editor: EditorBridge
+    commands: EditorCommands
+    toolbarState: EditorToolbarState
     onDiscard: () => void
     onSend: () => void
     onAttach?: () => void
@@ -24,7 +25,8 @@ interface ComposeToolbarProps {
 }
 
 export function ComposeToolbar({
-    editor,
+    commands,
+    toolbarState,
     onDiscard,
     onSend,
     onAttach,
@@ -35,15 +37,18 @@ export function ComposeToolbar({
     const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
     const borderColor = useThemeColor('border')
-    const editorState = useBridgeState(editor)
 
     const handleLink = useCallback(() => {
-        const defaultUrl = editorState.activeLink ?? 'https://'
+        const defaultUrl = toolbarState.currentLink ?? 'https://'
 
         if (Platform.OS === 'web') {
             const url = window.prompt('Enter URL:', defaultUrl)
             if (url !== null) {
-                editor.setLink(url || '')
+                if (url) {
+                    commands.setLink(url)
+                } else {
+                    commands.removeLink()
+                }
             }
         } else {
             Alert.prompt(
@@ -51,14 +56,18 @@ export function ComposeToolbar({
                 'Enter URL:',
                 url => {
                     if (url !== null) {
-                        editor.setLink(url || '')
+                        if (url) {
+                            commands.setLink(url)
+                        } else {
+                            commands.removeLink()
+                        }
                     }
                 },
                 'plain-text',
                 defaultUrl
             )
         }
-    }, [editor, editorState.activeLink])
+    }, [commands, toolbarState.currentLink])
 
     const items: ToolbarItem[] = useMemo(
         () => [
@@ -98,15 +107,15 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={Bold}
-                        isActive={editorState.isBoldActive}
-                        onPress={() => editor.toggleBold()}
+                        isActive={toolbarState.isBoldActive}
+                        onPress={() => commands.toggleBold()}
                         iconColor={iconColor}
                         activeColor={activeColor}
                     />
                 ),
                 overflowLabel: 'Bold',
                 overflowIcon: Bold,
-                overflowPress: () => editor.toggleBold(),
+                overflowPress: () => commands.toggleBold(),
             },
             {
                 type: 'custom',
@@ -114,15 +123,15 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={Italic}
-                        isActive={editorState.isItalicActive}
-                        onPress={() => editor.toggleItalic()}
+                        isActive={toolbarState.isItalicActive}
+                        onPress={() => commands.toggleItalic()}
                         iconColor={iconColor}
                         activeColor={activeColor}
                     />
                 ),
                 overflowLabel: 'Italic',
                 overflowIcon: Italic,
-                overflowPress: () => editor.toggleItalic(),
+                overflowPress: () => commands.toggleItalic(),
             },
             {
                 type: 'custom',
@@ -130,15 +139,15 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={Underline}
-                        isActive={editorState.isUnderlineActive}
-                        onPress={() => editor.toggleUnderline()}
+                        isActive={toolbarState.isUnderlineActive}
+                        onPress={() => commands.toggleUnderline()}
                         iconColor={iconColor}
                         activeColor={activeColor}
                     />
                 ),
                 overflowLabel: 'Underline',
                 overflowIcon: Underline,
-                overflowPress: () => editor.toggleUnderline(),
+                overflowPress: () => commands.toggleUnderline(),
             },
             { type: 'separator' },
             {
@@ -147,15 +156,15 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={List}
-                        isActive={editorState.isBulletListActive}
-                        onPress={() => editor.toggleBulletList()}
+                        isActive={toolbarState.isBulletListActive}
+                        onPress={() => commands.toggleBulletList()}
                         iconColor={iconColor}
                         activeColor={activeColor}
                     />
                 ),
                 overflowLabel: 'Bullet list',
                 overflowIcon: List,
-                overflowPress: () => editor.toggleBulletList(),
+                overflowPress: () => commands.toggleBulletList(),
             },
             {
                 type: 'custom',
@@ -163,15 +172,15 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={ListOrdered}
-                        isActive={editorState.isOrderedListActive}
-                        onPress={() => editor.toggleOrderedList()}
+                        isActive={toolbarState.isOrderedListActive}
+                        onPress={() => commands.toggleOrderedList()}
                         iconColor={iconColor}
                         activeColor={activeColor}
                     />
                 ),
                 overflowLabel: 'Numbered list',
                 overflowIcon: ListOrdered,
-                overflowPress: () => editor.toggleOrderedList(),
+                overflowPress: () => commands.toggleOrderedList(),
             },
             { type: 'separator' },
             {
@@ -180,15 +189,15 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={Quote}
-                        isActive={editorState.isBlockquoteActive}
-                        onPress={() => editor.toggleBlockquote()}
+                        isActive={toolbarState.isBlockquoteActive}
+                        onPress={() => commands.toggleBlockquote()}
                         iconColor={iconColor}
                         activeColor={activeColor}
                     />
                 ),
                 overflowLabel: 'Blockquote',
                 overflowIcon: Quote,
-                overflowPress: () => editor.toggleBlockquote(),
+                overflowPress: () => commands.toggleBlockquote(),
             },
             {
                 type: 'custom',
@@ -196,7 +205,7 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={Link2}
-                        isActive={editorState.isLinkActive}
+                        isActive={toolbarState.isLinkActive}
                         onPress={handleLink}
                         iconColor={iconColor}
                         activeColor={activeColor}
@@ -220,8 +229,8 @@ export function ComposeToolbar({
             primaryFgColor,
             isPending,
             onSend,
-            editor,
-            editorState,
+            commands,
+            toolbarState,
             iconColor,
             activeColor,
             handleLink,
