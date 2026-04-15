@@ -4,20 +4,26 @@ import {
     BulletListBridge,
     CoreBridge,
     DropCursorBridge,
-    type EditorBridge,
     HardBreakBridge,
     HistoryBridge,
     ItalicBridge,
     LinkBridge,
     OrderedListBridge,
     PlaceholderBridge,
+    RichText,
     UnderlineBridge,
+    useBridgeState,
     useEditorBridge,
 } from '@10play/tentap-editor'
-import { type RefObject, useMemo } from 'react'
-import { Platform } from 'react-native'
+import React, { useMemo } from 'react'
+import { View } from 'react-native'
+import type {
+    EditorCommands,
+    EditorHandle,
+    EditorResult,
+    EditorToolbarState,
+} from '~/lib/editor-types'
 import { useThemeColor } from '~/lib/use-app-theme'
-import type { RichTextEditorHandle } from '../components/RichTextEditor'
 
 function buildEditorCSS(colors: { bg: string; fg: string; placeholder: string; primary: string }) {
     return `
@@ -75,7 +81,7 @@ interface UseMailEditorOptions {
     placeholder?: string
 }
 
-export function useMailEditor(options: UseMailEditorOptions = {}) {
+export function useMailEditor(options: UseMailEditorOptions = {}): EditorResult {
     const bgColor = useThemeColor('background')
     const fgColor = useThemeColor('foreground')
     const placeholderColor = useThemeColor('field-placeholder')
@@ -98,70 +104,69 @@ export function useMailEditor(options: UseMailEditorOptions = {}) {
 
     const editorTheme = useMemo(() => ({ webview: { backgroundColor: bgColor } }), [bgColor])
 
-    return useEditorBridge({
+    const bridge = useEditorBridge({
         initialContent: options.initialContent,
         bridgeExtensions,
         theme: editorTheme,
     })
+
+    const bridgeState = useBridgeState(bridge)
+
+    const editor: EditorHandle = useMemo(
+        () => ({
+            getHTML: () => bridge.getHTML(),
+            getText: () => bridge.getText(),
+            setContent: (html: string) => bridge.setContent(html),
+            focus: (position?: 'start' | 'end') => bridge.focus(position ?? 'end'),
+            clear: () => bridge.setContent(''),
+        }),
+        [bridge]
+    )
+
+    const commands: EditorCommands = useMemo(
+        () => ({
+            toggleBold: () => bridge.toggleBold(),
+            toggleItalic: () => bridge.toggleItalic(),
+            toggleUnderline: () => bridge.toggleUnderline(),
+            toggleBulletList: () => bridge.toggleBulletList(),
+            toggleOrderedList: () => bridge.toggleOrderedList(),
+            toggleBlockquote: () => bridge.toggleBlockquote(),
+            toggleHeading: (level: number) => bridge.toggleHeading(level),
+            setLink: (url: string) => bridge.setLink(url),
+            removeLink: () => bridge.setLink(''),
+            undo: () => bridge.undo(),
+            redo: () => bridge.redo(),
+        }),
+        [bridge]
+    )
+
+    const toolbarState: EditorToolbarState = {
+        isBoldActive: bridgeState.isBoldActive,
+        isItalicActive: bridgeState.isItalicActive,
+        isUnderlineActive: bridgeState.isUnderlineActive,
+        isBulletListActive: bridgeState.isBulletListActive,
+        isOrderedListActive: bridgeState.isOrderedListActive,
+        isBlockquoteActive: bridgeState.isBlockquoteActive,
+        isLinkActive: bridgeState.isLinkActive,
+        currentLink: bridgeState.activeLink ?? null,
+    }
+
+    const EditorComponent = useMemo(
+        () =>
+            function MailEditorContent() {
+                return (
+                    <View className="flex-1 min-h-[100px]">
+                        <RichText editor={bridge} scrollEnabled={false} />
+                    </View>
+                )
+            },
+        [bridge]
+    )
+
+    return { editor, EditorComponent, commands, toolbarState }
 }
 
-export function useEditorHandle(editor: EditorBridge, ref: RefObject<RichTextEditorHandle | null>) {
-    ref.current = {
-        getHTML: () => editor.getHTML(),
-        getText: () => editor.getText(),
-        focus: () => editor.focus('end'),
-        clear: () => editor.setContent(''),
-    }
-}
-
-export function setContentWhenReady(editor: EditorBridge, content: string): () => void {
-    if (Platform.OS === 'web') {
-        return setContentOnWeb(editor, content)
-    }
-    setContentOnNative(editor, content)
+export function setContentWhenReady(editor: EditorHandle, content: string): () => void {
+    editor.setContent(content)
     return () => {}
-}
-
-function setContentOnWeb(editor: EditorBridge, content: string): () => void {
-    const escaped = JSON.stringify(content)
-    const js = `(function trySet(n) {
-        var pm = document.querySelector('.ProseMirror');
-        if (pm && pm.editor) { pm.editor.commands.setContent(${escaped}); }
-        else if (n < 30) { setTimeout(function() { trySet(n+1); }, 100); }
-    })(0);`
-
-    const tryInject = () => {
-        const ref = editor.webviewRef?.current
-        if (ref) {
-            ref.injectJavaScript(js)
-            return true
-        }
-        return false
-    }
-
-    if (tryInject()) return () => {}
-
-    let attempts = 0
-    const interval = setInterval(() => {
-        attempts++
-        if (tryInject() || attempts >= 30) {
-            clearInterval(interval)
-        }
-    }, 100)
-
-    return () => clearInterval(interval)
-}
-
-function setContentOnNative(editor: EditorBridge, content: string) {
-    const state = editor.getEditorState()
-    if (state && 'isReady' in state && state.isReady) {
-        editor.setContent(content)
-        return
-    }
-    const unsub = editor._subscribeToEditorStateUpdate(newState => {
-        if ('isReady' in newState && newState.isReady) {
-            unsub()
-            editor.setContent(content)
-        }
-    })
 }
