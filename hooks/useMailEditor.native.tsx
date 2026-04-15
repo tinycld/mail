@@ -15,7 +15,7 @@ import {
     useBridgeState,
     useEditorBridge,
 } from '@10play/tentap-editor'
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 import { View } from 'react-native'
 import type {
     EditorCommands,
@@ -131,7 +131,7 @@ export function useMailEditor(options: UseMailEditorOptions = {}): EditorResult 
             toggleBulletList: () => bridge.toggleBulletList(),
             toggleOrderedList: () => bridge.toggleOrderedList(),
             toggleBlockquote: () => bridge.toggleBlockquote(),
-            toggleHeading: (level: number) => bridge.toggleHeading(level),
+            toggleHeading: (level: number) => bridge.toggleHeading(level as 1 | 2 | 3 | 4 | 5 | 6),
             setLink: (url: string) => bridge.setLink(url),
             removeLink: () => bridge.setLink(''),
             undo: () => bridge.undo(),

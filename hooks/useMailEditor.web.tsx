@@ -3,7 +3,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import Underline from '@tiptap/extension-underline'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 import { View } from 'react-native'
 import type {
     EditorCommands,
@@ -64,8 +64,7 @@ export function useMailEditor(options: UseMailEditorOptions = {}): EditorResult 
                     .focus()
                     .toggleHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 })
                     .run(),
-            setLink: (url: string) =>
-                tiptapEditor?.chain().focus().setLink({ href: url }).run(),
+            setLink: (url: string) => tiptapEditor?.chain().focus().setLink({ href: url }).run(),
             removeLink: () => tiptapEditor?.chain().focus().unsetLink().run(),
             undo: () => tiptapEditor?.chain().focus().undo().run(),
             redo: () => tiptapEditor?.chain().focus().redo().run(),
@@ -91,9 +90,10 @@ export function useMailEditor(options: UseMailEditorOptions = {}): EditorResult 
                     <View
                         className="flex-1 min-h-[100px] tinycld-mail-editor"
                         style={{
+                            // @ts-expect-error CSS custom properties for web
                             '--editor-placeholder-color': placeholderColor,
                             '--editor-primary-color': primaryColor,
-                        } as React.CSSProperties}
+                        }}
                     >
                         <EditorContent editor={tiptapEditor} />
                     </View>
