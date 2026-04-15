@@ -15,10 +15,11 @@ function useEmailHtml(collectionId: string, recordId: string, filename: string) 
     useEffect(() => {
         if (!filename) return
 
+        const token = pb.authStore.token
         const url = pb.files.getURL({ collectionId, id: recordId }, filename)
         fetch(url)
             .then(res => res.text())
-            .then(raw => setHtml(proxyImageUrls(raw)))
+            .then(raw => setHtml(proxyImageUrls(raw, token)))
             .catch(() => setHtml(''))
     }, [collectionId, recordId, filename])
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/audit"
 )
 
 // settingsCache caches settings per org to avoid DB queries on every request.
@@ -14,6 +15,78 @@ import (
 var settingsCache sync.Map // map[string]map[string]string  (orgID → {key: value})
 
 func Register(app *pocketbase.PocketBase) {
+	// Audit logging for mail collections
+	audit.RegisterCollection(app, "mail_domains", &audit.CollectionConfig{
+		ExtractLabel: audit.LabelFromField("domain"),
+	})
+
+	resolveOrgViaMailbox := func(a core.App, mailboxID string) string {
+		mailbox, err := a.FindRecordById("mail_mailboxes", mailboxID)
+		if err != nil {
+			return ""
+		}
+		domainID := mailbox.GetString("domain")
+		if domainID == "" {
+			return ""
+		}
+		return audit.ResolveViaRelation(a, "mail_domains", domainID, "org")
+	}
+
+	audit.RegisterCollection(app, "mail_mailboxes", &audit.CollectionConfig{
+		ResolveOrg: func(a core.App, record *core.Record) string {
+			domainID := record.GetString("domain")
+			if domainID == "" {
+				return ""
+			}
+			return audit.ResolveViaRelation(a, "mail_domains", domainID, "org")
+		},
+		ExtractLabel: audit.LabelFromField("address"),
+	})
+
+	audit.RegisterCollection(app, "mail_mailbox_members", &audit.CollectionConfig{
+		ResolveOrg: func(a core.App, record *core.Record) string {
+			mailboxID := record.GetString("mailbox")
+			if mailboxID == "" {
+				return ""
+			}
+			return resolveOrgViaMailbox(a, mailboxID)
+		},
+	})
+
+	resolveOrgViaThread := func(a core.App, threadID string) string {
+		thread, err := a.FindRecordById("mail_threads", threadID)
+		if err != nil {
+			return ""
+		}
+		mailboxID := thread.GetString("mailbox")
+		if mailboxID == "" {
+			return ""
+		}
+		return resolveOrgViaMailbox(a, mailboxID)
+	}
+
+	audit.RegisterCollection(app, "mail_messages", &audit.CollectionConfig{
+		ResolveOrg: func(a core.App, record *core.Record) string {
+			threadID := record.GetString("thread")
+			if threadID == "" {
+				return ""
+			}
+			return resolveOrgViaThread(a, threadID)
+		},
+		ExtractLabel: audit.LabelFromField("subject"),
+	})
+
+	audit.RegisterCollection(app, "mail_thread_state", &audit.CollectionConfig{
+		ResolveOrg: func(a core.App, record *core.Record) string {
+			threadID := record.GetString("thread")
+			if threadID == "" {
+				return ""
+			}
+			return resolveOrgViaThread(a, threadID)
+		},
+		ExtractLabel: audit.LabelFromField("folder"),
+	})
+
 	// Env-based provider used for unauthenticated webhooks (no org context)
 	webhookProvider := newProviderFromEnv()
 
@@ -144,6 +217,11 @@ func Register(app *pocketbase.PocketBase) {
 		}
 		e.Router.POST("/api/mail/bounces/{token}", func(re *core.RequestEvent) error {
 			return handleBounce(app, webhookProvider, re, bounceSecret)
+		})
+
+		// Image proxy (auth via query token, since sandboxed iframes can't send headers)
+		e.Router.GET("/api/mail/image-proxy", func(re *core.RequestEvent) error {
+			return handleImageProxyRequest(app, re)
 		})
 
 		return e.Next()
