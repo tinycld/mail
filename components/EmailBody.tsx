@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Platform, Text, View } from 'react-native'
 import { pb } from '~/lib/pocketbase'
+import { proxyImageUrls } from '~/lib/proxy-image-urls'
 
 interface EmailBodyProps {
     collectionId: string
@@ -17,7 +18,7 @@ function useEmailHtml(collectionId: string, recordId: string, filename: string) 
         const url = pb.files.getURL({ collectionId, id: recordId }, filename)
         fetch(url)
             .then(res => res.text())
-            .then(setHtml)
+            .then(raw => setHtml(proxyImageUrls(raw)))
             .catch(() => setHtml(''))
     }, [collectionId, recordId, filename])
 
