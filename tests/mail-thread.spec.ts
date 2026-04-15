@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { clickSidebarItem, login, navigateToAddon } from '../../../tests/e2e/helpers'
+import { clickSidebarItem, login, navigateToPackage } from '../../../tests/e2e/helpers'
 
 test.describe('Mail — Thread Detail', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
-        await navigateToAddon(page, 'mail')
+        await navigateToPackage(page, 'mail')
     })
 
     test('open thread shows subject and content', async ({ page }) => {

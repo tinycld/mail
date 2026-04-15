@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { clickSidebarItem, login, navigateToAddon } from '../../../tests/e2e/helpers'
+import { clickSidebarItem, login, navigateToPackage } from '../../../tests/e2e/helpers'
 
 test.describe('Mail — Navigation', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
-        await navigateToAddon(page, 'mail')
+        await navigateToPackage(page, 'mail')
     })
 
     test('navigate to Sent', async ({ page }) => {
