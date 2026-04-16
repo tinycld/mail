@@ -1,8 +1,9 @@
 import type { useRouter } from 'expo-router'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef } from 'react'
 import { useOrgHref } from '~/lib/org-routes'
 import { type Shortcut, useRegisterShortcuts, useShortcutScope } from '~/lib/shortcuts'
 import type { ThreadListItem } from '../components/thread-list-item'
+import { useThreadListStore } from '../stores/thread-list-store'
 import { composeEvents } from './composeEvents'
 
 interface UseMailListShortcutsArgs {
@@ -10,6 +11,8 @@ interface UseMailListShortcutsArgs {
     router: ReturnType<typeof useRouter>
     toggleSelect: (stateId: string) => void
     isEnabled: boolean
+    folder: string | null
+    labels: string[]
 }
 
 export function useMailListShortcuts({
@@ -17,12 +20,30 @@ export function useMailListShortcuts({
     router,
     toggleSelect,
     isEnabled,
+    folder,
+    labels,
 }: UseMailListShortcutsArgs) {
-    const [focusedIndex, setFocusedIndex] = useState(0)
+    const storedIndex = useThreadListStore(s => s.focusedIndex)
+    const setFocusedIndex = useThreadListStore(s => s.setFocusedIndex)
     const orgHref = useOrgHref()
 
     useShortcutScope('list')
 
+    // Reset the persisted focus when the folder/label scope changes so we
+    // don't land on a stale position from the previous view. Compared during
+    // render rather than in useEffect (matches the pattern in useMailSelection).
+    const prevFolderRef = useRef(folder)
+    const prevLabelsRef = useRef(labels.join(','))
+    const labelsKey = labels.join(',')
+    if (folder !== prevFolderRef.current || labelsKey !== prevLabelsRef.current) {
+        prevFolderRef.current = folder
+        prevLabelsRef.current = labelsKey
+        if (storedIndex !== 0) setFocusedIndex(0)
+    }
+
+    // Clamp the persisted index to the current list so we don't highlight a
+    // nonexistent row after the list shrinks.
+    const focusedIndex = items.length === 0 ? 0 : Math.min(storedIndex, items.length - 1)
     const focusedId = items[focusedIndex]?.stateId ?? null
     const focusedThreadId = items[focusedIndex]?.threadId ?? null
 
@@ -87,7 +108,16 @@ export function useMailListShortcuts({
                 run: () => composeEvents.emit(),
             },
         ]
-    }, [isEnabled, items.length, focusedId, focusedThreadId, orgHref, router, toggleSelect])
+    }, [
+        isEnabled,
+        items.length,
+        focusedId,
+        focusedThreadId,
+        orgHref,
+        router,
+        setFocusedIndex,
+        toggleSelect,
+    ])
 
     useRegisterShortcuts(shortcuts)
 

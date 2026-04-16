@@ -240,6 +240,8 @@ export default function MailListScreen() {
         router,
         toggleSelect: selection.toggle,
         isEnabled: !search.isActive,
+        folder,
+        labels,
     })
 
     const selectedItemLabelIds = useMemo(() => {

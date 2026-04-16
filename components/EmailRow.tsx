@@ -366,18 +366,23 @@ function DesktopEmailRow({
               }
             : {}
 
+    // Keyboard-focused rows get the "shrunken" bordered look so it's obvious
+    // which row j/k landed on. Mouse hover gets a left stripe in the accent
+    // color — a lighter affordance that doesn't move the content around.
     const borderInset = hexToRgba(borderColor, 0.6)
-    const hoverShadow =
-        isHovered && Platform.OS === 'web'
+    const shrunkenBox = `inset 1px 0 0 ${borderInset}, inset -1px 0 0 ${borderInset}, inset 0 -1px 0 ${borderInset}, inset 0 1px 0 ${borderInset}`
+    const focusStyle =
+        isFocused && Platform.OS === 'web'
             ? ({
-                  boxShadow: `inset 1px 0 0 ${borderInset}, inset -1px 0 0 ${borderInset}, inset 0 -1px 0 ${borderInset}, inset 0 1px 0 ${borderInset}`,
+                  boxShadow: shrunkenBox,
                   backgroundColor: hexToRgba(borderColor, 0.12),
                   borderBottomColor: 'transparent',
               } as Record<string, unknown>)
             : null
-    const focusRing = isFocused
-        ? ({ boxShadow: `inset 3px 0 0 ${activeIndicator}` } as Record<string, unknown>)
-        : null
+    const hoverStyle =
+        isHovered && Platform.OS === 'web' && !isFocused
+            ? ({ boxShadow: `inset 3px 0 0 ${activeIndicator}` } as Record<string, unknown>)
+            : null
 
     return (
         <RowWrapper href={orgHref('mail/[id]', { id: email.threadId })} onPress={onPress}>
@@ -388,8 +393,8 @@ function DesktopEmailRow({
                         backgroundColor: rowBg,
                         borderBottomColor: borderColor,
                     },
-                    hoverShadow,
-                    focusRing,
+                    focusStyle,
+                    hoverStyle,
                 ]}
                 {...hoverWebProps}
                 testID="email-row"
