@@ -136,7 +136,6 @@ function InlineComposeForm({
 }) {
     const borderColor = useThemeColor('border')
     const backgroundColor = useThemeColor('background')
-    const _dangerColor = useThemeColor('danger')
     const fileInputRef = useRef<HTMLInputElement>(null)
     const mailboxId = useDefaultMailbox()
     const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
