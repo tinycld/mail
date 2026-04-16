@@ -1,6 +1,6 @@
 import { eq } from '@tanstack/db'
 import { CheckCircle, Circle, Globe, Plus, Trash2 } from 'lucide-react-native'
-import { newRecordId } from 'pbtsdb'
+import { newRecordId } from 'pbtsdb/core'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { handleMutationErrorsWithForm } from '~/lib/errors'

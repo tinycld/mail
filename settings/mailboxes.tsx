@@ -1,7 +1,7 @@
 import { eq } from '@tanstack/db'
 import { Link } from 'expo-router'
 import { Lock, Mail, Plus, Trash2, UserPlus, X } from 'lucide-react-native'
-import { newRecordId } from 'pbtsdb'
+import { newRecordId } from 'pbtsdb/core'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { handleMutationErrorsWithForm } from '~/lib/errors'

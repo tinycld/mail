@@ -1,5 +1,5 @@
-import type { createCollection } from 'pbtsdb'
-import { BasicIndex } from 'pbtsdb'
+import type { createCollection } from 'pbtsdb/core'
+import { BasicIndex } from 'pbtsdb/core'
 import type { CoreStores } from '~/lib/pocketbase'
 import type { Schema } from '~/types/pbSchema'
 import type { MailSchema } from './types'
