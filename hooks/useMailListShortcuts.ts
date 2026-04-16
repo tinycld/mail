@@ -49,6 +49,10 @@ export function useMailListShortcuts({
 
     const shortcuts = useMemo<Shortcut[]>(() => {
         if (!isEnabled) return []
+        const openFocused = () => {
+            if (!focusedThreadId) return
+            router.push(orgHref('mail/[id]', { id: focusedThreadId }))
+        }
         return [
             {
                 id: 'mail.list.next',
@@ -72,21 +76,15 @@ export function useMailListShortcuts({
                 scope: 'list',
                 group: 'Mail',
                 description: 'Open conversation',
-                run: () => {
-                    if (!focusedThreadId) return
-                    router.push(orgHref('mail/[id]', { id: focusedThreadId }))
-                },
+                run: openFocused,
             },
             {
                 id: 'mail.list.openO',
                 keys: 'o',
                 scope: 'list',
                 group: 'Mail',
-                description: 'Open conversation',
-                run: () => {
-                    if (!focusedThreadId) return
-                    router.push(orgHref('mail/[id]', { id: focusedThreadId }))
-                },
+                description: 'Open conversation (alt)',
+                run: openFocused,
             },
             {
                 id: 'mail.list.select',
