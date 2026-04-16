@@ -8,6 +8,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/audit"
+	"tinycld.org/notify"
 )
 
 // settingsCache caches settings per org to avoid DB queries on every request.
@@ -163,6 +164,12 @@ func Register(app *pocketbase.PocketBase) {
 		if err == nil {
 			globalNotifier.notify(thread.GetString("mailbox"))
 		}
+		return e.Next()
+	})
+
+	// Buffer inbound messages for batched notification delivery
+	app.OnRecordAfterCreateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
+		go bufferMailNotification(app, e.Record)
 		return e.Next()
 	})
 
@@ -339,4 +346,61 @@ func requireAuth(re *core.RequestEvent) error {
 		return re.UnauthorizedError("Authentication required", nil)
 	}
 	return re.Next()
+}
+
+// bufferMailNotification queues a mail notification for batched delivery.
+func bufferMailNotification(app *pocketbase.PocketBase, msgRecord *core.Record) {
+	// Skip outbound messages (sent by the user themselves)
+	direction := msgRecord.GetString("direction")
+	if direction == "outbound" || direction == "sent" {
+		return
+	}
+
+	threadID := msgRecord.GetString("thread")
+	if threadID == "" {
+		return
+	}
+
+	thread, err := app.FindRecordById("mail_threads", threadID)
+	if err != nil {
+		return
+	}
+
+	mailboxID := thread.GetString("mailbox")
+	if mailboxID == "" {
+		return
+	}
+
+	// Find mailbox members to notify
+	members, err := app.FindRecordsByFilter(
+		"mail_mailbox_members",
+		"mailbox = {:mailboxId}",
+		"",
+		0,
+		0,
+		map[string]any{"mailboxId": mailboxID},
+	)
+	if err != nil || len(members) == 0 {
+		return
+	}
+
+	senderName := msgRecord.GetString("sender_name")
+	senderEmail := msgRecord.GetString("sender_email")
+	subject := msgRecord.GetString("subject")
+	sender := senderName
+	if sender == "" {
+		sender = senderEmail
+	}
+
+	for _, member := range members {
+		userOrgID := member.GetString("user_org")
+		userOrgRecord, err := app.FindRecordById("user_org", userOrgID)
+		if err != nil {
+			continue
+		}
+		userID := userOrgRecord.GetString("user")
+		orgID := userOrgRecord.GetString("org")
+
+		notify.BufferMailNotification(userID, orgID, sender, subject)
+	}
 }

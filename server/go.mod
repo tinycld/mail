@@ -14,16 +14,22 @@ require (
 	golang.org/x/crypto v0.49.0
 	tinycld.org/audit v0.0.0
 	tinycld.org/mailer v0.0.0
+	tinycld.org/notify v0.0.0-00010101000000-000000000000
 	tinycld.org/textextract v0.0.0
 )
 
 replace tinycld.org/audit => ../../../server/audit
+
+replace tinycld.org/notify => ../../../server/notify
+
+replace tinycld.org/push => ../../../server/push
 
 replace tinycld.org/textextract => ../../../server/textextract
 
 replace tinycld.org/mailer => ../../../server/mailer
 
 require (
+	github.com/SherClockHolmes/webpush-go v1.4.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/disintegration/imaging v1.6.2 // indirect
@@ -55,4 +61,5 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.48.0 // indirect
+	tinycld.org/push v0.0.0 // indirect
 )
