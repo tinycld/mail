@@ -367,21 +367,28 @@ function DesktopEmailRow({
             : {}
 
     // Keyboard-focused rows get the "shrunken" bordered look so it's obvious
-    // which row j/k landed on. Mouse hover gets a left stripe in the accent
-    // color — a lighter affordance that doesn't move the content around.
+    // which row j/k landed on. Mouse hover adds a left stripe in the accent
+    // color — a separate dimension, so the two stack when both are true.
     const borderInset = hexToRgba(borderColor, 0.6)
     const shrunkenBox = `inset 1px 0 0 ${borderInset}, inset -1px 0 0 ${borderInset}, inset 0 -1px 0 ${borderInset}, inset 0 1px 0 ${borderInset}`
-    const focusStyle =
-        isFocused && Platform.OS === 'web'
+    const hoverStripe = `inset 3px 0 0 ${activeIndicator}`
+    const isWeb = Platform.OS === 'web'
+    const showShrunken = isWeb && isFocused
+    const showStripe = isWeb && isHovered
+    const boxShadows = [showShrunken ? shrunkenBox : null, showStripe ? hoverStripe : null]
+        .filter(Boolean)
+        .join(', ')
+    const effectStyle =
+        boxShadows.length > 0
             ? ({
-                  boxShadow: shrunkenBox,
-                  backgroundColor: hexToRgba(borderColor, 0.12),
-                  borderBottomColor: 'transparent',
+                  boxShadow: boxShadows,
+                  ...(showShrunken
+                      ? {
+                            backgroundColor: hexToRgba(borderColor, 0.12),
+                            borderBottomColor: 'transparent',
+                        }
+                      : {}),
               } as Record<string, unknown>)
-            : null
-    const hoverStyle =
-        isHovered && Platform.OS === 'web' && !isFocused
-            ? ({ boxShadow: `inset 3px 0 0 ${activeIndicator}` } as Record<string, unknown>)
             : null
 
     return (
@@ -393,8 +400,7 @@ function DesktopEmailRow({
                         backgroundColor: rowBg,
                         borderBottomColor: borderColor,
                     },
-                    focusStyle,
-                    hoverStyle,
+                    effectStyle,
                 ]}
                 {...hoverWebProps}
                 testID="email-row"
