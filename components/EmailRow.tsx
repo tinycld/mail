@@ -13,6 +13,7 @@ import {
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { rowFocusStyle } from '~/components/focusable-row'
 import { HoverAction } from '~/components/HoverAction'
 import { LabelBadge, LabelDots } from '~/components/LabelBadge'
 import { StarIcon } from '~/components/StarIcon'
@@ -366,30 +367,7 @@ function DesktopEmailRow({
               }
             : {}
 
-    // Hover and keyboard focus both show the accent left stripe; keyboard
-    // focus additionally gets the "shrunken" bordered look so it's visually
-    // the stronger affordance.
-    const borderInset = hexToRgba(borderColor, 0.6)
-    const shrunkenBox = `inset 1px 0 0 ${borderInset}, inset -1px 0 0 ${borderInset}, inset 0 -1px 0 ${borderInset}, inset 0 1px 0 ${borderInset}`
-    const stripeBox = `inset 3px 0 0 ${activeIndicator}`
-    const isWeb = Platform.OS === 'web'
-    const showShrunken = isWeb && isFocused
-    const showStripe = isWeb && (isHovered || isFocused)
-    const boxShadows = [showShrunken ? shrunkenBox : null, showStripe ? stripeBox : null]
-        .filter(Boolean)
-        .join(', ')
-    const effectStyle =
-        boxShadows.length > 0
-            ? ({
-                  boxShadow: boxShadows,
-                  ...(showShrunken
-                      ? {
-                            backgroundColor: hexToRgba(borderColor, 0.12),
-                            borderBottomColor: 'transparent',
-                        }
-                      : {}),
-              } as Record<string, unknown>)
-            : null
+    const effectStyle = rowFocusStyle({ isFocused, isHovered, borderColor, activeIndicator })
 
     return (
         <RowWrapper href={orgHref('mail/[id]', { id: email.threadId })} onPress={onPress}>
