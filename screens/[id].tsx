@@ -1,11 +1,12 @@
 import { and, eq } from '@tanstack/db'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { ScreenHeader } from '~/components/ScreenHeader'
 import { mutation, useMutation } from '~/lib/mutations'
 import { useOrgHref } from '~/lib/org-routes'
 import { useOrgLiveQuery, useStore } from '~/lib/pocketbase'
+import { type Shortcut, useRegisterShortcut, useShortcutScope } from '~/lib/shortcuts'
 import { useThemeColor } from '~/lib/use-app-theme'
 import { useScrollShadow } from '~/lib/use-scroll-shadow'
 import { EmailAttachments } from '../components/EmailAttachments'
@@ -92,6 +93,20 @@ export default function MailDetailScreen() {
             router.replace(orgHref('mail', { folder: initialFolderRef.current ?? 'inbox' }))
         }
     }, [router, orgHref])
+
+    useShortcutScope('thread')
+    const closeShortcut = useMemo<Shortcut>(
+        () => ({
+            id: 'mail.thread.close',
+            keys: 'Escape',
+            scope: 'thread',
+            group: 'Mail',
+            description: 'Close conversation',
+            run: navigateBack,
+        }),
+        [navigateBack]
+    )
+    useRegisterShortcut(closeShortcut)
 
     const {
         archiveThread,
