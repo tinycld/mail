@@ -1,0 +1,95 @@
+import type { useRouter } from 'expo-router'
+import { useMemo, useState } from 'react'
+import { useOrgHref } from '~/lib/org-routes'
+import { type Shortcut, useRegisterShortcuts, useShortcutScope } from '~/lib/shortcuts'
+import type { ThreadListItem } from '../components/thread-list-item'
+import { composeEvents } from './composeEvents'
+
+interface UseMailListShortcutsArgs {
+    items: ThreadListItem[]
+    router: ReturnType<typeof useRouter>
+    toggleSelect: (stateId: string) => void
+    isEnabled: boolean
+}
+
+export function useMailListShortcuts({
+    items,
+    router,
+    toggleSelect,
+    isEnabled,
+}: UseMailListShortcutsArgs) {
+    const [focusedIndex, setFocusedIndex] = useState(0)
+    const orgHref = useOrgHref()
+
+    useShortcutScope('list')
+
+    const focusedId = items[focusedIndex]?.stateId ?? null
+    const focusedThreadId = items[focusedIndex]?.threadId ?? null
+
+    const shortcuts = useMemo<Shortcut[]>(() => {
+        if (!isEnabled) return []
+        return [
+            {
+                id: 'mail.list.next',
+                keys: 'j',
+                scope: 'list',
+                group: 'Mail',
+                description: 'Next conversation',
+                run: () => setFocusedIndex(i => Math.min(i + 1, Math.max(items.length - 1, 0))),
+            },
+            {
+                id: 'mail.list.prev',
+                keys: 'k',
+                scope: 'list',
+                group: 'Mail',
+                description: 'Previous conversation',
+                run: () => setFocusedIndex(i => Math.max(i - 1, 0)),
+            },
+            {
+                id: 'mail.list.open',
+                keys: 'Enter',
+                scope: 'list',
+                group: 'Mail',
+                description: 'Open conversation',
+                run: () => {
+                    if (!focusedThreadId) return
+                    router.push(orgHref('mail/[id]', { id: focusedThreadId }))
+                },
+            },
+            {
+                id: 'mail.list.openO',
+                keys: 'o',
+                scope: 'list',
+                group: 'Mail',
+                description: 'Open conversation',
+                run: () => {
+                    if (!focusedThreadId) return
+                    router.push(orgHref('mail/[id]', { id: focusedThreadId }))
+                },
+            },
+            {
+                id: 'mail.list.select',
+                keys: 'x',
+                scope: 'list',
+                group: 'Mail',
+                description: 'Toggle selection',
+                run: () => {
+                    if (!focusedId) return
+                    toggleSelect(focusedId)
+                },
+            },
+            {
+                id: 'mail.list.compose',
+                keys: 'c',
+                scope: 'list',
+                group: 'Mail',
+                description: 'Compose new email',
+                run: () => composeEvents.emit(),
+            },
+        ]
+    }, [isEnabled, items.length, focusedId, focusedThreadId, orgHref, router, toggleSelect])
+
+    useRegisterShortcuts(shortcuts)
+
+    return { focusedIndex, focusedId }
+}

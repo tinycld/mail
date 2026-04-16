@@ -34,6 +34,7 @@ interface EmailRowProps {
     onTrash?: () => void
     onToggleRead?: () => void
     index?: number
+    isFocused?: boolean
 }
 
 export function EmailRow({
@@ -47,6 +48,7 @@ export function EmailRow({
     onTrash,
     onToggleRead,
     index,
+    isFocused,
 }: EmailRowProps) {
     if (isMobile)
         return (
@@ -70,6 +72,7 @@ export function EmailRow({
             onTrash={onTrash}
             onToggleRead={onToggleRead}
             index={index}
+            isFocused={isFocused}
         />
     )
 }
@@ -330,12 +333,14 @@ function DesktopEmailRow({
     onTrash,
     onToggleRead,
     index,
+    isFocused,
 }: EmailRowProps) {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const surfaceColor = useThemeColor('surface-secondary')
     const borderColor = useThemeColor('border')
     const accentBgColor = useThemeColor('accent')
+    const activeIndicator = useThemeColor('active-indicator')
     const dangerColor = useThemeColor('danger')
     const orgHref = useOrgHref()
     const [isHovered, setIsHovered] = useState(false)
@@ -370,6 +375,9 @@ function DesktopEmailRow({
                   borderBottomColor: 'transparent',
               } as Record<string, unknown>)
             : null
+    const focusRing = isFocused
+        ? ({ boxShadow: `inset 3px 0 0 ${activeIndicator}` } as Record<string, unknown>)
+        : null
 
     return (
         <RowWrapper href={orgHref('mail/[id]', { id: email.threadId })} onPress={onPress}>
@@ -381,8 +389,10 @@ function DesktopEmailRow({
                         borderBottomColor: borderColor,
                     },
                     hoverShadow,
+                    focusRing,
                 ]}
                 {...hoverWebProps}
+                testID="email-row"
             >
                 <Pressable
                     style={styles.checkbox}

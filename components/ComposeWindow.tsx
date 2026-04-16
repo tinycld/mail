@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, Text, View } from 'react-native'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { captureException } from '~/lib/errors'
 import { performMutations } from '~/lib/mutations'
 import { useStore } from '~/lib/pocketbase'
+import { type Shortcut, useRegisterShortcut, useShortcutScope } from '~/lib/shortcuts'
 import { useThemeColor } from '~/lib/use-app-theme'
 import { useForm, zodResolver } from '~/ui/form'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
@@ -287,7 +288,28 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             }}
             pointerEvents={showBackdrop ? 'auto' : 'box-none'}
         >
+            <ComposeShortcuts onSend={onSend} />
             {composeWindow}
         </View>
     )
+}
+
+function ComposeShortcuts({ onSend }: { onSend: () => void }) {
+    useShortcutScope('compose')
+    const sendRef = useRef(onSend)
+    sendRef.current = onSend
+    const shortcut = useMemo<Shortcut>(
+        () => ({
+            id: 'mail.compose.send',
+            keys: '$mod+Enter',
+            scope: 'compose',
+            group: 'Mail',
+            description: 'Send email',
+            allowInInputs: true,
+            run: () => sendRef.current(),
+        }),
+        []
+    )
+    useRegisterShortcut(shortcut)
+    return null
 }

@@ -17,6 +17,7 @@ import { EmailRow } from '../components/EmailRow'
 import type { ThreadListItem } from '../components/thread-list-item'
 import { useCompose } from '../hooks/useComposeState'
 import { useMailBulkActions } from '../hooks/useMailBulkActions'
+import { useMailListShortcuts } from '../hooks/useMailListShortcuts'
 import type { MailSearchResult } from '../hooks/useMailSearch'
 import { useMailSelection } from '../hooks/useMailSelection'
 import { useMailSearchState } from '../hooks/useSearchState'
@@ -234,6 +235,13 @@ export default function MailListScreen() {
         selection.clearSelection
     )
 
+    const { focusedIndex } = useMailListShortcuts({
+        items,
+        router,
+        toggleSelect: selection.toggle,
+        isEnabled: !search.isActive,
+    })
+
     const selectedItemLabelIds = useMemo(() => {
         if (selection.selectedItems.length === 0) return new Set<string>()
         const sets = selection.selectedItems.map(item => new Set(item.labels.map(l => l.id)))
@@ -420,6 +428,7 @@ export default function MailListScreen() {
                                 email={item}
                                 isMobile={isMobile}
                                 index={index}
+                                isFocused={index === focusedIndex}
                                 isSelected={selection.selectedIds.has(item.stateId)}
                                 onToggleSelect={() => selection.toggle(item.stateId)}
                                 onToggleStar={() =>
