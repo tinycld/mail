@@ -1,5 +1,6 @@
 import { eq } from '@tanstack/db'
-import { useOrgLiveQuery, useStore } from '~/lib/pocketbase'
+import { useStore } from '~/lib/pocketbase'
+import { useOrgLiveQuery } from '~/lib/use-org-live-query'
 
 export function useDefaultMailbox() {
     const [membersCollection] = useStore('mail_mailbox_members')

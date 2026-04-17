@@ -1,6 +1,7 @@
 import { eq } from '@tanstack/db'
 import { useMemo } from 'react'
-import { useOrgLiveQuery, useStore } from '~/lib/pocketbase'
+import { useStore } from '~/lib/pocketbase'
+import { useOrgLiveQuery } from '~/lib/use-org-live-query'
 
 interface Recipient {
     name: string

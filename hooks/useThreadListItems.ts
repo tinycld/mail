@@ -1,6 +1,7 @@
 import { and, eq } from '@tanstack/db'
 import { useMemo } from 'react'
-import { useOrgLiveQuery, useStore } from '~/lib/pocketbase'
+import { useStore } from '~/lib/pocketbase'
+import { useOrgLiveQuery } from '~/lib/use-org-live-query'
 import type { ThreadListItem } from '../components/thread-list-item'
 import { toThreadListItem } from '../components/thread-list-item'
 import type { MailMessages } from '../types'

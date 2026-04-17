@@ -23,8 +23,9 @@ import {
     SidebarNav,
 } from '~/components/sidebar-primitives'
 import { useOrgHref } from '~/lib/org-routes'
-import { useOrgLiveQuery, useStore } from '~/lib/pocketbase'
+import { useStore } from '~/lib/pocketbase'
 import { useThemeColor } from '~/lib/use-app-theme'
+import { useOrgLiveQuery } from '~/lib/use-org-live-query'
 import { composeEvents } from './hooks/composeEvents'
 import { useLabels } from './hooks/useLabels'
 
