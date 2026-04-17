@@ -158,7 +158,7 @@ func (s *imapSession) List(w *imapserver.ListWriter, ref string, patterns []stri
 	var allFolders []imap.ListData
 
 	for _, ctx := range s.mailboxIndex {
-		folders, err := listUserFolders(s.app, ctx.orgID)
+		folders, err := listUserFolders(s.app, ctx.orgID, ctx.userOrgID)
 		if err != nil {
 			continue
 		}
@@ -231,12 +231,12 @@ func (s *imapSession) Unselect() error {
 // Status returns mailbox status without selecting it.
 func (s *imapSession) Status(name string, options *imap.StatusOptions) (*imap.StatusData, error) {
 	ctx, bareName := s.matchMailboxContext(name)
-	mailboxID, _, userOrgID, err := s.resolveFolderWithContext(ctx)
+	mailboxID, orgID, userOrgID, err := s.resolveFolderWithContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.buildStatusData(bareName, mailboxID, userOrgID, options)
+	return s.buildStatusData(bareName, mailboxID, orgID, userOrgID, options)
 }
 
 // Fetch retrieves messages from the selected mailbox.
@@ -810,7 +810,7 @@ func (s *imapSession) buildSelectData(name string) (*imap.SelectData, error) {
 }
 
 // buildStatusData constructs the response data for a STATUS command.
-func (s *imapSession) buildStatusData(name, mailboxID, userOrgID string, options *imap.StatusOptions) (*imap.StatusData, error) {
+func (s *imapSession) buildStatusData(name, mailboxID, orgID, userOrgID string, options *imap.StatusOptions) (*imap.StatusData, error) {
 	data := &imap.StatusData{Mailbox: name}
 
 	if options == nil {
@@ -818,7 +818,7 @@ func (s *imapSession) buildStatusData(name, mailboxID, userOrgID string, options
 	}
 
 	if options.NumMessages {
-		messages, err := s.messagesForFolder(name, mailboxID, userOrgID)
+		messages, err := s.messagesForFolder(name, mailboxID, orgID, userOrgID)
 		if err == nil {
 			n := uint32(len(messages))
 			data.NumMessages = &n
@@ -837,7 +837,7 @@ func (s *imapSession) buildStatusData(name, mailboxID, userOrgID string, options
 	}
 
 	if options.NumUnseen {
-		filter, params := folderToFilter(name, userOrgID)
+		filter, params := folderToFilter(s.app, name, orgID, userOrgID)
 		filter += " && is_read = false"
 		states, err := s.app.FindRecordsByFilter("mail_thread_state", filter, "", 0, 0, params)
 		if err == nil {
@@ -907,8 +907,8 @@ func (s *imapSession) messagesForSelectedFolder() (map[int]*core.Record, error) 
 }
 
 // messagesForFolder loads messages for a specific IMAP folder name.
-func (s *imapSession) messagesForFolder(imapName, mailboxID, userOrgID string) ([]*core.Record, error) {
-	filter, params := folderToFilter(imapName, userOrgID)
+func (s *imapSession) messagesForFolder(imapName, mailboxID, orgID, userOrgID string) ([]*core.Record, error) {
+	filter, params := folderToFilter(s.app, imapName, orgID, userOrgID)
 
 	states, err := s.app.FindRecordsByFilter(
 		"mail_thread_state",
@@ -1200,7 +1200,11 @@ func (s *imapSession) markSeen(msg *core.Record) {
 	s.app.Save(states[0])
 }
 
-// addLabelToThread adds a label to a thread's thread_state.
+// addLabelToThread tags a thread with a label by creating a label_assignments
+// row (collection = "mail_thread_state", record_id = thread_state.id). This
+// matches how the web UI writes labels, so IMAP tags are immediately visible
+// there. The label lookup matches both org-level labels and the user's personal
+// labels. Idempotent — a second tag of the same label is a no-op.
 func (s *imapSession) addLabelToThread(threadID, userOrgID, orgID, imapName string) {
 	labelName := extractLabelName(imapName)
 	if labelName == "" {
@@ -1208,12 +1212,12 @@ func (s *imapSession) addLabelToThread(threadID, userOrgID, orgID, imapName stri
 	}
 
 	labels, err := s.app.FindRecordsByFilter(
-		"mail_labels",
-		"org = {:org} && name = {:name}",
+		"labels",
+		`org = {:org} && name = {:name} && (user_org = "" || user_org = {:userOrg})`,
 		"",
 		1,
 		0,
-		map[string]any{"org": orgID, "name": labelName},
+		map[string]any{"org": orgID, "name": labelName, "userOrg": userOrgID},
 	)
 	if err != nil || len(labels) == 0 {
 		return
@@ -1231,18 +1235,31 @@ func (s *imapSession) addLabelToThread(threadID, userOrgID, orgID, imapName stri
 		return
 	}
 
-	state := states[0]
-	existingLabels := state.GetStringSlice("labels")
 	labelID := labels[0].Id
+	stateID := states[0].Id
 
-	for _, l := range existingLabels {
-		if l == labelID {
-			return
-		}
+	existing, err := s.app.FindRecordsByFilter(
+		"label_assignments",
+		`label = {:label} && record_id = {:recordId} && collection = "mail_thread_state" && user_org = {:userOrg}`,
+		"",
+		1,
+		0,
+		map[string]any{"label": labelID, "recordId": stateID, "userOrg": userOrgID},
+	)
+	if err == nil && len(existing) > 0 {
+		return
 	}
-	existingLabels = append(existingLabels, labelID)
-	state.Set("labels", existingLabels)
-	s.app.Save(state)
+
+	collection, err := s.app.FindCollectionByNameOrId("label_assignments")
+	if err != nil {
+		return
+	}
+	record := core.NewRecord(collection)
+	record.Set("label", labelID)
+	record.Set("record_id", stateID)
+	record.Set("collection", "mail_thread_state")
+	record.Set("user_org", userOrgID)
+	s.app.Save(record)
 }
 
 // storeRawHeaders saves original RFC 5322 headers to a message record.

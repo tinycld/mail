@@ -11,6 +11,10 @@ import (
 
 const imapDelim = '/'
 
+// defaultLabelColor is assigned to labels created via IMAP since the protocol
+// provides no way for clients to specify a color. Users can recolor from the web UI.
+const defaultLabelColor = "#64748b"
+
 // systemFolder describes a built-in IMAP folder mapped to mail_thread_state fields.
 type systemFolder struct {
 	Name       string
@@ -55,9 +59,13 @@ func imapNameToFolder(name string) (folder string, isVirtual bool) {
 	}
 }
 
-// folderToFilter builds a PocketBase filter expression for querying threads
-// visible in a given IMAP folder for a specific user_org.
-func folderToFilter(imapName string, userOrgID string) (string, map[string]any) {
+// folderToFilter builds a PocketBase filter expression for querying
+// mail_thread_state records visible in a given IMAP folder for a specific
+// user_org. For label folders, it resolves the label name to a set of
+// thread_state IDs via label_assignments (the polymorphic junction the web
+// UI also uses) and emits an `id ~ ...` filter. Returns an impossible filter
+// if the label doesn't exist or the folder name is unknown.
+func folderToFilter(app *pocketbase.PocketBase, imapName, orgID, userOrgID string) (string, map[string]any) {
 	folder, isVirtual := imapNameToFolder(imapName)
 
 	if isVirtual {
@@ -71,10 +79,9 @@ func folderToFilter(imapName string, userOrgID string) (string, map[string]any) 
 		}
 	}
 
-	// Label folder: Labels/<name>
+	// Label folder: Labels/<name> — filter via label_assignments
 	if labelName := extractLabelName(imapName); labelName != "" {
-		return "user_org = {:userOrg} && labels.name ?= {:label}",
-			map[string]any{"userOrg": userOrgID, "label": labelName}
+		return labelFolderFilter(app, labelName, orgID, userOrgID)
 	}
 
 	// Standard folder
@@ -85,6 +92,50 @@ func folderToFilter(imapName string, userOrgID string) (string, map[string]any) 
 
 	// Unknown folder — return impossible filter
 	return "id = ''", nil
+}
+
+// labelFolderFilter resolves a label name to a mail_thread_state id-membership
+// filter by joining through label_assignments. Matches both org-level labels
+// (user_org = "") and the user's personal labels. Returns an impossible filter
+// if the label doesn't exist or has no assignments.
+func labelFolderFilter(app *pocketbase.PocketBase, labelName, orgID, userOrgID string) (string, map[string]any) {
+	labels, err := app.FindRecordsByFilter(
+		"labels",
+		`org = {:org} && name = {:name} && (user_org = "" || user_org = {:userOrg})`,
+		"",
+		1,
+		0,
+		map[string]any{"org": orgID, "name": labelName, "userOrg": userOrgID},
+	)
+	if err != nil || len(labels) == 0 {
+		return "id = ''", nil
+	}
+
+	assignments, err := app.FindRecordsByFilter(
+		"label_assignments",
+		`label = {:label} && collection = "mail_thread_state" && user_org = {:userOrg}`,
+		"",
+		0,
+		0,
+		map[string]any{"label": labels[0].Id, "userOrg": userOrgID},
+	)
+	if err != nil || len(assignments) == 0 {
+		return "id = ''", nil
+	}
+
+	ids := make([]string, 0, len(assignments))
+	for _, a := range assignments {
+		ids = append(ids, a.GetString("record_id"))
+	}
+	// Emit `id ~ {:i0} || id ~ {:i1} ...` to match the set of thread_state ids.
+	params := map[string]any{"userOrg": userOrgID}
+	var clauses []string
+	for i, id := range ids {
+		key := fmt.Sprintf("tid%d", i)
+		clauses = append(clauses, fmt.Sprintf("id = {:%s}", key))
+		params[key] = id
+	}
+	return "user_org = {:userOrg} && (" + strings.Join(clauses, " || ") + ")", params
 }
 
 // extractLabelName returns the label name from a "Labels/<name>" folder path,
@@ -103,7 +154,9 @@ func isLabelFolder(name string) bool {
 
 // listUserFolders returns all IMAP folders available to a user, including
 // system folders and label-based folders from the user's org.
-func listUserFolders(app *pocketbase.PocketBase, orgID string) ([]imap.ListData, error) {
+// Label folders include org-level labels (user_org = "") and the authenticated
+// user's personal labels (user_org = userOrgID).
+func listUserFolders(app *pocketbase.PocketBase, orgID, userOrgID string) ([]imap.ListData, error) {
 	var result []imap.ListData
 
 	// System folders
@@ -123,12 +176,12 @@ func listUserFolders(app *pocketbase.PocketBase, orgID string) ([]imap.ListData,
 
 	// User's org labels → Labels/<name>
 	labels, err := app.FindRecordsByFilter(
-		"mail_labels",
-		"org = {:org}",
+		"labels",
+		`org = {:org} && (user_org = "" || user_org = {:userOrg})`,
 		"name",
 		100,
 		0,
-		map[string]any{"org": orgID},
+		map[string]any{"org": orgID, "userOrg": userOrgID},
 	)
 	if err == nil {
 		for _, label := range labels {
@@ -142,17 +195,18 @@ func listUserFolders(app *pocketbase.PocketBase, orgID string) ([]imap.ListData,
 	return result, nil
 }
 
-// createLabelFolder creates a new label in the org for a "Labels/<name>" folder.
+// createLabelFolder creates a new org-level label for a "Labels/<name>" folder.
+// IMAP-created labels are always org-level (user_org = ""); personal labels
+// stay a web-UI concept.
 func createLabelFolder(app *pocketbase.PocketBase, orgID, imapName string) error {
 	labelName := extractLabelName(imapName)
 	if labelName == "" {
 		return fmt.Errorf("invalid label folder name: %s", imapName)
 	}
 
-	// Check if label already exists
 	existing, err := app.FindRecordsByFilter(
-		"mail_labels",
-		"org = {:org} && name = {:name}",
+		"labels",
+		`org = {:org} && name = {:name} && user_org = ""`,
 		"",
 		1,
 		0,
@@ -166,17 +220,19 @@ func createLabelFolder(app *pocketbase.PocketBase, orgID, imapName string) error
 		}
 	}
 
-	collection, err := app.FindCollectionByNameOrId("mail_labels")
+	collection, err := app.FindCollectionByNameOrId("labels")
 	if err != nil {
-		return fmt.Errorf("mail_labels collection not found: %w", err)
+		return fmt.Errorf("labels collection not found: %w", err)
 	}
 	record := core.NewRecord(collection)
 	record.Set("org", orgID)
 	record.Set("name", labelName)
+	record.Set("color", defaultLabelColor)
 	return app.Save(record)
 }
 
-// deleteLabelFolder deletes a label from the org.
+// deleteLabelFolder deletes an org-level label.
+// IMAP can only delete org-level labels; personal labels are managed from the web UI.
 func deleteLabelFolder(app *pocketbase.PocketBase, orgID, imapName string) error {
 	labelName := extractLabelName(imapName)
 	if labelName == "" {
@@ -184,8 +240,8 @@ func deleteLabelFolder(app *pocketbase.PocketBase, orgID, imapName string) error
 	}
 
 	labels, err := app.FindRecordsByFilter(
-		"mail_labels",
-		"org = {:org} && name = {:name}",
+		"labels",
+		`org = {:org} && name = {:name} && user_org = ""`,
 		"",
 		1,
 		0,
@@ -202,7 +258,8 @@ func deleteLabelFolder(app *pocketbase.PocketBase, orgID, imapName string) error
 	return app.Delete(labels[0])
 }
 
-// renameLabelFolder renames a label in the org.
+// renameLabelFolder renames an org-level label.
+// IMAP can only rename org-level labels; personal labels are managed from the web UI.
 func renameLabelFolder(app *pocketbase.PocketBase, orgID, oldName, newName string) error {
 	oldLabel := extractLabelName(oldName)
 	newLabel := extractLabelName(newName)
@@ -211,8 +268,8 @@ func renameLabelFolder(app *pocketbase.PocketBase, orgID, oldName, newName strin
 	}
 
 	labels, err := app.FindRecordsByFilter(
-		"mail_labels",
-		"org = {:org} && name = {:name}",
+		"labels",
+		`org = {:org} && name = {:name} && user_org = ""`,
 		"",
 		1,
 		0,
