@@ -499,6 +499,8 @@ migrate(
 
         // Phase 2: Apply access rules now that all collections exist and back-relations resolve
         const orgMemberRule = 'org.user_org_via_org.user ?= @request.auth.id'
+        // Mirrored in 1713000011_mail_domains_allow_owner.js (adminOrOwnerRule).
+        // Update both when changing the mail_domains write-rule.
         const orgAdminRule =
             'org.user_org_via_org.user ?= @request.auth.id && (org.user_org_via_org.role ?= "admin" || org.user_org_via_org.role ?= "owner")'
         const mbMemberRule = 'mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id'
