@@ -173,6 +173,17 @@ func (p *PostmarkProvider) CheckDomainVerification(ctx context.Context, domain s
 	return nil, fmt.Errorf("domain %q not found in Postmark", domain)
 }
 
+func (p *PostmarkProvider) CheckInboundDomain(ctx context.Context) (*InboundVerification, error) {
+	server, err := p.sender.Client().GetCurrentServer(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("postmark get current server failed: %w", err)
+	}
+	return &InboundVerification{
+		ServerInboundDomain: server.InboundDomain,
+		InboundAddress:      server.InboundAddress,
+	}, nil
+}
+
 func domainDetailsToVerification(d postmark.DomainDetails) *DomainVerification {
 	return &DomainVerification{
 		Domain:               d.Name,

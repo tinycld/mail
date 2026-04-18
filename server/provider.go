@@ -23,6 +23,15 @@ type Provider interface {
 	VerifyWebhookSignature(headers map[string]string, body []byte) error
 	AddDomain(ctx context.Context, domain string) (*DomainVerification, error)
 	CheckDomainVerification(ctx context.Context, domain string) (*DomainVerification, error)
+	CheckInboundDomain(ctx context.Context) (*InboundVerification, error)
+}
+
+// InboundVerification describes the server-side InboundDomain setting reported
+// by the mail provider (e.g. Postmark). Used to confirm the provider end of
+// inbound mail forwarding is wired up for the org's domain.
+type InboundVerification struct {
+	ServerInboundDomain string `json:"server_inbound_domain"`
+	InboundAddress      string `json:"inbound_address,omitempty"`
 }
 
 // BounceEvent represents a parsed bounce or spam complaint notification.

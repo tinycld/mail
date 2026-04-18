@@ -201,6 +201,13 @@ func Register(app *pocketbase.PocketBase) {
 			return handleSend(app, re)
 		}).BindFunc(requireAuth)
 
+		// Domain verification endpoint (requires auth; handler checks org admin/owner)
+		e.Router.POST("/api/mail/domains/{id}/verify", func(re *core.RequestEvent) error {
+			return handleVerifyDomain(app, re)
+		}).BindFunc(requireAuth)
+
+		go startDomainReverifyLoop(app)
+
 		// Draft endpoint (requires auth, saves without sending)
 		e.Router.POST("/api/mail/draft", func(re *core.RequestEvent) error {
 			return handleDraft(app, re)

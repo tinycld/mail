@@ -34,3 +34,7 @@ func (n *NoopProvider) AddDomain(_ context.Context, _ string) (*DomainVerificati
 func (n *NoopProvider) CheckDomainVerification(_ context.Context, _ string) (*DomainVerification, error) {
 	return nil, errNoProvider
 }
+
+func (n *NoopProvider) CheckInboundDomain(_ context.Context) (*InboundVerification, error) {
+	return nil, errNoProvider
+}
