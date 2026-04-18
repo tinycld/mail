@@ -21,14 +21,16 @@ func handleVerifyDomain(app *pocketbase.PocketBase, re *core.RequestEvent) error
 		return re.ForbiddenError("only org admins or owners can verify domains", err)
 	}
 
-	details, err := verifyDomainRecord(re.Request.Context(), app, record)
-	if err != nil {
-		app.Logger().Warn("mail: failed to persist domain verification",
-			"domain", record.GetString("domain"), "error", err)
-		return re.InternalServerError("failed to save verification result", err)
+	if _, ok := providerForOrg(app, orgID).(*PostmarkProvider); !ok {
+		return re.BadRequestError(
+			"configure the mail provider (Postmark server token) in settings before verifying",
+			errProviderNotConfigured,
+		)
 	}
 
-	return re.JSON(200, map[string]any{
+	details, saveErr := verifyDomainRecord(re.Request.Context(), app, record)
+
+	body := map[string]any{
 		"id":                      record.Id,
 		"verified":                record.GetBool("verified"),
 		"mx_verified":             record.GetBool("mx_verified"),
@@ -38,5 +40,13 @@ func handleVerifyDomain(app *pocketbase.PocketBase, re *core.RequestEvent) error
 		"return_path_verified":    record.GetBool("return_path_verified"),
 		"last_checked_at":         record.GetString("last_checked_at"),
 		"verification_details":    details,
-	})
+		"saved":                   saveErr == nil,
+	}
+	if saveErr != nil {
+		app.Logger().Warn("mail: failed to persist domain verification",
+			"domain", record.GetString("domain"), "error", saveErr)
+		body["save_error"] = saveErr.Error()
+	}
+
+	return re.JSON(200, body)
 }
