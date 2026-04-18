@@ -221,6 +221,8 @@ function DomainRowItem({ domain }: { domain: DomainRow }) {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
+    const successColor = useThemeColor('success')
+    const dangerColor = useThemeColor('danger')
     const [domainsCollection] = useStore('mail_domains')
     const [confirming, setConfirming] = useState(false)
 
@@ -231,6 +233,9 @@ function DomainRowItem({ domain }: { domain: DomainRow }) {
         onSuccess: () => setConfirming(false),
     })
 
+    // Plain HTTP mutation rather than ~/lib/mutations because verify calls a
+    // custom endpoint, not a pbtsdb collection. The row refreshes automatically
+    // via useOrgLiveQuery after the server saves the updated record.
     const verifyMutation = useReactQueryMutation({
         mutationFn: async () => {
             await pb.send(`/api/mail/domains/${domain.id}/verify`, { method: 'POST' })
@@ -240,7 +245,7 @@ function DomainRowItem({ domain }: { domain: DomainRow }) {
     const verifyErrorMessage = verifyMutation.error ? errorToString(verifyMutation.error) : null
 
     const VerifiedIcon = domain.verified ? CheckCircle : XCircle
-    const verifiedColor = domain.verified ? '#16a34a' : '#dc2626'
+    const verifiedColor = domain.verified ? successColor : dangerColor
 
     return (
         <View
@@ -329,53 +334,55 @@ function LastCheckedLabel({
     )
 }
 
+function buildMXHint(verified: boolean, details: MailDomainVerificationDetails | null): string {
+    if (verified) return 'MX points to inbound.postmarkapp.com'
+    const actual = details?.mx?.actual?.join(', ') || details?.mx?.error || 'no MX records'
+    return `expected inbound.postmarkapp.com — found: ${actual}`
+}
+
+function buildPostmarkHint(
+    verified: boolean,
+    details: MailDomainVerificationDetails | null
+): string {
+    const pm = details?.postmark
+    if (pm?.error) return pm.error
+    if (verified) {
+        return pm?.server_domain
+            ? `Postmark server InboundDomain: ${pm.server_domain}`
+            : 'Postmark server InboundDomain matches this domain'
+    }
+    if (pm?.server_domain) {
+        return `Postmark server InboundDomain is "${pm.server_domain}" — set it to this domain`
+    }
+    return 'Set this domain as the server InboundDomain in Postmark'
+}
+
+function buildOutboundHint(details: MailDomainVerificationDetails | null): string {
+    return details?.outbound?.error || 'outbound sending'
+}
+
 function DomainVerificationPanel({ domain }: { domain: DomainRow }) {
     const details = domain.verification_details
-    const mxActual = details?.mx?.actual?.join(', ') || details?.mx?.error || 'no MX records'
-    const postmarkDetail = details?.postmark?.error
-        ? details.postmark.error
-        : details?.postmark?.server_domain
-          ? `Postmark server InboundDomain: ${details.postmark.server_domain || '(empty)'}`
-          : null
-    const outboundError = details?.outbound?.error
+    const outboundHint = buildOutboundHint(details)
 
     return (
         <View className="gap-1">
             <CheckRow
                 label="Inbound MX"
                 ok={domain.mx_verified}
-                hint={
-                    domain.mx_verified
-                        ? 'MX points to inbound.postmarkapp.com'
-                        : `expected inbound.postmarkapp.com — found: ${mxActual}`
-                }
+                hint={buildMXHint(domain.mx_verified, details)}
             />
             <CheckRow
                 label="Postmark Inbound Domain"
                 ok={domain.inbound_domain_verified}
-                hint={
-                    domain.inbound_domain_verified
-                        ? postmarkDetail || 'Postmark server InboundDomain matches this domain'
-                        : postmarkDetail ||
-                          'Set this domain as the server InboundDomain in Postmark'
-                }
+                hint={buildPostmarkHint(domain.inbound_domain_verified, details)}
             />
-            <CheckRow
-                label="SPF"
-                ok={domain.spf_verified}
-                hint={outboundError || 'outbound sending'}
-                advisory
-            />
-            <CheckRow
-                label="DKIM"
-                ok={domain.dkim_verified}
-                hint={outboundError || 'outbound sending'}
-                advisory
-            />
+            <CheckRow label="SPF" ok={domain.spf_verified} hint={outboundHint} advisory />
+            <CheckRow label="DKIM" ok={domain.dkim_verified} hint={outboundHint} advisory />
             <CheckRow
                 label="Return-Path"
                 ok={domain.return_path_verified}
-                hint={outboundError || 'outbound sending'}
+                hint={outboundHint}
                 advisory
             />
         </View>
@@ -395,8 +402,10 @@ function CheckRow({
 }) {
     const mutedColor = useThemeColor('muted-foreground')
     const foregroundColor = useThemeColor('foreground')
+    const successColor = useThemeColor('success')
+    const dangerColor = useThemeColor('danger')
     const Icon = ok ? CheckCircle : XCircle
-    const iconColor = ok ? '#16a34a' : advisory ? mutedColor : '#dc2626'
+    const iconColor = ok ? successColor : advisory ? mutedColor : dangerColor
     return (
         <View className="flex-row gap-2 items-start">
             <Icon size={14} color={iconColor} style={{ marginTop: 2 }} />
@@ -424,8 +433,8 @@ function DeleteDomainButton({
     onStartConfirm: () => void
     onCancel: () => void
 }) {
-    const _primaryColor = useThemeColor('primary')
     const dangerColor = useThemeColor('danger')
+    const dangerFgColor = useThemeColor('danger-foreground')
 
     if (confirming) {
         return (
@@ -438,7 +447,7 @@ function DeleteDomainButton({
                         backgroundColor: dangerColor,
                     }}
                 >
-                    <Text style={{ fontSize: 13, color: '#fff' }}>Remove</Text>
+                    <Text style={{ fontSize: 13, color: dangerFgColor }}>Remove</Text>
                 </Pressable>
                 <Pressable
                     onPress={onCancel}
