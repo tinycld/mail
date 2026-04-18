@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"sync"
@@ -206,7 +207,12 @@ func Register(app *pocketbase.PocketBase) {
 			return handleVerifyDomain(app, re)
 		}).BindFunc(requireAuth)
 
-		go startDomainReverifyLoop(app)
+		reverifyCtx, cancelReverify := context.WithCancel(context.Background())
+		app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
+			cancelReverify()
+			return te.Next()
+		})
+		go startDomainReverifyLoop(reverifyCtx, app)
 
 		// Draft endpoint (requires auth, saves without sending)
 		e.Router.POST("/api/mail/draft", func(re *core.RequestEvent) error {

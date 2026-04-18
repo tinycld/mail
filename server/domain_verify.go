@@ -2,8 +2,11 @@ package mail
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pocketbase/pocketbase"
@@ -17,6 +20,15 @@ const expectedInboundMXHost = "inbound.postmarkapp.com"
 
 // mxLookup is swappable for tests.
 var mxLookup = net.DefaultResolver.LookupMX
+
+// verifyLocks serializes verify runs per mail_domains record so the hourly
+// ticker and a user-triggered Verify don't write to the same row concurrently.
+var verifyLocks sync.Map // recordID -> *sync.Mutex
+
+// errProviderNotConfigured is a sentinel the endpoint can detect to return
+// a targeted 400 instead of persisting misleading per-check failures when
+// the org has no mail provider credentials.
+var errProviderNotConfigured = errors.New("mail provider not configured")
 
 type mxCheckResult struct {
 	OK       bool     `json:"ok"`
@@ -41,9 +53,10 @@ type outboundCheckResult struct {
 }
 
 type verificationDetails struct {
-	MX       mxCheckResult       `json:"mx"`
-	Postmark postmarkCheckResult `json:"postmark"`
-	Outbound outboundCheckResult `json:"outbound"`
+	MX                  mxCheckResult       `json:"mx"`
+	Postmark            postmarkCheckResult `json:"postmark"`
+	Outbound            outboundCheckResult `json:"outbound"`
+	ProviderConfigured  bool                `json:"provider_configured"`
 }
 
 // checkMX resolves MX records for the domain and matches them against the
@@ -59,7 +72,7 @@ func checkMX(ctx context.Context, domain string) mxCheckResult {
 	}
 	for _, r := range records {
 		host := strings.TrimSuffix(strings.ToLower(r.Host), ".")
-		result.Actual = append(result.Actual, host)
+		result.Actual = append(result.Actual, fmt.Sprintf("%s (pref %d)", host, r.Pref))
 		if host == expectedInboundMXHost {
 			result.OK = true
 		}
@@ -101,18 +114,32 @@ func checkOutbound(ctx context.Context, provider Provider, domain string) outbou
 	return result
 }
 
+// recordLock returns a mutex that is unique per record ID. Callers must call
+// the returned unlock func when done.
+func recordLock(recordID string) func() {
+	m, _ := verifyLocks.LoadOrStore(recordID, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
 // verifyDomainRecord runs all checks for a single mail_domains record, persists
 // per-check status and the overall `verified` flag, and returns the details.
 // `verified` is derived from inbound-readiness only (MX + Postmark InboundDomain
-// match). Outbound checks are advisory.
+// match). Outbound checks are advisory. Concurrent calls on the same record
+// serialize via recordLock so writes don't interleave.
 func verifyDomainRecord(ctx context.Context, app *pocketbase.PocketBase, record *core.Record) (*verificationDetails, error) {
+	unlock := recordLock(record.Id)
+	defer unlock()
+
 	orgID := record.GetString("org")
 	domain := record.GetString("domain")
 
-	details := &verificationDetails{}
-	details.MX = checkMX(ctx, domain)
-
 	provider := providerForOrg(app, orgID)
+	_, providerConfigured := provider.(*PostmarkProvider)
+
+	details := &verificationDetails{ProviderConfigured: providerConfigured}
+	details.MX = checkMX(ctx, domain)
 	details.Postmark = checkPostmarkServer(ctx, provider, domain)
 	details.Outbound = checkOutbound(ctx, provider, domain)
 
@@ -122,7 +149,7 @@ func verifyDomainRecord(ctx context.Context, app *pocketbase.PocketBase, record 
 	record.Set("dkim_verified", details.Outbound.DKIM)
 	record.Set("return_path_verified", details.Outbound.ReturnPath)
 	record.Set("verification_details", details)
-	record.Set("last_checked_at", time.Now().UTC().Format(time.RFC3339))
+	record.Set("last_checked_at", time.Now().UTC().Format(time.RFC3339Nano))
 	record.Set("verified", details.MX.OK && details.Postmark.OK)
 
 	if err := app.Save(record); err != nil {

@@ -173,6 +173,11 @@ func (p *PostmarkProvider) CheckDomainVerification(ctx context.Context, domain s
 	return nil, fmt.Errorf("domain %q not found in Postmark", domain)
 }
 
+// CheckInboundDomain fetches the current Postmark server (the one the server
+// token belongs to) and returns its InboundDomain. This assumes one Postmark
+// server per org — if an org later runs multiple servers, this will need to
+// take the domain as input and scan all account-level servers for a match
+// (requires account-token auth via GetServers).
 func (p *PostmarkProvider) CheckInboundDomain(ctx context.Context) (*InboundVerification, error) {
 	server, err := p.sender.Client().GetCurrentServer(ctx)
 	if err != nil {
