@@ -22,6 +22,7 @@ interface ComposeToolbarProps {
     onSend: () => void
     onAttach?: () => void
     isPending: boolean
+    isSendDisabled?: boolean
 }
 
 export function ComposeToolbar({
@@ -31,6 +32,7 @@ export function ComposeToolbar({
     onSend,
     onAttach,
     isPending,
+    isSendDisabled = false,
 }: ComposeToolbarProps) {
     const iconColor = useThemeColor('muted-foreground')
     const activeColor = useThemeColor('primary')
@@ -84,10 +86,10 @@ export function ComposeToolbar({
                                 minWidth: 72,
                                 backgroundColor: primaryColor,
                             },
-                            isPending && { opacity: 0.6 },
+                            (isPending || isSendDisabled) && { opacity: 0.6 },
                         ]}
                         onPress={onSend}
-                        disabled={isPending}
+                        disabled={isPending || isSendDisabled}
                     >
                         {isPending ? (
                             <ActivityIndicator size="small" color={primaryFgColor} />
@@ -228,6 +230,7 @@ export function ComposeToolbar({
             primaryColor,
             primaryFgColor,
             isPending,
+            isSendDisabled,
             onSend,
             commands,
             toolbarState,

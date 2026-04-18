@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Platform, Text, View } from 'react-native'
+import { Platform, View } from 'react-native'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { captureException } from '~/lib/errors'
 import { performMutations } from '~/lib/mutations'
 import { useStore } from '~/lib/pocketbase'
 import { type Shortcut, useRegisterShortcut, useShortcutScope } from '~/lib/shortcuts'
+import { showToast } from '~/lib/toast'
 import { useThemeColor } from '~/lib/use-app-theme'
-import { useForm, zodResolver } from '~/ui/form'
+import { FormErrorSummary, useForm, zodResolver } from '~/ui/form'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
 import { useCompose } from '../hooks/useComposeState'
-import { useDefaultMailbox } from '../hooks/useDefaultMailbox'
 import { setContentWhenReady, useMailEditor } from '../hooks/useMailEditor'
+import { useMailSendReadiness } from '../hooks/useMailSendReadiness'
 import { useSaveDraft } from '../hooks/useSaveDraft'
 import { useSendEmail } from '../hooks/useSendEmail'
 import { AttachmentRibbon } from './AttachmentRibbon'
@@ -34,13 +35,31 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const { mode, replyContext, draftContext, minimize, maximize, open, close } = useCompose()
     const breakpoint = useBreakpoint()
     const fileInputRef = useRef<HTMLInputElement>(null)
-    const mailboxId = useDefaultMailbox()
+    const readiness = useMailSendReadiness()
+    const mailboxId = readiness.mailboxId
     const draftIdRef = useRef<string | null>(null)
+    const toastedBlockerRef = useRef<string | null>(null)
     const [headerTitle, setHeaderTitle] = useState('')
     const { attachments, addFiles, removeFile, clearAll: clearAttachments } = useAttachments()
     const backgroundColor = useThemeColor('background')
     const borderColor = useThemeColor('border')
-    const dangerColor = useThemeColor('danger')
+
+    useEffect(() => {
+        if (!isVisible) {
+            toastedBlockerRef.current = null
+            return
+        }
+        if (!readiness.blocker || !readiness.message) return
+        if (toastedBlockerRef.current === readiness.blocker) return
+        toastedBlockerRef.current = readiness.blocker
+        const variant = readiness.blocker === 'domain-unverified' ? 'warning' : 'error'
+        showToast({
+            title: "Can't send mail",
+            body: readiness.message,
+            variant,
+            duration: 8000,
+        })
+    }, [isVisible, readiness.blocker, readiness.message])
 
     const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
         placeholder: 'Compose email',
@@ -52,9 +71,8 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         control,
         handleSubmit,
         reset,
-        setError,
         getValues,
-        formState: { errors },
+        formState: { errors, isSubmitted },
     } = useForm({
         resolver: zodResolver(composeSchema),
         mode: 'onChange',
@@ -158,7 +176,6 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const isMinimized = mode === 'minimized'
     const isMaximized = mode === 'maximized'
     const isNotDesktop = breakpoint !== 'desktop'
-    const hasMailbox = mailboxId != null
 
     const modeStyles = {
         open: { bottom: 0, right: 16, width: 500, height: 560 },
@@ -178,10 +195,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const windowStyle = isNotDesktop ? fullscreenStyle : modeStyles[mode]
 
     const onSend = handleSubmit(async data => {
-        if (!mailboxId) {
-            setError('to', { message: 'No mailbox configured — contact your admin' })
-            return
-        }
+        if (!mailboxId) return
 
         const htmlBody = await editor.getHTML()
         const textBody = await editor.getText()
@@ -239,13 +253,9 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             />
             <View className={isMinimized ? 'hidden' : 'flex-1'}>
                 <ComposeFields control={control} errors={errors} onSubjectBlur={onSubjectBlur} />
-                {hasMailbox ? null : (
-                    <View className="px-3 py-1.5">
-                        <Text style={{ fontSize: 12, color: dangerColor }}>
-                            No mailbox found. Ask your admin to add you to a mailbox.
-                        </Text>
-                    </View>
-                )}
+                <View className="px-3 pt-2">
+                    <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
+                </View>
                 <View className="flex-1 p-3">
                     <EditorComponent />
                 </View>
@@ -270,6 +280,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                     onSend={onSend}
                     onAttach={handleAttach}
                     isPending={isPending}
+                    isSendDisabled={!mailboxId}
                 />
             </View>
         </View>

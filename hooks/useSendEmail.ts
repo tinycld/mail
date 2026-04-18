@@ -1,6 +1,7 @@
-import { errorToString } from '~/lib/errors'
+import { captureException, errorToString } from '~/lib/errors'
 import { useMutation } from '~/lib/mutations'
 import { PB_SERVER_ADDR, pb } from '~/lib/pocketbase'
+import { showToast } from '~/lib/toast'
 
 interface SendEmailParams {
     mailbox_id: string
@@ -23,7 +24,6 @@ export function useSendEmail({ onSuccess, onError }: UseSendEmailOptions = {}) {
     const mutation = useMutation({
         mutationFn: async (params: SendEmailParams) => {
             const { attachments, ...jsonFields } = params
-
             if (attachments?.length) {
                 const formData = new FormData()
                 formData.append('json', JSON.stringify(jsonFields))
@@ -49,7 +49,10 @@ export function useSendEmail({ onSuccess, onError }: UseSendEmailOptions = {}) {
         },
         onSuccess,
         onError: (error: unknown) => {
-            onError?.(errorToString(error))
+            const message = errorToString(error)
+            captureException('mail send failed', error)
+            showToast({ title: 'Send failed', body: message, variant: 'error', duration: 8000 })
+            onError?.(message)
         },
     })
 
