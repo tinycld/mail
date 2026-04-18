@@ -500,7 +500,7 @@ migrate(
         // Phase 2: Apply access rules now that all collections exist and back-relations resolve
         const orgMemberRule = 'org.user_org_via_org.user ?= @request.auth.id'
         const orgAdminRule =
-            'org.user_org_via_org.user ?= @request.auth.id && org.user_org_via_org.role ?= "admin"'
+            'org.user_org_via_org.user ?= @request.auth.id && (org.user_org_via_org.role ?= "admin" || org.user_org_via_org.role ?= "owner")'
         const mbMemberRule = 'mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id'
         const mbOwnerRule =
             'mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id && mail_mailbox_members_via_mailbox.role ?= "owner"'
