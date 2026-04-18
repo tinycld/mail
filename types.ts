@@ -1,10 +1,39 @@
 import type { UserOrg } from '~/types/pbSchema'
 
+export interface MailDomainVerificationDetails {
+    mx?: {
+        ok: boolean
+        expected: string
+        actual?: string[]
+        error?: string
+    }
+    postmark?: {
+        ok: boolean
+        expected_domain?: string
+        server_domain?: string
+        inbound_address?: string
+        error?: string
+    }
+    outbound?: {
+        spf: boolean
+        dkim: boolean
+        return_path: boolean
+        error?: string
+    }
+}
+
 export interface MailDomains {
     id: string
     org: string
     domain: string
     verified: boolean
+    mx_verified: boolean
+    inbound_domain_verified: boolean
+    spf_verified: boolean
+    dkim_verified: boolean
+    return_path_verified: boolean
+    last_checked_at: string
+    verification_details: MailDomainVerificationDetails | null
     created: string
     updated: string
 }
