@@ -3,9 +3,9 @@ import { Platform, View } from 'react-native'
 import { useBreakpoint } from '~/components/workspace/useBreakpoint'
 import { captureException } from '~/lib/errors'
 import { performMutations } from '~/lib/mutations'
+import { notify } from '~/lib/notify'
 import { useStore } from '~/lib/pocketbase'
 import { type Shortcut, useRegisterShortcut, useShortcutScope } from '~/lib/shortcuts'
-import { showToast } from '~/lib/toast'
 import { useThemeColor } from '~/lib/use-app-theme'
 import { FormErrorSummary, useForm, zodResolver } from '~/ui/form'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
@@ -52,12 +52,15 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         if (!readiness.blocker || !readiness.message) return
         if (toastedBlockerRef.current === readiness.blocker) return
         toastedBlockerRef.current = readiness.blocker
-        const variant = readiness.blocker === 'domain-unverified' ? 'warning' : 'error'
-        showToast({
+        const event =
+            readiness.blocker === 'domain-unverified'
+                ? 'mail.send_blocked_warn'
+                : 'mail.send_blocked_error'
+        notify.emit({
+            event,
             title: "Can't send mail",
             body: readiness.message,
-            variant,
-            duration: 8000,
+            data: { reason: readiness.message },
         })
     }, [isVisible, readiness.blocker, readiness.message])
 
