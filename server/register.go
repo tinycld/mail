@@ -9,7 +9,6 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/audit"
-	"tinycld.org/notify"
 )
 
 // settingsCache caches settings per org to avoid DB queries on every request.
@@ -244,6 +243,10 @@ func Register(app *pocketbase.PocketBase) {
 			return handleImageProxyRequest(app, re)
 		})
 
+		// Mail notification batcher: drains the per-user buffer every 2min
+		// and dispatches one batched notification per user.
+		go startMailBatcher(app)
+
 		return e.Next()
 	})
 }
@@ -414,6 +417,6 @@ func bufferMailNotification(app *pocketbase.PocketBase, msgRecord *core.Record) 
 		userID := userOrgRecord.GetString("user")
 		orgID := userOrgRecord.GetString("org")
 
-		notify.BufferMailNotification(userID, orgID, sender, subject)
+		bufferMailNotificationForUser(userID, orgID, sender, subject)
 	}
 }
