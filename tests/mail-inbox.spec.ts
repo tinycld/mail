@@ -13,8 +13,10 @@ test.describe('Mail — Inbox', () => {
     })
 
     test('inbox shows unread badge in sidebar', async ({ page }) => {
-        // Sidebar "Inbox" item should have a badge with the unread count
-        await expect(page.getByText('Inbox')).toBeVisible()
+        // Sidebar "Inbox" item should have a badge with the unread count. Use
+        // exact match so thread-body excerpts like "Tips for using your new
+        // inbox" don't trip strict mode.
+        await expect(page.getByText('Inbox', { exact: true })).toBeVisible()
         // Seed has 2 unread threads — badge shows "2"
         await expect(page.getByText('2', { exact: true }).first()).toBeVisible()
     })
