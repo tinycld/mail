@@ -14,8 +14,8 @@
         "./seed": "./seed.ts",
         "./sidebar": "./sidebar.tsx",
         "./settings/*": "./settings/*.tsx",
-        "./hooks/*": "./hooks/*",
-        "./components/*": "./components/*"
+        "./hooks/*": "./hooks/*.ts",
+        "./components/*": "./components/*.tsx"
     },
     "peerDependencies": {
         "react": ">=19",
