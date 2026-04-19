@@ -55,6 +55,7 @@ export function useSendEmail({ onSuccess, onError }: UseSendEmailOptions = {}) {
                 event: 'mail.send_failed',
                 title: 'Send failed',
                 body: message,
+                durationMs: 8000,
                 data: { error: message },
             })
             onError?.(message)

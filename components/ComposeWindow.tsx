@@ -60,6 +60,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             event,
             title: "Can't send mail",
             body: readiness.message,
+            durationMs: 8000,
             data: { reason: readiness.message },
         })
     }, [isVisible, readiness.blocker, readiness.message])
