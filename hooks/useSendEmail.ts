@@ -1,7 +1,7 @@
 import { captureException, errorToString } from '~/lib/errors'
 import { useMutation } from '~/lib/mutations'
+import { notify } from '~/lib/notify'
 import { PB_SERVER_ADDR, pb } from '~/lib/pocketbase'
-import { showToast } from '~/lib/toast'
 
 interface SendEmailParams {
     mailbox_id: string
@@ -51,7 +51,12 @@ export function useSendEmail({ onSuccess, onError }: UseSendEmailOptions = {}) {
         onError: (error: unknown) => {
             const message = errorToString(error)
             captureException('mail send failed', error)
-            showToast({ title: 'Send failed', body: message, variant: 'error', duration: 8000 })
+            notify.emit({
+                event: 'mail.send_failed',
+                title: 'Send failed',
+                body: message,
+                data: { error: message },
+            })
             onError?.(message)
         },
     })
