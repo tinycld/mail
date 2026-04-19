@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login, navigateToPackage } from '../../../tests/e2e/helpers'
+import { login, navigateToPackage } from '../../../../tests/e2e/helpers'
 
 test.describe('Mail — Inbox', () => {
     test.beforeEach(async ({ page }) => {

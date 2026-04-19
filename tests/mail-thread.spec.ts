@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { clickSidebarItem, login, navigateToPackage } from '../../../tests/e2e/helpers'
+import { clickSidebarItem, login, navigateToPackage } from '../../../../tests/e2e/helpers'
 
 test.describe('Mail — Thread Detail', () => {
     test.beforeEach(async ({ page }) => {

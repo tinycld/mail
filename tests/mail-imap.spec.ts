@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login, navigateToPackage } from '../../../tests/e2e/helpers'
+import { login, navigateToPackage } from '../../../../tests/e2e/helpers'
 import {
     appendMessage,
     deleteMessage,
@@ -9,7 +9,7 @@ import {
     listMessages,
     moveMessage,
     withImapClient,
-} from '../../../tests/e2e/imap-helpers'
+} from '../../../../tests/e2e/imap-helpers'
 
 test.describe('Mail — IMAP Integration', () => {
     test('lists mailboxes and reads appended messages via IMAP', async () => {
