@@ -5,12 +5,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { useMemo } from 'react'
 import { View } from 'react-native'
-import type {
-    EditorCommands,
-    EditorHandle,
-    EditorResult,
-    EditorToolbarState,
-} from '~/lib/editor-types'
+import type { EditorCommands, EditorHandle, EditorResult, EditorToolbarState } from '~/lib/editor-types'
 import { useThemeColor } from '~/lib/use-app-theme'
 import '../styles/editor.css'
 

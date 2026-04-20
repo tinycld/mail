@@ -7,10 +7,7 @@ import { toThreadListItem } from '../components/thread-list-item'
 import type { MailMessages } from '../types'
 import { useLabels } from './useLabels'
 
-export function useThreadListItems(
-    userOrgId: string,
-    filter: { folder: string | null; labels: string[] }
-) {
+export function useThreadListItems(userOrgId: string, filter: { folder: string | null; labels: string[] }) {
     const [
         threadStateCollection,
         threadsCollection,
@@ -30,7 +27,7 @@ export function useThreadListItems(
     const { labels, labelMap } = useLabels()
 
     const { data: threadStates } = useOrgLiveQuery(
-        query =>
+        (query) =>
             query
                 .from({ mail_thread_state: threadStateCollection })
                 .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, userOrgId)),
@@ -70,10 +67,7 @@ export function useThreadListItems(
         query
             .from({ label_assignments: assignmentsCollection })
             .where(({ label_assignments }) =>
-                and(
-                    eq(label_assignments.collection, 'mail_thread_state'),
-                    eq(label_assignments.user_org, userOrgId)
-                )
+                and(eq(label_assignments.collection, 'mail_thread_state'), eq(label_assignments.user_org, userOrgId))
             )
     )
 
@@ -118,11 +112,11 @@ export function useThreadListItems(
         if (!threadStates) return []
 
         const mapped = threadStates
-            .map(state => {
+            .map((state) => {
                 const thread = threadMap.get(state.thread)
                 const labelIds = assignmentsByRecord.get(state.id) ?? []
                 const stateLabels = labelIds
-                    .map(id => labelMap.get(id))
+                    .map((id) => labelMap.get(id))
                     .filter((l): l is { id: string; name: string; color: string } => l != null)
                 const hasDraft = draftByThread.has(state.thread)
                 const hasAttachments = threadsWithAttachments.has(state.thread)
@@ -132,30 +126,22 @@ export function useThreadListItems(
 
         const { folder, labels } = filter
         if (labels.length > 0) {
-            return mapped.filter(item => item.labels.some(l => labels.includes(l.id)))
+            return mapped.filter((item) => item.labels.some((l) => labels.includes(l.id)))
         }
 
         const activeFolder = folder ?? 'inbox'
         if (activeFolder === 'starred') {
-            return mapped.filter(item => item.isStarred)
+            return mapped.filter((item) => item.isStarred)
         }
         if (activeFolder === 'all') {
             return mapped
         }
         if (activeFolder === 'inbox') {
-            return mapped.filter(item => item.folder === 'inbox')
+            return mapped.filter((item) => item.folder === 'inbox')
         }
 
-        return mapped.filter(item => item.folder === activeFolder)
-    }, [
-        threadStates,
-        threadMap,
-        assignmentsByRecord,
-        labelMap,
-        draftByThread,
-        threadsWithAttachments,
-        filter,
-    ])
+        return mapped.filter((item) => item.folder === activeFolder)
+    }, [threadStates, threadMap, assignmentsByRecord, labelMap, draftByThread, threadsWithAttachments, filter])
 
     return {
         items,

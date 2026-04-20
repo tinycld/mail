@@ -13,15 +13,7 @@ interface RecipientFieldProps {
     placeholder?: string
 }
 
-function RecipientChip({
-    name,
-    email,
-    onRemove,
-}: {
-    name: string
-    email: string
-    onRemove: () => void
-}) {
+function RecipientChip({ name, email, onRemove }: { name: string; email: string; onRemove: () => void }) {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const surfaceColor = useThemeColor('surface-secondary')
@@ -43,11 +35,7 @@ function RecipientChip({
                 {displayName}
             </Text>
             <Pressable onPress={onRemove} hitSlop={4}>
-                <Text
-                    style={{ fontSize: 15, lineHeight: 16, fontWeight: '600', color: mutedColor }}
-                >
-                    x
-                </Text>
+                <Text style={{ fontSize: 15, lineHeight: 16, fontWeight: '600', color: mutedColor }}>x</Text>
             </Pressable>
         </View>
     )
@@ -58,8 +46,9 @@ export function RecipientField({ control, name, placeholder }: RecipientFieldPro
     const placeholderColor = useThemeColor('field-placeholder')
     const { field } = useController({ control, name })
 
-    const { committedRecipients, activeQuery, committedRaw, suggestions, showSuggestions } =
-        useRecipientSuggestions(field.value)
+    const { committedRecipients, activeQuery, committedRaw, suggestions, showSuggestions } = useRecipientSuggestions(
+        field.value
+    )
 
     const handleSelect = (contact: { first_name: string; last_name: string; email: string }) => {
         const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(' ')
@@ -69,7 +58,7 @@ export function RecipientField({ control, name, placeholder }: RecipientFieldPro
 
     const handleRemoveChip = (index: number) => {
         const updated = committedRecipients.filter((_, i) => i !== index)
-        const joined = updated.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ')
+        const joined = updated.map((r) => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ')
         const newRaw = updated.length > 0 ? `${joined}, ` : ''
         field.onChange(`${newRaw}${activeQuery}`)
     }
@@ -105,11 +94,7 @@ export function RecipientField({ control, name, placeholder }: RecipientFieldPro
                 />
             </View>
             {showSuggestions ? (
-                <RecipientSuggestionList
-                    suggestions={suggestions}
-                    query={activeQuery}
-                    onSelect={handleSelect}
-                />
+                <RecipientSuggestionList suggestions={suggestions} query={activeQuery} onSelect={handleSelect} />
             ) : null}
         </View>
     )

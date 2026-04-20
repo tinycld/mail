@@ -13,7 +13,7 @@ interface ComposeStoreState {
     openDraft: (context: DraftContext) => void
 }
 
-export const useComposeStore = create<ComposeStoreState>(set => ({
+export const useComposeStore = create<ComposeStoreState>((set) => ({
     mode: 'closed',
     replyContext: null,
     draftContext: null,
@@ -21,6 +21,6 @@ export const useComposeStore = create<ComposeStoreState>(set => ({
     minimize: () => set({ mode: 'minimized' }),
     maximize: () => set({ mode: 'maximized' }),
     close: () => set({ mode: 'closed', replyContext: null, draftContext: null }),
-    openReply: context => set({ replyContext: context, mode: 'inline' }),
-    openDraft: context => set({ draftContext: context, replyContext: null, mode: 'open' }),
+    openReply: (context) => set({ replyContext: context, mode: 'inline' }),
+    openDraft: (context) => set({ draftContext: context, replyContext: null, mode: 'open' }),
 }))

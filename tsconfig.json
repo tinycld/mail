@@ -1,0 +1,15 @@
+{
+    "extends": "../core/tsconfig.json",
+    "compilerOptions": {
+        "baseUrl": ".",
+        "rootDir": "..",
+        "paths": {
+            "~/*": ["../core/*"],
+            "@tinycld/*": ["../core/packages/@tinycld/*"]
+        },
+        "noEmit": true,
+        "preserveSymlinks": false
+    },
+    "include": ["**/*.ts", "**/*.tsx", "../core/**/*.d.ts", "../core/expo-env.d.ts", "../core/.expo/types/**/*.ts"],
+    "exclude": ["node_modules", "server", "pb-migrations", "tests/**/*.spec.ts"]
+}

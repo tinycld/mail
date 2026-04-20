@@ -22,10 +22,7 @@ import { ComposeToolbar } from './ComposeToolbar'
 
 export type { ComposeFormData } from '../hooks/composeSchema'
 
-const webShadow =
-    Platform.OS === 'web'
-        ? ({ boxShadow: '0 8px 32px rgba(0,0,0,0.24)' } as Record<string, unknown>)
-        : {}
+const webShadow = Platform.OS === 'web' ? ({ boxShadow: '0 8px 32px rgba(0,0,0,0.24)' } as Record<string, unknown>) : {}
 
 interface ComposeWindowProps {
     isVisible: boolean
@@ -52,10 +49,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         if (!readiness.blocker || !readiness.message) return
         if (toastedBlockerRef.current === readiness.blocker) return
         toastedBlockerRef.current = readiness.blocker
-        const event =
-            readiness.blocker === 'domain-unverified'
-                ? 'mail.send_blocked_warn'
-                : 'mail.send_blocked_error'
+        const event = readiness.blocker === 'domain-unverified' ? 'mail.send_blocked_warn' : 'mail.send_blocked_error'
         notify.emit({
             event,
             title: "Can't send mail",
@@ -90,7 +84,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         if (draftContext) {
             draftIdRef.current = draftContext.messageId
             const formatRecipients = (recipients: { name: string; email: string }[]) =>
-                recipients.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ')
+                recipients.map((r) => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ')
             reset({
                 to: formatRecipients(draftContext.to),
                 cc: formatRecipients(draftContext.cc),
@@ -98,14 +92,11 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                 subject: draftContext.subject,
             })
             setHeaderTitle(draftContext.subject)
-            cleanup = setContentWhenReady(
-                editorRef.current,
-                draftContext.htmlBody || draftContext.textBody || ''
-            )
+            cleanup = setContentWhenReady(editorRef.current, draftContext.htmlBody || draftContext.textBody || '')
         } else if (replyContext) {
             draftIdRef.current = null
             const toValue =
-                replyContext.to.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
+                replyContext.to.map((r) => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
                 (replyContext.to.length > 0 ? ', ' : '')
             const subjectPrefix = replyContext.subject.startsWith('Re:')
                 ? replyContext.subject
@@ -165,7 +156,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             subject: data.subject,
             html_body: htmlBody,
             text_body: text,
-            attachments: attachments.map(a => a.file),
+            attachments: attachments.map((a) => a.file),
         })
 
         draftIdRef.current = null
@@ -198,7 +189,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const fullscreenStyle = { top: 0, left: 0, right: 0, bottom: 0 }
     const windowStyle = isNotDesktop ? fullscreenStyle : modeStyles[mode]
 
-    const onSend = handleSubmit(async data => {
+    const onSend = handleSubmit(async (data) => {
         if (!mailboxId) return
 
         const htmlBody = await editor.getHTML()
@@ -216,7 +207,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             html_body: htmlBody,
             text_body: textBody,
             in_reply_to_message_id: replyContext?.messageId,
-            attachments: attachments.map(a => a.file),
+            attachments: attachments.map((a) => a.file),
         })
     })
 
@@ -263,11 +254,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                 <View className="flex-1 p-3">
                     <EditorComponent />
                 </View>
-                <AttachmentRibbon
-                    isVisible={attachments.length > 0}
-                    attachments={attachments}
-                    onRemove={removeFile}
-                />
+                <AttachmentRibbon isVisible={attachments.length > 0} attachments={attachments} onRemove={removeFile} />
                 {Platform.OS === 'web' && (
                     <input
                         ref={fileInputRef}

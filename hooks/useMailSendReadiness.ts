@@ -26,7 +26,7 @@ export function useMailSendReadiness(): MailSendReadiness {
     const mailboxId = members?.[0]?.mailbox ?? null
 
     const { data: mailboxes } = useOrgLiveQuery(
-        query =>
+        (query) =>
             query
                 .from({ mail_mailboxes: mailboxesCollection })
                 .where(({ mail_mailboxes }) => eq(mail_mailboxes.id, mailboxId ?? '')),
@@ -36,7 +36,7 @@ export function useMailSendReadiness(): MailSendReadiness {
     const domainId = mailboxes?.[0]?.domain ?? null
 
     const { data: domains } = useOrgLiveQuery(
-        query =>
+        (query) =>
             query
                 .from({ mail_domains: domainsCollection })
                 .where(({ mail_domains }) => eq(mail_domains.id, domainId ?? '')),
@@ -57,8 +57,7 @@ export function useMailSendReadiness(): MailSendReadiness {
         return {
             mailboxId,
             blocker: 'no-domain',
-            message:
-                'Mailbox exists but its sending domain is missing. An admin must configure a mail domain.',
+            message: 'Mailbox exists but its sending domain is missing. An admin must configure a mail domain.',
         }
     }
 

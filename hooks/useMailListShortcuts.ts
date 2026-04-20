@@ -23,8 +23,8 @@ export function useMailListShortcuts({
     folder,
     labels,
 }: UseMailListShortcutsArgs) {
-    const storedIndex = useThreadListStore(s => s.focusedIndex)
-    const setFocusedIndex = useThreadListStore(s => s.setFocusedIndex)
+    const storedIndex = useThreadListStore((s) => s.focusedIndex)
+    const setFocusedIndex = useThreadListStore((s) => s.setFocusedIndex)
     const orgHref = useOrgHref()
 
     useShortcutScope('list')
@@ -60,7 +60,7 @@ export function useMailListShortcuts({
                 scope: 'list',
                 group: 'Mail',
                 description: 'Next conversation',
-                run: () => setFocusedIndex(i => Math.min(i + 1, Math.max(items.length - 1, 0))),
+                run: () => setFocusedIndex((i) => Math.min(i + 1, Math.max(items.length - 1, 0))),
             },
             {
                 id: 'mail.list.prev',
@@ -68,7 +68,7 @@ export function useMailListShortcuts({
                 scope: 'list',
                 group: 'Mail',
                 description: 'Previous conversation',
-                run: () => setFocusedIndex(i => Math.max(i - 1, 0)),
+                run: () => setFocusedIndex((i) => Math.max(i - 1, 0)),
             },
             {
                 id: 'mail.list.open',
@@ -106,16 +106,7 @@ export function useMailListShortcuts({
                 run: () => composeEvents.emit(),
             },
         ]
-    }, [
-        isEnabled,
-        items.length,
-        focusedId,
-        focusedThreadId,
-        orgHref,
-        router,
-        setFocusedIndex,
-        toggleSelect,
-    ])
+    }, [isEnabled, items.length, focusedId, focusedThreadId, orgHref, router, setFocusedIndex, toggleSelect])
 
     useRegisterShortcuts(shortcuts)
 

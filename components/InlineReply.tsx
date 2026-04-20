@@ -52,11 +52,7 @@ export function InlineReply({
     }
 
     const handleReplyAll = () => {
-        const allRecipients = [
-            { name: senderName, email: senderEmail },
-            ...recipientsTo,
-            ...recipientsCc,
-        ]
+        const allRecipients = [{ name: senderName, email: senderEmail }, ...recipientsTo, ...recipientsCc]
         openReply({
             messageId,
             threadId,
@@ -108,9 +104,7 @@ export function InlineReply({
                 onPress={handleReplyAll}
             >
                 <ReplyAll size={16} color={mutedColor} />
-                <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>
-                    Reply all
-                </Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>Reply all</Text>
             </Pressable>
             <Pressable
                 className="flex-row items-center px-4 py-2 rounded-full border"
@@ -144,11 +138,9 @@ function InlineComposeForm({
     const { attachments, addFiles, removeFile, clearAll: clearAttachments } = useAttachments()
 
     const toValue =
-        replyContext.to.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
+        replyContext.to.map((r) => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
         (replyContext.to.length > 0 ? ', ' : '')
-    const subjectValue = replyContext.subject.startsWith('Re:')
-        ? replyContext.subject
-        : `Re: ${replyContext.subject}`
+    const subjectValue = replyContext.subject.startsWith('Re:') ? replyContext.subject : `Re: ${replyContext.subject}`
 
     const {
         control,
@@ -171,7 +163,7 @@ function InlineComposeForm({
         },
     })
 
-    const onSend = handleSubmit(async data => {
+    const onSend = handleSubmit(async (data) => {
         if (!mailboxId) {
             setError('to', { message: 'No mailbox configured — contact your admin' })
             return
@@ -192,7 +184,7 @@ function InlineComposeForm({
             html_body: htmlBody,
             text_body: textBody,
             in_reply_to_message_id: replyContext.messageId,
-            attachments: attachments.map(a => a.file),
+            attachments: attachments.map((a) => a.file),
         })
     })
 
@@ -224,11 +216,7 @@ function InlineComposeForm({
             <View className="flex-1 p-3" style={{ minHeight: 120 }}>
                 <EditorComponent />
             </View>
-            <AttachmentRibbon
-                isVisible={attachments.length > 0}
-                attachments={attachments}
-                onRemove={removeFile}
-            />
+            <AttachmentRibbon isVisible={attachments.length > 0} attachments={attachments} onRemove={removeFile} />
             {Platform.OS === 'web' && (
                 <input
                     ref={fileInputRef}

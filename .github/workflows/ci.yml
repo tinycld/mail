@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CORE_REPO: tinycld/core
+  CORE_REF: main
+  TEST_USER_LOGIN: user@tinycld.org
+  TEST_USER_PW: TestUser1234!
+  ADMIN_USER_LOGIN: admin@tinycld.org
+  ADMIN_USER_PW: AdminPass1234!
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: mail
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ env.CORE_REPO }}
+          ref: ${{ env.CORE_REF }}
+          path: core
+      - uses: oven-sh/setup-bun@v2
+      - name: Install core deps (biome + typescript come from here)
+        working-directory: core
+        run: bun install
+      - name: Expose core's node_modules to mail
+        run: ln -s ../core/node_modules mail/node_modules
+      - name: Lint mail
+        working-directory: mail
+        run: bun run lint
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: mail
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ env.CORE_REPO }}
+          ref: ${{ env.CORE_REF }}
+          path: core
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: core/.node-version
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: core/server/go.mod
+          cache-dependency-path: core/server/go.sum
+      - name: Install core deps
+        working-directory: core
+        run: bun install
+      - name: Link mail into core (so ~/types/pbSchema sees mail collections)
+        working-directory: core
+        run: bun run packages:link @tinycld/mail ../mail
+      - name: Generate PB schema types
+        working-directory: core
+        run: |
+          cd server && go build -o tinycld .
+          ./tinycld --dev serve &
+          sleep 3
+          kill %1 2>/dev/null || true
+      - name: Expose core's node_modules to mail
+        run: ln -s ../core/node_modules mail/node_modules
+      - name: Typecheck mail
+        working-directory: mail
+        env:
+          NODE_OPTIONS: --preserve-symlinks
+        run: bun run typecheck
+
+  test:
+    name: Unit & E2E tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: mail
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ env.CORE_REPO }}
+          ref: ${{ env.CORE_REF }}
+          path: core
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: core/.node-version
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: core/server/go.mod
+          cache-dependency-path: core/server/go.sum
+
+      - name: Install core deps
+        working-directory: core
+        run: bun install
+
+      - name: Link mail into core
+        working-directory: core
+        run: bun run packages:link @tinycld/mail ../mail
+
+      - name: Build PocketBase binary
+        working-directory: core/server
+        run: go build -o tinycld .
+
+      - name: Run unit tests (vitest picks up mail via packages glob)
+        working-directory: core
+        run: bunx vitest run packages/@tinycld/mail
+
+      - name: Reset test DB
+        working-directory: core
+        run: bunx tsx scripts/reset-dev-db.ts --url http://127.0.0.1:7091 --data-dir server/pb_test_data
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('core/bun.lock') }}
+      - name: Install Playwright browsers
+        working-directory: core
+        run: bunx playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - name: Install Playwright system deps
+        working-directory: core
+        run: bunx playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+
+      - name: Run Playwright tests (mail project only)
+        working-directory: core
+        env:
+          CI: true
+          NODE_OPTIONS: --preserve-symlinks
+        run: bunx playwright test --project "@tinycld/mail" --timeout=90000
+
+      - uses: actions/upload-artifact@v5
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: core/playwright-report/
+          retention-days: 14

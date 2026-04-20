@@ -32,7 +32,7 @@ function useAutoMarkAsRead(
     const markedRef = useRef<string | null>(null)
     const markAsRead = useMutation({
         mutationFn: mutation(function* (stateId: string) {
-            yield threadStateCollection.update(stateId, draft => {
+            yield threadStateCollection.update(stateId, (draft) => {
                 draft.is_read = true
             })
         }),
@@ -51,10 +51,7 @@ export default function MailDetailScreen() {
     const _borderColor = useThemeColor('border')
     const backgroundColor = useThemeColor('background')
 
-    const [threadStateCollection, messagesCollection] = useStore(
-        'mail_thread_state',
-        'mail_messages'
-    )
+    const [threadStateCollection, messagesCollection] = useStore('mail_thread_state', 'mail_messages')
 
     const { data: threadStates } = useOrgLiveQuery(
         (query, { userOrgId }) =>
@@ -69,7 +66,7 @@ export default function MailDetailScreen() {
     const threadState = threadStates?.[0]
 
     const { data: messages } = useOrgLiveQuery(
-        query =>
+        (query) =>
             query
                 .from({ mail_messages: messagesCollection })
                 .where(({ mail_messages }) => eq(mail_messages.thread, id))
@@ -109,15 +106,8 @@ export default function MailDetailScreen() {
     )
     useRegisterShortcut(closeShortcut)
 
-    const {
-        archiveThread,
-        spamThread,
-        trashThread,
-        moveThread,
-        toggleRead,
-        toggleStar,
-        updateLabel,
-    } = useThreadActions(threadStateCollection, threadState, navigateBack)
+    const { archiveThread, spamThread, trashThread, moveThread, toggleRead, toggleStar, updateLabel } =
+        useThreadActions(threadStateCollection, threadState, navigateBack)
 
     const { threadIds } = useThreadListContext()
     const { hasPrevious, hasNext, goToPrevious, goToNext } = useThreadNavigation(threadIds, id)
@@ -134,7 +124,7 @@ export default function MailDetailScreen() {
     }
 
     const toggleExpanded = (msgId: string) => {
-        setExpandedMessages(prev => {
+        setExpandedMessages((prev) => {
             const next = new Set(prev)
             if (next.has(msgId)) {
                 next.delete(msgId)
@@ -176,7 +166,7 @@ export default function MailDetailScreen() {
                     onArchive={() => archiveThread.mutate()}
                     onSpam={() => spamThread.mutate()}
                     onTrash={() => trashThread.mutate()}
-                    onMove={folder => moveThread.mutate(folder)}
+                    onMove={(folder) => moveThread.mutate(folder)}
                     onUpdateLabel={(labelId, add) => updateLabel.mutate({ labelId, add })}
                     onToggleRead={() => toggleRead.mutate()}
                     onToggleStar={() => toggleStar.mutate()}
@@ -238,16 +228,9 @@ export default function MailDetailScreen() {
                                 }
                             />
                             {expanded ? (
-                                <EmailBody
-                                    collectionId="mail_messages"
-                                    recordId={msg.id}
-                                    filename={msg.body_html}
-                                />
+                                <EmailBody collectionId="mail_messages" recordId={msg.id} filename={msg.body_html} />
                             ) : (
-                                <CollapsedSnippet
-                                    snippet={msg.snippet}
-                                    onPress={() => toggleExpanded(msg.id)}
-                                />
+                                <CollapsedSnippet snippet={msg.snippet} onPress={() => toggleExpanded(msg.id)} />
                             )}
                         </View>
                     )
