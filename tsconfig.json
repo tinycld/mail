@@ -4,8 +4,10 @@
         "baseUrl": ".",
         "rootDir": "..",
         "paths": {
-            "~/*": ["../core/*"],
-            "@tinycld/*": ["../core/packages/@tinycld/*"]
+            "~/tinycld/mail/*": ["./tinycld/mail/*"],
+            "@tinycld/core/*": ["../core/tinycld/core/*"],
+            "@tinycld/*": ["../core/packages/@tinycld/*"],
+            "~/*": ["../core/*"]
         },
         "noEmit": true,
         "preserveSymlinks": false
