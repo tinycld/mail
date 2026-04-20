@@ -4,8 +4,8 @@ import { NameAvatar as ContactAvatar } from '~/components/NameAvatar'
 import { useThemeColor } from '~/lib/use-app-theme'
 import { PlainInput } from '~/ui/PlainInput'
 import type { ComposeFormData } from '../hooks/composeSchema'
-import { useRecipientSuggestions } from '../hooks/useRecipientSuggestions'
-import { RecipientSuggestionList } from './RecipientSuggestionList'
+import { type ContactSuggestion, useParsedRecipients } from '../hooks/useRecipientSuggestions'
+import { ContactSuggestionsList } from './ContactSuggestionsList'
 
 interface RecipientFieldProps {
     control: Control<ComposeFormData>
@@ -46,11 +46,14 @@ export function RecipientField({ control, name, placeholder }: RecipientFieldPro
     const placeholderColor = useThemeColor('field-placeholder')
     const { field } = useController({ control, name })
 
-    const { committedRecipients, activeQuery, committedRaw, suggestions, showSuggestions } = useRecipientSuggestions(
-        field.value
-    )
+    const {
+        committed: committedRecipients,
+        committedEmails,
+        activeQuery,
+        committedRaw,
+    } = useParsedRecipients(field.value)
 
-    const handleSelect = (contact: { first_name: string; last_name: string; email: string }) => {
+    const handleSelect = (contact: ContactSuggestion) => {
         const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(' ')
         const formatted = `${fullName} <${contact.email}>`
         field.onChange(`${committedRaw}${formatted}, `)
@@ -93,9 +96,11 @@ export function RecipientField({ control, name, placeholder }: RecipientFieldPro
                     placeholder={committedRecipients.length === 0 ? placeholder : undefined}
                 />
             </View>
-            {showSuggestions ? (
-                <RecipientSuggestionList suggestions={suggestions} query={activeQuery} onSelect={handleSelect} />
-            ) : null}
+            <ContactSuggestionsList
+                activeQuery={activeQuery}
+                committedEmails={committedEmails}
+                onSelect={handleSelect}
+            />
         </View>
     )
 }
