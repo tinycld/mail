@@ -1,17 +1,6 @@
 import { eq } from '@tanstack/db'
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
-import {
-    AlertTriangle,
-    Archive,
-    File,
-    Inbox,
-    Mail,
-    Pencil,
-    Send,
-    Settings,
-    Star,
-    Trash2,
-} from 'lucide-react-native'
+import { AlertTriangle, Archive, File, Inbox, Mail, Pencil, Send, Settings, Star, Trash2 } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { Pressable } from 'react-native'
 import { LabelManagerDialog } from '~/components/LabelManagerDialog'
@@ -60,12 +49,12 @@ export default function MailSidebar(_props: MailSidebarProps) {
     const folderCounts = useMemo(() => {
         const states = threadStates ?? []
         return {
-            inbox: states.filter(s => s.folder === 'inbox' && !s.is_read).length,
-            drafts: states.filter(s => s.folder === 'drafts').length,
-            sent: states.filter(s => s.folder === 'sent').length,
-            starred: states.filter(s => s.is_starred).length,
-            trash: states.filter(s => s.folder === 'trash').length,
-            spam: states.filter(s => s.folder === 'spam').length,
+            inbox: states.filter((s) => s.folder === 'inbox' && !s.is_read).length,
+            drafts: states.filter((s) => s.folder === 'drafts').length,
+            sent: states.filter((s) => s.folder === 'sent').length,
+            starred: states.filter((s) => s.is_starred).length,
+            trash: states.filter((s) => s.folder === 'trash').length,
+            spam: states.filter((s) => s.folder === 'spam').length,
         }
     }, [threadStates])
 
@@ -91,7 +80,7 @@ export default function MailSidebar(_props: MailSidebarProps) {
         }
     }
 
-    const labelItems = orgLabels.map(label => (
+    const labelItems = orgLabels.map((label) => (
         <SidebarItem
             key={label.id}
             label={label.name}
@@ -104,11 +93,7 @@ export default function MailSidebar(_props: MailSidebarProps) {
 
     return (
         <SidebarNav>
-            <SidebarActionButton
-                label="Compose"
-                icon={Pencil}
-                onPress={() => composeEvents.emit()}
-            />
+            <SidebarActionButton label="Compose" icon={Pencil} onPress={() => composeEvents.emit()} />
 
             <SidebarItem
                 label="Inbox"
@@ -188,10 +173,7 @@ export default function MailSidebar(_props: MailSidebarProps) {
 
             {labelItems}
 
-            <LabelManagerDialog
-                isVisible={labelManagerOpen}
-                onClose={() => setLabelManagerOpen(false)}
-            />
+            <LabelManagerDialog isVisible={labelManagerOpen} onClose={() => setLabelManagerOpen(false)} />
         </SidebarNav>
     )
 }

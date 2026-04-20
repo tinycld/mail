@@ -12,13 +12,7 @@ interface ComposeHeaderProps {
     onClose: () => void
 }
 
-export function ComposeHeader({
-    mode,
-    title,
-    onMinimize,
-    onMaximize,
-    onClose,
-}: ComposeHeaderProps) {
+export function ComposeHeader({ mode, title, onMinimize, onMaximize, onClose }: ComposeHeaderProps) {
     const foregroundColor = useThemeColor('foreground')
     const backgroundColor = useThemeColor('background')
     const breakpoint = useBreakpoint()
@@ -36,10 +30,7 @@ export function ComposeHeader({
             }}
         >
             <Pressable className="flex-1" onPress={mode === 'minimized' ? onMinimize : undefined}>
-                <Text
-                    style={{ fontSize: 14, fontWeight: '600', color: backgroundColor }}
-                    numberOfLines={1}
-                >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: backgroundColor }} numberOfLines={1}>
                     {displayTitle}
                 </Text>
             </Pressable>

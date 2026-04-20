@@ -4,7 +4,7 @@ const listeners = new Set<Listener>()
 
 export const composeEvents = {
     emit() {
-        listeners.forEach(listener => {
+        listeners.forEach((listener) => {
             listener()
         })
     },

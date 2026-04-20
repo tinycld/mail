@@ -58,34 +58,28 @@ function useMailboxData() {
     )
 
     const { data: domains } = useOrgLiveQuery((query, { orgId }) =>
-        query
-            .from({ mail_domains: domainsCollection })
-            .where(({ mail_domains }) => eq(mail_domains.org, orgId))
+        query.from({ mail_domains: domainsCollection }).where(({ mail_domains }) => eq(mail_domains.org, orgId))
     )
 
     const { data: mailboxes } = useOrgLiveQuery(
-        query =>
+        (query) =>
             query
                 .from({ mail_mailboxes: mailboxesCollection })
-                .where(({ mail_mailboxes }) =>
-                    eq(mail_mailboxes.domain, (domains ?? [])[0]?.id ?? '')
-                ),
+                .where(({ mail_mailboxes }) => eq(mail_mailboxes.domain, (domains ?? [])[0]?.id ?? '')),
         [domains]
     )
 
-    const { data: members } = useOrgLiveQuery(query =>
-        query.from({ mail_mailbox_members: membersCollection })
-    )
+    const { data: members } = useOrgLiveQuery((query) => query.from({ mail_mailbox_members: membersCollection }))
 
     const { data: orgUserOrgs } = useOrgLiveQuery((query, { orgId }) =>
         query.from({ user_org: userOrgCollection }).where(({ user_org }) => eq(user_org.org, orgId))
     )
 
-    const domainMap = new Map((domains ?? []).map(d => [d.id, d.domain]))
+    const domainMap = new Map((domains ?? []).map((d) => [d.id, d.domain]))
 
     const mailboxRows: MailboxRow[] = (mailboxes ?? [])
-        .filter(mb => domainMap.has(mb.domain))
-        .map(mb => ({
+        .filter((mb) => domainMap.has(mb.domain))
+        .map((mb) => ({
             id: mb.id,
             address: mb.address,
             domain: mb.domain,
@@ -97,7 +91,7 @@ function useMailboxData() {
 
     const membersByMailbox = new Map<string, MemberRow[]>()
     for (const m of members ?? []) {
-        const userOrg = (orgUserOrgs ?? []).find(uo => uo.id === m.user_org)
+        const userOrg = (orgUserOrgs ?? []).find((uo) => uo.id === m.user_org)
         if (!userOrg) continue
         const row: MemberRow = {
             id: m.id,
@@ -111,7 +105,7 @@ function useMailboxData() {
         membersByMailbox.set(m.mailbox, list)
     }
 
-    const orgMembers: OrgMemberRow[] = (orgUserOrgs ?? []).map(uo => ({
+    const orgMembers: OrgMemberRow[] = (orgUserOrgs ?? []).map((uo) => ({
         userOrgId: uo.id,
         userId: uo.user,
         userName: uo.expand?.user?.name || uo.expand?.user?.email || uo.user,
@@ -142,7 +136,7 @@ export default function MailboxesSettings() {
         )
     }
 
-    const domainOptions = data.domains.map(d => ({ label: d.domain, value: d.id }))
+    const domainOptions = data.domains.map((d) => ({ label: d.domain, value: d.id }))
     const hasDomains = data.domains.length > 0
 
     return (
@@ -150,9 +144,7 @@ export default function MailboxesSettings() {
             <View className="flex-1 gap-5 p-5" style={{ maxWidth: 600 }}>
                 <View className="gap-2">
                     <Mail size={32} color={primaryColor} />
-                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: foregroundColor }}>
-                        Mailboxes
-                    </Text>
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: foregroundColor }}>Mailboxes</Text>
                     <Text style={{ fontSize: 13, color: mutedColor }}>
                         Manage mailboxes and member assignments for your organization.
                     </Text>
@@ -163,22 +155,16 @@ export default function MailboxesSettings() {
                 {hasDomains && (
                     <>
                         <View className="gap-3">
-                            <Text
-                                style={{ fontSize: 18, fontWeight: 'bold', color: foregroundColor }}
-                            >
-                                Mailboxes
-                            </Text>
+                            <Text style={{ fontSize: 18, fontWeight: 'bold', color: foregroundColor }}>Mailboxes</Text>
                             <NoMailboxesBanner isVisible={data.mailboxRows.length === 0} />
-                            {data.mailboxRows.map(mb => (
+                            {data.mailboxRows.map((mb) => (
                                 <MailboxCard
                                     key={mb.id}
                                     mailbox={mb}
                                     members={data.membersByMailbox.get(mb.id) ?? []}
                                     orgMembers={data.orgMembers}
                                     isExpanded={expandedMailbox === mb.id}
-                                    onToggle={() =>
-                                        setExpandedMailbox(prev => (prev === mb.id ? null : mb.id))
-                                    }
+                                    onToggle={() => setExpandedMailbox((prev) => (prev === mb.id ? null : mb.id))}
                                 />
                             ))}
                         </View>
@@ -243,9 +229,7 @@ function MailboxCard({
                 <View className="gap-1 flex-1">
                     <View className="flex-row gap-2 items-center">
                         {isPersonal && <Lock size={14} color={mutedColor} />}
-                        <Text style={{ fontWeight: '600', color: foregroundColor }}>
-                            {fullAddress}
-                        </Text>
+                        <Text style={{ fontWeight: '600', color: foregroundColor }}>{fullAddress}</Text>
                         <TypeBadge type={mailbox.type} />
                     </View>
                     <Text style={{ fontSize: 13, color: mutedColor }}>
@@ -272,9 +256,7 @@ function TypeBadge({ type }: { type: string }) {
     const isPersonal = type === 'personal'
     return (
         <View className={`px-2 py-0.5 rounded-lg ${isPersonal ? 'bg-[#dbeafe]' : 'bg-[#dcfce7]'}`}>
-            <Text className={`text-[11px] ${isPersonal ? 'text-[#2563eb]' : 'text-[#16a34a]'}`}>
-                {type}
-            </Text>
+            <Text className={`text-[11px] ${isPersonal ? 'text-[#2563eb]' : 'text-[#16a34a]'}`}>{type}</Text>
         </View>
     )
 }
@@ -318,7 +300,7 @@ function DeleteMailboxButton({ mailboxId, isVisible }: { mailboxId: string; isVi
     return (
         <Pressable
             className="p-1"
-            onPress={e => {
+            onPress={(e) => {
                 e.stopPropagation()
                 setConfirming(true)
             }}
@@ -347,8 +329,8 @@ function MailboxMemberPanel({
     const [addingMember, setAddingMember] = useState(false)
     const [selectedUserOrg, setSelectedUserOrg] = useState('')
 
-    const existingUserOrgIds = new Set(members.map(m => m.userOrgId))
-    const availableMembers = orgMembers.filter(uo => !existingUserOrgIds.has(uo.userOrgId))
+    const existingUserOrgIds = new Set(members.map((m) => m.userOrgId))
+    const availableMembers = orgMembers.filter((uo) => !existingUserOrgIds.has(uo.userOrgId))
 
     const addMemberMutation = useMutation({
         mutationFn: mutation(function* () {
@@ -372,14 +354,8 @@ function MailboxMemberPanel({
     })
 
     const toggleRoleMutation = useMutation({
-        mutationFn: mutation(function* ({
-            memberId,
-            newRole,
-        }: {
-            memberId: string
-            newRole: string
-        }) {
-            yield membersCollection.update(memberId, draft => {
+        mutationFn: mutation(function* ({ memberId, newRole }: { memberId: string; newRole: string }) {
+            yield membersCollection.update(memberId, (draft) => {
                 draft.role = newRole as 'owner' | 'member'
             })
         }),
@@ -387,7 +363,7 @@ function MailboxMemberPanel({
 
     if (!isVisible) return null
 
-    const ownerCount = members.filter(m => m.role === 'owner').length
+    const ownerCount = members.filter((m) => m.role === 'owner').length
 
     return (
         <View
@@ -399,16 +375,14 @@ function MailboxMemberPanel({
         >
             <Text style={{ fontSize: 13, fontWeight: '600', color: foregroundColor }}>Members</Text>
 
-            {members.map(m => {
+            {members.map((m) => {
                 const isOwner = m.role === 'owner'
                 const canRemove = !(isOwner && ownerCount <= 1)
 
                 return (
                     <View key={m.id} className="flex-row justify-between items-center py-1">
                         <View className="flex-1">
-                            <Text style={{ fontSize: 13, color: foregroundColor }}>
-                                {m.userName}
-                            </Text>
+                            <Text style={{ fontSize: 13, color: foregroundColor }}>{m.userName}</Text>
                             <Text style={{ fontSize: 11, color: mutedColor }}>{m.role}</Text>
                         </View>
 
@@ -423,9 +397,7 @@ function MailboxMemberPanel({
                                 disabled={isOwner && ownerCount <= 1}
                                 className={`p-1 ${isOwner && ownerCount <= 1 ? 'opacity-40' : 'opacity-100'}`}
                             >
-                                <Text style={{ fontSize: 13 }}>
-                                    {isOwner ? 'Make member' : 'Make owner'}
-                                </Text>
+                                <Text style={{ fontSize: 13 }}>{isOwner ? 'Make member' : 'Make owner'}</Text>
                             </Pressable>
 
                             <Pressable
@@ -491,7 +463,7 @@ function AddMemberSection({
         <View className="gap-2">
             <Text style={{ fontSize: 13, color: mutedColor }}>Select a member to add:</Text>
             <View className="flex-row gap-1 flex-wrap">
-                {availableMembers.map(uo => {
+                {availableMembers.map((uo) => {
                     const isSelected = selectedUserOrg === uo.userOrgId
                     return (
                         <Pressable
@@ -518,11 +490,7 @@ function AddMemberSection({
                 >
                     <Text style={{ color: primaryFgColor }}>Add</Text>
                 </Pressable>
-                <Pressable
-                    onPress={onCancel}
-                    className="px-4 rounded-lg"
-                    style={{ paddingVertical: 10 }}
-                >
+                <Pressable onPress={onCancel} className="px-4 rounded-lg" style={{ paddingVertical: 10 }}>
                     <Text>Cancel</Text>
                 </Pressable>
             </View>
@@ -563,10 +531,7 @@ function CreateMailboxForm({
     const foregroundColor = useThemeColor('foreground')
     const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
-    const [mailboxesCollection, membersCollection] = useStore(
-        'mail_mailboxes',
-        'mail_mailbox_members'
-    )
+    const [mailboxesCollection, membersCollection] = useStore('mail_mailboxes', 'mail_mailbox_members')
 
     const {
         control,
@@ -608,14 +573,12 @@ function CreateMailboxForm({
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
 
-    const onSubmit = handleSubmit(data => createMutation.mutate(data))
+    const onSubmit = handleSubmit((data) => createMutation.mutate(data))
     const canSubmit = !createMutation.isPending && isDirty
 
     return (
         <View className="gap-3">
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: foregroundColor }}>
-                Create Shared Mailbox
-            </Text>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: foregroundColor }}>Create Shared Mailbox</Text>
 
             <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
 
@@ -623,12 +586,7 @@ function CreateMailboxForm({
 
             <SelectInput control={control} name="domain" label="Domain" options={domainOptions} />
 
-            <TextInput
-                control={control}
-                name="display_name"
-                label="Display Name"
-                placeholder="Support Team"
-            />
+            <TextInput control={control} name="display_name" label="Display Name" placeholder="Support Team" />
 
             <TextInput control={control} name="name" label="Mailbox Name" placeholder="Acme Corp" />
 

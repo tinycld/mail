@@ -15,6 +15,12 @@
         "./hooks/*": "./hooks/*.ts",
         "./components/*": "./components/*.tsx"
     },
+    "scripts": {
+        "lint": "biome check .",
+        "lint:fix": "biome check --write .",
+        "typecheck": "tsc --noEmit --skipLibCheck",
+        "checks": "bun run lint && bun run typecheck"
+    },
     "peerDependencies": {
         "react": ">=19",
         "react-native": ">=0.83",

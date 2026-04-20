@@ -103,7 +103,7 @@ export function EmailDetailToolbar({
                 key: 'labels',
                 icon: Tag,
                 label: 'Labels',
-                children: labels.map(lbl => {
+                children: labels.map((lbl) => {
                     const isActive = threadLabelIds.has(lbl.id)
                     return (
                         <MenuActionItem

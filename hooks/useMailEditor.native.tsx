@@ -17,12 +17,7 @@ import {
 } from '@10play/tentap-editor'
 import { useMemo } from 'react'
 import { View } from 'react-native'
-import type {
-    EditorCommands,
-    EditorHandle,
-    EditorResult,
-    EditorToolbarState,
-} from '~/lib/editor-types'
+import type { EditorCommands, EditorHandle, EditorResult, EditorToolbarState } from '~/lib/editor-types'
 import { useThemeColor } from '~/lib/use-app-theme'
 
 function buildEditorCSS(colors: { bg: string; fg: string; placeholder: string; primary: string }) {
