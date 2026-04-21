@@ -103,6 +103,9 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                 : `Re: ${replyContext.subject}`
             reset({ to: toValue, cc: '', bcc: '', subject: subjectPrefix })
             setHeaderTitle(subjectPrefix)
+            // To and Subject are pre-filled; the user almost always wants to
+            // type the body next.
+            editorRef.current.focus('start')
         } else {
             draftIdRef.current = null
             reset({ to: '', cc: '', bcc: '', subject: '' })

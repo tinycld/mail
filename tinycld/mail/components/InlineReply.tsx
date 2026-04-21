@@ -1,5 +1,5 @@
 import { Forward, Reply, ReplyAll } from 'lucide-react-native'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { Platform, Pressable, Text, View } from 'react-native'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { captureException } from '@tinycld/core/lib/errors'
@@ -162,6 +162,13 @@ function InlineComposeForm({
             onClose()
         },
     })
+
+    // Replies pre-fill recipients and subject; the user almost always wants to
+    // start typing the body. Focus the editor on mount so they don't have to
+    // click into it.
+    useEffect(() => {
+        editor.focus('start')
+    }, [editor])
 
     const onSend = handleSubmit(async (data) => {
         if (!mailboxId) {
