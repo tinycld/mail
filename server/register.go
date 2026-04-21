@@ -2,7 +2,11 @@ package mail
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"os"
 	"sync"
 
@@ -108,6 +112,18 @@ func Register(app *pocketbase.PocketBase) {
 	// Clean up orphaned personal mailboxes when a user leaves an org
 	app.OnRecordAfterDeleteSuccess("user_org").BindFunc(func(e *core.RecordEvent) error {
 		handleUserOrgDeleted(app, e.Record)
+		return e.Next()
+	})
+
+	// Auto-generate webhook_secret for new domains
+	app.OnRecordCreate("mail_domains").BindFunc(func(e *core.RecordEvent) error {
+		if e.Record.GetString("webhook_secret") == "" {
+			secret, err := randomHex(16)
+			if err != nil {
+				return fmt.Errorf("failed to generate webhook secret: %w", err)
+			}
+			e.Record.Set("webhook_secret", secret)
+		}
 		return e.Next()
 	})
 
@@ -223,20 +239,38 @@ func Register(app *pocketbase.PocketBase) {
 			return handleSearch(app, re)
 		}).BindFunc(requireAuth)
 
-		// Inbound webhook (unauthenticated, secured via secret token)
-		inboundSecret := os.Getenv("MAIL_INBOUND_SECRET")
+		// Inbound webhook (unauthenticated, secured via per-domain secret)
 		e.Router.POST("/api/mail/inbound/{token}", func(re *core.RequestEvent) error {
-			return handleInbound(app, webhookProvider, re, inboundSecret)
+			secret := re.Request.PathValue("token")
+			if secret == "" || !isValidDomainWebhookSecret(app, secret) {
+				return re.UnauthorizedError("Invalid inbound token", nil)
+			}
+			return handleInbound(app, webhookProvider, re, secret)
 		})
 
-		// Bounce webhook (unauthenticated, secured via secret token)
-		bounceSecret := os.Getenv("MAIL_BOUNCE_SECRET")
-		if bounceSecret == "" {
-			bounceSecret = inboundSecret
-		}
+		// Bounce webhook (unauthenticated, secured via per-domain secret)
 		e.Router.POST("/api/mail/bounces/{token}", func(re *core.RequestEvent) error {
-			return handleBounce(app, webhookProvider, re, bounceSecret)
+			secret := re.Request.PathValue("token")
+			if secret == "" || !isValidDomainWebhookSecret(app, secret) {
+				return re.ForbiddenError("Invalid token", nil)
+			}
+			return handleBounce(app, webhookProvider, re, secret)
 		})
+
+		// Webhook URLs endpoint (requires auth, returns URLs for a domain)
+		e.Router.GET("/api/mail/domains/{id}/webhook-urls", func(re *core.RequestEvent) error {
+			domainID := re.Request.PathValue("id")
+			domain, err := app.FindRecordById("mail_domains", domainID)
+			if err != nil {
+				return re.NotFoundError("Domain not found", nil)
+			}
+			secret := domain.GetString("webhook_secret")
+			baseURL := app.Settings().Meta.AppURL
+			return re.JSON(http.StatusOK, map[string]string{
+				"inbound": fmt.Sprintf("%s/api/mail/inbound/%s", baseURL, secret),
+				"bounces": fmt.Sprintf("%s/api/mail/bounces/%s", baseURL, secret),
+			})
+		}).BindFunc(requireAuth)
 
 		// Image proxy (auth via query token, since sandboxed iframes can't send headers)
 		e.Router.GET("/api/mail/image-proxy", func(re *core.RequestEvent) error {
@@ -354,6 +388,26 @@ func indexMessageRecordFromStorage(app *pocketbase.PocketBase, record *core.Reco
 		SenderEmail: record.GetString("sender_email"),
 		TextBody:    bodyText,
 	}, attachmentText)
+}
+
+func randomHex(bytes int) (string, error) {
+	b := make([]byte, bytes)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func isValidDomainWebhookSecret(app *pocketbase.PocketBase, secret string) bool {
+	records, err := app.FindRecordsByFilter(
+		"mail_domains",
+		"webhook_secret = {:secret}",
+		"",
+		1,
+		0,
+		map[string]any{"secret": secret},
+	)
+	return err == nil && len(records) > 0
 }
 
 // requireAuth is a middleware that ensures the request has a valid auth token.
