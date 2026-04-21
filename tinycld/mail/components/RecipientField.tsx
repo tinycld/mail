@@ -11,6 +11,7 @@ interface RecipientFieldProps {
     control: Control<ComposeFormData>
     name: Path<ComposeFormData>
     placeholder?: string
+    autoFocus?: boolean
 }
 
 function RecipientChip({ name, email, onRemove }: { name: string; email: string; onRemove: () => void }) {
@@ -41,7 +42,7 @@ function RecipientChip({ name, email, onRemove }: { name: string; email: string;
     )
 }
 
-export function RecipientField({ control, name, placeholder }: RecipientFieldProps) {
+export function RecipientField({ control, name, placeholder, autoFocus }: RecipientFieldProps) {
     const foregroundColor = useThemeColor('foreground')
     const placeholderColor = useThemeColor('field-placeholder')
     const { field } = useController({ control, name })
@@ -94,6 +95,7 @@ export function RecipientField({ control, name, placeholder }: RecipientFieldPro
                     onChangeText={handleChangeText}
                     onBlur={field.onBlur}
                     placeholder={committedRecipients.length === 0 ? placeholder : undefined}
+                    autoFocus={autoFocus}
                 />
             </View>
             <ContactSuggestionsList

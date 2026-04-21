@@ -58,16 +58,16 @@ export function ComposeFields({ control, errors, onSubjectBlur }: ComposeFieldsP
                 }}
             >
                 <Text style={{ fontSize: 13, width: 56, color: mutedColor }}>To</Text>
-                <RecipientField control={control} name="to" />
+                <RecipientField control={control} name="to" autoFocus />
                 {!showCc || !showBcc ? (
                     <View className="flex-row gap-2 ml-2">
                         {showCc ? null : (
-                            <Pressable onPress={() => setShowCc(true)}>
+                            <Pressable onPress={() => setShowCc(true)} tabIndex={-1}>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>Cc</Text>
                             </Pressable>
                         )}
                         {showBcc ? null : (
-                            <Pressable onPress={() => setShowBcc(true)}>
+                            <Pressable onPress={() => setShowBcc(true)} tabIndex={-1}>
                                 <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>Bcc</Text>
                             </Pressable>
                         )}
