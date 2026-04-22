@@ -27,8 +27,12 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
     const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
     const mutedColor = useThemeColor('muted-foreground')
+    const borderColor = useThemeColor('border')
 
-    const [aliasesCollection, mailboxesCollection] = useStore('mail_mailbox_aliases', 'mail_mailboxes')
+    const [aliasesCollection, mailboxesCollection] = useStore(
+        'mail_mailbox_aliases',
+        'mail_mailboxes'
+    )
 
     const { data: mailboxesInDomain } = useOrgLiveQuery(
         (query) =>
@@ -88,7 +92,10 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
     return (
         <View className="gap-2">
             <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
-            <View className="flex-row gap-2 items-center">
+            <View
+                className="flex-row gap-2 items-center rounded-lg px-2"
+                style={{ borderWidth: 1, borderColor, borderStyle: 'dashed' }}
+            >
                 <View className="flex-1">
                     <TextInput control={control} name="address" placeholder="new-alias" />
                 </View>
@@ -96,11 +103,18 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
                 <Pressable
                     onPress={onSubmit}
                     disabled={!canSubmit}
-                    className={`flex-row gap-1 items-center rounded-lg px-3 py-2 ${canSubmit ? 'opacity-100' : 'opacity-50'}`}
-                    style={{ backgroundColor: primaryColor }}
+                    className="rounded-md"
+                    style={{
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        backgroundColor: primaryColor,
+                        opacity: canSubmit ? 1 : 0.5,
+                    }}
                 >
-                    <Plus size={14} color={primaryFgColor} />
-                    <Text style={{ color: primaryFgColor, fontSize: 13 }}>Add alias</Text>
+                    <View className="flex-row gap-1 items-center">
+                        <Plus size={12} color={primaryFgColor} />
+                        <Text style={{ color: primaryFgColor, fontSize: 12, fontWeight: '600' }}>Add</Text>
+                    </View>
                 </Pressable>
             </View>
         </View>
