@@ -17,6 +17,7 @@ import { useSaveDraft } from '../hooks/useSaveDraft'
 import { useSendEmail } from '../hooks/useSendEmail'
 import { AttachmentRibbon } from './AttachmentRibbon'
 import { ComposeFields } from './ComposeFields'
+import { ComposeFromRow } from './ComposeFromRow'
 import { ComposeHeader } from './ComposeHeader'
 import { ComposeToolbar } from './ComposeToolbar'
 
@@ -250,6 +251,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                 onClose={handleClose}
             />
             <View className={isMinimized ? 'hidden' : 'flex-1'}>
+                <ComposeFromRow />
                 <ComposeFields control={control} errors={errors} onSubjectBlur={onSubjectBlur} />
                 <View className="px-3 pt-2">
                     <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
