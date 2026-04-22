@@ -60,3 +60,25 @@ func TestSMTP_BuildOutgoingFrom_UsesPrimaryWhenNoAlias(t *testing.T) {
 		t.Fatalf("expected primary address in From, got %q", got)
 	}
 }
+
+func TestSMTP_BuildOutgoingFrom_EmptyDisplayName(t *testing.T) {
+	app := setupAliasTestApp(t)
+
+	seedDomainAndMailbox(t, app, "acme.com", "support", "mb00000000000003")
+	seedAlias(t, app, "mb00000000000003", "help", "al00000000000003")
+
+	mb, alias, err := resolveMailboxByAddress(app, "help", "acme.com")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	domain, err := app.FindRecordById("mail_domains", mb.GetString("domain"))
+	if err != nil {
+		t.Fatalf("domain: %v", err)
+	}
+
+	s := &smtpSession{mailbox: mb, alias: alias, domain: domain}
+	got := buildOutgoingFrom(s)
+	if got != "<help@acme.com>" {
+		t.Fatalf("expected bare angle-addr with empty display_name, got %q", got)
+	}
+}

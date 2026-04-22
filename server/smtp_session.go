@@ -208,15 +208,26 @@ func (s *smtpSession) Rcpt(to string, opts *smtp.RcptOptions) error {
 	return nil
 }
 
+// resolveSenderAddress returns the local part of the outgoing From address,
+// preferring the alias address when the session authenticated via an alias.
+// Precondition: s.mailbox is non-nil (enforced by Mail() handler).
+func resolveSenderAddress(s *smtpSession) string {
+	if s.alias != nil {
+		return s.alias.GetString("address")
+	}
+	return s.mailbox.GetString("address")
+}
+
 // buildOutgoingFrom builds the outgoing From header for this session, using
 // the alias address when the session authenticated via an alias.
+// Precondition: s.mailbox and s.domain are non-nil.
 func buildOutgoingFrom(s *smtpSession) string {
 	displayName := s.mailbox.GetString("display_name")
-	address := s.mailbox.GetString("address")
-	if s.alias != nil {
-		address = s.alias.GetString("address")
-	}
+	address := resolveSenderAddress(s)
 	domainName := s.domain.GetString("domain")
+	if displayName == "" {
+		return fmt.Sprintf("<%s@%s>", address, domainName)
+	}
 	return fmt.Sprintf("%s <%s@%s>", displayName, address, domainName)
 }
 
@@ -261,10 +272,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 	// to enforce consistent sender identity across all channels.
 	displayName := s.mailbox.GetString("display_name")
 	domainName := s.domain.GetString("domain")
-	senderAddress := s.mailbox.GetString("address")
-	if s.alias != nil {
-		senderAddress = s.alias.GetString("address")
-	}
+	senderAddress := resolveSenderAddress(s)
 	fromAddr := buildOutgoingFrom(s)
 
 	// Build To/Cc from parsed headers, derive Bcc from RCPT TO envelope
