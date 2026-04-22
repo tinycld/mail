@@ -199,6 +199,7 @@ export default function MailListScreen() {
         labels: allLabels,
         labelMap,
         draftByThread,
+        threadMap,
         threadStateCollection,
     } = useThreadListItems(userOrgId, {
         folder,
@@ -289,6 +290,7 @@ export default function MailListScreen() {
                     .catch(() => '')
             }
 
+            const draftThread = threadMap.get(draft.thread)
             openDraft({
                 messageId: draft.id,
                 threadId: item.threadId,
@@ -298,9 +300,11 @@ export default function MailListScreen() {
                 bcc: [],
                 htmlBody,
                 textBody: draft.snippet ?? '',
+                mailboxId: draftThread?.mailbox ?? '',
+                aliasId: draft.alias || null,
             })
         },
-        [draftByThread, openDraft]
+        [draftByThread, threadMap, openDraft]
     )
 
     const searchItems = useMemo(() => search.results.map(searchResultToThreadListItem), [search.results])

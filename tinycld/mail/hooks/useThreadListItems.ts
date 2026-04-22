@@ -208,6 +208,7 @@ export function useThreadListItems(
         labels,
         labelMap,
         draftByThread,
+        threadMap,
         threadStateCollection,
     }
 }

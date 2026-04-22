@@ -23,6 +23,7 @@ interface InlineReplyProps {
     senderEmail: string
     recipientsTo: { name: string; email: string }[]
     recipientsCc: { name: string; email: string }[]
+    mailboxId: string
 }
 
 export function InlineReply({
@@ -33,6 +34,7 @@ export function InlineReply({
     senderEmail,
     recipientsTo,
     recipientsCc,
+    mailboxId,
 }: InlineReplyProps) {
     const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
@@ -42,12 +44,19 @@ export function InlineReply({
 
     const isInlineActive = mode === 'inline' && replyContext?.threadId === threadId
 
+    const sentToAddresses = [
+        ...recipientsTo.map((r) => r.email),
+        ...recipientsCc.map((r) => r.email),
+    ]
+
     const handleReply = () => {
         openReply({
             messageId,
             threadId,
             subject,
             to: [{ name: senderName, email: senderEmail }],
+            mailboxId,
+            sentToAddresses,
         })
     }
 
@@ -58,6 +67,8 @@ export function InlineReply({
             threadId,
             subject,
             to: allRecipients,
+            mailboxId,
+            sentToAddresses,
         })
     }
 
@@ -67,6 +78,8 @@ export function InlineReply({
             threadId,
             subject: `Fwd: ${subject}`,
             to: [],
+            mailboxId,
+            sentToAddresses,
         })
     }
 
