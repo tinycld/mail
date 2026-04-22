@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { eq } from '@tanstack/db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { flattenSendableIdentities } from './flattenSendableIdentities'
@@ -14,8 +15,10 @@ export function useSendableIdentities() {
     const { data: allAliases } = useOrgLiveQuery((query) =>
         query.from({ mail_mailbox_aliases: aliasesCollection })
     )
-    const { data: allDomains } = useOrgLiveQuery((query) =>
-        query.from({ mail_domains: domainsCollection })
+    const { data: allDomains } = useOrgLiveQuery((query, { orgId }) =>
+        query
+            .from({ mail_domains: domainsCollection })
+            .where(({ mail_domains }) => eq(mail_domains.org, orgId))
     )
 
     return useMemo(() => {

@@ -20,17 +20,20 @@ export function flattenSendableIdentities(
         aliasesByMailbox.set(a.mailbox, list)
     }
 
-    return mailboxes.map((mb) => {
-        const domainName = domainMap.get(mb.domain) ?? ''
+    const result: SendableIdentity[] = []
+    for (const mb of mailboxes) {
+        const domainName = domainMap.get(mb.domain)
+        if (!domainName) continue
         const aliases = (aliasesByMailbox.get(mb.id) ?? []).map((a) => ({
             id: a.id,
             address: `${a.address}@${domainName}`,
         }))
-        return {
+        result.push({
             mailboxId: mb.id,
             mailboxDisplayName: mb.display_name || mb.address,
             primaryAddress: `${mb.address}@${domainName}`,
             aliases,
-        }
-    })
+        })
+    }
+    return result
 }

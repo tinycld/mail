@@ -100,4 +100,13 @@ describe('flattenSendableIdentities', () => {
         )
         expect(got[0].aliases).toEqual([])
     })
+
+    it('skips mailboxes whose domain is unknown', () => {
+        const got = flattenSendableIdentities(
+            [mb({ id: 'mb1', address: 'alice', domain: 'd_missing' })],
+            [],
+            []
+        )
+        expect(got).toEqual([])
+    })
 })
