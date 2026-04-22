@@ -44,8 +44,20 @@ describe('filterAndGroupMailboxes', () => {
     })
 
     it('matches query against primary address', () => {
-        const a = item({ id: 'a', address: 'support' })
-        const b = item({ id: 'b', address: 'billing' })
+        const a = item({
+            id: 'a',
+            address: 'support',
+            displayName: 'Help Desk',
+            memberNames: [],
+            memberEmails: [],
+        })
+        const b = item({
+            id: 'b',
+            address: 'billing',
+            displayName: 'Help Desk',
+            memberNames: [],
+            memberEmails: [],
+        })
         const got = filterAndGroupMailboxes([a, b], { query: 'sup', type: 'all' })
         expect(got.shared.map((m) => m.id)).toEqual(['a'])
     })
