@@ -189,6 +189,19 @@ func Register(app *pocketbase.PocketBase) {
 		return e.Next()
 	})
 
+	registerAliasHooks(app)
+
+	audit.RegisterCollection(app, "mail_mailbox_aliases", &audit.CollectionConfig{
+		ResolveOrg: func(a core.App, record *core.Record) string {
+			mailboxID := record.GetString("mailbox")
+			if mailboxID == "" {
+				return ""
+			}
+			return resolveOrgViaMailbox(a, mailboxID)
+		},
+		ExtractLabel: audit.LabelFromField("address"),
+	})
+
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		// Start IMAP server
 		imapShutdown, err := StartIMAPServer(app, e.CertManager)

@@ -102,3 +102,131 @@ func checkPrimaryAddressAvailable(app core.App, domainID, address, excludeMailbo
 	}
 	return nil
 }
+
+// registerAliasHooks wires record-level create/update hooks that enforce
+// address uniqueness across primary mailboxes and aliases on the same domain,
+// and normalize addresses to lowercase/trimmed form before persistence.
+func registerAliasHooks(app core.App) {
+	app.OnRecordCreate("mail_mailbox_aliases").BindFunc(func(e *core.RecordEvent) error {
+		normalized := strings.ToLower(strings.TrimSpace(e.Record.GetString("address")))
+		e.Record.Set("address", normalized)
+
+		mailboxID := e.Record.GetString("mailbox")
+		if mailboxID == "" {
+			return fmt.Errorf("alias is missing mailbox reference")
+		}
+		mb, err := e.App.FindRecordById("mail_mailboxes", mailboxID)
+		if err != nil {
+			return fmt.Errorf("alias references unknown mailbox: %w", err)
+		}
+		if err := checkAliasAddressAvailable(e.App, mb.GetString("domain"), normalized); err != nil {
+			return err
+		}
+		return e.Next()
+	})
+
+	app.OnRecordUpdate("mail_mailbox_aliases").BindFunc(func(e *core.RecordEvent) error {
+		normalized := strings.ToLower(strings.TrimSpace(e.Record.GetString("address")))
+		e.Record.Set("address", normalized)
+
+		mailboxID := e.Record.GetString("mailbox")
+		if mailboxID == "" {
+			return fmt.Errorf("alias is missing mailbox reference")
+		}
+
+		original, err := e.App.FindRecordById("mail_mailbox_aliases", e.Record.Id)
+		if err != nil {
+			return fmt.Errorf("failed to load original alias: %w", err)
+		}
+		originalAddress := strings.ToLower(strings.TrimSpace(original.GetString("address")))
+		originalMailbox := original.GetString("mailbox")
+
+		// Skip the availability check when nothing relevant changed.
+		if originalAddress == normalized && originalMailbox == mailboxID {
+			return e.Next()
+		}
+
+		mb, err := e.App.FindRecordById("mail_mailboxes", mailboxID)
+		if err != nil {
+			return fmt.Errorf("alias references unknown mailbox: %w", err)
+		}
+		domainID := mb.GetString("domain")
+
+		// Check for cross-mailbox alias collisions, excluding this row itself.
+		aliases, err := e.App.FindRecordsByFilter(
+			"mail_mailbox_aliases",
+			"address = {:address} && mailbox.domain = {:domain}",
+			"",
+			2,
+			0,
+			map[string]any{"address": normalized, "domain": domainID},
+		)
+		if err != nil {
+			return fmt.Errorf("alias lookup failed: %w", err)
+		}
+		for _, a := range aliases {
+			if a.Id == e.Record.Id {
+				continue
+			}
+			return fmt.Errorf("address %s is already an alias on this domain", normalized)
+		}
+
+		// Check for primary-mailbox collisions on the same domain.
+		mailboxes, err := e.App.FindRecordsByFilter(
+			"mail_mailboxes",
+			"address = {:address} && domain = {:domain}",
+			"",
+			1,
+			0,
+			map[string]any{"address": normalized, "domain": domainID},
+		)
+		if err != nil {
+			return fmt.Errorf("mailbox lookup failed: %w", err)
+		}
+		if len(mailboxes) > 0 {
+			return fmt.Errorf("address %s is already a primary mailbox on this domain", normalized)
+		}
+
+		return e.Next()
+	})
+
+	app.OnRecordCreate("mail_mailboxes").BindFunc(func(e *core.RecordEvent) error {
+		normalized := strings.ToLower(strings.TrimSpace(e.Record.GetString("address")))
+		e.Record.Set("address", normalized)
+
+		domainID := e.Record.GetString("domain")
+		if domainID == "" {
+			return fmt.Errorf("mailbox is missing domain reference")
+		}
+		if err := checkPrimaryAddressAvailable(e.App, domainID, normalized, ""); err != nil {
+			return err
+		}
+		return e.Next()
+	})
+
+	app.OnRecordUpdate("mail_mailboxes").BindFunc(func(e *core.RecordEvent) error {
+		normalized := strings.ToLower(strings.TrimSpace(e.Record.GetString("address")))
+		e.Record.Set("address", normalized)
+
+		domainID := e.Record.GetString("domain")
+		if domainID == "" {
+			return fmt.Errorf("mailbox is missing domain reference")
+		}
+
+		original, err := e.App.FindRecordById("mail_mailboxes", e.Record.Id)
+		if err != nil {
+			return fmt.Errorf("failed to load original mailbox: %w", err)
+		}
+		originalAddress := strings.ToLower(strings.TrimSpace(original.GetString("address")))
+		originalDomain := original.GetString("domain")
+
+		if originalAddress == normalized && originalDomain == domainID {
+			return e.Next()
+		}
+
+		if err := checkPrimaryAddressAvailable(e.App, domainID, normalized, e.Record.Id); err != nil {
+			return err
+		}
+		return e.Next()
+	})
+}

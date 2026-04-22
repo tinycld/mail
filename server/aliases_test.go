@@ -223,6 +223,71 @@ func seedDomainAndMailbox(t *testing.T, app core.App, domainStr, localPart, mail
 	return domain.Id
 }
 
+func TestAliasHook_RejectsDuplicatePrimaryAddress(t *testing.T) {
+	app := setupAliasTestApp(t)
+	registerAliasHooks(app)
+
+	seedDomainAndMailbox(t, app, "example.com", "support", "mbox_hook_primary")
+
+	aliasesCol, err := app.FindCollectionByNameOrId("mail_mailbox_aliases")
+	if err != nil {
+		t.Fatalf("mail_mailbox_aliases collection missing: %v", err)
+	}
+	alias := core.NewRecord(aliasesCol)
+	alias.Set("mailbox", padID("mbox_hook_primary"))
+	alias.Set("address", "support")
+	if err := app.Save(alias); err == nil {
+		t.Fatalf("expected alias save to fail due to primary-address collision")
+	}
+}
+
+func TestAliasHook_NormalizesUppercaseAddressOnCreate(t *testing.T) {
+	app := setupAliasTestApp(t)
+	registerAliasHooks(app)
+
+	seedDomainAndMailbox(t, app, "example.com", "team", "mbox_hook_norm")
+
+	aliasesCol, err := app.FindCollectionByNameOrId("mail_mailbox_aliases")
+	if err != nil {
+		t.Fatalf("mail_mailbox_aliases collection missing: %v", err)
+	}
+	alias := core.NewRecord(aliasesCol)
+	alias.Id = padID("alias_hook_norm")
+	alias.Set("mailbox", padID("mbox_hook_norm"))
+	alias.Set("address", "HELP")
+	if err := app.Save(alias); err != nil {
+		t.Fatalf("expected alias save to succeed, got %v", err)
+	}
+
+	reloaded, err := app.FindRecordById("mail_mailbox_aliases", padID("alias_hook_norm"))
+	if err != nil {
+		t.Fatalf("failed to reload saved alias: %v", err)
+	}
+	if got := reloaded.GetString("address"); got != "help" {
+		t.Fatalf("expected normalized address 'help', got %q", got)
+	}
+}
+
+func TestPrimaryHook_RejectsCollidingWithAlias(t *testing.T) {
+	app := setupAliasTestApp(t)
+	registerAliasHooks(app)
+
+	domainID := seedDomainAndMailbox(t, app, "example.com", "support", "mbox_hook_existing")
+	seedAlias(t, app, "mbox_hook_existing", "help", "alias_hook_blocks")
+
+	mailboxesCol, err := app.FindCollectionByNameOrId("mail_mailboxes")
+	if err != nil {
+		t.Fatalf("mail_mailboxes collection missing: %v", err)
+	}
+	mailbox := core.NewRecord(mailboxesCol)
+	mailbox.Set("address", "help")
+	mailbox.Set("domain", domainID)
+	mailbox.Set("type", "personal")
+	if err := app.Save(mailbox); err == nil {
+		t.Fatalf("expected mailbox save to fail due to alias collision")
+	}
+}
+
 func seedAlias(t *testing.T, app core.App, mailboxID, address, aliasID string) {
 	t.Helper()
 
