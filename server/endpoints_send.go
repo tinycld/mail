@@ -16,6 +16,7 @@ import (
 
 type sendRequest struct {
 	MailboxID          string      `json:"mailbox_id"`
+	AliasID            string      `json:"alias_id"`
 	To                 []Recipient `json:"to"`
 	Cc                 []Recipient `json:"cc"`
 	Bcc                []Recipient `json:"bcc"`
@@ -89,11 +90,28 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		return re.ForbiddenError("Not a member of this mailbox", err)
 	}
 
+	var alias *core.Record
+	if req.AliasID != "" {
+		alias, err = app.FindRecordById("mail_mailbox_aliases", req.AliasID)
+		if err != nil {
+			return re.BadRequestError("Alias not found", err)
+		}
+		if err := verifyAliasBelongsToMailbox(alias, req.MailboxID); err != nil {
+			return re.ForbiddenError("Alias does not belong to this mailbox", err)
+		}
+	}
+
 	// Build From address
 	displayName := mailbox.GetString("display_name")
 	address := mailbox.GetString("address")
 	domain := domainRecord.GetString("domain")
-	fromAddr := fmt.Sprintf("%s <%s@%s>", displayName, address, domain)
+	fromAddr := buildFromAddress(mailbox, domainRecord, alias)
+
+	senderAddress := address
+	if alias != nil {
+		senderAddress = alias.GetString("address")
+	}
+	senderEmail := fmt.Sprintf("%s@%s", senderAddress, domain)
 
 	// Build threading headers if replying
 	var inReplyToHeader, referencesHeader string
@@ -145,8 +163,9 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	msg := &storedMessage{
 		MessageID:      result.MessageID,
 		InReplyTo:      inReplyToHeader,
+		Alias:          req.AliasID,
 		SenderName:     displayName,
-		SenderEmail:    fmt.Sprintf("%s@%s", address, domain),
+		SenderEmail:    senderEmail,
 		To:             req.To,
 		Cc:             req.Cc,
 		Date:           now,

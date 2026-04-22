@@ -16,6 +16,7 @@ import (
 
 type draftRequest struct {
 	MailboxID string      `json:"mailbox_id"`
+	AliasID   string      `json:"alias_id"`
 	MessageID string      `json:"message_id"` // existing draft record ID to update
 	To        []Recipient `json:"to"`
 	Cc        []Recipient `json:"cc"`
@@ -81,6 +82,17 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		return re.ForbiddenError("Not a member of this mailbox", err)
 	}
 
+	var alias *core.Record
+	if req.AliasID != "" {
+		alias, err = app.FindRecordById("mail_mailbox_aliases", req.AliasID)
+		if err != nil {
+			return re.BadRequestError("Alias not found", err)
+		}
+		if err := verifyAliasBelongsToMailbox(alias, req.MailboxID); err != nil {
+			return re.ForbiddenError("Alias does not belong to this mailbox", err)
+		}
+	}
+
 	displayName := mailbox.GetString("display_name")
 	address := mailbox.GetString("address")
 	domain := domainRecord.GetString("domain")
@@ -90,7 +102,11 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		subject = "(no subject)"
 	}
 
-	senderEmail := fmt.Sprintf("%s@%s", address, domain)
+	senderAddress := address
+	if alias != nil {
+		senderAddress = alias.GetString("address")
+	}
+	senderEmail := fmt.Sprintf("%s@%s", senderAddress, domain)
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	// Update existing draft in-place
@@ -132,6 +148,7 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 
 	msg := &storedMessage{
 		MessageID:      fmt.Sprintf("draft-%s-%d", userID, time.Now().UnixNano()),
+		Alias:          req.AliasID,
 		SenderName:     displayName,
 		SenderEmail:    senderEmail,
 		To:             req.To,
@@ -170,6 +187,7 @@ func updateDraftRecord(app *pocketbase.PocketBase, record *core.Record, req draf
 	record.Set("subject", subject)
 	record.Set("date", date)
 	record.Set("sender_email", senderEmail)
+	record.Set("alias", req.AliasID)
 
 	snippetSource := req.TextBody
 	record.Set("snippet", truncateSnippet(snippetSource, 200))
