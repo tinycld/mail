@@ -16,9 +16,11 @@ import { EmailDetailToolbar } from '../components/EmailDetailToolbar'
 import { MessageHeader, ThreadSubjectHeader } from '../components/EmailHeader'
 import { InlineReply } from '../components/InlineReply'
 import { NotFoundState } from '../components/NotFoundState'
+import { filterOwnAddresses, pickDefaultFrom } from '../hooks/defaultFromIdentity'
 import { useCompose } from '../hooks/useComposeState'
 import { useLabels, useThreadLabels } from '../hooks/useLabels'
 import { useMailboxes } from '../hooks/useMailboxes'
+import { useSendableIdentities } from '../hooks/useSendableIdentities'
 import { useThreadActions } from '../hooks/useThreadActions'
 import { useThreadNavigation } from '../hooks/useThreadNavigation'
 import { useThreadListContext } from '../stores/thread-list-store'
@@ -80,6 +82,7 @@ export default function MailDetailScreen() {
     const thread = threads?.[0]
 
     const { personal, shared } = useMailboxes()
+    const identities = useSendableIdentities()
     const userMailboxIds = new Set<string>()
     if (personal) userMailboxIds.add(personal.id)
     for (const mb of shared) userMailboxIds.add(mb.id)
@@ -239,23 +242,36 @@ export default function MailDetailScreen() {
                                         ],
                                     })
                                 }
-                                onReplyAll={() =>
+                                onReplyAll={() => {
+                                    const replyAddresses = [
+                                        ...(msg.recipients_to ?? []).map((r) => r.email),
+                                        ...(msg.recipients_cc ?? []).map((r) => r.email),
+                                    ]
+                                    const defaultFrom = pickDefaultFrom({
+                                        mode: 'reply',
+                                        identities,
+                                        replyToAddresses: replyAddresses,
+                                    })
+                                    const identity = identities.find(
+                                        (i) => i.mailboxId === defaultFrom.mailboxId
+                                    )
+                                    const rawTo = [
+                                        { name: msg.sender_name, email: msg.sender_email },
+                                        ...(msg.recipients_to ?? []),
+                                        ...(msg.recipients_cc ?? []),
+                                    ]
+                                    const filteredTo = identity
+                                        ? filterOwnAddresses({ identity, recipients: rawTo })
+                                        : rawTo
                                     openReply({
                                         messageId: msg.id,
                                         threadId: id,
                                         subject: msg.subject,
-                                        to: [
-                                            { name: msg.sender_name, email: msg.sender_email },
-                                            ...(msg.recipients_to ?? []),
-                                            ...(msg.recipients_cc ?? []),
-                                        ],
+                                        to: filteredTo,
                                         mailboxId,
-                                        sentToAddresses: [
-                                            ...(msg.recipients_to ?? []).map((r) => r.email),
-                                            ...(msg.recipients_cc ?? []).map((r) => r.email),
-                                        ],
+                                        sentToAddresses: replyAddresses,
                                     })
-                                }
+                                }}
                                 onForward={() =>
                                     openReply({
                                         messageId: msg.id,
