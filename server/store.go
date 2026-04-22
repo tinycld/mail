@@ -110,6 +110,9 @@ func storeMessage(app *pocketbase.PocketBase, threadID string, msg *storedMessag
 	record.Set("thread", threadID)
 	record.Set("message_id", msg.MessageID)
 	record.Set("in_reply_to", msg.InReplyTo)
+	if msg.Alias != "" {
+		record.Set("alias", msg.Alias)
+	}
 	record.Set("sender_name", msg.SenderName)
 	record.Set("sender_email", msg.SenderEmail)
 	record.Set("date", msg.Date)
@@ -198,6 +201,7 @@ func storeMessage(app *pocketbase.PocketBase, threadID string, msg *storedMessag
 type storedMessage struct {
 	MessageID      string
 	InReplyTo      string
+	Alias          string
 	References     string
 	SenderName     string
 	SenderEmail    string

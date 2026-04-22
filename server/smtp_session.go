@@ -208,6 +208,18 @@ func (s *smtpSession) Rcpt(to string, opts *smtp.RcptOptions) error {
 	return nil
 }
 
+// buildOutgoingFrom builds the outgoing From header for this session, using
+// the alias address when the session authenticated via an alias.
+func buildOutgoingFrom(s *smtpSession) string {
+	displayName := s.mailbox.GetString("display_name")
+	address := s.mailbox.GetString("address")
+	if s.alias != nil {
+		address = s.alias.GetString("address")
+	}
+	domainName := s.domain.GetString("domain")
+	return fmt.Sprintf("%s <%s@%s>", displayName, address, domainName)
+}
+
 // Data handles the DATA command — parses the RFC 5322 message and sends it
 // through the existing provider pipeline.
 func (s *smtpSession) Data(r io.Reader) error {
@@ -248,9 +260,12 @@ func (s *smtpSession) Data(r io.Reader) error {
 	// mailbox's configured display name, not the one from the message headers,
 	// to enforce consistent sender identity across all channels.
 	displayName := s.mailbox.GetString("display_name")
-	address := s.mailbox.GetString("address")
 	domainName := s.domain.GetString("domain")
-	fromAddr := fmt.Sprintf("%s <%s@%s>", displayName, address, domainName)
+	senderAddress := s.mailbox.GetString("address")
+	if s.alias != nil {
+		senderAddress = s.alias.GetString("address")
+	}
+	fromAddr := buildOutgoingFrom(s)
 
 	// Build To/Cc from parsed headers, derive Bcc from RCPT TO envelope
 	toMap := make(map[string]bool)
@@ -330,7 +345,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 		MessageID:      result.MessageID,
 		InReplyTo:      inReplyToHeader,
 		SenderName:     displayName,
-		SenderEmail:    fmt.Sprintf("%s@%s", address, domainName),
+		SenderEmail:    fmt.Sprintf("%s@%s", senderAddress, domainName),
 		To:             msg.To,
 		Cc:             msg.Cc,
 		Date:           now,
@@ -339,6 +354,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 		TextBody:       msg.TextBody,
 		DeliveryStatus: "sent",
 		Attachments:    msg.Attachments,
+		Alias:          aliasIDFromSession(s),
 	}
 
 	if _, err := storeMessage(s.app, thread.Id, storedMsg); err != nil {
@@ -380,3 +396,10 @@ func (s *smtpSession) Logout() error {
 
 // Ensure smtpSession implements the AuthSession interface.
 var _ smtp.AuthSession = (*smtpSession)(nil)
+
+func aliasIDFromSession(s *smtpSession) string {
+	if s.alias == nil {
+		return ""
+	}
+	return s.alias.Id
+}
