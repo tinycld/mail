@@ -15,6 +15,7 @@ import { setContentWhenReady, useMailEditor } from '../hooks/useMailEditor'
 import { useMailSendReadiness } from '../hooks/useMailSendReadiness'
 import { useSaveDraft } from '../hooks/useSaveDraft'
 import { useSendEmail } from '../hooks/useSendEmail'
+import { useComposeStore } from '../stores/compose-store'
 import { AttachmentRibbon } from './AttachmentRibbon'
 import { ComposeFields } from './ComposeFields'
 import { ComposeFromRow } from './ComposeFromRow'
@@ -35,6 +36,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const fileInputRef = useRef<HTMLInputElement>(null)
     const readiness = useMailSendReadiness()
     const mailboxId = readiness.mailboxId
+    const aliasId = useComposeStore((s) => s.aliasId)
     const draftIdRef = useRef<string | null>(null)
     const toastedBlockerRef = useRef<string | null>(null)
     const [headerTitle, setHeaderTitle] = useState('')
@@ -153,6 +155,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
         saveDraft({
             mailbox_id: mailboxId,
+            alias_id: aliasId ?? undefined,
             message_id: draftIdRef.current ?? undefined,
             to,
             cc,
@@ -204,6 +207,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
         send({
             mailbox_id: mailboxId,
+            alias_id: aliasId ?? undefined,
             to: parseRecipients(data.to),
             cc,
             bcc,

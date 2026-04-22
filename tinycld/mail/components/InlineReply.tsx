@@ -11,6 +11,7 @@ import { useCompose } from '../hooks/useComposeState'
 import { useDefaultMailbox } from '../hooks/useDefaultMailbox'
 import { useMailEditor } from '../hooks/useMailEditor'
 import { useSendEmail } from '../hooks/useSendEmail'
+import { useComposeStore } from '../stores/compose-store'
 import { AttachmentRibbon } from './AttachmentRibbon'
 import { ComposeFields } from './ComposeFields'
 import { ComposeToolbar } from './ComposeToolbar'
@@ -145,6 +146,7 @@ function InlineComposeForm({
     const backgroundColor = useThemeColor('background')
     const fileInputRef = useRef<HTMLInputElement>(null)
     const mailboxId = useDefaultMailbox()
+    const aliasId = useComposeStore((s) => s.aliasId)
     const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
         placeholder: 'Compose reply',
     })
@@ -197,6 +199,7 @@ function InlineComposeForm({
 
         send({
             mailbox_id: mailboxId,
+            alias_id: aliasId ?? undefined,
             to: parseRecipients(data.to),
             cc,
             bcc,

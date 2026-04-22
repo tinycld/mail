@@ -5,6 +5,7 @@ import { PB_SERVER_ADDR, pb } from '@tinycld/core/lib/pocketbase'
 
 interface SendEmailParams {
     mailbox_id: string
+    alias_id?: string
     to: { name: string; email: string }[]
     cc?: { name: string; email: string }[]
     bcc?: { name: string; email: string }[]

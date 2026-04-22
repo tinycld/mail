@@ -4,6 +4,7 @@ import { PB_SERVER_ADDR, pb } from '@tinycld/core/lib/pocketbase'
 
 interface SaveDraftParams {
     mailbox_id: string
+    alias_id?: string
     message_id?: string
     to?: { name: string; email: string }[]
     cc?: { name: string; email: string }[]
