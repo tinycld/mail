@@ -11,7 +11,7 @@ export function registerCollections(
     coreStores: CoreStores
 ) {
     const mail_domains = newCollection('mail_domains', {
-        omitOnInsert: ['created', 'updated'] as const,
+        omitOnInsert: ['created', 'updated', 'webhook_secret'] as const,
         collectionOptions: {
             autoIndex: 'eager' as const,
             defaultIndexType: BasicIndex,

@@ -34,6 +34,7 @@ export interface MailDomains {
     return_path_verified: boolean
     last_checked_at: string
     verification_details: MailDomainVerificationDetails | null
+    webhook_secret: string
     created: string
     updated: string
 }
