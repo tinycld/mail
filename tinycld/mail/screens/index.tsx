@@ -17,6 +17,7 @@ import { EmailRow } from '../components/EmailRow'
 import type { ThreadListItem } from '../components/thread-list-item'
 import { useCompose } from '../hooks/useComposeState'
 import { useMailBulkActions } from '../hooks/useMailBulkActions'
+import { useMailboxes } from '../hooks/useMailboxes'
 import { useMailListShortcuts } from '../hooks/useMailListShortcuts'
 import type { MailSearchResult } from '../hooks/useMailSearch'
 import { useMailSelection } from '../hooks/useMailSelection'
@@ -25,9 +26,13 @@ import { useThreadListItems } from '../hooks/useThreadListItems'
 import { useThreadListContext } from '../stores/thread-list-store'
 
 function useQueryParams() {
-    const { folder, label } = useLocalSearchParams<{ folder?: string; label?: string }>()
+    const { folder, label, mailbox } = useLocalSearchParams<{
+        folder?: string
+        label?: string
+        mailbox?: string
+    }>()
     const labels = label ? label.split(',').filter(Boolean) : []
-    return { folder: folder ?? null, labels }
+    return { folder: folder ?? null, labels, mailbox: mailbox ?? null }
 }
 
 function EmptyState({ folderTitle, isVisible }: { folderTitle: string; isVisible: boolean }) {
@@ -175,7 +180,7 @@ function searchResultToThreadListItem(result: MailSearchResult): ThreadListItem 
 }
 
 export default function MailListScreen() {
-    const { folder, labels } = useQueryParams()
+    const { folder, labels, mailbox } = useQueryParams()
     const router = useRouter()
     const orgHref = useOrgHref()
     const breakpoint = useBreakpoint()
@@ -186,6 +191,8 @@ export default function MailListScreen() {
     const mutedColor = useThemeColor('muted-foreground')
     const primaryColor = useThemeColor('primary')
     const _backgroundColor = useThemeColor('background')
+    const { personal } = useMailboxes()
+    const mailboxId = mailbox ?? personal?.id ?? ''
 
     const {
         items,
@@ -196,6 +203,7 @@ export default function MailListScreen() {
     } = useThreadListItems(userOrgId, {
         folder,
         labels,
+        mailboxId,
     })
 
     const { setThreadIds } = useThreadListContext()

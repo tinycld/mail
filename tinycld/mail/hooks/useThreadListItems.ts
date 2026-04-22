@@ -4,10 +4,14 @@ import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import type { ThreadListItem } from '../components/thread-list-item'
 import { toThreadListItem } from '../components/thread-list-item'
-import type { MailMessages } from '../types'
+import type { MailMessages, MailThreadState } from '../types'
 import { useLabels } from './useLabels'
+import { mergeSharedFolderStates } from './mergeSharedFolderStates'
 
-export function useThreadListItems(userOrgId: string, filter: { folder: string | null; labels: string[] }) {
+export function useThreadListItems(
+    userOrgId: string,
+    filter: { folder: string | null; labels: string[]; mailboxId: string }
+) {
     const [
         threadStateCollection,
         threadsCollection,
@@ -15,13 +19,15 @@ export function useThreadListItems(userOrgId: string, filter: { folder: string |
         assignmentsCollection,
         mailboxesCollection,
         domainsCollection,
+        membersCollection,
     ] = useStore(
         'mail_thread_state',
         'mail_threads',
         'mail_messages',
         'label_assignments',
         'mail_mailboxes',
-        'mail_domains'
+        'mail_domains',
+        'mail_mailbox_members'
     )
 
     const { labels, labelMap } = useLabels()
@@ -71,6 +77,36 @@ export function useThreadListItems(userOrgId: string, filter: { folder: string |
             )
     )
 
+    const { data: targetMailbox } = useOrgLiveQuery(
+        (query) =>
+            query
+                .from({ mail_mailboxes: mailboxesCollection })
+                .where(({ mail_mailboxes }) => eq(mail_mailboxes.id, filter.mailboxId)),
+        [filter.mailboxId]
+    )
+    const mailboxType = targetMailbox?.[0]?.type ?? 'personal'
+
+    const { data: coMembers } = useOrgLiveQuery(
+        (query) =>
+            query
+                .from({ mail_mailbox_members: membersCollection })
+                .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.mailbox, filter.mailboxId)),
+        [filter.mailboxId]
+    )
+
+    const needsSharedTeamStates =
+        mailboxType === 'shared' && (filter.folder === 'sent' || filter.folder === 'drafts')
+
+    const { data: sharedFolderStates } = useOrgLiveQuery(
+        (query) =>
+            query
+                .from({ mail_thread_state: threadStateCollection })
+                .where(({ mail_thread_state }) =>
+                    eq(mail_thread_state.folder, filter.folder ?? 'sent')
+                ),
+        [filter.folder]
+    )
+
     const assignmentsByRecord = useMemo(() => {
         const map = new Map<string, string[]>()
         for (const a of allAssignments ?? []) {
@@ -111,7 +147,20 @@ export function useThreadListItems(userOrgId: string, filter: { folder: string |
     const items: ThreadListItem[] = useMemo(() => {
         if (!threadStates) return []
 
-        const mapped = threadStates
+        const threadIsInMailbox = (threadId: string): boolean => {
+            const t = threadMap.get(threadId)
+            return !!t && t.mailbox === filter.mailboxId
+        }
+
+        let baseStates: MailThreadState[] = threadStates as MailThreadState[]
+
+        if (needsSharedTeamStates && coMembers && sharedFolderStates) {
+            const coMemberIds = coMembers.map((m) => m.user_org)
+            baseStates = mergeSharedFolderStates(sharedFolderStates as MailThreadState[], coMemberIds)
+        }
+
+        const mapped = baseStates
+            .filter((state) => threadIsInMailbox(state.thread))
             .map((state) => {
                 const thread = threadMap.get(state.thread)
                 const labelIds = assignmentsByRecord.get(state.id) ?? []
@@ -141,7 +190,18 @@ export function useThreadListItems(userOrgId: string, filter: { folder: string |
         }
 
         return mapped.filter((item) => item.folder === activeFolder)
-    }, [threadStates, threadMap, assignmentsByRecord, labelMap, draftByThread, threadsWithAttachments, filter])
+    }, [
+        threadStates,
+        sharedFolderStates,
+        coMembers,
+        needsSharedTeamStates,
+        threadMap,
+        assignmentsByRecord,
+        labelMap,
+        draftByThread,
+        threadsWithAttachments,
+        filter,
+    ])
 
     return {
         items,
