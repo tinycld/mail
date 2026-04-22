@@ -86,7 +86,7 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	if req.AliasID != "" {
 		alias, err = app.FindRecordById("mail_mailbox_aliases", req.AliasID)
 		if err != nil {
-			return re.BadRequestError("Alias not found", err)
+			return re.NotFoundError("Alias not found", err)
 		}
 		if err := verifyAliasBelongsToMailbox(alias, req.MailboxID); err != nil {
 			return re.ForbiddenError("Alias does not belong to this mailbox", err)
@@ -94,7 +94,6 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	}
 
 	displayName := mailbox.GetString("display_name")
-	address := mailbox.GetString("address")
 	domain := domainRecord.GetString("domain")
 
 	subject := req.Subject
@@ -102,10 +101,7 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		subject = "(no subject)"
 	}
 
-	senderAddress := address
-	if alias != nil {
-		senderAddress = alias.GetString("address")
-	}
+	senderAddress := resolveSenderAddressRecords(mailbox, alias)
 	senderEmail := fmt.Sprintf("%s@%s", senderAddress, domain)
 	now := time.Now().UTC().Format(time.RFC3339)
 

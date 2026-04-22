@@ -7,14 +7,20 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
+// resolveSenderAddressRecords returns the local part of the From address,
+// preferring the alias address when present.
+func resolveSenderAddressRecords(mailbox, alias *core.Record) string {
+	if alias != nil {
+		return alias.GetString("address")
+	}
+	return mailbox.GetString("address")
+}
+
 // buildFromAddress formats an outgoing From header using the alias address
 // when supplied, else the mailbox's primary address. Display name always
 // comes from the mailbox record.
 func buildFromAddress(mailbox, domain, alias *core.Record) string {
-	address := mailbox.GetString("address")
-	if alias != nil {
-		address = alias.GetString("address")
-	}
+	address := resolveSenderAddressRecords(mailbox, alias)
 	displayName := mailbox.GetString("display_name")
 	domainName := domain.GetString("domain")
 	if displayName == "" {
