@@ -13,6 +13,7 @@ import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { Divider } from '@tinycld/core/ui/divider'
 import { FormErrorSummary, SelectInput, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
+import { MailboxAliasesPanel } from './MailboxAliasesPanel'
 
 const createMailboxSchema = z.object({
     address: z
@@ -248,6 +249,14 @@ function MailboxCard({
                 members={members}
                 orgMembers={orgMembers}
             />
+
+            {isExpanded && (
+                <MailboxAliasesPanel
+                    mailboxId={mailbox.id}
+                    mailboxDomainId={mailbox.domain}
+                    domainName={mailbox.domainName}
+                />
+            )}
         </View>
     )
 }
