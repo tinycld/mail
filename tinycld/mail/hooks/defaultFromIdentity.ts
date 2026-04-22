@@ -5,6 +5,19 @@ export interface FromIdentity {
     aliasId: string | null
 }
 
+/**
+ * Accepts either a bare email ("alice@acme.com") or a display-name-prefixed
+ * address ('"Alice" <alice@acme.com>') and returns the lowercase bare address,
+ * or null if not extractable.
+ */
+export function extractBareAddress(raw: string): string | null {
+    const trimmed = raw.trim()
+    if (!trimmed) return null
+    const angleMatch = trimmed.match(/<([^>]+)>/)
+    if (angleMatch) return angleMatch[1].trim().toLowerCase()
+    return trimmed.toLowerCase()
+}
+
 interface PickDefaultFromParams {
     mode: 'new' | 'reply' | 'forward'
     identities: SendableIdentity[]
@@ -29,7 +42,12 @@ export function pickDefaultFrom({
 
     if (mode === 'new' || replyToAddresses.length === 0) return fallback
 
-    const normalized = new Set(replyToAddresses.map((a) => a.toLowerCase()))
+    const normalized = new Set<string>()
+    for (const raw of replyToAddresses) {
+        const bare = extractBareAddress(raw)
+        if (bare) normalized.add(bare)
+    }
+    if (normalized.size === 0) return fallback
 
     for (const id of identities) {
         if (normalized.has(id.primaryAddress.toLowerCase())) {

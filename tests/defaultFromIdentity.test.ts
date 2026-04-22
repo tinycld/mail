@@ -100,3 +100,32 @@ describe('filterOwnAddresses', () => {
         expect(got).toEqual([{ name: 'External', email: 'ext@foo.com' }])
     })
 })
+
+describe('pickDefaultFrom address extraction', () => {
+    it('extracts bare address from display-name-prefixed input', () => {
+        const got = pickDefaultFrom({
+            mode: 'reply',
+            identities: [personal, support],
+            replyToAddresses: ['"Support Team" <support@acme.com>'],
+        })
+        expect(got).toEqual({ mailboxId: 'mb2', aliasId: null })
+    })
+
+    it('ignores empty strings in replyToAddresses', () => {
+        const got = pickDefaultFrom({
+            mode: 'reply',
+            identities: [personal, support],
+            replyToAddresses: ['', '   ', 'support@acme.com'],
+        })
+        expect(got).toEqual({ mailboxId: 'mb2', aliasId: null })
+    })
+
+    it('falls back when all replyToAddresses are unparseable', () => {
+        const got = pickDefaultFrom({
+            mode: 'reply',
+            identities: [personal, support],
+            replyToAddresses: ['', '   '],
+        })
+        expect(got).toEqual({ mailboxId: 'mb1', aliasId: null })
+    })
+})
