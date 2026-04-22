@@ -30,6 +30,7 @@ type smtpSession struct {
 	// Transaction state (reset between MAIL FROM commands)
 	from       string
 	mailbox    *core.Record
+	alias      *core.Record
 	domain     *core.Record
 	orgID      string
 	userOrg    *core.Record
@@ -122,7 +123,7 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 		}
 	}
 
-	mailbox, err := resolveMailboxByAddress(s.app, local, domainStr)
+	mailbox, alias, err := resolveMailboxByAddress(s.app, local, domainStr)
 	if err != nil {
 		return &smtp.SMTPError{
 			Code:         550,
@@ -161,6 +162,7 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 
 	s.from = from
 	s.mailbox = mailbox
+	s.alias = alias
 	s.domain = domainRecord
 	s.orgID = orgID
 	s.userOrg = userOrg
@@ -362,6 +364,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 func (s *smtpSession) Reset() {
 	s.from = ""
 	s.mailbox = nil
+	s.alias = nil
 	s.domain = nil
 	s.orgID = ""
 	s.userOrg = nil
