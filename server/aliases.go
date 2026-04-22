@@ -37,9 +37,9 @@ func findMailboxViaAlias(app core.App, domainID, localPart string) (*core.Record
 	return mailbox, alias, nil
 }
 
-// checkAliasAddressAvailable returns an error if the given address would
-// collide with an existing mailbox primary address or an existing alias on
-// the same domain. Comparison is case-insensitive.
+// checkAliasAddressAvailable returns an error if `address` collides with an
+// existing primary mailbox or another alias on the same domain. Comparisons
+// are case-insensitive.
 func checkAliasAddressAvailable(app core.App, domainID, address string) error {
 	normalized := strings.ToLower(strings.TrimSpace(address))
 
@@ -51,8 +51,11 @@ func checkAliasAddressAvailable(app core.App, domainID, address string) error {
 		0,
 		map[string]any{"address": normalized, "domain": domainID},
 	)
-	if err == nil && len(mailboxes) > 0 {
-		return fmt.Errorf("address %s is already used as a mailbox primary address", address)
+	if err != nil {
+		return fmt.Errorf("mailbox lookup failed: %w", err)
+	}
+	if len(mailboxes) > 0 {
+		return fmt.Errorf("address %s is already a primary mailbox on this domain", normalized)
 	}
 
 	aliases, err := app.FindRecordsByFilter(
@@ -63,38 +66,39 @@ func checkAliasAddressAvailable(app core.App, domainID, address string) error {
 		0,
 		map[string]any{"address": normalized, "domain": domainID},
 	)
-	if err == nil && len(aliases) > 0 {
-		return fmt.Errorf("address %s is already used as an alias", address)
+	if err != nil {
+		return fmt.Errorf("alias lookup failed: %w", err)
+	}
+	if len(aliases) > 0 {
+		return fmt.Errorf("address %s is already an alias on this domain", normalized)
 	}
 
 	return nil
 }
 
-// checkPrimaryAddressAvailable returns an error if the given address would
-// collide with an existing alias on the same domain. Aliases that belong to
-// excludeMailboxID are skipped so a mailbox can be updated without self-
-// collision against its own aliases. Comparison is case-insensitive.
+// checkPrimaryAddressAvailable returns an error if `address` is already taken
+// by an alias on the same domain, excluding aliases owned by excludeMailboxID
+// (so a mailbox can update without self-colliding). Case-insensitive.
 func checkPrimaryAddressAvailable(app core.App, domainID, address, excludeMailboxID string) error {
 	normalized := strings.ToLower(strings.TrimSpace(address))
 
+	// limit 2: at most one "self" alias + any colliding alias from another mailbox
 	aliases, err := app.FindRecordsByFilter(
 		"mail_mailbox_aliases",
 		"address = {:address} && mailbox.domain = {:domain}",
 		"",
-		100,
+		2,
 		0,
 		map[string]any{"address": normalized, "domain": domainID},
 	)
 	if err != nil {
-		return nil
+		return fmt.Errorf("alias lookup failed: %w", err)
 	}
-
-	for _, alias := range aliases {
-		if alias.GetString("mailbox") == excludeMailboxID {
+	for _, a := range aliases {
+		if excludeMailboxID != "" && a.GetString("mailbox") == excludeMailboxID {
 			continue
 		}
-		return fmt.Errorf("address %s is already used as an alias", address)
+		return fmt.Errorf("address %s is already an alias on this domain", normalized)
 	}
-
 	return nil
 }
