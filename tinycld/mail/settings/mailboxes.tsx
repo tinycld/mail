@@ -234,9 +234,7 @@ function MailboxCard({
                         <TypeBadge type={mailbox.type} />
                     </View>
                     <Text style={{ fontSize: 13, color: mutedColor }}>
-                        {mailbox.name ? `${mailbox.name} \u00b7 ` : ''}
-                        {mailbox.displayName || 'No display name'} \u00b7 {members.length} member
-                        {members.length !== 1 ? 's' : ''}
+                        {`${mailbox.name ? `${mailbox.name} \u00b7 ` : ''}${mailbox.displayName || 'No display name'} \u00b7 ${members.length} member${members.length !== 1 ? 's' : ''}`}
                     </Text>
                 </View>
 
