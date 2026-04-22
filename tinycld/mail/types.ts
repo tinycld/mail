@@ -58,6 +58,14 @@ export interface MailMailboxMembers {
     updated: string
 }
 
+export interface MailMailboxAliases {
+    id: string
+    mailbox: string
+    address: string
+    created: string
+    updated: string
+}
+
 export interface MailThreads {
     id: string
     mailbox: string
@@ -79,6 +87,7 @@ export interface MailMessages {
     sender_email: string
     recipients_to: { name: string; email: string }[]
     recipients_cc: { name: string; email: string }[]
+    alias: string
     date: string
     subject: string
     snippet: string
@@ -134,6 +143,12 @@ export type MailSchema = {
             user_org: UserOrg
         }
     }
+    mail_mailbox_aliases: {
+        type: MailMailboxAliases
+        relations: {
+            mailbox: MailMailboxes
+        }
+    }
     mail_threads: {
         type: MailThreads
         relations: {
@@ -144,6 +159,7 @@ export type MailSchema = {
         type: MailMessages
         relations: {
             thread: MailThreads
+            alias: MailMailboxAliases
         }
     }
     mail_thread_state: {
