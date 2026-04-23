@@ -16,8 +16,11 @@ import { EmailDetailToolbar } from '../components/EmailDetailToolbar'
 import { MessageHeader, ThreadSubjectHeader } from '../components/EmailHeader'
 import { InlineReply } from '../components/InlineReply'
 import { NotFoundState } from '../components/NotFoundState'
+import { filterOwnAddresses, pickDefaultFrom } from '../hooks/defaultFromIdentity'
 import { useCompose } from '../hooks/useComposeState'
 import { useLabels, useThreadLabels } from '../hooks/useLabels'
+import { useMailboxes } from '../hooks/useMailboxes'
+import { useSendableIdentities } from '../hooks/useSendableIdentities'
 import { useThreadActions } from '../hooks/useThreadActions'
 import { useThreadNavigation } from '../hooks/useThreadNavigation'
 import { useThreadListContext } from '../stores/thread-list-store'
@@ -51,7 +54,11 @@ export default function MailDetailScreen() {
     const _borderColor = useThemeColor('border')
     const backgroundColor = useThemeColor('background')
 
-    const [threadStateCollection, messagesCollection] = useStore('mail_thread_state', 'mail_messages')
+    const [threadStateCollection, messagesCollection, threadsCollection] = useStore(
+        'mail_thread_state',
+        'mail_messages',
+        'mail_threads'
+    )
 
     const { data: threadStates } = useOrgLiveQuery(
         (query, { userOrgId }) =>
@@ -64,6 +71,22 @@ export default function MailDetailScreen() {
     )
 
     const threadState = threadStates?.[0]
+
+    const { data: threads } = useOrgLiveQuery(
+        (query) =>
+            query
+                .from({ mail_threads: threadsCollection })
+                .where(({ mail_threads }) => eq(mail_threads.id, id)),
+        [id]
+    )
+    const thread = threads?.[0]
+
+    const { personal, shared } = useMailboxes()
+    const identities = useSendableIdentities()
+    const userMailboxIds = new Set<string>()
+    if (personal) userMailboxIds.add(personal.id)
+    for (const mb of shared) userMailboxIds.add(mb.id)
+    const hasAccess = !thread || userMailboxIds.has(thread.mailbox)
 
     const { data: messages } = useOrgLiveQuery(
         (query) =>
@@ -136,6 +159,7 @@ export default function MailDetailScreen() {
     }
 
     if (!threadState && !messages?.length) return <NotFoundState message="Email not found" />
+    if (!hasAccess) return <NotFoundState message="Email not found" />
 
     const subject = messages?.[0]?.subject ?? ''
 
@@ -145,6 +169,8 @@ export default function MailDetailScreen() {
         return [{ recordId: msg.id, filenames: msg.attachments as string[] }]
     })
 
+    const mailboxId = thread?.mailbox ?? ''
+
     const handleForwardAll = () => {
         if (!lastMessage) return
         openReply({
@@ -152,6 +178,11 @@ export default function MailDetailScreen() {
             threadId: id,
             subject: `Fwd: ${subject}`,
             to: [],
+            mailboxId,
+            sentToAddresses: [
+                ...(lastMessage.recipients_to ?? []).map((r) => r.email),
+                ...(lastMessage.recipients_cc ?? []).map((r) => r.email),
+            ],
         })
     }
 
@@ -204,26 +235,54 @@ export default function MailDetailScreen() {
                                         threadId: id,
                                         subject: msg.subject,
                                         to: [{ name: msg.sender_name, email: msg.sender_email }],
+                                        mailboxId,
+                                        sentToAddresses: [
+                                            ...(msg.recipients_to ?? []).map((r) => r.email),
+                                            ...(msg.recipients_cc ?? []).map((r) => r.email),
+                                        ],
                                     })
                                 }
-                                onReplyAll={() =>
+                                onReplyAll={() => {
+                                    const replyAddresses = [
+                                        ...(msg.recipients_to ?? []).map((r) => r.email),
+                                        ...(msg.recipients_cc ?? []).map((r) => r.email),
+                                    ]
+                                    const defaultFrom = pickDefaultFrom({
+                                        mode: 'reply',
+                                        identities,
+                                        replyToAddresses: replyAddresses,
+                                    })
+                                    const identity = identities.find(
+                                        (i) => i.mailboxId === defaultFrom.mailboxId
+                                    )
+                                    const rawTo = [
+                                        { name: msg.sender_name, email: msg.sender_email },
+                                        ...(msg.recipients_to ?? []),
+                                        ...(msg.recipients_cc ?? []),
+                                    ]
+                                    const filteredTo = identity
+                                        ? filterOwnAddresses({ identity, recipients: rawTo })
+                                        : rawTo
                                     openReply({
                                         messageId: msg.id,
                                         threadId: id,
                                         subject: msg.subject,
-                                        to: [
-                                            { name: msg.sender_name, email: msg.sender_email },
-                                            ...(msg.recipients_to ?? []),
-                                            ...(msg.recipients_cc ?? []),
-                                        ],
+                                        to: filteredTo,
+                                        mailboxId,
+                                        sentToAddresses: replyAddresses,
                                     })
-                                }
+                                }}
                                 onForward={() =>
                                     openReply({
                                         messageId: msg.id,
                                         threadId: id,
                                         subject: `Fwd: ${msg.subject}`,
                                         to: [],
+                                        mailboxId,
+                                        sentToAddresses: [
+                                            ...(msg.recipients_to ?? []).map((r) => r.email),
+                                            ...(msg.recipients_cc ?? []).map((r) => r.email),
+                                        ],
                                     })
                                 }
                             />
@@ -254,6 +313,7 @@ export default function MailDetailScreen() {
                     senderEmail={lastMessage.sender_email}
                     recipientsTo={lastMessage.recipients_to ?? []}
                     recipientsCc={lastMessage.recipients_cc ?? []}
+                    mailboxId={mailboxId}
                 />
             ) : null}
         </View>

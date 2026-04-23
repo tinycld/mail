@@ -30,6 +30,7 @@ type smtpSession struct {
 	// Transaction state (reset between MAIL FROM commands)
 	from       string
 	mailbox    *core.Record
+	alias      *core.Record
 	domain     *core.Record
 	orgID      string
 	userOrg    *core.Record
@@ -122,7 +123,7 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 		}
 	}
 
-	mailbox, err := resolveMailboxByAddress(s.app, local, domainStr)
+	mailbox, alias, err := resolveMailboxByAddress(s.app, local, domainStr)
 	if err != nil {
 		return &smtp.SMTPError{
 			Code:         550,
@@ -161,6 +162,7 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 
 	s.from = from
 	s.mailbox = mailbox
+	s.alias = alias
 	s.domain = domainRecord
 	s.orgID = orgID
 	s.userOrg = userOrg
@@ -206,6 +208,20 @@ func (s *smtpSession) Rcpt(to string, opts *smtp.RcptOptions) error {
 	return nil
 }
 
+// resolveSenderAddress returns the local part of the outgoing From address,
+// preferring the alias address when the session authenticated via an alias.
+// Precondition: s.mailbox is non-nil (enforced by Mail() handler).
+func resolveSenderAddress(s *smtpSession) string {
+	return resolveSenderAddressRecords(s.mailbox, s.alias)
+}
+
+// buildOutgoingFrom builds the outgoing From header for this session, using
+// the alias address when the session authenticated via an alias.
+// Precondition: s.mailbox and s.domain are non-nil.
+func buildOutgoingFrom(s *smtpSession) string {
+	return buildFromAddress(s.mailbox, s.domain, s.alias)
+}
+
 // Data handles the DATA command — parses the RFC 5322 message and sends it
 // through the existing provider pipeline.
 func (s *smtpSession) Data(r io.Reader) error {
@@ -246,9 +262,9 @@ func (s *smtpSession) Data(r io.Reader) error {
 	// mailbox's configured display name, not the one from the message headers,
 	// to enforce consistent sender identity across all channels.
 	displayName := s.mailbox.GetString("display_name")
-	address := s.mailbox.GetString("address")
 	domainName := s.domain.GetString("domain")
-	fromAddr := fmt.Sprintf("%s <%s@%s>", displayName, address, domainName)
+	senderAddress := resolveSenderAddress(s)
+	fromAddr := buildOutgoingFrom(s)
 
 	// Build To/Cc from parsed headers, derive Bcc from RCPT TO envelope
 	toMap := make(map[string]bool)
@@ -328,7 +344,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 		MessageID:      result.MessageID,
 		InReplyTo:      inReplyToHeader,
 		SenderName:     displayName,
-		SenderEmail:    fmt.Sprintf("%s@%s", address, domainName),
+		SenderEmail:    fmt.Sprintf("%s@%s", senderAddress, domainName),
 		To:             msg.To,
 		Cc:             msg.Cc,
 		Date:           now,
@@ -337,6 +353,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 		TextBody:       msg.TextBody,
 		DeliveryStatus: "sent",
 		Attachments:    msg.Attachments,
+		Alias:          aliasIDFromSession(s),
 	}
 
 	if _, err := storeMessage(s.app, thread.Id, storedMsg); err != nil {
@@ -362,6 +379,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 func (s *smtpSession) Reset() {
 	s.from = ""
 	s.mailbox = nil
+	s.alias = nil
 	s.domain = nil
 	s.orgID = ""
 	s.userOrg = nil
@@ -377,3 +395,10 @@ func (s *smtpSession) Logout() error {
 
 // Ensure smtpSession implements the AuthSession interface.
 var _ smtp.AuthSession = (*smtpSession)(nil)
+
+func aliasIDFromSession(s *smtpSession) string {
+	if s.alias == nil {
+		return ""
+	}
+	return s.alias.Id
+}

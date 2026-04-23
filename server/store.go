@@ -110,6 +110,9 @@ func storeMessage(app *pocketbase.PocketBase, threadID string, msg *storedMessag
 	record.Set("thread", threadID)
 	record.Set("message_id", msg.MessageID)
 	record.Set("in_reply_to", msg.InReplyTo)
+	if msg.Alias != "" {
+		record.Set("alias", msg.Alias)
+	}
 	record.Set("sender_name", msg.SenderName)
 	record.Set("sender_email", msg.SenderEmail)
 	record.Set("date", msg.Date)
@@ -198,6 +201,7 @@ func storeMessage(app *pocketbase.PocketBase, threadID string, msg *storedMessag
 type storedMessage struct {
 	MessageID      string
 	InReplyTo      string
+	Alias          string
 	References     string
 	SenderName     string
 	SenderEmail    string
@@ -283,7 +287,14 @@ func ensureThreadState(app *pocketbase.PocketBase, threadID, userOrgID, folder s
 }
 
 // resolveMailboxByAddress finds a mailbox matching a local part and domain.
-func resolveMailboxByAddress(app *pocketbase.PocketBase, localPart, domainStr string) (*core.Record, error) {
+// It first checks primary addresses on mail_mailboxes, then falls back to
+// mail_mailbox_aliases. When a match is via an alias, the alias record is
+// returned as the second value; for a primary-address match, alias is nil.
+// Addresses are compared case-insensitively.
+func resolveMailboxByAddress(app core.App, localPart, domainStr string) (*core.Record, *core.Record, error) {
+	normalizedLocal := strings.ToLower(strings.TrimSpace(localPart))
+	normalizedDomain := strings.ToLower(strings.TrimSpace(domainStr))
+
 	// First find the domain record
 	domains, err := app.FindRecordsByFilter(
 		"mail_domains",
@@ -291,28 +302,34 @@ func resolveMailboxByAddress(app *pocketbase.PocketBase, localPart, domainStr st
 		"",
 		1,
 		0,
-		map[string]any{"domain": domainStr},
+		map[string]any{"domain": normalizedDomain},
 	)
 	if err != nil || len(domains) == 0 {
-		return nil, fmt.Errorf("domain %s not found", domainStr)
+		return nil, nil, fmt.Errorf("domain %s not found", domainStr)
 	}
 
 	domainID := domains[0].Id
 
-	// Then find the mailbox with this domain and address
+	// Then find a mailbox with a matching primary address on this domain
 	mailboxes, err := app.FindRecordsByFilter(
 		"mail_mailboxes",
 		"address = {:address} && domain = {:domain}",
 		"",
 		1,
 		0,
-		map[string]any{"address": localPart, "domain": domainID},
+		map[string]any{"address": normalizedLocal, "domain": domainID},
 	)
-	if err != nil || len(mailboxes) == 0 {
-		return nil, fmt.Errorf("mailbox %s@%s not found", localPart, domainStr)
+	if err == nil && len(mailboxes) > 0 {
+		return mailboxes[0], nil, nil
 	}
 
-	return mailboxes[0], nil
+	// Fall back to alias lookup
+	mailbox, alias, err := findMailboxViaAlias(app, domainID, normalizedLocal)
+	if err == nil {
+		return mailbox, alias, nil
+	}
+
+	return nil, nil, fmt.Errorf("mailbox %s@%s not found", localPart, domainStr)
 }
 
 // getMailboxMembers returns all mail_mailbox_members for a given mailbox.

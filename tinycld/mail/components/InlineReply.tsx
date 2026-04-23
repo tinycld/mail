@@ -6,11 +6,14 @@ import { captureException } from '@tinycld/core/lib/errors'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useForm, zodResolver } from '@tinycld/core/ui/form'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
+import { filterOwnAddresses, pickDefaultFrom } from '../hooks/defaultFromIdentity'
 import { useAttachments } from '../hooks/useAttachments'
 import { useCompose } from '../hooks/useComposeState'
 import { useDefaultMailbox } from '../hooks/useDefaultMailbox'
 import { useMailEditor } from '../hooks/useMailEditor'
+import { useSendableIdentities } from '../hooks/useSendableIdentities'
 import { useSendEmail } from '../hooks/useSendEmail'
+import { useComposeStore } from '../stores/compose-store'
 import { AttachmentRibbon } from './AttachmentRibbon'
 import { ComposeFields } from './ComposeFields'
 import { ComposeToolbar } from './ComposeToolbar'
@@ -23,6 +26,7 @@ interface InlineReplyProps {
     senderEmail: string
     recipientsTo: { name: string; email: string }[]
     recipientsCc: { name: string; email: string }[]
+    mailboxId: string
 }
 
 export function InlineReply({
@@ -33,14 +37,21 @@ export function InlineReply({
     senderEmail,
     recipientsTo,
     recipientsCc,
+    mailboxId,
 }: InlineReplyProps) {
     const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
     const breakpoint = useBreakpoint()
     const isMobile = breakpoint === 'mobile'
     const { mode, replyContext, openReply, close } = useCompose()
+    const identities = useSendableIdentities()
 
     const isInlineActive = mode === 'inline' && replyContext?.threadId === threadId
+
+    const sentToAddresses = [
+        ...recipientsTo.map((r) => r.email),
+        ...recipientsCc.map((r) => r.email),
+    ]
 
     const handleReply = () => {
         openReply({
@@ -48,16 +59,29 @@ export function InlineReply({
             threadId,
             subject,
             to: [{ name: senderName, email: senderEmail }],
+            mailboxId,
+            sentToAddresses,
         })
     }
 
     const handleReplyAll = () => {
-        const allRecipients = [{ name: senderName, email: senderEmail }, ...recipientsTo, ...recipientsCc]
+        const defaultFrom = pickDefaultFrom({
+            mode: 'reply',
+            identities,
+            replyToAddresses: sentToAddresses,
+        })
+        const identity = identities.find((i) => i.mailboxId === defaultFrom.mailboxId)
+        const rawTo = [{ name: senderName, email: senderEmail }, ...recipientsTo, ...recipientsCc]
+        const filteredTo = identity
+            ? filterOwnAddresses({ identity, recipients: rawTo })
+            : rawTo
         openReply({
             messageId,
             threadId,
             subject,
-            to: allRecipients,
+            to: filteredTo,
+            mailboxId,
+            sentToAddresses,
         })
     }
 
@@ -67,6 +91,8 @@ export function InlineReply({
             threadId,
             subject: `Fwd: ${subject}`,
             to: [],
+            mailboxId,
+            sentToAddresses,
         })
     }
 
@@ -132,6 +158,7 @@ function InlineComposeForm({
     const backgroundColor = useThemeColor('background')
     const fileInputRef = useRef<HTMLInputElement>(null)
     const mailboxId = useDefaultMailbox()
+    const aliasId = useComposeStore((s) => s.aliasId)
     const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
         placeholder: 'Compose reply',
     })
@@ -184,6 +211,7 @@ function InlineComposeForm({
 
         send({
             mailbox_id: mailboxId,
+            alias_id: aliasId ?? undefined,
             to: parseRecipients(data.to),
             cc,
             bcc,

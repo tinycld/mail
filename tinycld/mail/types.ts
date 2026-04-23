@@ -34,6 +34,7 @@ export interface MailDomains {
     return_path_verified: boolean
     last_checked_at: string
     verification_details: MailDomainVerificationDetails | null
+    webhook_secret: string
     created: string
     updated: string
 }
@@ -54,6 +55,14 @@ export interface MailMailboxMembers {
     mailbox: string
     user_org: string
     role: 'owner' | 'member'
+    created: string
+    updated: string
+}
+
+export interface MailMailboxAliases {
+    id: string
+    mailbox: string
+    address: string
     created: string
     updated: string
 }
@@ -79,6 +88,7 @@ export interface MailMessages {
     sender_email: string
     recipients_to: { name: string; email: string }[]
     recipients_cc: { name: string; email: string }[]
+    alias: string
     date: string
     subject: string
     snippet: string
@@ -134,6 +144,12 @@ export type MailSchema = {
             user_org: UserOrg
         }
     }
+    mail_mailbox_aliases: {
+        type: MailMailboxAliases
+        relations: {
+            mailbox: MailMailboxes
+        }
+    }
     mail_threads: {
         type: MailThreads
         relations: {
@@ -144,6 +160,7 @@ export type MailSchema = {
         type: MailMessages
         relations: {
             thread: MailThreads
+            alias: MailMailboxAliases
         }
     }
     mail_thread_state: {

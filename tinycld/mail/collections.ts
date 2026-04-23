@@ -11,7 +11,7 @@ export function registerCollections(
     coreStores: CoreStores
 ) {
     const mail_domains = newCollection('mail_domains', {
-        omitOnInsert: ['created', 'updated'] as const,
+        omitOnInsert: ['created', 'updated', 'webhook_secret'] as const,
         collectionOptions: {
             autoIndex: 'eager' as const,
             defaultIndexType: BasicIndex,
@@ -45,9 +45,18 @@ export function registerCollections(
         },
     })
 
+    const mail_mailbox_aliases = newCollection('mail_mailbox_aliases', {
+        omitOnInsert: ['created', 'updated'] as const,
+        expand: { mailbox: mail_mailboxes },
+        collectionOptions: {
+            autoIndex: 'eager' as const,
+            defaultIndexType: BasicIndex,
+        },
+    })
+
     const mail_messages = newCollection('mail_messages', {
         omitOnInsert: ['created', 'updated'] as const,
-        expand: { thread: mail_threads },
+        expand: { thread: mail_threads, alias: mail_mailbox_aliases },
         collectionOptions: {
             autoIndex: 'eager' as const,
             defaultIndexType: BasicIndex,
@@ -79,6 +88,7 @@ export function registerCollections(
         mail_domains,
         mail_mailboxes,
         mail_mailbox_members,
+        mail_mailbox_aliases,
         mail_threads,
         mail_messages,
         mail_thread_state,

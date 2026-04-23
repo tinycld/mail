@@ -55,7 +55,7 @@ func handleInbound(app *pocketbase.PocketBase, provider Provider, re *core.Reque
 		// Handle plus-addressing: strip +tag before lookup
 		localPart = stripPlusTag(localPart)
 
-		mailbox, err := resolveMailboxByAddress(app, localPart, domain)
+		mailbox, _, err := resolveMailboxByAddress(app, localPart, domain)
 		if err != nil {
 			continue // not our mailbox
 		}
