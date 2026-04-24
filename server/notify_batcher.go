@@ -8,7 +8,7 @@ import (
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
-	"tinycld.org/notify"
+	"tinycld.org/core/notify"
 )
 
 type pendingMail struct {

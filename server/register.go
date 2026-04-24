@@ -12,7 +12,7 @@ import (
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
-	"tinycld.org/audit"
+	"tinycld.org/core/audit"
 )
 
 // settingsCache caches settings per org to avoid DB queries on every request.
