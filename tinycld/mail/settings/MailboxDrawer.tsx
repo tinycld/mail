@@ -1,4 +1,4 @@
-import { Copy, Pencil, Trash2, UserPlus, X } from 'lucide-react-native'
+import { Pencil, Trash2, UserPlus, X } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb/core'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
@@ -231,9 +231,6 @@ function ViewMode({
                     </View>
                 </View>
                 <View className="flex-row gap-1">
-                    <Pressable className="p-2">
-                        <Copy size={16} color={mutedColor} />
-                    </Pressable>
                     {mailbox.type === 'shared' && (
                         <Pressable className="p-2" onPress={onEdit}>
                             <Pencil size={16} color={mutedColor} />
