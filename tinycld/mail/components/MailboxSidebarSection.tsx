@@ -50,7 +50,7 @@ export function MailboxSidebarSection({
         <View>
             <Pressable
                 onPress={() => toggle(mailboxId, defaultExpanded)}
-                className="flex-row gap-2 items-center px-3 py-2"
+                className="flex-row gap-1 items-center pl-1 pr-3 py-2"
             >
                 {isExpanded ? (
                     <ChevronDown size={14} color={mutedColor} />
