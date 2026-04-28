@@ -36,7 +36,7 @@
                 "useTemplate": "error"
             },
             "suspicious": {
-                "noExplicitAny": "warn"
+                "noExplicitAny": "error"
             },
             "correctness": {
                 "noUnusedVariables": "warn"
@@ -45,7 +45,7 @@
     },
     "overrides": [
         {
-            "includes": ["tests/**", "scripts/**"],
+            "includes": ["tests/**", "scripts/**", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"],
             "linter": {
                 "rules": {
                     "suspicious": { "noConsole": "off" },
