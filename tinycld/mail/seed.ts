@@ -1412,6 +1412,103 @@ const THREADS: {
     },
 ]
 
+const SHARED_THREADS: typeof THREADS = [
+    {
+        subject: 'Refund request for order #84210',
+        snippet:
+            "Hi Support, I'd like to request a refund for order #84210 — the package arrived damaged. I've attached photos of the box.",
+        message_count: 1,
+        latest_date: '2026-04-04 11:15:00.000Z',
+        participants: [{ name: 'Jordan Reeves', email: 'jordan.reeves@example.com' }],
+        folder: 'inbox',
+        is_read: false,
+        is_starred: false,
+        labels: ['Clients'],
+        messages: [
+            {
+                sender_name: 'Jordan Reeves',
+                sender_email: 'jordan.reeves@example.com',
+                recipients_to: [{ name: 'Support', email: 'support@tinycld.org' }],
+                date: '2026-04-04 11:15:00.000Z',
+                subject: 'Refund request for order #84210',
+                snippet: "I'd like to request a refund for order #84210.",
+                body_html:
+                    "<p>Hi Support,</p><p>I'd like to request a refund for order #84210 — the package arrived damaged. I've attached photos of the box and the contents.</p><p>Order placed: April 1, 2026<br/>Tracking: 1Z999AA10123456784</p><p>Thanks,<br/>Jordan</p>",
+            },
+        ],
+    },
+    {
+        subject: 'API rate limit question',
+        snippet:
+            'Hello — we just upgraded to the Pro plan and are seeing 429s on our webhook ingest. The docs say 1000 req/min but we hit limits at ~400. Can you check the account?',
+        message_count: 1,
+        latest_date: '2026-04-03 17:42:00.000Z',
+        participants: [{ name: 'Priya Natarajan', email: 'priya@orbitlabs.io' }],
+        folder: 'inbox',
+        is_read: false,
+        is_starred: true,
+        labels: ['Urgent', 'Clients'],
+        messages: [
+            {
+                sender_name: 'Priya Natarajan',
+                sender_email: 'priya@orbitlabs.io',
+                recipients_to: [{ name: 'Support', email: 'support@tinycld.org' }],
+                date: '2026-04-03 17:42:00.000Z',
+                subject: 'API rate limit question',
+                snippet: 'We just upgraded to Pro and are seeing 429s on our webhook ingest.',
+                body_html:
+                    '<p>Hello,</p><p>We just upgraded to the Pro plan and are seeing 429s on our webhook ingest. The docs say 1000 req/min but we hit limits at ~400.</p><p>Account: orbitlabs<br/>Endpoint: <code>POST /v1/events</code></p><p>Can you check the account configuration?</p><p>Thanks,<br/>Priya</p>',
+            },
+        ],
+    },
+    {
+        subject: 'Thank you!',
+        snippet: 'Just wanted to say your team has been incredible to work with. The migration went smoothly and our customers love the new flow.',
+        message_count: 1,
+        latest_date: '2026-04-02 10:05:00.000Z',
+        participants: [{ name: 'Daniel Okafor', email: 'daniel@brightside.co' }],
+        folder: 'inbox',
+        is_read: true,
+        is_starred: false,
+        labels: ['Clients'],
+        messages: [
+            {
+                sender_name: 'Daniel Okafor',
+                sender_email: 'daniel@brightside.co',
+                recipients_to: [{ name: 'Support', email: 'support@tinycld.org' }],
+                date: '2026-04-02 10:05:00.000Z',
+                subject: 'Thank you!',
+                snippet: 'Your team has been incredible to work with.',
+                body_html:
+                    '<p>Hi team,</p><p>Just wanted to say your team has been incredible to work with. The migration went smoothly and our customers love the new flow.</p><p>Big thanks to whoever stayed late on Tuesday to push the DNS changes through. Above and beyond.</p><p>Cheers,<br/>Daniel</p>',
+            },
+        ],
+    },
+    {
+        subject: 'Invoice question — line item discrepancy',
+        snippet: "Hi, on invoice INV-2026-0331 we're seeing a line item for 'Premium add-on' that we don't recall enabling. Could you clarify?",
+        message_count: 1,
+        latest_date: '2026-04-01 09:20:00.000Z',
+        participants: [{ name: 'Helena Ortiz', email: 'helena.ortiz@northwind.example' }],
+        folder: 'inbox',
+        is_read: true,
+        is_starred: false,
+        labels: ['Finance', 'Clients'],
+        messages: [
+            {
+                sender_name: 'Helena Ortiz',
+                sender_email: 'helena.ortiz@northwind.example',
+                recipients_to: [{ name: 'Support', email: 'support@tinycld.org' }],
+                date: '2026-04-01 09:20:00.000Z',
+                subject: 'Invoice question — line item discrepancy',
+                snippet: "We're seeing a line item we don't recall enabling.",
+                body_html:
+                    "<p>Hi,</p><p>On invoice INV-2026-0331 we're seeing a line item for 'Premium add-on' ($29.00) that we don't recall enabling.</p><p>Could you clarify when this was added and whether we can remove it going forward?</p><p>Best,<br/>Helena Ortiz<br/>Finance, Northwind</p>",
+            },
+        ],
+    },
+]
+
 function deriveAddress(email: string) {
     return (
         email
@@ -1540,20 +1637,31 @@ export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedC
         labelMap[label.name] = record.id
     }
 
-    // Check if threads already exist for this mailbox
-    const existingThreads = await pb.collection('mail_threads').getList(1, 1, {
-        filter: `mailbox = "${personalMailbox.id}"`,
+    await seedThreadsForMailbox(pb, personalMailbox.id, userOrg.id, THREADS, labelMap, 'personal')
+    await seedThreadsForMailbox(pb, sharedMailbox.id, userOrg.id, SHARED_THREADS, labelMap, 'shared')
+}
+
+async function seedThreadsForMailbox(
+    pb: PocketBase,
+    mailboxId: string,
+    userOrgId: string,
+    threads: typeof THREADS,
+    labelMap: Record<string, string>,
+    label: string
+) {
+    const existing = await pb.collection('mail_threads').getList(1, 1, {
+        filter: `mailbox = "${mailboxId}"`,
     })
-    if (existingThreads.totalItems > 0) {
-        log(`Skipping threads (${existingThreads.totalItems} already exist)`)
+    if (existing.totalItems > 0) {
+        log(`Skipping ${label} threads (${existing.totalItems} already exist)`)
         return
     }
 
-    const totalMessages = THREADS.reduce((sum, t) => sum + t.messages.length, 0)
-    log(`Creating ${THREADS.length} threads with ${totalMessages} messages...`)
-    for (const thread of THREADS) {
+    const totalMessages = threads.reduce((sum, t) => sum + t.messages.length, 0)
+    log(`Creating ${threads.length} ${label} threads with ${totalMessages} messages...`)
+    for (const thread of threads) {
         const threadRecord = await pb.collection('mail_threads').create({
-            mailbox: personalMailbox.id,
+            mailbox: mailboxId,
             subject: thread.subject,
             snippet: thread.snippet,
             message_count: thread.message_count,
@@ -1592,7 +1700,7 @@ export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedC
 
         const threadState = await pb.collection('mail_thread_state').create({
             thread: threadRecord.id,
-            user_org: userOrg.id,
+            user_org: userOrgId,
             folder: thread.folder,
             is_read: thread.is_read,
             is_starred: thread.is_starred,
@@ -1603,10 +1711,10 @@ export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedC
                 label: labelId,
                 record_id: threadState.id,
                 collection: 'mail_thread_state',
-                user_org: userOrg.id,
+                user_org: userOrgId,
             })
         }
     }
 
-    log(`Created ${THREADS.length} threads with ${totalMessages} messages`)
+    log(`Created ${threads.length} ${label} threads with ${totalMessages} messages`)
 }
