@@ -1,13 +1,13 @@
 {
-    "extends": "../core/tsconfig.json",
+    "extends": "../tinycld/packages/@tinycld/core/tsconfig.json",
     "compilerOptions": {
         "baseUrl": ".",
         "rootDir": "..",
         "paths": {
             "~/tinycld/mail/*": ["./tinycld/mail/*"],
-            "@tinycld/core/*": ["../core/*"],
-            "@tinycld/*": ["../core/packages/@tinycld/*"],
-            "~/*": ["../core/*"]
+            "@tinycld/core/*": ["../tinycld/packages/@tinycld/core/*"],
+            "@tinycld/*": ["../tinycld/packages/@tinycld/*"],
+            "~/*": ["../tinycld/packages/@tinycld/core/*"]
         },
         "noEmit": true,
         "preserveSymlinks": false
@@ -15,9 +15,9 @@
     "include": [
         "**/*.ts",
         "**/*.tsx",
-        "../core/**/*.d.ts",
-        "../core/expo-env.d.ts",
-        "../core/.expo/types/**/*.ts"
+        "../tinycld/packages/@tinycld/core/**/*.d.ts",
+        "../tinycld/packages/@tinycld/core/expo-env.d.ts",
+        "../tinycld/packages/@tinycld/core/.expo/types/**/*.ts"
     ],
     "exclude": ["node_modules", "server", "pb-migrations", "tests/**/*.spec.ts"]
 }
