@@ -5,6 +5,7 @@
         "rootDir": "..",
         "paths": {
             "~/tinycld/mail/*": ["./tinycld/mail/*"],
+            "@tinycld/app-generated/*": ["../tinycld/lib/generated/*"],
             "@tinycld/core/*": ["../tinycld/packages/@tinycld/core/*"],
             "@tinycld/*": ["../tinycld/packages/@tinycld/*"],
             "~/*": ["../tinycld/packages/@tinycld/core/*"]
