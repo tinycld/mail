@@ -46,10 +46,15 @@ export function MailboxSidebarSection({
     const isActive = (folder: string) =>
         activeMailboxId === mailboxId && activeFolder === folder
 
+    const handleHeaderPress = () => {
+        toggle(mailboxId, defaultExpanded)
+        if (!isExpanded) onNavigate(mailboxId, 'inbox')
+    }
+
     return (
         <View>
             <Pressable
-                onPress={() => toggle(mailboxId, defaultExpanded)}
+                onPress={handleHeaderPress}
                 className="flex-row gap-1 items-center pl-1 pr-3 py-2"
             >
                 {isExpanded ? (
