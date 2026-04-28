@@ -30,7 +30,7 @@ test.describe('Mail — Thread Detail', () => {
 
         await page.getByLabel('Archive').click()
 
-        await page.waitForURL((url) => !url.pathname.includes('/mail/'), { timeout: 10_000 })
+        await page.waitForURL(url => !url.pathname.includes('/mail/'), { timeout: 10_000 })
         await expect(page.getByText('Lunch tomorrow?')).not.toBeVisible({ timeout: 10_000 })
 
         await clickSidebarItem(page, 'Archive')
@@ -43,7 +43,7 @@ test.describe('Mail — Thread Detail', () => {
 
         await page.getByLabel('Delete').click()
 
-        await page.waitForURL((url) => !url.pathname.includes('/mail/'), { timeout: 10_000 })
+        await page.waitForURL(url => !url.pathname.includes('/mail/'), { timeout: 10_000 })
 
         await clickSidebarItem(page, 'Trash')
         await expect(page.getByText('resolve subdomain redirect loop')).toBeVisible({

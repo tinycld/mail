@@ -91,7 +91,8 @@ const THREADS: {
                 in_reply_to: 'roadmap-2@tinycld.org',
                 date: '2026-04-04 10:42:00.000Z',
                 subject: 'Re: Q2 Product Roadmap Review',
-                snippet: "I've attached the updated Q2 roadmap with the changes we discussed in yesterday's meeting.",
+                snippet:
+                    "I've attached the updated Q2 roadmap with the changes we discussed in yesterday's meeting.",
                 body_html:
                     "<p>Hi team,</p><p>I've attached the updated Q2 roadmap with the changes we discussed in yesterday's meeting. Please review and add any comments before Friday.</p><p>Key changes include:</p><ul><li>Moved the billing migration to Sprint 14</li><li>Added the new onboarding flow to Sprint 12</li><li>Deprioritized the analytics dashboard redesign</li></ul><p>Let me know if you have questions.</p><p>Best,<br/>Alice</p>",
             },
@@ -123,7 +124,8 @@ const THREADS: {
     },
     {
         subject: 'Lunch tomorrow?',
-        snippet: "Hey! Are you free for lunch tomorrow around noon? There's a new Thai place on 5th that just opened.",
+        snippet:
+            "Hey! Are you free for lunch tomorrow around noon? There's a new Thai place on 5th that just opened.",
         message_count: 1,
         latest_date: '2026-04-03 12:30:00.000Z',
         participants: [{ name: 'Marcus Johnson', email: 'marcus.j@tinycld.org' }],
@@ -146,7 +148,8 @@ const THREADS: {
     },
     {
         subject: 'Your receipt from TinyCld',
-        snippet: 'Payment of $49.00 for TinyCld Pro Plan (Monthly) was successfully processed on April 1, 2026.',
+        snippet:
+            'Payment of $49.00 for TinyCld Pro Plan (Monthly) was successfully processed on April 1, 2026.',
         message_count: 1,
         latest_date: '2026-04-01 14:00:00.000Z',
         participants: [{ name: 'Stripe', email: 'receipts@stripe.com' }],
@@ -161,7 +164,8 @@ const THREADS: {
                 recipients_to: [{ name: 'Alice', email: 'alice@tinycld.org' }],
                 date: '2026-04-01 14:00:00.000Z',
                 subject: 'Your receipt from TinyCld',
-                snippet: 'Payment of $49.00 for TinyCld Pro Plan (Monthly) was successfully processed.',
+                snippet:
+                    'Payment of $49.00 for TinyCld Pro Plan (Monthly) was successfully processed.',
                 body_html:
                     '<p>Payment of <strong>$49.00</strong> for TinyCld Pro Plan (Monthly) was successfully processed on April 1, 2026.</p><p>Invoice #INV-2026-0401</p><p>If you have any questions about this charge, please contact support.</p>',
             },
@@ -169,7 +173,8 @@ const THREADS: {
     },
     {
         subject: 'Re: Conference travel arrangements',
-        snippet: "I've booked the flights for the team. Departing SFO on the 15th at 8:30 AM, returning on the 18th.",
+        snippet:
+            "I've booked the flights for the team. Departing SFO on the 15th at 8:30 AM, returning on the 18th.",
         message_count: 5,
         latest_date: '2026-03-30 16:45:00.000Z',
         participants: [
@@ -220,7 +225,8 @@ const THREADS: {
                 date: '2026-03-29 11:00:00.000Z',
                 subject: 'Re: Conference travel arrangements',
                 snippet: 'On it! Looking at flights now.',
-                body_html: '<p>On it! Looking at flights now. Will share options by end of day.</p><p>Sarah</p>',
+                body_html:
+                    '<p>On it! Looking at flights now. Will share options by end of day.</p><p>Sarah</p>',
             },
             {
                 sender_name: 'Alice',
@@ -232,7 +238,8 @@ const THREADS: {
                 in_reply_to: 'travel-3@tinycld.org',
                 date: '2026-03-30 08:30:00.000Z',
                 subject: 'Re: Conference travel arrangements',
-                snippet: "I've booked the Marriott Marquis. Confirmation numbers coming separately.",
+                snippet:
+                    "I've booked the Marriott Marquis. Confirmation numbers coming separately.",
                 body_html:
                     "<p>I've booked the Marriott Marquis in Times Square for all three of us. Confirmation numbers coming separately.</p><p>Alice</p>",
             },
@@ -246,7 +253,8 @@ const THREADS: {
                 in_reply_to: 'travel-4@tinycld.org',
                 date: '2026-03-30 16:45:00.000Z',
                 subject: 'Re: Conference travel arrangements',
-                snippet: "I've booked the flights for the team. Departing SFO on the 15th at 8:30 AM.",
+                snippet:
+                    "I've booked the flights for the team. Departing SFO on the 15th at 8:30 AM.",
                 body_html:
                     "<p>I've booked the flights for the team. Here are the details:</p><p><strong>Departure:</strong> SFO → JFK, April 15, 8:30 AM<br/><strong>Return:</strong> JFK → SFO, April 18, 6:15 PM</p><p>Hotel reservations are at the Marriott Marquis in Times Square. I'll send the confirmation numbers separately.</p><p>Sarah</p>",
             },
@@ -254,7 +262,8 @@ const THREADS: {
     },
     {
         subject: 'Draft: Monthly newsletter',
-        snippet: "Here's the draft for this month's newsletter. Still need to add the section about new features.",
+        snippet:
+            "Here's the draft for this month's newsletter. Still need to add the section about new features.",
         message_count: 1,
         latest_date: '2026-03-28 15:00:00.000Z',
         participants: [{ name: 'Alice', email: 'alice@tinycld.org' }],
@@ -277,7 +286,8 @@ const THREADS: {
     },
     {
         subject: 'Team standup notes — March 27',
-        snippet: "Quick summary from today's standup: API migration on track, mobile app release pushed to next week.",
+        snippet:
+            "Quick summary from today's standup: API migration on track, mobile app release pushed to next week.",
         message_count: 1,
         latest_date: '2026-03-27 17:00:00.000Z',
         participants: [{ name: 'Alice', email: 'alice@tinycld.org' }],
@@ -301,7 +311,8 @@ const THREADS: {
     // --- Additional threads below to fill out the inbox ---
     {
         subject: 'Weekly engineering sync — April 7',
-        snippet: 'Agenda for this week: deploy retrospective, Q2 OKR check-in, and new hire intros.',
+        snippet:
+            'Agenda for this week: deploy retrospective, Q2 OKR check-in, and new hire intros.',
         message_count: 2,
         latest_date: '2026-04-07 11:00:00.000Z',
         participants: [
@@ -338,7 +349,8 @@ const THREADS: {
     },
     {
         subject: 'Your AWS bill for March 2026',
-        snippet: 'Your total charges for March 2026: $312.47. View your detailed billing statement.',
+        snippet:
+            'Your total charges for March 2026: $312.47. View your detailed billing statement.',
         message_count: 1,
         latest_date: '2026-04-02 06:00:00.000Z',
         participants: [{ name: 'AWS Billing', email: 'billing@aws.amazon.com' }],
@@ -361,7 +373,8 @@ const THREADS: {
     },
     {
         subject: 'Design review: new onboarding flow',
-        snippet: "Hi Alice, I've finished the mockups for the new onboarding flow. Can you take a look?",
+        snippet:
+            "Hi Alice, I've finished the mockups for the new onboarding flow. Can you take a look?",
         message_count: 4,
         latest_date: '2026-04-06 15:30:00.000Z',
         participants: [
@@ -425,7 +438,8 @@ const THREADS: {
                 in_reply_to: 'onboarding-3@tinycld.org',
                 date: '2026-04-06 15:30:00.000Z',
                 subject: 'Re: Design review: new onboarding flow',
-                snippet: 'Updated both — skip option and mobile progress bar fix are in the latest Figma.',
+                snippet:
+                    'Updated both — skip option and mobile progress bar fix are in the latest Figma.',
                 body_html:
                     '<p>Updated both — skip option and mobile progress bar fix are in the latest Figma revision. Take another look when you get a chance.</p><p>Rachel</p>',
             },
@@ -433,7 +447,8 @@ const THREADS: {
     },
     {
         subject: 'Invitation: Team offsite planning',
-        snippet: "You're invited to collaborate on the Q2 team offsite. Date: May 2-3 at the coast house.",
+        snippet:
+            "You're invited to collaborate on the Q2 team offsite. Date: May 2-3 at the coast house.",
         message_count: 1,
         latest_date: '2026-04-06 08:00:00.000Z',
         participants: [{ name: 'David Lee', email: 'david.lee@tinycld.org' }],
@@ -502,7 +517,8 @@ const THREADS: {
     },
     {
         subject: 'Coffee chat next week?',
-        snippet: 'Hey! I just joined the team and would love to grab a coffee and learn about the product.',
+        snippet:
+            'Hey! I just joined the team and would love to grab a coffee and learn about the product.',
         message_count: 2,
         latest_date: '2026-04-05 16:00:00.000Z',
         participants: [
@@ -539,7 +555,8 @@ const THREADS: {
     },
     {
         subject: 'Security alert: new sign-in from Chrome on macOS',
-        snippet: 'We noticed a new sign-in to your account from Chrome on macOS in San Francisco, CA.',
+        snippet:
+            'We noticed a new sign-in to your account from Chrome on macOS in San Francisco, CA.',
         message_count: 1,
         latest_date: '2026-04-03 22:15:00.000Z',
         participants: [{ name: 'TinyCld Security', email: 'security@tinycld.org' }],
@@ -562,7 +579,8 @@ const THREADS: {
     },
     {
         subject: 'Re: API rate limiting strategy',
-        snippet: "I think we should go with token bucket. Here's a comparison of the three approaches.",
+        snippet:
+            "I think we should go with token bucket. Here's a comparison of the three approaches.",
         message_count: 3,
         latest_date: '2026-04-03 17:20:00.000Z',
         participants: [
@@ -584,7 +602,8 @@ const THREADS: {
                 ],
                 date: '2026-04-03 10:00:00.000Z',
                 subject: 'API rate limiting strategy',
-                snippet: 'We need to decide on a rate limiting approach before the API goes public.',
+                snippet:
+                    'We need to decide on a rate limiting approach before the API goes public.',
                 body_html:
                     '<p>Hey Alice and Jorge,</p><p>We need to decide on a rate limiting approach before the public API launch. Three options:</p><ol><li>Fixed window</li><li>Sliding window</li><li>Token bucket</li></ol><p>Thoughts?</p><p>Bob</p>',
             },
@@ -643,7 +662,8 @@ const THREADS: {
     },
     {
         subject: 'Can you review my PR? (#253)',
-        snippet: 'Hey Alice, I submitted a PR for the contact import feature. Would appreciate your review.',
+        snippet:
+            'Hey Alice, I submitted a PR for the contact import feature. Would appreciate your review.',
         message_count: 1,
         latest_date: '2026-04-07 14:00:00.000Z',
         participants: [{ name: 'Sarah Kim', email: 'sarah.kim@tinycld.org' }],
@@ -790,7 +810,8 @@ const THREADS: {
                 date: '2026-04-04 10:00:00.000Z',
                 subject: 'Re: Database migration plan',
                 snippet: 'Running it in staging now. Will report back.',
-                body_html: '<p>Good call. Running it in staging now. Will report back this afternoon.</p><p>Bob</p>',
+                body_html:
+                    '<p>Good call. Running it in staging now. Will report back this afternoon.</p><p>Bob</p>',
             },
             {
                 sender_name: 'Bob Park',
@@ -807,7 +828,8 @@ const THREADS: {
     },
     {
         subject: 'Slack Connect invite from Acme Corp',
-        snippet: 'Carol Williams has invited you to connect on Slack. Join the #acme-tinycld channel.',
+        snippet:
+            'Carol Williams has invited you to connect on Slack. Join the #acme-tinycld channel.',
         message_count: 1,
         latest_date: '2026-04-05 09:00:00.000Z',
         participants: [{ name: 'Slack', email: 'notifications@slack.com' }],
@@ -830,7 +852,8 @@ const THREADS: {
     },
     {
         subject: 'Team standup notes — April 3',
-        snippet: 'Standup summary: onboarding designs in review, rate limiter PoC in progress, new hire starts Monday.',
+        snippet:
+            'Standup summary: onboarding designs in review, rate limiter PoC in progress, new hire starts Monday.',
         message_count: 1,
         latest_date: '2026-04-03 17:30:00.000Z',
         participants: [{ name: 'Alice', email: 'alice@tinycld.org' }],
@@ -845,7 +868,8 @@ const THREADS: {
                 recipients_to: [{ name: 'Team', email: 'support@tinycld.org' }],
                 date: '2026-04-03 17:30:00.000Z',
                 subject: 'Team standup notes — April 3',
-                snippet: 'Standup summary: onboarding designs in review, rate limiter PoC in progress.',
+                snippet:
+                    'Standup summary: onboarding designs in review, rate limiter PoC in progress.',
                 body_html:
                     '<p>Standup summary for April 3:</p><ul><li>Onboarding flow designs in review (Rachel)</li><li>Rate limiter PoC in progress (Jorge)</li><li>Contact import PR ready for review (Sarah)</li><li>New hire Priya starts Monday</li></ul><p>Alice</p>',
             },
@@ -853,7 +877,8 @@ const THREADS: {
     },
     {
         subject: 'Team standup notes — April 7',
-        snippet: 'Standup summary: CI flakiness fixed, migration staged, offsite RSVPs due April 15.',
+        snippet:
+            'Standup summary: CI flakiness fixed, migration staged, offsite RSVPs due April 15.',
         message_count: 1,
         latest_date: '2026-04-07 17:30:00.000Z',
         participants: [{ name: 'Alice', email: 'alice@tinycld.org' }],
@@ -876,7 +901,8 @@ const THREADS: {
     },
     {
         subject: 'Updated PTO policy',
-        snippet: "We've updated our PTO policy for 2026. Key changes: unlimited PTO for tenured employees.",
+        snippet:
+            "We've updated our PTO policy for 2026. Key changes: unlimited PTO for tenured employees.",
         message_count: 1,
         latest_date: '2026-03-20 10:00:00.000Z',
         participants: [{ name: 'HR Team', email: 'hr@tinycld.org' }],
@@ -970,7 +996,8 @@ const THREADS: {
     },
     {
         subject: 'Cloudflare DDoS attack mitigated',
-        snippet: 'A DDoS attack targeting your domain was automatically mitigated. No action required.',
+        snippet:
+            'A DDoS attack targeting your domain was automatically mitigated. No action required.',
         message_count: 1,
         latest_date: '2026-04-02 03:15:00.000Z',
         participants: [{ name: 'Cloudflare', email: 'noreply@notify.cloudflare.com' }],
@@ -993,7 +1020,8 @@ const THREADS: {
     },
     {
         subject: 'Gym membership renewal',
-        snippet: 'Your annual membership at FitLife Gym expires on April 30. Renew now to keep your rate.',
+        snippet:
+            'Your annual membership at FitLife Gym expires on April 30. Renew now to keep your rate.',
         message_count: 1,
         latest_date: '2026-04-01 09:00:00.000Z',
         participants: [{ name: 'FitLife Gym', email: 'membership@fitlifegym.com' }],
@@ -1076,7 +1104,8 @@ const THREADS: {
     },
     {
         subject: 'Sentry alert: high error rate in production',
-        snippet: 'Error rate exceeded threshold (>5%) in the mail service. 23 events in the last hour.',
+        snippet:
+            'Error rate exceeded threshold (>5%) in the mail service. 23 events in the last hour.',
         message_count: 1,
         latest_date: '2026-04-06 23:30:00.000Z',
         participants: [{ name: 'Sentry', email: 'noreply@sentry.io' }],
@@ -1099,7 +1128,8 @@ const THREADS: {
     },
     {
         subject: 'Google Workspace storage warning',
-        snippet: 'Your organization is using 89% of its storage quota. Consider upgrading your plan.',
+        snippet:
+            'Your organization is using 89% of its storage quota. Consider upgrading your plan.',
         message_count: 1,
         latest_date: '2026-03-18 08:00:00.000Z',
         participants: [{ name: 'Google Workspace', email: 'no-reply@accounts.google.com' }],
@@ -1122,7 +1152,8 @@ const THREADS: {
     },
     {
         subject: 'Invitation: 1:1 with David — recurring',
-        snippet: 'David Lee has invited you to a recurring event: 1:1 sync, every Tuesday at 10 AM.',
+        snippet:
+            'David Lee has invited you to a recurring event: 1:1 sync, every Tuesday at 10 AM.',
         message_count: 1,
         latest_date: '2026-03-22 09:00:00.000Z',
         participants: [{ name: 'Google Calendar', email: 'calendar-notification@google.com' }],
@@ -1237,7 +1268,8 @@ const THREADS: {
     },
     {
         subject: "Spam: You've won a free cruise!",
-        snippet: "Congratulations! You've been selected to win a free Caribbean cruise. Click here to claim.",
+        snippet:
+            "Congratulations! You've been selected to win a free Caribbean cruise. Click here to claim.",
         message_count: 1,
         latest_date: '2026-04-05 04:00:00.000Z',
         participants: [{ name: 'Prize Center', email: 'winner@totally-real-prizes.biz' }],
@@ -1283,7 +1315,8 @@ const THREADS: {
     },
     {
         subject: 'Old project files — archive?',
-        snippet: "Hey Alice, can we archive the v1 project files? They're taking up a lot of space.",
+        snippet:
+            "Hey Alice, can we archive the v1 project files? They're taking up a lot of space.",
         message_count: 1,
         latest_date: '2026-03-10 11:00:00.000Z',
         participants: [{ name: 'Bob Park', email: 'bob.park@tinycld.org' }],
@@ -1329,7 +1362,8 @@ const THREADS: {
     },
     {
         subject: 'Feedback on the new calendar view',
-        snippet: 'The 3-day view is really nice. One issue: events overlap when there are too many.',
+        snippet:
+            'The 3-day view is really nice. One issue: events overlap when there are too many.',
         message_count: 2,
         latest_date: '2026-04-08 11:30:00.000Z',
         participants: [
@@ -1463,7 +1497,8 @@ const SHARED_THREADS: typeof THREADS = [
     },
     {
         subject: 'Thank you!',
-        snippet: 'Just wanted to say your team has been incredible to work with. The migration went smoothly and our customers love the new flow.',
+        snippet:
+            'Just wanted to say your team has been incredible to work with. The migration went smoothly and our customers love the new flow.',
         message_count: 1,
         latest_date: '2026-04-02 10:05:00.000Z',
         participants: [{ name: 'Daniel Okafor', email: 'daniel@brightside.co' }],
@@ -1486,7 +1521,8 @@ const SHARED_THREADS: typeof THREADS = [
     },
     {
         subject: 'Invoice question — line item discrepancy',
-        snippet: "Hi, on invoice INV-2026-0331 we're seeing a line item for 'Premium add-on' that we don't recall enabling. Could you clarify?",
+        snippet:
+            "Hi, on invoice INV-2026-0331 we're seeing a line item for 'Premium add-on' that we don't recall enabling. Could you clarify?",
         message_count: 1,
         latest_date: '2026-04-01 09:20:00.000Z',
         participants: [{ name: 'Helena Ortiz', email: 'helena.ortiz@northwind.example' }],
@@ -1523,7 +1559,9 @@ async function findUniqueAddress(pb: PocketBase, base: string, domainId: string)
     let suffix = 2
     while (true) {
         try {
-            await pb.collection('mail_mailboxes').getFirstListItem(`address = "${address}" && domain = "${domainId}"`)
+            await pb
+                .collection('mail_mailboxes')
+                .getFirstListItem(`address = "${address}" && domain = "${domainId}"`)
             address = `${base}${suffix++}`
         } catch {
             return address
@@ -1570,7 +1608,9 @@ async function findOrCreatePersonalMailbox(
 export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedContext) {
     let domain: { id: string }
     try {
-        domain = await pb.collection('mail_domains').getFirstListItem(`org = "${org.id}" && domain = "tinycld.org"`)
+        domain = await pb
+            .collection('mail_domains')
+            .getFirstListItem(`org = "${org.id}" && domain = "tinycld.org"`)
         log('Found existing mail domain: tinycld.org')
     } catch {
         log('Creating mail domain: tinycld.org')
@@ -1582,7 +1622,13 @@ export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedC
     }
 
     log('Setting up personal mailbox for', user.email)
-    const personalMailbox = await findOrCreatePersonalMailbox(pb, user.email, user.name, domain.id, userOrg.id)
+    const personalMailbox = await findOrCreatePersonalMailbox(
+        pb,
+        user.email,
+        user.name,
+        domain.id,
+        userOrg.id
+    )
 
     let sharedMailbox: { id: string }
     try {
@@ -1617,7 +1663,13 @@ export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedC
     for (const member of otherMembers) {
         const memberUser = member.expand?.user as { email: string; name: string } | undefined
         if (!memberUser) continue
-        await findOrCreatePersonalMailbox(pb, memberUser.email, memberUser.name, domain.id, member.id)
+        await findOrCreatePersonalMailbox(
+            pb,
+            memberUser.email,
+            memberUser.name,
+            domain.id,
+            member.id
+        )
     }
 
     // Create labels (find or create) — uses core 'labels' collection
@@ -1626,7 +1678,9 @@ export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedC
     for (const label of LABELS) {
         let record: { id: string }
         try {
-            record = await pb.collection('labels').getFirstListItem(`org = "${org.id}" && name = "${label.name}"`)
+            record = await pb
+                .collection('labels')
+                .getFirstListItem(`org = "${org.id}" && name = "${label.name}"`)
         } catch {
             record = await pb.collection('labels').create({
                 org: org.id,
@@ -1638,7 +1692,14 @@ export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedC
     }
 
     await seedThreadsForMailbox(pb, personalMailbox.id, userOrg.id, THREADS, labelMap, 'personal')
-    await seedThreadsForMailbox(pb, sharedMailbox.id, userOrg.id, SHARED_THREADS, labelMap, 'shared')
+    await seedThreadsForMailbox(
+        pb,
+        sharedMailbox.id,
+        userOrg.id,
+        SHARED_THREADS,
+        labelMap,
+        'shared'
+    )
 }
 
 async function seedThreadsForMailbox(
@@ -1696,7 +1757,7 @@ async function seedThreadsForMailbox(
             await pb.collection('mail_messages').create(formData)
         }
 
-        const labelIds = thread.labels.map((name) => labelMap[name]).filter(Boolean)
+        const labelIds = thread.labels.map(name => labelMap[name]).filter(Boolean)
 
         const threadState = await pb.collection('mail_thread_state').create({
             thread: threadRecord.id,

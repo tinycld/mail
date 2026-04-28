@@ -23,7 +23,7 @@ describe('mergeSharedFolderStates', () => {
             st({ id: 's2', thread: 't2', user_org: 'uo_other' }),
         ]
         const got = mergeSharedFolderStates(states, ['uo1', 'uo2'])
-        expect(got.map((s) => s.id)).toEqual(['s1'])
+        expect(got.map(s => s.id)).toEqual(['s1'])
     })
 
     it('dedupes by thread id — first wins', () => {
@@ -32,7 +32,7 @@ describe('mergeSharedFolderStates', () => {
             st({ id: 's2', thread: 't1', user_org: 'uo2' }),
         ]
         const got = mergeSharedFolderStates(states, ['uo1', 'uo2'])
-        expect(got.map((s) => s.id)).toEqual(['s1'])
+        expect(got.map(s => s.id)).toEqual(['s1'])
     })
 
     it('returns empty for empty co-member set', () => {

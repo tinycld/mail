@@ -17,25 +17,38 @@ const support: SendableIdentity = {
 
 describe('pickDefaultFrom', () => {
     it('returns first identity primary for new message', () => {
-        expect(pickDefaultFrom({ mode: 'new', identities: [personal, support], replyToAddresses: [] }))
-            .toEqual({ mailboxId: 'mb1', aliasId: null })
+        expect(
+            pickDefaultFrom({ mode: 'new', identities: [personal, support], replyToAddresses: [] })
+        ).toEqual({ mailboxId: 'mb1', aliasId: null })
     })
 
     it('falls back to first identity when no reply matches', () => {
         expect(
-            pickDefaultFrom({ mode: 'reply', identities: [personal, support], replyToAddresses: ['ext@other.com'] })
+            pickDefaultFrom({
+                mode: 'reply',
+                identities: [personal, support],
+                replyToAddresses: ['ext@other.com'],
+            })
         ).toEqual({ mailboxId: 'mb1', aliasId: null })
     })
 
     it('prefers mailbox primary when reply matches primary', () => {
         expect(
-            pickDefaultFrom({ mode: 'reply', identities: [personal, support], replyToAddresses: ['support@acme.com'] })
+            pickDefaultFrom({
+                mode: 'reply',
+                identities: [personal, support],
+                replyToAddresses: ['support@acme.com'],
+            })
         ).toEqual({ mailboxId: 'mb2', aliasId: null })
     })
 
     it('matches alias when reply matches alias', () => {
         expect(
-            pickDefaultFrom({ mode: 'reply', identities: [personal, support], replyToAddresses: ['help@acme.com'] })
+            pickDefaultFrom({
+                mode: 'reply',
+                identities: [personal, support],
+                replyToAddresses: ['help@acme.com'],
+            })
         ).toEqual({ mailboxId: 'mb2', aliasId: 'a2' })
     })
 
@@ -51,13 +64,18 @@ describe('pickDefaultFrom', () => {
 
     it('is case-insensitive', () => {
         expect(
-            pickDefaultFrom({ mode: 'reply', identities: [personal, support], replyToAddresses: ['Support@ACME.com'] })
+            pickDefaultFrom({
+                mode: 'reply',
+                identities: [personal, support],
+                replyToAddresses: ['Support@ACME.com'],
+            })
         ).toEqual({ mailboxId: 'mb2', aliasId: null })
     })
 
     it('returns empty mailboxId when no identities', () => {
-        expect(pickDefaultFrom({ mode: 'reply', identities: [], replyToAddresses: ['x@y.com'] }))
-            .toEqual({ mailboxId: '', aliasId: null })
+        expect(
+            pickDefaultFrom({ mode: 'reply', identities: [], replyToAddresses: ['x@y.com'] })
+        ).toEqual({ mailboxId: '', aliasId: null })
     })
 
     it('treats forward mode like reply for defaulting', () => {

@@ -1,8 +1,8 @@
+import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
+import { useWorkspaceLayout } from '@tinycld/core/components/workspace/useWorkspaceLayout'
 import { Slot } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { View } from 'react-native'
-import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
-import { useWorkspaceLayout } from '@tinycld/core/components/workspace/useWorkspaceLayout'
 import { ComposeWindow } from '../components/ComposeWindow'
 import { SearchBar } from '../components/SearchBar'
 import { composeEvents } from '../hooks/composeEvents'
@@ -23,7 +23,7 @@ export default function MailLayout() {
     const [isFilterOpen, setIsFilterOpen] = useState(false)
     const breakpoint = useBreakpoint()
     const { setDrawerOpen } = useWorkspaceLayout()
-    const composeMode = useComposeStore((s) => s.mode)
+    const composeMode = useComposeStore(s => s.mode)
 
     useEffect(() => {
         return composeEvents.subscribe(() => {

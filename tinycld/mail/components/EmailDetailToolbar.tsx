@@ -1,3 +1,4 @@
+import { ResponsiveToolbar, type ToolbarItem } from '@tinycld/core/components/ResponsiveToolbar'
 import {
     Archive,
     ArrowLeft,
@@ -14,7 +15,6 @@ import {
     Trash2,
 } from 'lucide-react-native'
 import { useMemo } from 'react'
-import { ResponsiveToolbar, type ToolbarItem } from '@tinycld/core/components/ResponsiveToolbar'
 import type { MailThreadState } from '../types'
 import { MenuActionItem } from './DropdownMenu'
 
@@ -103,7 +103,7 @@ export function EmailDetailToolbar({
                 key: 'labels',
                 icon: Tag,
                 label: 'Labels',
-                children: labels.map((lbl) => {
+                children: labels.map(lbl => {
                     const isActive = threadLabelIds.has(lbl.id)
                     return (
                         <MenuActionItem

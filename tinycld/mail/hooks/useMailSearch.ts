@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
 import { pb } from '@tinycld/core/lib/pocketbase'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AdvancedSearchFilters } from './useSearchState'
 import { hasActiveFilters } from './useSearchState'
 
@@ -99,7 +99,10 @@ function parseDuration(value: string): number {
     }
 }
 
-export function useMailSearch(query: string, filters: AdvancedSearchFilters = {}): UseMailSearchReturn {
+export function useMailSearch(
+    query: string,
+    filters: AdvancedSearchFilters = {}
+): UseMailSearchReturn {
     const [results, setResults] = useState<MailSearchResult[]>([])
     const [total, setTotal] = useState(0)
     const [isSearching, setIsSearching] = useState(false)

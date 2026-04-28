@@ -1,6 +1,3 @@
-import { Plus } from 'lucide-react-native'
-import { newRecordId } from 'pbtsdb/core'
-import { Pressable, Text, View } from 'react-native'
 import { handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
@@ -13,6 +10,9 @@ import {
     z,
     zodResolver,
 } from '@tinycld/core/ui/form'
+import { Plus } from 'lucide-react-native'
+import { newRecordId } from 'pbtsdb/core'
+import { Pressable, Text, View } from 'react-native'
 
 const mailboxSchema = z.object({
     address: z
@@ -44,11 +44,7 @@ interface EditProps {
 type Props = CreateProps | EditProps
 
 export function MailboxForm(props: Props) {
-    return props.mode === 'create' ? (
-        <CreateForm {...props} />
-    ) : (
-        <EditForm {...props} />
-    )
+    return props.mode === 'create' ? <CreateForm {...props} /> : <EditForm {...props} />
 }
 
 function CreateForm({ domainOptions, userOrgId, onDone }: CreateProps) {
@@ -102,10 +98,10 @@ function CreateForm({ domainOptions, userOrgId, onDone }: CreateProps) {
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
 
-    const onSubmit = handleSubmit((d) => createMutation.mutate(d))
+    const onSubmit = handleSubmit(d => createMutation.mutate(d))
     const canSubmit = !createMutation.isPending && isDirty && isValid
     const values = watch()
-    const domainName = domainOptions.find((d) => d.value === values.domain)?.label ?? ''
+    const domainName = domainOptions.find(d => d.value === values.domain)?.label ?? ''
 
     return (
         <FormLayout
@@ -147,7 +143,7 @@ function EditForm({ mailboxId, initial, domainName, onDone }: EditProps) {
 
     const editMutation = useMutation({
         mutationFn: mutation(function* (data: MailboxFormValues) {
-            yield mailboxesCollection.update(mailboxId, (draft) => {
+            yield mailboxesCollection.update(mailboxId, draft => {
                 draft.address = data.address
                 draft.display_name = data.display_name
                 draft.name = data.display_name
@@ -157,7 +153,7 @@ function EditForm({ mailboxId, initial, domainName, onDone }: EditProps) {
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
 
-    const onSubmit = handleSubmit((d) => editMutation.mutate(d))
+    const onSubmit = handleSubmit(d => editMutation.mutate(d))
     const canSubmit = !editMutation.isPending && isDirty && isValid
     const values = watch()
 
@@ -212,7 +208,10 @@ function FormLayout({
     const borderColor = useThemeColor('border')
     const mutedColor = useThemeColor('muted-foreground')
     const fgColor = useThemeColor('foreground')
-    const previewInitial = (preview.displayName || preview.address || '?').trim().charAt(0).toUpperCase()
+    const previewInitial = (preview.displayName || preview.address || '?')
+        .trim()
+        .charAt(0)
+        .toUpperCase()
 
     return (
         <View className="gap-4">
@@ -225,7 +224,12 @@ function FormLayout({
                 hint={`will be: ${preview.address || '…'}@${preview.domainName || '…'}`}
             />
             {domainOptions.length > 1 && !domainDisabled ? (
-                <SelectInput control={control} name="domain" label="Domain" options={domainOptions} />
+                <SelectInput
+                    control={control}
+                    name="domain"
+                    label="Domain"
+                    options={domainOptions}
+                />
             ) : null}
             <TextInput
                 control={control}

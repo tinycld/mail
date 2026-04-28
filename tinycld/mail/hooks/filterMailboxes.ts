@@ -47,22 +47,25 @@ function byAddress(a: MailboxListItem, b: MailboxListItem): number {
     return a.address.localeCompare(b.address)
 }
 
-export function filterAndGroupMailboxes(items: MailboxListItem[], input: FilterInput): GroupedMailboxes {
+export function filterAndGroupMailboxes(
+    items: MailboxListItem[],
+    input: FilterInput
+): GroupedMailboxes {
     const totals = {
         all: items.length,
-        shared: items.filter((i) => i.type === 'shared').length,
-        personal: items.filter((i) => i.type === 'personal').length,
+        shared: items.filter(i => i.type === 'shared').length,
+        personal: items.filter(i => i.type === 'personal').length,
     }
 
-    const typeFiltered = items.filter((i) => {
+    const typeFiltered = items.filter(i => {
         if (input.type === 'all') return true
         return i.type === input.type
     })
 
-    const queryFiltered = typeFiltered.filter((i) => matchesQuery(i, input.query))
+    const queryFiltered = typeFiltered.filter(i => matchesQuery(i, input.query))
 
-    const shared = queryFiltered.filter((i) => i.type === 'shared').sort(byAddress)
-    const personal = queryFiltered.filter((i) => i.type === 'personal').sort(byAddress)
+    const shared = queryFiltered.filter(i => i.type === 'shared').sort(byAddress)
+    const personal = queryFiltered.filter(i => i.type === 'personal').sort(byAddress)
 
     return { shared, personal, totals }
 }

@@ -1,6 +1,6 @@
+import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { Search } from 'lucide-react-native'
 import { Platform, Pressable, Text, TextInput, View } from 'react-native'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import type { TypeFilter } from '../hooks/filterMailboxes'
 
 interface Props {
@@ -28,7 +28,13 @@ export function MailboxSearchBar({ query, onQueryChange, type, onTypeChange, cou
         <View className="flex-row gap-2 items-center flex-wrap">
             <View
                 className="flex-row gap-2 items-center flex-1 rounded-lg px-3"
-                style={{ borderWidth: 1, borderColor, paddingVertical: 8, backgroundColor: bgColor, minWidth: 200 }}
+                style={{
+                    borderWidth: 1,
+                    borderColor,
+                    paddingVertical: 8,
+                    backgroundColor: bgColor,
+                    minWidth: 200,
+                }}
             >
                 <Search size={14} color={mutedColor} />
                 <TextInput
@@ -53,7 +59,7 @@ export function MailboxSearchBar({ query, onQueryChange, type, onTypeChange, cou
                 className="flex-row rounded-lg overflow-hidden"
                 style={{ borderWidth: 1, borderColor }}
             >
-                {SEGMENTS.map((seg) => {
+                {SEGMENTS.map(seg => {
                     const isActive = type === seg.value
                     const count = counts[seg.value]
                     return (
@@ -76,7 +82,12 @@ export function MailboxSearchBar({ query, onQueryChange, type, onTypeChange, cou
                                 }}
                             >
                                 {seg.label}{' '}
-                                <Text style={{ color: isActive ? primaryColor : mutedColor, fontWeight: '500' }}>
+                                <Text
+                                    style={{
+                                        color: isActive ? primaryColor : mutedColor,
+                                        fontWeight: '500',
+                                    }}
+                                >
                                     {count}
                                 </Text>
                             </Text>

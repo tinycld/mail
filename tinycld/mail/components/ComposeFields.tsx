@@ -1,8 +1,8 @@
+import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { PlainInput } from '@tinycld/core/ui/PlainInput'
 import { useState } from 'react'
 import { type Control, type FieldErrors, useController } from 'react-hook-form'
 import { Pressable, Text, View } from 'react-native'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { PlainInput } from '@tinycld/core/ui/PlainInput'
 import type { ComposeFormData } from '../hooks/composeSchema'
 import { RecipientField } from './RecipientField'
 
@@ -63,12 +63,20 @@ export function ComposeFields({ control, errors, onSubjectBlur }: ComposeFieldsP
                     <View className="flex-row gap-2 ml-2">
                         {showCc ? null : (
                             <Pressable onPress={() => setShowCc(true)} tabIndex={-1}>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>Cc</Text>
+                                <Text
+                                    style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}
+                                >
+                                    Cc
+                                </Text>
                             </Pressable>
                         )}
                         {showBcc ? null : (
                             <Pressable onPress={() => setShowBcc(true)} tabIndex={-1}>
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>Bcc</Text>
+                                <Text
+                                    style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}
+                                >
+                                    Bcc
+                                </Text>
                             </Pressable>
                         )}
                     </View>

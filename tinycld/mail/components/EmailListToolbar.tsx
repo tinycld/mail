@@ -1,3 +1,6 @@
+import { ResponsiveToolbar, type ToolbarItem } from '@tinycld/core/components/ResponsiveToolbar'
+import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
+import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import {
     Archive,
     ChevronLeft,
@@ -16,9 +19,6 @@ import {
 } from 'lucide-react-native'
 import { useMemo } from 'react'
 import { Pressable, Text } from 'react-native'
-import { ResponsiveToolbar, type ToolbarItem } from '@tinycld/core/components/ResponsiveToolbar'
-import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import type { MailThreadState } from '../types'
 import { MenuActionItem } from './DropdownMenu'
 
@@ -59,10 +59,16 @@ export function EmailListToolbar(props: EmailListToolbarProps) {
     return <DefaultToolbar {...props} />
 }
 
-function DefaultToolbar({ emailCount, onToggleAll, onRefresh, isRefreshing }: EmailListToolbarProps) {
+function DefaultToolbar({
+    emailCount,
+    onToggleAll,
+    onRefresh,
+    isRefreshing,
+}: EmailListToolbarProps) {
     const mutedColor = useThemeColor('muted-foreground')
 
-    const paginationText = emailCount > 0 ? `1\u2013${emailCount} of ${emailCount}` : 'No conversations'
+    const paginationText =
+        emailCount > 0 ? `1\u2013${emailCount} of ${emailCount}` : 'No conversations'
 
     const items: ToolbarItem[] = useMemo(
         () => [
@@ -92,7 +98,11 @@ function DefaultToolbar({ emailCount, onToggleAll, onRefresh, isRefreshing }: Em
             {
                 type: 'custom',
                 key: 'pagination-text',
-                element: <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>{paginationText}</Text>,
+                element: (
+                    <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>
+                        {paginationText}
+                    </Text>
+                ),
             },
             { type: 'button', key: 'newer', icon: ChevronLeft, label: 'Newer', onPress: () => {} },
             { type: 'button', key: 'older', icon: ChevronRight, label: 'Older', onPress: () => {} },
@@ -136,7 +146,8 @@ function BulkActionsToolbar({
 
     const SelectIcon = allSelected ? SquareCheck : someSelected ? SquareMinus : Square
 
-    const paginationText = emailCount > 0 ? `1\u2013${emailCount} of ${emailCount}` : 'No conversations'
+    const paginationText =
+        emailCount > 0 ? `1\u2013${emailCount} of ${emailCount}` : 'No conversations'
 
     const ReadIcon = allSelectedRead ? MailOpen : Mail
     const readLabel = allSelectedRead ? 'Mark as unread' : 'Mark as read'
@@ -192,7 +203,7 @@ function BulkActionsToolbar({
                 key: 'labels',
                 icon: Tag,
                 label: 'Labels',
-                children: labels.map((lbl) => {
+                children: labels.map(lbl => {
                     const isActive = selectedItemLabelIds.has(lbl.id)
                     return (
                         <MenuActionItem
@@ -240,7 +251,11 @@ function BulkActionsToolbar({
             {
                 type: 'custom',
                 key: 'pagination-text',
-                element: <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>{paginationText}</Text>,
+                element: (
+                    <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>
+                        {paginationText}
+                    </Text>
+                ),
             },
             { type: 'button', key: 'newer', icon: ChevronLeft, label: 'Newer', onPress: () => {} },
             { type: 'button', key: 'older', icon: ChevronRight, label: 'Older', onPress: () => {} },

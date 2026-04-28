@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { computeMailboxFolderCounts } from '../tinycld/mail/hooks/computeMailboxFolderCounts'
-import type { MailThreads, MailThreadState } from '../tinycld/mail/types'
+import type { MailThreadState, MailThreads } from '../tinycld/mail/types'
 
 function t(id: string, mailbox: string): MailThreads {
     return {

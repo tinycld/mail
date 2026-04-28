@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { computeMailboxFolderCounts } from '../tinycld/mail/hooks/computeMailboxFolderCounts'
 import { getMailboxLabel } from '../tinycld/mail/hooks/useMailboxes'
-import type { MailMailboxes, MailThreads, MailThreadState } from '../tinycld/mail/types'
+import type { MailMailboxes, MailThreadState, MailThreads } from '../tinycld/mail/types'
 
 function thread(id: string, mailbox: string): MailThreads {
     return {
@@ -97,11 +97,7 @@ describe('unified inbox unread aggregation', () => {
     })
 
     it('does not count threads outside the inbox folder', () => {
-        const threads = [
-            thread('t1', 'mb1'),
-            thread('t2', 'mb1'),
-            thread('t3', 'mb2'),
-        ]
+        const threads = [thread('t1', 'mb1'), thread('t2', 'mb1'), thread('t3', 'mb2')]
         const states = [
             state({ id: 's1', thread: 't1', folder: 'inbox', is_read: false }),
             state({ id: 's2', thread: 't2', folder: 'archive', is_read: false }),

@@ -1,12 +1,15 @@
+import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useRouter } from 'expo-router'
 import { useCallback, useMemo } from 'react'
-import { useOrgHref } from '@tinycld/core/lib/org-routes'
 
 export function useThreadNavigation(threadIds: string[], currentThreadId: string) {
     const router = useRouter()
     const orgHref = useOrgHref()
 
-    const currentIndex = useMemo(() => threadIds.indexOf(currentThreadId), [threadIds, currentThreadId])
+    const currentIndex = useMemo(
+        () => threadIds.indexOf(currentThreadId),
+        [threadIds, currentThreadId]
+    )
 
     const hasPrevious = currentIndex > 0
     const hasNext = currentIndex >= 0 && currentIndex < threadIds.length - 1

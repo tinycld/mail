@@ -1,6 +1,6 @@
+import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { X } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 
 export type Role = 'owner' | 'member'
 
@@ -36,9 +36,7 @@ export function MailboxMemberRow({
             <View className="flex-1" style={{ minWidth: 0 }}>
                 <Text style={{ fontSize: 13, fontWeight: '600', color: fgColor }}>
                     {name}
-                    {isYou && (
-                        <Text style={{ color: mutedColor, fontWeight: '500' }}> · you</Text>
-                    )}
+                    {isYou && <Text style={{ color: mutedColor, fontWeight: '500' }}> · you</Text>}
                 </Text>
                 {email ? (
                     <Text style={{ fontSize: 11.5, color: mutedColor, marginTop: 1 }}>{email}</Text>

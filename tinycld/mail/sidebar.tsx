@@ -1,7 +1,3 @@
-import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
-import { Pencil, Settings } from 'lucide-react-native'
-import { useMemo, useState } from 'react'
-import { Pressable } from 'react-native'
 import { LabelManagerDialog } from '@tinycld/core/components/LabelManagerDialog'
 import {
     SidebarActionButton,
@@ -12,6 +8,10 @@ import {
 } from '@tinycld/core/components/sidebar-primitives'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
+import { Pencil, Settings } from 'lucide-react-native'
+import { useMemo, useState } from 'react'
+import { Pressable } from 'react-native'
 import { MailboxSidebarSection } from './components/MailboxSidebarSection'
 import { UnifiedInboxSection } from './components/UnifiedInboxSection'
 import { composeEvents } from './hooks/composeEvents'
@@ -84,7 +84,7 @@ export default function MailSidebar(_props: MailSidebarProps) {
         else router.push(orgHref('mail', { label: Array.from(next).join(',') }))
     }
 
-    const labelItems = orgLabels.map((label) => (
+    const labelItems = orgLabels.map(label => (
         <SidebarItem
             key={label.id}
             label={label.name}
@@ -97,7 +97,11 @@ export default function MailSidebar(_props: MailSidebarProps) {
 
     return (
         <SidebarNav>
-            <SidebarActionButton label="Compose" icon={Pencil} onPress={() => composeEvents.emit()} />
+            <SidebarActionButton
+                label="Compose"
+                icon={Pencil}
+                onPress={() => composeEvents.emit()}
+            />
 
             {showUnifiedInbox && (
                 <UnifiedInboxSection
@@ -119,7 +123,7 @@ export default function MailSidebar(_props: MailSidebarProps) {
                 />
             )}
 
-            {shared.map((mb) => (
+            {shared.map(mb => (
                 <MailboxSidebarSection
                     key={mb.id}
                     mailboxId={mb.id}
@@ -149,7 +153,10 @@ export default function MailSidebar(_props: MailSidebarProps) {
 
             {labelItems}
 
-            <LabelManagerDialog isVisible={labelManagerOpen} onClose={() => setLabelManagerOpen(false)} />
+            <LabelManagerDialog
+                isVisible={labelManagerOpen}
+                onClose={() => setLabelManagerOpen(false)}
+            />
         </SidebarNav>
     )
 }

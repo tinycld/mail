@@ -1,3 +1,5 @@
+import { SidebarItem } from '@tinycld/core/components/sidebar-primitives'
+import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import {
     AlertTriangle,
     Archive,
@@ -11,8 +13,6 @@ import {
     Trash2,
 } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
-import { SidebarItem } from '@tinycld/core/components/sidebar-primitives'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import type { FolderCounts } from '../hooks/useMailboxFolderCounts'
 import { useMailSidebarStore } from '../stores/sidebar-store'
 
@@ -38,13 +38,12 @@ export function MailboxSidebarSection({
     const fgColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
 
-    const isExpanded = useMailSidebarStore((s) => s.isExpanded(mailboxId, defaultExpanded))
-    const toggle = useMailSidebarStore((s) => s.toggle)
+    const isExpanded = useMailSidebarStore(s => s.isExpanded(mailboxId, defaultExpanded))
+    const toggle = useMailSidebarStore(s => s.toggle)
 
     const aggregateUnread = counts.inbox
 
-    const isActive = (folder: string) =>
-        activeMailboxId === mailboxId && activeFolder === folder
+    const isActive = (folder: string) => activeMailboxId === mailboxId && activeFolder === folder
 
     const handleHeaderPress = () => {
         toggle(mailboxId, defaultExpanded)

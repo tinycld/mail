@@ -1,7 +1,7 @@
-import type { useRouter } from 'expo-router'
-import { useMemo, useRef } from 'react'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { type Shortcut, useRegisterShortcuts, useShortcutScope } from '@tinycld/core/lib/shortcuts'
+import type { useRouter } from 'expo-router'
+import { useMemo, useRef } from 'react'
 import type { ThreadListItem } from '../components/thread-list-item'
 import { useThreadListStore } from '../stores/thread-list-store'
 import { composeEvents } from './composeEvents'
@@ -23,8 +23,8 @@ export function useMailListShortcuts({
     folder,
     labels,
 }: UseMailListShortcutsArgs) {
-    const storedIndex = useThreadListStore((s) => s.focusedIndex)
-    const setFocusedIndex = useThreadListStore((s) => s.setFocusedIndex)
+    const storedIndex = useThreadListStore(s => s.focusedIndex)
+    const setFocusedIndex = useThreadListStore(s => s.setFocusedIndex)
     const orgHref = useOrgHref()
 
     useShortcutScope('list')
@@ -60,7 +60,7 @@ export function useMailListShortcuts({
                 scope: 'list',
                 group: 'Mail',
                 description: 'Next conversation',
-                run: () => setFocusedIndex((i) => Math.min(i + 1, Math.max(items.length - 1, 0))),
+                run: () => setFocusedIndex(i => Math.min(i + 1, Math.max(items.length - 1, 0))),
             },
             {
                 id: 'mail.list.prev',
@@ -68,7 +68,7 @@ export function useMailListShortcuts({
                 scope: 'list',
                 group: 'Mail',
                 description: 'Previous conversation',
-                run: () => setFocusedIndex((i) => Math.max(i - 1, 0)),
+                run: () => setFocusedIndex(i => Math.max(i - 1, 0)),
             },
             {
                 id: 'mail.list.open',
@@ -106,7 +106,16 @@ export function useMailListShortcuts({
                 run: () => composeEvents.emit(),
             },
         ]
-    }, [isEnabled, items.length, focusedId, focusedThreadId, orgHref, router, setFocusedIndex, toggleSelect])
+    }, [
+        isEnabled,
+        items.length,
+        focusedId,
+        focusedThreadId,
+        orgHref,
+        router,
+        setFocusedIndex,
+        toggleSelect,
+    ])
 
     useRegisterShortcuts(shortcuts)
 

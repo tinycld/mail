@@ -1,6 +1,6 @@
+import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useState } from 'react'
 import { Modal, Pressable, Text, View } from 'react-native'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import type { SendableIdentity } from '../hooks/flattenSendableIdentities'
 
 interface Props {
@@ -42,7 +42,7 @@ export function FromIdentityPicker({
                         className="rounded-xl p-3 gap-3"
                         style={{ backgroundColor: surfaceBg, minWidth: 320 }}
                     >
-                        {identities.map((identity) => (
+                        {identities.map(identity => (
                             <View key={identity.mailboxId} className="gap-1">
                                 <Text
                                     style={{
@@ -57,8 +57,7 @@ export function FromIdentityPicker({
                                 <IdentityRow
                                     label={`${identity.mailboxDisplayName} <${identity.primaryAddress}>`}
                                     isSelected={
-                                        selectedMailboxId === identity.mailboxId &&
-                                        !selectedAliasId
+                                        selectedMailboxId === identity.mailboxId && !selectedAliasId
                                     }
                                     onPress={() => {
                                         onSelect(identity.mailboxId, null)
@@ -66,7 +65,7 @@ export function FromIdentityPicker({
                                     }}
                                     color={fgColor}
                                 />
-                                {identity.aliases.map((alias) => (
+                                {identity.aliases.map(alias => (
                                     <IdentityRow
                                         key={alias.id}
                                         label={alias.address}

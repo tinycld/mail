@@ -1,11 +1,11 @@
-import { ChevronDown, ChevronUp, Forward, MoreVertical, Reply, ReplyAll } from 'lucide-react-native'
-import { Pressable, Text, View } from 'react-native'
 import { LabelBadge } from '@tinycld/core/components/LabelBadge'
 import { StarIcon } from '@tinycld/core/components/StarIcon'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { hexToRgba } from '@tinycld/core/lib/color-utils'
 import { formatRelativeDate } from '@tinycld/core/lib/format-utils'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { ChevronDown, ChevronUp, Forward, MoreVertical, Reply, ReplyAll } from 'lucide-react-native'
+import { Pressable, Text, View } from 'react-native'
 import { MenuActionItem, ToolbarMenu } from './DropdownMenu'
 
 interface ThreadSubjectHeaderProps {
@@ -20,9 +20,13 @@ export function ThreadSubjectHeader({ subject, labels }: ThreadSubjectHeaderProp
 
     return (
         <View className="flex-row items-center gap-2 px-4 py-3 flex-wrap">
-            <Text style={{ fontSize: isMobile ? 18 : 22, fontWeight: '400', color: foregroundColor }}>{subject}</Text>
+            <Text
+                style={{ fontSize: isMobile ? 18 : 22, fontWeight: '400', color: foregroundColor }}
+            >
+                {subject}
+            </Text>
             <View className="flex-row gap-1">
-                {labels.map((label) => (
+                {labels.map(label => (
                     <LabelBadge key={label.id} name={label.name} color={label.color} />
                 ))}
             </View>
@@ -100,7 +104,7 @@ export function MessageHeader({
     const initials = senderName
         .split(' ')
         .filter(Boolean)
-        .map((n) => n[0])
+        .map(n => n[0])
         .join('')
         .toUpperCase()
         .slice(0, 2)
@@ -124,11 +128,15 @@ export function MessageHeader({
                             backgroundColor: accentBgColor,
                         }}
                     >
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: accentFgColor }}>{initials}</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: accentFgColor }}>
+                            {initials}
+                        </Text>
                     </View>
                     <View className="flex-1" style={{ gap: 2 }}>
                         <View className="flex-row items-center gap-1">
-                            <Text style={{ fontSize: 14, fontWeight: '600', color: foregroundColor }}>
+                            <Text
+                                style={{ fontSize: 14, fontWeight: '600', color: foregroundColor }}
+                            >
                                 {senderName}
                             </Text>
                             {isMobile ? null : (
@@ -141,9 +149,15 @@ export function MessageHeader({
                         </View>
                         <Text style={{ fontSize: 12, color: mutedColor }}>to me</Text>
                     </View>
-                    <Text style={{ fontSize: 12, flexShrink: 0, color: mutedColor }}>{dateDisplay}</Text>
+                    <Text style={{ fontSize: 12, flexShrink: 0, color: mutedColor }}>
+                        {dateDisplay}
+                    </Text>
                     {isStarred != null ? (
-                        <Pressable className="rounded-full" style={{ padding: 6 }} onPress={onToggleStar}>
+                        <Pressable
+                            className="rounded-full"
+                            style={{ padding: 6 }}
+                            onPress={onToggleStar}
+                        >
                             <StarIcon isStarred={!!isStarred} size={18} />
                         </Pressable>
                     ) : null}
@@ -158,9 +172,21 @@ export function MessageHeader({
                         )}
                     </Pressable>
                     <ToolbarMenu icon={MoreVertical} label="More options">
-                        <MenuActionItem label="Reply" icon={Reply} onPress={onReply ?? (() => {})} />
-                        <MenuActionItem label="Reply all" icon={ReplyAll} onPress={onReplyAll ?? (() => {})} />
-                        <MenuActionItem label="Forward" icon={Forward} onPress={onForward ?? (() => {})} />
+                        <MenuActionItem
+                            label="Reply"
+                            icon={Reply}
+                            onPress={onReply ?? (() => {})}
+                        />
+                        <MenuActionItem
+                            label="Reply all"
+                            icon={ReplyAll}
+                            onPress={onReplyAll ?? (() => {})}
+                        />
+                        <MenuActionItem
+                            label="Forward"
+                            icon={Forward}
+                            onPress={onForward ?? (() => {})}
+                        />
                     </ToolbarMenu>
                 </View>
             </Pressable>

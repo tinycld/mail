@@ -79,7 +79,7 @@ export function filterOwnAddresses({
 }: FilterOwnAddressesParams): { name: string; email: string }[] {
     const own = new Set<string>([
         identity.primaryAddress.toLowerCase(),
-        ...identity.aliases.map((a) => a.address.toLowerCase()),
+        ...identity.aliases.map(a => a.address.toLowerCase()),
     ])
-    return recipients.filter((r) => !own.has(r.email.toLowerCase()))
+    return recipients.filter(r => !own.has(r.email.toLowerCase()))
 }

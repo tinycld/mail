@@ -44,7 +44,9 @@ test.describe('Mail — Unified inbox', () => {
         await expect(personalRow.getByText('Personal', { exact: true })).toBeVisible()
     })
 
-    test('opening a thread from All Inboxes preserves the unified context on back', async ({ page }) => {
+    test('opening a thread from All Inboxes preserves the unified context on back', async ({
+        page,
+    }) => {
         await clickSidebarItem(page, 'All Inboxes')
         await expect(page).toHaveURL(/folder=all-inboxes/)
 

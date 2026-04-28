@@ -1,11 +1,11 @@
 import { eq } from '@tanstack/db'
-import { Plus, Tag, X } from 'lucide-react-native'
-import { useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
+import { Plus, Tag, X } from 'lucide-react-native'
+import { useState } from 'react'
+import { Pressable, Text, View } from 'react-native'
 import { AddAliasForm } from './AddAliasForm'
 
 interface Props {
@@ -24,7 +24,7 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
     const [showForm, setShowForm] = useState(false)
 
     const { data: aliases } = useOrgLiveQuery(
-        (query) =>
+        query =>
             query
                 .from({ mail_mailbox_aliases: aliasesCollection })
                 .where(({ mail_mailbox_aliases }) => eq(mail_mailbox_aliases.mailbox, mailboxId)),
@@ -54,7 +54,7 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
                     Aliases
                 </Text>
                 <Pressable
-                    onPress={() => setShowForm((s) => !s)}
+                    onPress={() => setShowForm(s => !s)}
                     className="flex-row gap-1 items-center"
                 >
                     <Plus size={12} color={primaryColor} />
@@ -70,11 +70,8 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
                 </Text>
             )}
 
-            {items.map((alias) => (
-                <View
-                    key={alias.id}
-                    className="flex-row items-center gap-3 rounded-lg py-2"
-                >
+            {items.map(alias => (
+                <View key={alias.id} className="flex-row items-center gap-3 rounded-lg py-2">
                     <View
                         className="items-center justify-center rounded-lg"
                         style={{ width: 28, height: 28, backgroundColor: `${primaryColor}1F` }}

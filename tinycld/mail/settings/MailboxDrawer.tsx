@@ -1,7 +1,3 @@
-import { Pencil, Trash2, UserPlus, X } from 'lucide-react-native'
-import { newRecordId } from 'pbtsdb/core'
-import { useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
@@ -14,6 +10,10 @@ import {
     DrawerFooter,
     DrawerHeader,
 } from '@tinycld/core/ui/drawer'
+import { Pencil, Trash2, UserPlus, X } from 'lucide-react-native'
+import { newRecordId } from 'pbtsdb/core'
+import { useState } from 'react'
+import { Pressable, Text, View } from 'react-native'
 import { MailboxAliasesPanel } from './MailboxAliasesPanel'
 import { MailboxForm, type MailboxFormValues } from './MailboxForm'
 import { MailboxMemberRow, type Role } from './MailboxMemberRow'
@@ -163,7 +163,9 @@ function EditView({
         <>
             <DrawerHeader>
                 <View>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: fgColor }}>Edit mailbox</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: fgColor }}>
+                        Edit mailbox
+                    </Text>
                     <Text style={{ fontSize: 12.5, color: mutedColor, marginTop: 2 }}>
                         {mailbox.address}@{mailbox.domainName}
                     </Text>
@@ -242,7 +244,10 @@ function ViewMode({
                 </View>
             </DrawerHeader>
 
-            <View className="flex-row gap-2 items-center flex-wrap" style={{ paddingHorizontal: 4, paddingBottom: 8 }}>
+            <View
+                className="flex-row gap-2 items-center flex-wrap"
+                style={{ paddingHorizontal: 4, paddingBottom: 8 }}
+            >
                 <TypeBadge type={mailbox.type} />
                 <DomainBadge domainName={mailbox.domainName} />
                 <Text style={{ fontSize: 11, color: mutedColor }}>
@@ -270,11 +275,7 @@ function ViewMode({
 
             <DrawerBody>
                 {mailbox.type === 'shared' && tab === 'members' && (
-                    <MembersTab
-                        mailboxId={mailbox.id}
-                        members={members}
-                        orgMembers={orgMembers}
-                    />
+                    <MembersTab mailboxId={mailbox.id} members={members} orgMembers={orgMembers} />
                 )}
                 {(mailbox.type === 'personal' || tab === 'aliases') && (
                     <MailboxAliasesPanel
@@ -422,15 +423,15 @@ function MembersTab({
 
     const toggleRoleMutation = useMutation({
         mutationFn: mutation(function* ({ id, next }: { id: string; next: Role }) {
-            yield membersCollection.update(id, (draft) => {
+            yield membersCollection.update(id, draft => {
                 draft.role = next
             })
         }),
     })
 
-    const existingIds = new Set(members.map((m) => m.userOrgId))
-    const available = orgMembers.filter((o) => !existingIds.has(o.userOrgId))
-    const ownerCount = members.filter((m) => m.role === 'owner').length
+    const existingIds = new Set(members.map(m => m.userOrgId))
+    const available = orgMembers.filter(o => !existingIds.has(o.userOrgId))
+    const ownerCount = members.filter(m => m.role === 'owner').length
 
     return (
         <View className="gap-3">
@@ -445,7 +446,7 @@ function MembersTab({
             >
                 Who has access
             </Text>
-            {members.map((m) => (
+            {members.map(m => (
                 <MailboxMemberRow
                     key={m.id}
                     name={m.userName}
@@ -481,7 +482,7 @@ function MembersTab({
                 >
                     <Text style={{ fontSize: 12, color: mutedColor }}>Select a member:</Text>
                     <View className="flex-row gap-1 flex-wrap">
-                        {available.map((o) => {
+                        {available.map(o => {
                             const isSelected = selected === o.userOrgId
                             return (
                                 <Pressable
@@ -492,7 +493,9 @@ function MembersTab({
                                         paddingVertical: 6,
                                         borderWidth: 1,
                                         borderColor: isSelected ? primaryColor : borderColor,
-                                        backgroundColor: isSelected ? `${primaryColor}14` : undefined,
+                                        backgroundColor: isSelected
+                                            ? `${primaryColor}14`
+                                            : undefined,
                                     }}
                                 >
                                     <Text style={{ fontSize: 12.5 }}>{o.userName}</Text>
@@ -512,7 +515,9 @@ function MembersTab({
                                 opacity: !selected || addMutation.isPending ? 0.5 : 1,
                             }}
                         >
-                            <Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '600' }}>Add</Text>
+                            <Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '600' }}>
+                                Add
+                            </Text>
                         </Pressable>
                         <Pressable
                             onPress={() => {
@@ -531,13 +536,7 @@ function MembersTab({
     )
 }
 
-function DangerZone({
-    mailboxId,
-    onDeleted,
-}: {
-    mailboxId: string
-    onDeleted: () => void
-}) {
+function DangerZone({ mailboxId, onDeleted }: { mailboxId: string; onDeleted: () => void }) {
     const mutedColor = useThemeColor('muted-foreground')
     const fgColor = useThemeColor('foreground')
     const dangerColor = useThemeColor('danger')

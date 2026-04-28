@@ -1,7 +1,14 @@
-import { Download, File, FileArchive, FileImage, FileSpreadsheet, FileText } from 'lucide-react-native'
-import { Linking, Platform, Pressable, Text, View } from 'react-native'
 import { pb } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import {
+    Download,
+    File,
+    FileArchive,
+    FileImage,
+    FileSpreadsheet,
+    FileText,
+} from 'lucide-react-native'
+import { Linking, Platform, Pressable, Text, View } from 'react-native'
 
 interface EmailAttachmentsProps {
     isVisible: boolean
@@ -10,7 +17,12 @@ interface EmailAttachmentsProps {
     filenames: string[]
 }
 
-export function EmailAttachments({ isVisible, collectionId, recordId, filenames }: EmailAttachmentsProps) {
+export function EmailAttachments({
+    isVisible,
+    collectionId,
+    recordId,
+    filenames,
+}: EmailAttachmentsProps) {
     const borderColor = useThemeColor('border')
     const mutedColor = useThemeColor('muted-foreground')
 
@@ -36,7 +48,7 @@ export function EmailAttachments({ isVisible, collectionId, recordId, filenames 
                 {filenames.length} attachment{filenames.length !== 1 ? 's' : ''}
             </Text>
             <View className="flex-row flex-wrap gap-2">
-                {filenames.map((filename) => (
+                {filenames.map(filename => (
                     <AttachmentThumbnail
                         key={filename}
                         collectionId={collectionId}
@@ -118,7 +130,15 @@ function AttachmentThumbnail({
     )
 }
 
-function ImagePreview({ url, mutedColor, surfaceColor }: { url: string; mutedColor: string; surfaceColor: string }) {
+function ImagePreview({
+    url,
+    mutedColor,
+    surfaceColor,
+}: {
+    url: string
+    mutedColor: string
+    surfaceColor: string
+}) {
     if (Platform.OS !== 'web') {
         return (
             <View

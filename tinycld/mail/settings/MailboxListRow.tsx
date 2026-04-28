@@ -1,6 +1,6 @@
+import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { ChevronRight } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import type { MailboxListItem } from '../hooks/filterMailboxes'
 
 interface Props {
@@ -12,9 +12,11 @@ interface Props {
 function initials(item: MailboxListItem): string {
     const name = item.displayName || item.address
     const words = name.trim().split(/\s+/).filter(Boolean)
-    if (words.length === 0) return '?'
-    if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase()
-    return (words[0]![0]! + words[1]![0]!).toUpperCase()
+    const first = words[0] ?? ''
+    if (first === '') return '?'
+    if (words.length === 1) return first.slice(0, 2).toUpperCase()
+    const second = words[1] ?? ''
+    return ((first[0] ?? '') + (second[0] ?? '')).toUpperCase()
 }
 
 function subtitle(item: MailboxListItem): string {
@@ -49,14 +51,18 @@ export function MailboxListRow({ item, isActive = false, onPress }: Props) {
                 className="rounded-lg items-center justify-center"
                 style={{ width: 36, height: 36, backgroundColor: avatarBg }}
             >
-                <Text style={{ color: avatarFg, fontWeight: '700', fontSize: 13 }}>{initials(item)}</Text>
+                <Text style={{ color: avatarFg, fontWeight: '700', fontSize: 13 }}>
+                    {initials(item)}
+                </Text>
             </View>
             <View className="flex-1" style={{ minWidth: 0 }}>
                 <Text style={{ fontSize: 14, fontWeight: '600', color: fgColor }}>
                     {item.address}
                     <Text style={{ color: mutedColor, fontWeight: '500' }}>@{item.domainName}</Text>
                 </Text>
-                <Text style={{ fontSize: 12.5, color: mutedColor, marginTop: 2 }}>{subtitle(item)}</Text>
+                <Text style={{ fontSize: 12.5, color: mutedColor, marginTop: 2 }}>
+                    {subtitle(item)}
+                </Text>
             </View>
             <ChevronRight size={16} color={mutedColor} />
         </Pressable>

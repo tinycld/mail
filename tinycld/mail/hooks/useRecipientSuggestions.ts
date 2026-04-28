@@ -36,7 +36,7 @@ export function parseCommittedRecipients(formValue: string): ParsedRecipients {
     const activeQuery = formValue.slice(lastCommaIndex + 1).trim()
     const segments = committedRaw
         .split(',')
-        .map((s) => s.trim())
+        .map(s => s.trim())
         .filter(Boolean)
 
     const committed: Recipient[] = []
@@ -72,7 +72,7 @@ export function filterContactSuggestions(
 ): ContactSuggestion[] {
     if (!activeQuery || activeQuery.length < 1 || !contacts) return []
     const q = activeQuery.toLowerCase()
-    return contacts.filter((c) => {
+    return contacts.filter(c => {
         if (committedEmails.has(c.email?.toLowerCase() ?? '')) return false
         const fullName = `${c.first_name} ${c.last_name}`.toLowerCase()
         return fullName.includes(q) || (c.email?.toLowerCase().includes(q) ?? false)

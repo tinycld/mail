@@ -1,7 +1,7 @@
-import { Maximize2, Minimize2, X } from 'lucide-react-native'
-import { Pressable, Text, View } from 'react-native'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { Maximize2, Minimize2, X } from 'lucide-react-native'
+import { Pressable, Text, View } from 'react-native'
 import type { ComposeMode } from '../hooks/useComposeState'
 
 interface ComposeHeaderProps {
@@ -12,7 +12,13 @@ interface ComposeHeaderProps {
     onClose: () => void
 }
 
-export function ComposeHeader({ mode, title, onMinimize, onMaximize, onClose }: ComposeHeaderProps) {
+export function ComposeHeader({
+    mode,
+    title,
+    onMinimize,
+    onMaximize,
+    onClose,
+}: ComposeHeaderProps) {
     const foregroundColor = useThemeColor('foreground')
     const backgroundColor = useThemeColor('background')
     const breakpoint = useBreakpoint()
@@ -30,7 +36,10 @@ export function ComposeHeader({ mode, title, onMinimize, onMaximize, onClose }: 
             }}
         >
             <Pressable className="flex-1" onPress={mode === 'minimized' ? onMinimize : undefined}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: backgroundColor }} numberOfLines={1}>
+                <Text
+                    style={{ fontSize: 14, fontWeight: '600', color: backgroundColor }}
+                    numberOfLines={1}
+                >
                     {displayTitle}
                 </Text>
             </Pressable>

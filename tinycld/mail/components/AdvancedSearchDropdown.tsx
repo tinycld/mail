@@ -1,11 +1,20 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { PlainInput } from '@tinycld/core/ui/PlainInput'
 import { ChevronDown, Search, Square, SquareCheck, X } from 'lucide-react-native'
 import { useCallback, useMemo, useState } from 'react'
 import { useController, useForm } from 'react-hook-form'
-import { Platform, Pressable, ScrollView, type StyleProp, StyleSheet, Text, type TextStyle, View } from 'react-native'
+import {
+    Platform,
+    Pressable,
+    ScrollView,
+    type StyleProp,
+    StyleSheet,
+    Text,
+    type TextStyle,
+    View,
+} from 'react-native'
 import { z } from 'zod'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { PlainInput } from '@tinycld/core/ui/PlainInput'
 import type { AdvancedSearchFilters } from '../hooks/useSearchState'
 
 const schema = z.object({
@@ -68,7 +77,11 @@ interface AdvancedSearchDropdownProps {
     initialFilters?: AdvancedSearchFilters
 }
 
-export function AdvancedSearchDropdown({ onApply, onClose, initialFilters }: AdvancedSearchDropdownProps) {
+export function AdvancedSearchDropdown({
+    onApply,
+    onClose,
+    initialFilters,
+}: AdvancedSearchDropdownProps) {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
@@ -78,14 +91,17 @@ export function AdvancedSearchDropdown({ onApply, onClose, initialFilters }: Adv
     const shadowColor = useThemeColor('border')
     const focusBgColor = useThemeColor('surface-secondary')
 
-    const defaults = useMemo(() => ({ ...makeDefaultValues(), ...initialFilters }), [initialFilters])
+    const defaults = useMemo(
+        () => ({ ...makeDefaultValues(), ...initialFilters }),
+        [initialFilters]
+    )
 
     const { control, handleSubmit, setValue, watch, reset } = useForm<FormValues>({
         resolver: zodResolver(schema),
         defaultValues: defaults,
     })
 
-    const onSubmit = handleSubmit((data) => {
+    const onSubmit = handleSubmit(data => {
         onApply(formDataToFilters(data))
         onClose()
     })
@@ -143,19 +159,39 @@ export function AdvancedSearchDropdown({ onApply, onClose, initialFilters }: Adv
             >
                 <ScrollView style={{ padding: 16 }} keyboardShouldPersistTaps="handled">
                     <FieldRow label="From" labelColor={mutedColor}>
-                        <FormInput control={control} name="from" style={inputStyle} placeholder="" />
+                        <FormInput
+                            control={control}
+                            name="from"
+                            style={inputStyle}
+                            placeholder=""
+                        />
                     </FieldRow>
                     <FieldRow label="To" labelColor={mutedColor}>
                         <FormInput control={control} name="to" style={inputStyle} placeholder="" />
                     </FieldRow>
                     <FieldRow label="Subject" labelColor={mutedColor}>
-                        <FormInput control={control} name="subject" style={inputStyle} placeholder="" />
+                        <FormInput
+                            control={control}
+                            name="subject"
+                            style={inputStyle}
+                            placeholder=""
+                        />
                     </FieldRow>
                     <FieldRow label="Has the words" labelColor={mutedColor}>
-                        <FormInput control={control} name="hasWords" style={inputStyle} placeholder="" />
+                        <FormInput
+                            control={control}
+                            name="hasWords"
+                            style={inputStyle}
+                            placeholder=""
+                        />
                     </FieldRow>
                     <FieldRow label="Doesn't have" labelColor={mutedColor}>
-                        <FormInput control={control} name="doesntHave" style={inputStyle} placeholder="" />
+                        <FormInput
+                            control={control}
+                            name="doesntHave"
+                            style={inputStyle}
+                            placeholder=""
+                        />
                     </FieldRow>
                     <FieldRow label="Size" labelColor={mutedColor}>
                         <View className="flex-row items-center gap-2">
@@ -221,7 +257,10 @@ export function AdvancedSearchDropdown({ onApply, onClose, initialFilters }: Adv
                         />
                     </FieldRow>
                     <FieldRow label="Has attachment" labelColor={mutedColor}>
-                        <Pressable onPress={toggleAttachment} className="flex-row items-center py-1">
+                        <Pressable
+                            onPress={toggleAttachment}
+                            className="flex-row items-center py-1"
+                        >
                             {hasAttachment ? (
                                 <SquareCheck size={20} color={primaryColor} />
                             ) : (
@@ -251,7 +290,9 @@ export function AdvancedSearchDropdown({ onApply, onClose, initialFilters }: Adv
                         }}
                     >
                         <Search size={16} color={primaryFgColor} />
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: primaryFgColor }}>Search</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: primaryFgColor }}>
+                            Search
+                        </Text>
                     </Pressable>
                 </View>
             </View>
@@ -259,10 +300,20 @@ export function AdvancedSearchDropdown({ onApply, onClose, initialFilters }: Adv
     )
 }
 
-function FieldRow({ label, labelColor, children }: { label: string; labelColor: string; children: React.ReactNode }) {
+function FieldRow({
+    label,
+    labelColor,
+    children,
+}: {
+    label: string
+    labelColor: string
+    children: React.ReactNode
+}) {
     return (
         <View className="flex-row items-center mb-3" style={{ minHeight: 36 }}>
-            <Text style={{ width: 110, fontSize: 13, flexShrink: 0, color: labelColor }}>{label}</Text>
+            <Text style={{ width: 110, fontSize: 13, flexShrink: 0, color: labelColor }}>
+                {label}
+            </Text>
             <View className="flex-1">{children}</View>
         </View>
     )
@@ -354,7 +405,7 @@ function PickerButton({
     const { field } = useController({ control, name })
     const [isOpen, setIsOpen] = useState(false)
 
-    const selectedLabel = options.find((o) => o.value === field.value)?.label ?? options[0].label
+    const selectedLabel = options.find(o => o.value === field.value)?.label ?? options[0].label
 
     return (
         <View className="relative">
@@ -376,7 +427,7 @@ function PickerButton({
                 <PickerMenu
                     options={options}
                     value={String(field.value)}
-                    onSelect={(val) => {
+                    onSelect={val => {
                         field.onChange(val)
                         setIsOpen(false)
                     }}
@@ -428,7 +479,7 @@ function PickerMenu({
                     borderColor,
                 }}
             >
-                {options.map((option) => (
+                {options.map(option => (
                     <Pressable
                         key={option.value}
                         onPress={() => onSelect(option.value)}

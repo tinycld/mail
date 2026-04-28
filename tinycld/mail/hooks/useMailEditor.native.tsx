@@ -15,10 +15,15 @@ import {
     useBridgeState,
     useEditorBridge,
 } from '@10play/tentap-editor'
+import type {
+    EditorCommands,
+    EditorHandle,
+    EditorResult,
+    EditorToolbarState,
+} from '@tinycld/core/lib/editor-types'
+import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useMemo } from 'react'
 import { View } from 'react-native'
-import type { EditorCommands, EditorHandle, EditorResult, EditorToolbarState } from '@tinycld/core/lib/editor-types'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 
 function buildEditorCSS(colors: { bg: string; fg: string; placeholder: string; primary: string }) {
     return `

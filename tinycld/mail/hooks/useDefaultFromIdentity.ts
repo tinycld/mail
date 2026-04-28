@@ -2,8 +2,8 @@ import { useMemo } from 'react'
 import { type FromIdentity, filterOwnAddresses, pickDefaultFrom } from './defaultFromIdentity'
 import { useSendableIdentities } from './useSendableIdentities'
 
-export { filterOwnAddresses, pickDefaultFrom }
 export type { FromIdentity } from './defaultFromIdentity'
+export { filterOwnAddresses, pickDefaultFrom }
 
 interface UseDefaultFromIdentityParams {
     mode: 'new' | 'reply' | 'forward'

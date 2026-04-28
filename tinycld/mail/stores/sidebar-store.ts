@@ -24,7 +24,7 @@ export const useMailSidebarStore = create<SidebarState>()(
         {
             name: 'tinycld_mail_sidebar',
             storage: asyncStorage,
-            partialize: (s) => ({ expanded: s.expanded }),
+            partialize: s => ({ expanded: s.expanded }),
         }
     )
 )

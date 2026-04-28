@@ -15,10 +15,10 @@ export function splitMailboxes(
     allMailboxes: MailMailboxes[]
 ): MailboxesResult {
     const memberSet = new Set(memberUserOrgMailboxIds)
-    const mine = allMailboxes.filter((mb) => memberSet.has(mb.id))
-    const personal = mine.find((mb) => mb.type === 'personal') ?? null
+    const mine = allMailboxes.filter(mb => memberSet.has(mb.id))
+    const personal = mine.find(mb => mb.type === 'personal') ?? null
     const shared = mine
-        .filter((mb) => mb.type === 'shared')
+        .filter(mb => mb.type === 'shared')
         .sort((a, b) => a.created.localeCompare(b.created))
     return { personal, shared }
 }

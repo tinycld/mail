@@ -1,7 +1,7 @@
-import { Menu, Search, SlidersHorizontal } from 'lucide-react-native'
-import { Pressable, View } from 'react-native'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { PlainInput } from '@tinycld/core/ui/PlainInput'
+import { Menu, Search, SlidersHorizontal } from 'lucide-react-native'
+import { Pressable, View } from 'react-native'
 import type { AdvancedSearchFilters } from '../hooks/useSearchState'
 import { AdvancedSearchDropdown } from './AdvancedSearchDropdown'
 

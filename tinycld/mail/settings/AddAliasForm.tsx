@@ -1,13 +1,13 @@
 import { eq } from '@tanstack/db'
-import { Plus } from 'lucide-react-native'
-import { newRecordId } from 'pbtsdb/core'
-import { Pressable, Text, View } from 'react-native'
 import { handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { FormErrorSummary, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
+import { Plus } from 'lucide-react-native'
+import { newRecordId } from 'pbtsdb/core'
+import { Pressable, Text, View } from 'react-native'
 
 const schema = z.object({
     address: z
@@ -35,13 +35,13 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
     )
 
     const { data: mailboxesInDomain } = useOrgLiveQuery(
-        (query) =>
+        query =>
             query
                 .from({ mail_mailboxes: mailboxesCollection })
                 .where(({ mail_mailboxes }) => eq(mail_mailboxes.domain, mailboxDomainId)),
         [mailboxDomainId]
     )
-    const { data: aliasesAll } = useOrgLiveQuery((query) =>
+    const { data: aliasesAll } = useOrgLiveQuery(query =>
         query.from({ mail_mailbox_aliases: aliasesCollection })
     )
 
@@ -62,13 +62,13 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
         mutationFn: mutation(function* (data: z.infer<typeof schema>) {
             const addr = data.address.toLowerCase().trim()
 
-            const primaryCollision = (mailboxesInDomain ?? []).some((m) => m.address === addr)
+            const primaryCollision = (mailboxesInDomain ?? []).some(m => m.address === addr)
             if (primaryCollision) {
                 throw new Error('Address is already a primary mailbox on this domain')
             }
-            const mailboxIdsInDomain = new Set((mailboxesInDomain ?? []).map((m) => m.id))
+            const mailboxIdsInDomain = new Set((mailboxesInDomain ?? []).map(m => m.id))
             const aliasCollision = (aliasesAll ?? []).some(
-                (a) => mailboxIdsInDomain.has(a.mailbox) && a.address === addr
+                a => mailboxIdsInDomain.has(a.mailbox) && a.address === addr
             )
             if (aliasCollision) {
                 throw new Error('Address is already an alias on this domain')
@@ -86,7 +86,7 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
 
-    const onSubmit = handleSubmit((d) => create.mutate(d))
+    const onSubmit = handleSubmit(d => create.mutate(d))
     const canSubmit = !create.isPending && isDirty
 
     return (
@@ -113,7 +113,9 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
                 >
                     <View className="flex-row gap-1 items-center">
                         <Plus size={12} color={primaryFgColor} />
-                        <Text style={{ color: primaryFgColor, fontSize: 12, fontWeight: '600' }}>Add</Text>
+                        <Text style={{ color: primaryFgColor, fontSize: 12, fontWeight: '600' }}>
+                            Add
+                        </Text>
                     </View>
                 </Pressable>
             </View>

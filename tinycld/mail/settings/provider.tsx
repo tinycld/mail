@@ -1,18 +1,5 @@
 import { eq } from '@tanstack/db'
 import { useMutation as useReactQueryMutation } from '@tanstack/react-query'
-import {
-    CheckCircle,
-    Copy,
-    Globe,
-    Loader2,
-    Plus,
-    RefreshCw,
-    Trash2,
-    XCircle,
-} from 'lucide-react-native'
-import { newRecordId } from 'pbtsdb/core'
-import { useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
 import { errorToString, handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
@@ -29,6 +16,19 @@ import {
     z,
     zodResolver,
 } from '@tinycld/core/ui/form'
+import {
+    CheckCircle,
+    Copy,
+    Globe,
+    Loader2,
+    Plus,
+    RefreshCw,
+    Trash2,
+    XCircle,
+} from 'lucide-react-native'
+import { newRecordId } from 'pbtsdb/core'
+import { useState } from 'react'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import type { MailDomainVerificationDetails } from '../types'
 
 const PROVIDER_OPTIONS = [{ label: 'Postmark', value: 'postmark' }]

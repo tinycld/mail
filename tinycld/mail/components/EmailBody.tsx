@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Platform, Text, View } from 'react-native'
 import { pb } from '@tinycld/core/lib/pocketbase'
 import { proxyImageUrls } from '@tinycld/core/lib/proxy-image-urls'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Platform, Text, View } from 'react-native'
 
 interface EmailBodyProps {
     collectionId: string
@@ -18,8 +18,8 @@ function useEmailHtml(collectionId: string, recordId: string, filename: string) 
         const token = pb.authStore.token
         const url = pb.files.getURL({ collectionId, id: recordId }, filename)
         fetch(url)
-            .then((res) => res.text())
-            .then((raw) => setHtml(proxyImageUrls(raw, token)))
+            .then(res => res.text())
+            .then(raw => setHtml(proxyImageUrls(raw, token)))
             .catch(() => setHtml(''))
     }, [collectionId, recordId, filename])
 
@@ -97,7 +97,9 @@ export function EmailBody({ collectionId, recordId, filename }: EmailBodyProps) 
 
     return (
         <View className="p-4 flex-1 rounded-lg" style={{ backgroundColor: '#fff' }}>
-            <Text style={{ fontSize: 14, lineHeight: 22, color: '#000' }}>{html.replace(/<[^>]*>/g, '')}</Text>
+            <Text style={{ fontSize: 14, lineHeight: 22, color: '#000' }}>
+                {html.replace(/<[^>]*>/g, '')}
+            </Text>
         </View>
     )
 }

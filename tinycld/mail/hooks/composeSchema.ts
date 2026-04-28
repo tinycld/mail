@@ -13,7 +13,7 @@ function validateRecipients(value: string) {
     if (!value) return true
     return value
         .split(',')
-        .map((s) => s.trim())
+        .map(s => s.trim())
         .filter(Boolean)
         .every(isValidRecipient)
 }
@@ -54,9 +54,9 @@ export type ComposeFormData = z.infer<typeof composeSchema>
 export function parseRecipients(value: string) {
     return value
         .split(',')
-        .map((s) => s.trim())
+        .map(s => s.trim())
         .filter(Boolean)
-        .map((segment) => {
+        .map(segment => {
             const namedMatch = segment.match(namedEmailPattern)
             if (namedMatch) return { name: namedMatch[1].trim(), email: namedMatch[2] }
             return { name: '', email: segment }

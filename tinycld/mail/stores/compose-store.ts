@@ -16,7 +16,7 @@ interface ComposeStoreState {
     setFromIdentity: (mailboxId: string, aliasId: string | null) => void
 }
 
-export const useComposeStore = create<ComposeStoreState>((set) => ({
+export const useComposeStore = create<ComposeStoreState>(set => ({
     mode: 'closed',
     replyContext: null,
     draftContext: null,
@@ -33,14 +33,14 @@ export const useComposeStore = create<ComposeStoreState>((set) => ({
             mailboxId: '',
             aliasId: null,
         }),
-    openReply: (context) =>
+    openReply: context =>
         set({
             replyContext: context,
             mode: 'inline',
             mailboxId: context.mailboxId,
             aliasId: null,
         }),
-    openDraft: (context) =>
+    openDraft: context =>
         set({
             draftContext: context,
             replyContext: null,

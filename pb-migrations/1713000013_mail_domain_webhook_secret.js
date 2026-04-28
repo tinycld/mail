@@ -19,7 +19,10 @@ migrate(
         const records = app.findRecordsByFilter('mail_domains', '1=1')
         for (const record of records) {
             if (!record.get('webhook_secret')) {
-                record.set('webhook_secret', $security.randomStringWithAlphabet(32, 'abcdef0123456789'))
+                record.set(
+                    'webhook_secret',
+                    $security.randomStringWithAlphabet(32, 'abcdef0123456789')
+                )
                 app.save(record)
             }
         }

@@ -73,8 +73,8 @@ describe('flattenSendableIdentities', () => {
             [al('a1', 'mb2', 'help')],
             [dn('d1', 'acme.com')]
         )
-        expect(got.find((i) => i.mailboxId === 'mb1')?.aliases).toEqual([])
-        expect(got.find((i) => i.mailboxId === 'mb2')?.aliases).toEqual([
+        expect(got.find(i => i.mailboxId === 'mb1')?.aliases).toEqual([])
+        expect(got.find(i => i.mailboxId === 'mb2')?.aliases).toEqual([
             { id: 'a1', address: 'help@acme.com' },
         ])
     })

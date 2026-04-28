@@ -1,5 +1,5 @@
-import { Inbox } from 'lucide-react-native'
 import { SidebarItem } from '@tinycld/core/components/sidebar-primitives'
+import { Inbox } from 'lucide-react-native'
 
 interface Props {
     isActive: boolean

@@ -1,7 +1,7 @@
-import { X } from 'lucide-react-native'
-import { Pressable, ScrollView, Text, View } from 'react-native'
 import { formatBytes } from '@tinycld/core/lib/format-utils'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { X } from 'lucide-react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import type { AttachmentFile } from '../hooks/useAttachments'
 
 interface AttachmentRibbonProps {
@@ -26,8 +26,12 @@ export function AttachmentRibbon({ isVisible, attachments, onRemove }: Attachmen
         >
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
                 <View className="flex-row" style={{ gap: 6 }}>
-                    {attachments.map((att) => (
-                        <AttachmentChip key={att.id} attachment={att} onRemove={() => onRemove(att.id)} />
+                    {attachments.map(att => (
+                        <AttachmentChip
+                            key={att.id}
+                            attachment={att}
+                            onRemove={() => onRemove(att.id)}
+                        />
                     ))}
                 </View>
             </ScrollView>
@@ -35,13 +39,20 @@ export function AttachmentRibbon({ isVisible, attachments, onRemove }: Attachmen
     )
 }
 
-function AttachmentChip({ attachment, onRemove }: { attachment: AttachmentFile; onRemove: () => void }) {
+function AttachmentChip({
+    attachment,
+    onRemove,
+}: {
+    attachment: AttachmentFile
+    onRemove: () => void
+}) {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const surfaceColor = useThemeColor('surface-secondary')
     const borderColor = useThemeColor('border')
 
-    const truncatedName = attachment.name.length > 24 ? `${attachment.name.slice(0, 21)}...` : attachment.name
+    const truncatedName =
+        attachment.name.length > 24 ? `${attachment.name.slice(0, 21)}...` : attachment.name
 
     return (
         <View

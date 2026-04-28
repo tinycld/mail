@@ -1,8 +1,8 @@
-import { type Control, type Path, useController } from 'react-hook-form'
-import { Pressable, Text, View } from 'react-native'
 import { NameAvatar as ContactAvatar } from '@tinycld/core/components/NameAvatar'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { PlainInput } from '@tinycld/core/ui/PlainInput'
+import { type Control, type Path, useController } from 'react-hook-form'
+import { Pressable, Text, View } from 'react-native'
 import type { ComposeFormData } from '../hooks/composeSchema'
 import { type ContactSuggestion, useParsedRecipients } from '../hooks/useRecipientSuggestions'
 import { ContactSuggestionsList } from './ContactSuggestionsList'
@@ -14,7 +14,15 @@ interface RecipientFieldProps {
     autoFocus?: boolean
 }
 
-function RecipientChip({ name, email, onRemove }: { name: string; email: string; onRemove: () => void }) {
+function RecipientChip({
+    name,
+    email,
+    onRemove,
+}: {
+    name: string
+    email: string
+    onRemove: () => void
+}) {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const surfaceColor = useThemeColor('surface-secondary')
@@ -36,7 +44,11 @@ function RecipientChip({ name, email, onRemove }: { name: string; email: string;
                 {displayName}
             </Text>
             <Pressable onPress={onRemove} hitSlop={4}>
-                <Text style={{ fontSize: 15, lineHeight: 16, fontWeight: '600', color: mutedColor }}>x</Text>
+                <Text
+                    style={{ fontSize: 15, lineHeight: 16, fontWeight: '600', color: mutedColor }}
+                >
+                    x
+                </Text>
             </Pressable>
         </View>
     )
@@ -62,7 +74,7 @@ export function RecipientField({ control, name, placeholder, autoFocus }: Recipi
 
     const handleRemoveChip = (index: number) => {
         const updated = committedRecipients.filter((_, i) => i !== index)
-        const joined = updated.map((r) => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ')
+        const joined = updated.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ')
         const newRaw = updated.length > 0 ? `${joined}, ` : ''
         field.onChange(`${newRaw}${activeQuery}`)
     }
