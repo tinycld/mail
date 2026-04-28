@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Archive, type Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
+import { Archive, Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
 import { ScreenHeader } from '@tinycld/core/components/ScreenHeader'
@@ -22,7 +22,7 @@ import { useMailListShortcuts } from '../hooks/useMailListShortcuts'
 import type { MailSearchResult } from '../hooks/useMailSearch'
 import { useMailSelection } from '../hooks/useMailSelection'
 import { useMailSearchState } from '../hooks/useSearchState'
-import { useThreadListItems } from '../hooks/useThreadListItems'
+import { UNIFIED_INBOX, useThreadListItems } from '../hooks/useThreadListItems'
 import { useThreadListContext } from '../stores/thread-list-store'
 
 function useQueryParams() {
@@ -52,6 +52,11 @@ const FOLDER_ICONS: Record<string, typeof Inbox> = {
     trash: Trash2,
     starred: Star,
     archive: Archive,
+    'all-inboxes': Inbox,
+}
+
+const FOLDER_TITLES: Record<string, string> = {
+    'all-inboxes': 'All Inboxes',
 }
 
 function LabelChip({
@@ -113,7 +118,9 @@ function ActiveViewBanner({
         )
     }
 
-    const displayName = (folder ?? '').charAt(0).toUpperCase() + (folder ?? '').slice(1)
+    const folderKey = folder ?? ''
+    const displayName =
+        FOLDER_TITLES[folderKey] ?? (folderKey.charAt(0).toUpperCase() + folderKey.slice(1))
     const FolderIcon = folder ? (FOLDER_ICONS[folder] ?? Tag) : Tag
 
     return (
@@ -192,7 +199,8 @@ export default function MailListScreen() {
     const primaryColor = useThemeColor('primary')
     const _backgroundColor = useThemeColor('background')
     const { personal } = useMailboxes()
-    const mailboxId = mailbox ?? personal?.id ?? ''
+    const isUnifiedView = folder === 'all-inboxes'
+    const mailboxId = isUnifiedView ? UNIFIED_INBOX : (mailbox ?? personal?.id ?? '')
 
     const {
         items,
@@ -312,10 +320,12 @@ export default function MailListScreen() {
     const activeLabels = labels
         .map((id) => labelMap.get(id))
         .filter((l): l is { id: string; name: string; color: string } => l != null)
+    const folderKey = folder ?? 'inbox'
     const folderTitle =
         activeLabels.length > 0
             ? activeLabels.map((l) => l.name).join(', ')
-            : (folder ?? 'inbox').charAt(0).toUpperCase() + (folder ?? 'inbox').slice(1)
+            : (FOLDER_TITLES[folderKey] ??
+              folderKey.charAt(0).toUpperCase() + folderKey.slice(1))
 
     const isNonDefaultView = labels.length > 0 || (!!folder && folder !== 'inbox')
 

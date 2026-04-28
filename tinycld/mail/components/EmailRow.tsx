@@ -15,6 +15,28 @@ import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import type { ThreadListItem } from './thread-list-item'
 
+function MailboxChip({ label }: { label: string }) {
+    const mutedColor = useThemeColor('muted-foreground')
+    const borderColor = useThemeColor('border')
+    return (
+        <View
+            className="flex-row px-1.5 rounded shrink-0"
+            style={{
+                paddingVertical: 1,
+                borderWidth: 1,
+                borderColor,
+            }}
+        >
+            <Text
+                style={{ fontSize: 11, fontWeight: '500', color: mutedColor }}
+                numberOfLines={1}
+            >
+                {label}
+            </Text>
+        </View>
+    )
+}
+
 interface EmailRowProps {
     email: ThreadListItem
     isMobile?: boolean
@@ -196,6 +218,7 @@ function MobileEmailRow({ email, onToggleStar, onPress, onArchive, onTrash, onTo
                                 style={[mobileStyles.sender, { color: foregroundColor, fontWeight: senderWeight }]}
                                 numberOfLines={1}
                             />
+                            {email.mailboxLabel ? <MailboxChip label={email.mailboxLabel} /> : null}
                             {email.hasAttachments ? <Paperclip size={14} color={mutedColor} /> : null}
                             <Text style={[mobileStyles.date, { color: mutedColor }]}>{dateDisplay}</Text>
                             <Pressable
@@ -373,6 +396,7 @@ function DesktopEmailRow({
                         <Text style={[styles.threadBadge, { color: mutedColor }]}>{email.messageCount}</Text>
                     ) : null}
                 </View>
+                {email.mailboxLabel ? <MailboxChip label={email.mailboxLabel} /> : null}
                 <View style={styles.subjectArea}>
                     <Text
                         style={[styles.subject, { color: foregroundColor, fontWeight: subjectWeight as '400' | '600' }]}

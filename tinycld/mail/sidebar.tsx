@@ -1,6 +1,6 @@
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
 import { Pencil, Settings } from 'lucide-react-native'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Pressable } from 'react-native'
 import { LabelManagerDialog } from '@tinycld/core/components/LabelManagerDialog'
 import {
@@ -13,6 +13,7 @@ import {
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { MailboxSidebarSection } from './components/MailboxSidebarSection'
+import { UnifiedInboxSection } from './components/UnifiedInboxSection'
 import { composeEvents } from './hooks/composeEvents'
 import { useLabels } from './hooks/useLabels'
 import { useMailboxes } from './hooks/useMailboxes'
@@ -54,12 +55,25 @@ export default function MailSidebar(_props: MailSidebarProps) {
     const counts = useMailboxFolderCounts()
 
     const activeMailboxId = activeMailbox ?? personal?.id ?? ''
+    const mailboxCount = (personal ? 1 : 0) + shared.length
+    const showUnifiedInbox = mailboxCount >= 2
+    const isUnifiedActive = activeFolder === 'all-inboxes'
+
+    const unifiedUnread = useMemo(() => {
+        let total = 0
+        for (const c of counts.values()) total += c.inbox
+        return total
+    }, [counts])
 
     const navigateTo = (mailboxId: string, folder: string) => {
         const params: Record<string, string> = {}
         if (mailboxId && mailboxId !== personal?.id) params.mailbox = mailboxId
         if (folder !== 'inbox') params.folder = folder
         router.push(orgHref('mail', Object.keys(params).length ? params : undefined))
+    }
+
+    const navigateToUnified = () => {
+        router.push(orgHref('mail', { folder: 'all-inboxes' }))
     }
 
     const toggleLabel = (labelId: string) => {
@@ -84,6 +98,14 @@ export default function MailSidebar(_props: MailSidebarProps) {
     return (
         <SidebarNav>
             <SidebarActionButton label="Compose" icon={Pencil} onPress={() => composeEvents.emit()} />
+
+            {showUnifiedInbox && (
+                <UnifiedInboxSection
+                    isActive={isUnifiedActive}
+                    unreadCount={unifiedUnread}
+                    onPress={navigateToUnified}
+                />
+            )}
 
             {personal && (
                 <MailboxSidebarSection

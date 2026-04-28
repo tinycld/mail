@@ -2,10 +2,19 @@ import { eq } from '@tanstack/db'
 import { useMemo } from 'react'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
+import type { MailMailboxes } from '../types'
 import { splitMailboxes } from './splitMailboxes'
 
 export { splitMailboxes }
 export type { MailboxesResult } from './splitMailboxes'
+
+export function getMailboxLabel(
+    mailbox: Pick<MailMailboxes, 'display_name' | 'address'>,
+    isPersonal: boolean
+): string {
+    if (isPersonal) return 'Personal'
+    return mailbox.display_name || mailbox.address
+}
 
 export function useMailboxes() {
     const [membersCollection, mailboxesCollection] = useStore(

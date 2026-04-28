@@ -6,7 +6,10 @@ import type { ThreadListItem } from '../components/thread-list-item'
 import { toThreadListItem } from '../components/thread-list-item'
 import type { MailMessages, MailThreadState } from '../types'
 import { useLabels } from './useLabels'
+import { getMailboxLabel } from './useMailboxes'
 import { mergeSharedFolderStates } from './mergeSharedFolderStates'
+
+export const UNIFIED_INBOX = '__all_inboxes__'
 
 export function useThreadListItems(
     userOrgId: string,
@@ -144,12 +147,37 @@ export function useThreadListItems(
         return map
     }, [threads])
 
+    const { data: allMailboxes } = useOrgLiveQuery((query) =>
+        query.from({ mail_mailboxes: mailboxesCollection })
+    )
+
+    const { data: userMemberships } = useOrgLiveQuery((query, { userOrgId }) =>
+        query
+            .from({ mail_mailbox_members: membersCollection })
+            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user_org, userOrgId))
+    )
+
+    const isUnified = filter.mailboxId === UNIFIED_INBOX
+
+    const mailboxLabelMap = useMemo(() => {
+        if (!isUnified || !allMailboxes || !userMemberships) return null
+        const myMailboxIds = new Set(userMemberships.map((m) => m.mailbox))
+        const map = new Map<string, string>()
+        for (const mb of allMailboxes) {
+            if (!myMailboxIds.has(mb.id)) continue
+            map.set(mb.id, getMailboxLabel(mb, mb.type === 'personal'))
+        }
+        return map
+    }, [isUnified, allMailboxes, userMemberships])
+
     const items: ThreadListItem[] = useMemo(() => {
         if (!threadStates) return []
 
         const threadIsInMailbox = (threadId: string): boolean => {
             const t = threadMap.get(threadId)
-            return !!t && t.mailbox === filter.mailboxId
+            if (!t) return false
+            if (isUnified) return true
+            return t.mailbox === filter.mailboxId
         }
 
         let baseStates: MailThreadState[] = threadStates as MailThreadState[]
@@ -169,7 +197,16 @@ export function useThreadListItems(
                     .filter((l): l is { id: string; name: string; color: string } => l != null)
                 const hasDraft = draftByThread.has(state.thread)
                 const hasAttachments = threadsWithAttachments.has(state.thread)
-                return toThreadListItem(state, thread, stateLabels, hasDraft, hasAttachments)
+                const mailboxLabel =
+                    isUnified && thread ? mailboxLabelMap?.get(thread.mailbox) : undefined
+                return toThreadListItem(
+                    state,
+                    thread,
+                    stateLabels,
+                    hasDraft,
+                    hasAttachments,
+                    mailboxLabel
+                )
             })
             .sort((a, b) => new Date(b.latestDate).getTime() - new Date(a.latestDate).getTime())
 
@@ -185,7 +222,7 @@ export function useThreadListItems(
         if (activeFolder === 'all') {
             return mapped
         }
-        if (activeFolder === 'inbox') {
+        if (activeFolder === 'inbox' || activeFolder === 'all-inboxes') {
             return mapped.filter((item) => item.folder === 'inbox')
         }
 
@@ -201,6 +238,8 @@ export function useThreadListItems(
         draftByThread,
         threadsWithAttachments,
         filter,
+        isUnified,
+        mailboxLabelMap,
     ])
 
     return {
