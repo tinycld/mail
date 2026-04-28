@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 env:
-  CORE_REPO: tinycld/core
-  CORE_REF: main
+  APP_REPO: tinycld/tinycld
+  APP_REF: main
   TEST_USER_LOGIN: user@tinycld.org
   TEST_USER_PW: TestUser1234!
   ADMIN_USER_LOGIN: admin@tinycld.org
@@ -24,15 +24,15 @@ jobs:
           path: mail
       - uses: actions/checkout@v5
         with:
-          repository: ${{ env.CORE_REPO }}
-          ref: ${{ env.CORE_REF }}
-          path: core
+          repository: ${{ env.APP_REPO }}
+          ref: ${{ env.APP_REF }}
+          path: tinycld
       - uses: oven-sh/setup-bun@v2
-      - name: Install core deps (biome + typescript come from here)
-        working-directory: core
+      - name: Install tinycld deps (biome + typescript come from here)
+        working-directory: tinycld
         run: bun install
-      - name: Expose core's node_modules to mail
-        run: ln -s ../core/node_modules mail/node_modules
+      - name: expose tinycld's node_modules to mail
+        run: ln -s ../tinycld/node_modules mail/node_modules
       - name: Lint mail
         working-directory: mail
         run: bun run lint
@@ -46,32 +46,32 @@ jobs:
           path: mail
       - uses: actions/checkout@v5
         with:
-          repository: ${{ env.CORE_REPO }}
-          ref: ${{ env.CORE_REF }}
-          path: core
+          repository: ${{ env.APP_REPO }}
+          ref: ${{ env.APP_REF }}
+          path: tinycld
       - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-node@v5
         with:
-          node-version-file: core/.node-version
+          node-version-file: tinycld/.node-version
       - uses: actions/setup-go@v6
         with:
-          go-version-file: core/server/go.mod
-          cache-dependency-path: core/server/go.sum
-      - name: Install core deps
-        working-directory: core
+          go-version-file: tinycld/server/go.mod
+          cache-dependency-path: tinycld/server/go.sum
+      - name: Install tinycld deps
+        working-directory: tinycld
         run: bun install
-      - name: Link mail into core (so ~/types/pbSchema sees mail collections)
-        working-directory: core
-        run: bun run packages:link @tinycld/mail ../mail
+      - name: Link mail into tinycld (so ~/types/pbSchema sees mail collections)
+        working-directory: tinycld
+        run: bun run packages:link ../mail
       - name: Generate PB schema types
-        working-directory: core
+        working-directory: tinycld
         run: |
           cd server && go build -o tinycld .
           ./tinycld --dev serve &
           sleep 3
           kill %1 2>/dev/null || true
-      - name: Expose core's node_modules to mail
-        run: ln -s ../core/node_modules mail/node_modules
+      - name: expose tinycld's node_modules to mail
+        run: ln -s ../tinycld/node_modules mail/node_modules
       - name: Typecheck mail
         working-directory: mail
         env:
@@ -87,36 +87,36 @@ jobs:
           path: mail
       - uses: actions/checkout@v5
         with:
-          repository: ${{ env.CORE_REPO }}
-          ref: ${{ env.CORE_REF }}
-          path: core
+          repository: ${{ env.APP_REPO }}
+          ref: ${{ env.APP_REF }}
+          path: tinycld
       - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-node@v5
         with:
-          node-version-file: core/.node-version
+          node-version-file: tinycld/.node-version
       - uses: actions/setup-go@v6
         with:
-          go-version-file: core/server/go.mod
-          cache-dependency-path: core/server/go.sum
+          go-version-file: tinycld/server/go.mod
+          cache-dependency-path: tinycld/server/go.sum
 
-      - name: Install core deps
-        working-directory: core
+      - name: Install tinycld deps
+        working-directory: tinycld
         run: bun install
 
-      - name: Link mail into core
-        working-directory: core
-        run: bun run packages:link @tinycld/mail ../mail
+      - name: Link mail into tinycld
+        working-directory: tinycld
+        run: bun run packages:link ../mail
 
       - name: Build PocketBase binary
-        working-directory: core/server
+        working-directory: tinycld/server
         run: go build -o tinycld .
 
       - name: Run unit tests (vitest picks up mail via packages glob)
-        working-directory: core
+        working-directory: tinycld
         run: bunx vitest run packages/@tinycld/mail
 
       - name: Reset test DB
-        working-directory: core
+        working-directory: tinycld
         run: bunx tsx scripts/reset-dev-db.ts --url http://127.0.0.1:7091 --data-dir server/pb_test_data
 
       - name: Cache Playwright browsers
@@ -124,18 +124,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ hashFiles('core/bun.lock') }}
+          key: playwright-${{ hashFiles('tinycld/bun.lock') }}
       - name: Install Playwright browsers
-        working-directory: core
+        working-directory: tinycld
         run: bunx playwright install --with-deps chromium
         if: steps.playwright-cache.outputs.cache-hit != 'true'
       - name: Install Playwright system deps
-        working-directory: core
+        working-directory: tinycld
         run: bunx playwright install-deps chromium
         if: steps.playwright-cache.outputs.cache-hit == 'true'
 
       - name: Run Playwright tests (mail project only)
-        working-directory: core
+        working-directory: tinycld
         env:
           CI: true
           NODE_OPTIONS: --preserve-symlinks
@@ -145,5 +145,5 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
-          path: core/playwright-report/
+          path: tinycld/playwright-report/
           retention-days: 14
