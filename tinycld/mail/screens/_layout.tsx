@@ -23,7 +23,7 @@ export default function MailLayout() {
     const [isFilterOpen, setIsFilterOpen] = useState(false)
     const breakpoint = useBreakpoint()
     const { setDrawerOpen } = useWorkspaceLayout()
-    const composeMode = useComposeStore(s => s.mode)
+    const composeMode = useComposeStore((s) => s.mode)
 
     useEffect(() => {
         return composeEvents.subscribe(() => {

@@ -1,17 +1,7 @@
 import { ResponsiveToolbar, type ToolbarItem } from '@tinycld/core/components/ResponsiveToolbar'
 import type { EditorCommands, EditorToolbarState } from '@tinycld/core/lib/editor-types'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import {
-    Bold,
-    Italic,
-    Link2,
-    List,
-    ListOrdered,
-    Paperclip,
-    Quote,
-    Trash2,
-    Underline,
-} from 'lucide-react-native'
+import { Bold, Italic, Link2, List, ListOrdered, Paperclip, Quote, Trash2, Underline } from 'lucide-react-native'
 import { useCallback, useMemo } from 'react'
 import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from 'react-native'
 
@@ -56,7 +46,7 @@ export function ComposeToolbar({
             Alert.prompt(
                 'Insert Link',
                 'Enter URL:',
-                url => {
+                (url) => {
                     if (url !== null) {
                         if (url) {
                             commands.setLink(url)
@@ -94,11 +84,7 @@ export function ComposeToolbar({
                         {isPending ? (
                             <ActivityIndicator size="small" color={primaryFgColor} />
                         ) : (
-                            <Text
-                                style={{ fontSize: 14, fontWeight: '600', color: primaryFgColor }}
-                            >
-                                Send
-                            </Text>
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: primaryFgColor }}>Send</Text>
                         )}
                     </Pressable>
                 ),
@@ -242,9 +228,7 @@ export function ComposeToolbar({
     )
 
     const rightItems: ToolbarItem[] = useMemo(
-        () => [
-            { type: 'button', key: 'discard', icon: Trash2, label: 'Discard', onPress: onDiscard },
-        ],
+        () => [{ type: 'button', key: 'discard', icon: Trash2, label: 'Discard', onPress: onDiscard }],
         [onDiscard]
     )
 
@@ -263,13 +247,7 @@ interface FormatButtonProps {
     activeColor: string
 }
 
-function FormatButton({
-    icon: Icon,
-    isActive,
-    onPress,
-    iconColor,
-    activeColor,
-}: FormatButtonProps) {
+function FormatButton({ icon: Icon, isActive, onPress, iconColor, activeColor }: FormatButtonProps) {
     return (
         <Pressable
             className="rounded-md p-1.5"

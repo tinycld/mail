@@ -47,19 +47,14 @@ export function MailboxSearchBar({ query, onQueryChange, type, onTypeChange, cou
                         color: fgColor,
                         fontSize: 13,
                         padding: 0,
-                        ...(Platform.OS === 'web'
-                            ? ({ outlineStyle: 'none' } as Record<string, unknown>)
-                            : {}),
+                        ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as Record<string, unknown>) : {}),
                     }}
                     autoCorrect={false}
                     autoCapitalize="none"
                 />
             </View>
-            <View
-                className="flex-row rounded-lg overflow-hidden"
-                style={{ borderWidth: 1, borderColor }}
-            >
-                {SEGMENTS.map(seg => {
+            <View className="flex-row rounded-lg overflow-hidden" style={{ borderWidth: 1, borderColor }}>
+                {SEGMENTS.map((seg) => {
                     const isActive = type === seg.value
                     const count = counts[seg.value]
                     return (

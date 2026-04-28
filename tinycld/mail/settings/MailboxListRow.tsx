@@ -51,18 +51,14 @@ export function MailboxListRow({ item, isActive = false, onPress }: Props) {
                 className="rounded-lg items-center justify-center"
                 style={{ width: 36, height: 36, backgroundColor: avatarBg }}
             >
-                <Text style={{ color: avatarFg, fontWeight: '700', fontSize: 13 }}>
-                    {initials(item)}
-                </Text>
+                <Text style={{ color: avatarFg, fontWeight: '700', fontSize: 13 }}>{initials(item)}</Text>
             </View>
             <View className="flex-1" style={{ minWidth: 0 }}>
                 <Text style={{ fontSize: 14, fontWeight: '600', color: fgColor }}>
                     {item.address}
                     <Text style={{ color: mutedColor, fontWeight: '500' }}>@{item.domainName}</Text>
                 </Text>
-                <Text style={{ fontSize: 12.5, color: mutedColor, marginTop: 2 }}>
-                    {subtitle(item)}
-                </Text>
+                <Text style={{ fontSize: 12.5, color: mutedColor, marginTop: 2 }}>{subtitle(item)}</Text>
             </View>
             <ChevronRight size={16} color={mutedColor} />
         </Pressable>

@@ -24,7 +24,7 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
     const [showForm, setShowForm] = useState(false)
 
     const { data: aliases } = useOrgLiveQuery(
-        query =>
+        (query) =>
             query
                 .from({ mail_mailbox_aliases: aliasesCollection })
                 .where(({ mail_mailbox_aliases }) => eq(mail_mailbox_aliases.mailbox, mailboxId)),
@@ -53,10 +53,7 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
                 >
                     Aliases
                 </Text>
-                <Pressable
-                    onPress={() => setShowForm(s => !s)}
-                    className="flex-row gap-1 items-center"
-                >
+                <Pressable onPress={() => setShowForm((s) => !s)} className="flex-row gap-1 items-center">
                     <Plus size={12} color={primaryColor} />
                     <Text style={{ fontSize: 12, fontWeight: '600', color: primaryColor }}>
                         {showForm ? 'Cancel' : 'Add alias'}
@@ -70,7 +67,7 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
                 </Text>
             )}
 
-            {items.map(alias => (
+            {items.map((alias) => (
                 <View key={alias.id} className="flex-row items-center gap-3 rounded-lg py-2">
                     <View
                         className="items-center justify-center rounded-lg"
@@ -89,11 +86,7 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
             ))}
 
             {showForm && (
-                <AddAliasForm
-                    mailboxId={mailboxId}
-                    mailboxDomainId={mailboxDomainId}
-                    domainName={domainName}
-                />
+                <AddAliasForm mailboxId={mailboxId} mailboxDomainId={mailboxDomainId} domainName={domainName} />
             )}
         </View>
     )

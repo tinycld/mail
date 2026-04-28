@@ -2,14 +2,7 @@ import { handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import {
-    FormErrorSummary,
-    SelectInput,
-    TextInput,
-    useForm,
-    z,
-    zodResolver,
-} from '@tinycld/core/ui/form'
+import { FormErrorSummary, SelectInput, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
 import { Plus } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb/core'
 import { Pressable, Text, View } from 'react-native'
@@ -50,10 +43,7 @@ export function MailboxForm(props: Props) {
 function CreateForm({ domainOptions, userOrgId, onDone }: CreateProps) {
     const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
-    const [mailboxesCollection, membersCollection] = useStore(
-        'mail_mailboxes',
-        'mail_mailbox_members'
-    )
+    const [mailboxesCollection, membersCollection] = useStore('mail_mailboxes', 'mail_mailbox_members')
 
     const {
         control,
@@ -98,10 +88,10 @@ function CreateForm({ domainOptions, userOrgId, onDone }: CreateProps) {
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
 
-    const onSubmit = handleSubmit(d => createMutation.mutate(d))
+    const onSubmit = handleSubmit((d) => createMutation.mutate(d))
     const canSubmit = !createMutation.isPending && isDirty && isValid
     const values = watch()
-    const domainName = domainOptions.find(d => d.value === values.domain)?.label ?? ''
+    const domainName = domainOptions.find((d) => d.value === values.domain)?.label ?? ''
 
     return (
         <FormLayout
@@ -143,7 +133,7 @@ function EditForm({ mailboxId, initial, domainName, onDone }: EditProps) {
 
     const editMutation = useMutation({
         mutationFn: mutation(function* (data: MailboxFormValues) {
-            yield mailboxesCollection.update(mailboxId, draft => {
+            yield mailboxesCollection.update(mailboxId, (draft) => {
                 draft.address = data.address
                 draft.display_name = data.display_name
                 draft.name = data.display_name
@@ -153,7 +143,7 @@ function EditForm({ mailboxId, initial, domainName, onDone }: EditProps) {
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
 
-    const onSubmit = handleSubmit(d => editMutation.mutate(d))
+    const onSubmit = handleSubmit((d) => editMutation.mutate(d))
     const canSubmit = !editMutation.isPending && isDirty && isValid
     const values = watch()
 
@@ -208,10 +198,7 @@ function FormLayout({
     const borderColor = useThemeColor('border')
     const mutedColor = useThemeColor('muted-foreground')
     const fgColor = useThemeColor('foreground')
-    const previewInitial = (preview.displayName || preview.address || '?')
-        .trim()
-        .charAt(0)
-        .toUpperCase()
+    const previewInitial = (preview.displayName || preview.address || '?').trim().charAt(0).toUpperCase()
 
     return (
         <View className="gap-4">
@@ -224,12 +211,7 @@ function FormLayout({
                 hint={`will be: ${preview.address || '…'}@${preview.domainName || '…'}`}
             />
             {domainOptions.length > 1 && !domainDisabled ? (
-                <SelectInput
-                    control={control}
-                    name="domain"
-                    label="Domain"
-                    options={domainOptions}
-                />
+                <SelectInput control={control} name="domain" label="Domain" options={domainOptions} />
             ) : null}
             <TextInput
                 control={control}
@@ -238,28 +220,19 @@ function FormLayout({
                 placeholder="Support Team"
                 hint="shown in the From: header and in the admin list"
             />
-            <View
-                className="flex-row gap-3 items-center rounded-lg p-3"
-                style={{ borderWidth: 1, borderColor }}
-            >
+            <View className="flex-row gap-3 items-center rounded-lg p-3" style={{ borderWidth: 1, borderColor }}>
                 <View
                     className="items-center justify-center rounded-lg"
                     style={{ width: 30, height: 30, backgroundColor: `${primaryColor}1F` }}
                 >
-                    <Text style={{ color: primaryColor, fontWeight: '700', fontSize: 13 }}>
-                        {previewInitial}
-                    </Text>
+                    <Text style={{ color: primaryColor, fontWeight: '700', fontSize: 13 }}>{previewInitial}</Text>
                 </View>
                 <View className="flex-1" style={{ minWidth: 0 }}>
                     <Text style={{ fontSize: 13, fontWeight: '600', color: fgColor }}>
                         {preview.address || '…'}
-                        <Text style={{ color: mutedColor, fontWeight: '500' }}>
-                            @{preview.domainName || '…'}
-                        </Text>
+                        <Text style={{ color: mutedColor, fontWeight: '500' }}>@{preview.domainName || '…'}</Text>
                     </Text>
-                    <Text style={{ fontSize: 11.5, color: mutedColor }}>
-                        {preview.displayName || 'Display name'}
-                    </Text>
+                    <Text style={{ fontSize: 11.5, color: mutedColor }}>{preview.displayName || 'Display name'}</Text>
                 </View>
                 <Text
                     style={{

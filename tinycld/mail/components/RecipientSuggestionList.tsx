@@ -15,10 +15,7 @@ interface RecipientSuggestionListProps {
     onSelect: (contact: Suggestion) => void
 }
 
-const webShadow =
-    Platform.OS === 'web'
-        ? ({ boxShadow: '0 4px 16px rgba(0,0,0,0.18)' } as Record<string, unknown>)
-        : {}
+const webShadow = Platform.OS === 'web' ? ({ boxShadow: '0 4px 16px rgba(0,0,0,0.18)' } as Record<string, unknown>) : {}
 
 function HighlightText({ text, query, bold }: { text: string; query: string; bold?: boolean }) {
     const foregroundColor = useThemeColor('foreground')
@@ -56,23 +53,15 @@ function HighlightText({ text, query, bold }: { text: string; query: string; bol
     }
 
     return (
-        <Text
-            style={{ fontSize: 13, fontWeight: bold ? '500' : undefined, color: foregroundColor }}
-        >
+        <Text style={{ fontSize: 13, fontWeight: bold ? '500' : undefined, color: foregroundColor }}>
             {text.slice(0, index)}
-            <Text style={{ fontSize: 13, fontWeight: '700' }}>
-                {text.slice(index, index + query.length)}
-            </Text>
+            <Text style={{ fontSize: 13, fontWeight: '700' }}>{text.slice(index, index + query.length)}</Text>
             {text.slice(index + query.length)}
         </Text>
     )
 }
 
-export function RecipientSuggestionList({
-    suggestions,
-    query,
-    onSelect,
-}: RecipientSuggestionListProps) {
+export function RecipientSuggestionList({ suggestions, query, onSelect }: RecipientSuggestionListProps) {
     const backgroundColor = useThemeColor('background')
     const borderColor = useThemeColor('border')
     const hoverBgColor = useThemeColor('surface-secondary')
@@ -94,10 +83,8 @@ export function RecipientSuggestionList({
             }}
         >
             <ScrollView style={{ maxHeight: 250 }} keyboardShouldPersistTaps="handled">
-                {suggestions.map(contact => {
-                    const fullName = [contact.first_name, contact.last_name]
-                        .filter(Boolean)
-                        .join(' ')
+                {suggestions.map((contact) => {
+                    const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(' ')
 
                     return (
                         <Pressable
@@ -113,11 +100,7 @@ export function RecipientSuggestionList({
                                 cursor: 'pointer' as 'auto',
                             })}
                         >
-                            <ContactAvatar
-                                firstName={contact.first_name}
-                                lastName={contact.last_name}
-                                size={32}
-                            />
+                            <ContactAvatar firstName={contact.first_name} lastName={contact.last_name} size={32} />
                             <View className="flex-1" style={{ gap: 2 }}>
                                 <HighlightText text={fullName} query={query} bold />
                                 <HighlightText text={contact.email ?? ''} query={query} />

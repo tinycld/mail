@@ -10,16 +10,10 @@ interface UseDefaultFromIdentityParams {
     replyToAddresses?: string[]
 }
 
-export function useDefaultFromIdentity({
-    mode,
-    replyToAddresses,
-}: UseDefaultFromIdentityParams): FromIdentity {
+export function useDefaultFromIdentity({ mode, replyToAddresses }: UseDefaultFromIdentityParams): FromIdentity {
     const identities = useSendableIdentities()
     const addresses = replyToAddresses ?? []
     const key = addresses.join('\x00').toLowerCase()
     // biome-ignore lint/correctness/useExhaustiveDependencies: `key` is a stable primitive derived from `addresses`; depending on `addresses` directly would re-memo on every render since callers typically pass a fresh array
-    return useMemo(
-        () => pickDefaultFrom({ mode, identities, replyToAddresses: addresses }),
-        [mode, identities, key]
-    )
+    return useMemo(() => pickDefaultFrom({ mode, identities, replyToAddresses: addresses }), [mode, identities, key])
 }

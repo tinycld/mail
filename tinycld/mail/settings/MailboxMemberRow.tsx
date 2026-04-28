@@ -14,15 +14,7 @@ interface Props {
     onRemove: () => void
 }
 
-export function MailboxMemberRow({
-    name,
-    email,
-    isYou = false,
-    role,
-    canRemove,
-    onToggleRole,
-    onRemove,
-}: Props) {
+export function MailboxMemberRow({ name, email, isYou = false, role, canRemove, onToggleRole, onRemove }: Props) {
     const fgColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const primaryColor = useThemeColor('primary')
@@ -38,18 +30,14 @@ export function MailboxMemberRow({
                     {name}
                     {isYou && <Text style={{ color: mutedColor, fontWeight: '500' }}> · you</Text>}
                 </Text>
-                {email ? (
-                    <Text style={{ fontSize: 11.5, color: mutedColor, marginTop: 1 }}>{email}</Text>
-                ) : null}
+                {email ? <Text style={{ fontSize: 11.5, color: mutedColor, marginTop: 1 }}>{email}</Text> : null}
             </View>
             <Pressable
                 onPress={onToggleRole}
                 className="rounded-md"
                 style={{ paddingVertical: 3, paddingHorizontal: 8, backgroundColor: pillBg }}
             >
-                <Text style={{ fontSize: 11, fontWeight: '600', color: pillFg }}>
-                    {isOwner ? 'Owner' : 'Member'}
-                </Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: pillFg }}>{isOwner ? 'Owner' : 'Member'}</Text>
             </Pressable>
             <Pressable
                 onPress={onRemove}

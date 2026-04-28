@@ -15,11 +15,7 @@ interface ContactSuggestionsListProps {
 // only mounted when @tinycld/contacts is linked (see the parent guard),
 // so `useStore('contacts')` is safe here — it would throw synchronously
 // if the collection were missing.
-function ContactSuggestionsFromCollection({
-    activeQuery,
-    committedEmails,
-    onSelect,
-}: ContactSuggestionsListProps) {
+function ContactSuggestionsFromCollection({ activeQuery, committedEmails, onSelect }: ContactSuggestionsListProps) {
     // biome-ignore lint/suspicious/noExplicitAny: cross-package soft dependency — see mail/README
     const [contactsCollection] = useStore('contacts' as any) as [any]
 
@@ -34,19 +30,9 @@ function ContactSuggestionsFromCollection({
         []
     )
 
-    const suggestions = filterContactSuggestions(
-        data as ContactSuggestion[] | undefined,
-        activeQuery,
-        committedEmails
-    )
+    const suggestions = filterContactSuggestions(data as ContactSuggestion[] | undefined, activeQuery, committedEmails)
     if (suggestions.length === 0) return null
-    return (
-        <RecipientSuggestionList
-            suggestions={suggestions}
-            query={activeQuery}
-            onSelect={onSelect}
-        />
-    )
+    return <RecipientSuggestionList suggestions={suggestions} query={activeQuery} onSelect={onSelect} />
 }
 
 // Runtime gate: only subscribe to the contacts collection when the
@@ -54,7 +40,7 @@ function ContactSuggestionsFromCollection({
 // if contacts is absent we render nothing and never call useStore.
 export function ContactSuggestionsList(props: ContactSuggestionsListProps) {
     const packages = usePackages()
-    const contactsInstalled = packages.some(p => p.slug === 'contacts')
+    const contactsInstalled = packages.some((p) => p.slug === 'contacts')
     if (!contactsInstalled) return null
     return <ContactSuggestionsFromCollection {...props} />
 }

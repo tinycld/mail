@@ -18,13 +18,12 @@ export const useMailSidebarStore = create<SidebarState>()(
                 const current = get().expanded[mailboxId] ?? defaultExpanded
                 set({ expanded: { ...get().expanded, [mailboxId]: !current } })
             },
-            isExpanded: (mailboxId, defaultExpanded) =>
-                get().expanded[mailboxId] ?? defaultExpanded,
+            isExpanded: (mailboxId, defaultExpanded) => get().expanded[mailboxId] ?? defaultExpanded,
         }),
         {
             name: 'tinycld_mail_sidebar',
             storage: asyncStorage,
-            partialize: s => ({ expanded: s.expanded }),
+            partialize: (s) => ({ expanded: s.expanded }),
         }
     )
 )

@@ -10,12 +10,7 @@ interface Props {
     onSelect: (mailboxId: string, aliasId: string | null) => void
 }
 
-export function FromIdentityPicker({
-    identities,
-    selectedMailboxId,
-    selectedAliasId,
-    onSelect,
-}: Props) {
+export function FromIdentityPicker({ identities, selectedMailboxId, selectedAliasId, onSelect }: Props) {
     const [open, setOpen] = useState(false)
     const primaryColor = useThemeColor('primary')
     const fgColor = useThemeColor('foreground')
@@ -25,11 +20,7 @@ export function FromIdentityPicker({
     return (
         <>
             <Pressable onPress={() => setOpen(true)}>
-                <Text
-                    style={{ fontSize: 13, color: primaryColor, textDecorationLine: 'underline' }}
-                >
-                    Change
-                </Text>
+                <Text style={{ fontSize: 13, color: primaryColor, textDecorationLine: 'underline' }}>Change</Text>
             </Pressable>
 
             <Modal transparent visible={open} onRequestClose={() => setOpen(false)}>
@@ -38,11 +29,8 @@ export function FromIdentityPicker({
                     style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
                     onPress={() => setOpen(false)}
                 >
-                    <View
-                        className="rounded-xl p-3 gap-3"
-                        style={{ backgroundColor: surfaceBg, minWidth: 320 }}
-                    >
-                        {identities.map(identity => (
+                    <View className="rounded-xl p-3 gap-3" style={{ backgroundColor: surfaceBg, minWidth: 320 }}>
+                        {identities.map((identity) => (
                             <View key={identity.mailboxId} className="gap-1">
                                 <Text
                                     style={{
@@ -56,22 +44,19 @@ export function FromIdentityPicker({
                                 </Text>
                                 <IdentityRow
                                     label={`${identity.mailboxDisplayName} <${identity.primaryAddress}>`}
-                                    isSelected={
-                                        selectedMailboxId === identity.mailboxId && !selectedAliasId
-                                    }
+                                    isSelected={selectedMailboxId === identity.mailboxId && !selectedAliasId}
                                     onPress={() => {
                                         onSelect(identity.mailboxId, null)
                                         setOpen(false)
                                     }}
                                     color={fgColor}
                                 />
-                                {identity.aliases.map(alias => (
+                                {identity.aliases.map((alias) => (
                                     <IdentityRow
                                         key={alias.id}
                                         label={alias.address}
                                         isSelected={
-                                            selectedMailboxId === identity.mailboxId &&
-                                            selectedAliasId === alias.id
+                                            selectedMailboxId === identity.mailboxId && selectedAliasId === alias.id
                                         }
                                         onPress={() => {
                                             onSelect(identity.mailboxId, alias.id)

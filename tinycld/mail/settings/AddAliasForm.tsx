@@ -29,21 +29,16 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
     const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
 
-    const [aliasesCollection, mailboxesCollection] = useStore(
-        'mail_mailbox_aliases',
-        'mail_mailboxes'
-    )
+    const [aliasesCollection, mailboxesCollection] = useStore('mail_mailbox_aliases', 'mail_mailboxes')
 
     const { data: mailboxesInDomain } = useOrgLiveQuery(
-        query =>
+        (query) =>
             query
                 .from({ mail_mailboxes: mailboxesCollection })
                 .where(({ mail_mailboxes }) => eq(mail_mailboxes.domain, mailboxDomainId)),
         [mailboxDomainId]
     )
-    const { data: aliasesAll } = useOrgLiveQuery(query =>
-        query.from({ mail_mailbox_aliases: aliasesCollection })
-    )
+    const { data: aliasesAll } = useOrgLiveQuery((query) => query.from({ mail_mailbox_aliases: aliasesCollection }))
 
     const {
         control,
@@ -62,13 +57,13 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
         mutationFn: mutation(function* (data: z.infer<typeof schema>) {
             const addr = data.address.toLowerCase().trim()
 
-            const primaryCollision = (mailboxesInDomain ?? []).some(m => m.address === addr)
+            const primaryCollision = (mailboxesInDomain ?? []).some((m) => m.address === addr)
             if (primaryCollision) {
                 throw new Error('Address is already a primary mailbox on this domain')
             }
-            const mailboxIdsInDomain = new Set((mailboxesInDomain ?? []).map(m => m.id))
+            const mailboxIdsInDomain = new Set((mailboxesInDomain ?? []).map((m) => m.id))
             const aliasCollision = (aliasesAll ?? []).some(
-                a => mailboxIdsInDomain.has(a.mailbox) && a.address === addr
+                (a) => mailboxIdsInDomain.has(a.mailbox) && a.address === addr
             )
             if (aliasCollision) {
                 throw new Error('Address is already an alias on this domain')
@@ -86,7 +81,7 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
 
-    const onSubmit = handleSubmit(d => create.mutate(d))
+    const onSubmit = handleSubmit((d) => create.mutate(d))
     const canSubmit = !create.isPending && isDirty
 
     return (
@@ -113,9 +108,7 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
                 >
                     <View className="flex-row gap-1 items-center">
                         <Plus size={12} color={primaryFgColor} />
-                        <Text style={{ color: primaryFgColor, fontSize: 12, fontWeight: '600' }}>
-                            Add
-                        </Text>
+                        <Text style={{ color: primaryFgColor, fontSize: 12, fontWeight: '600' }}>Add</Text>
                     </View>
                 </Pressable>
             </View>

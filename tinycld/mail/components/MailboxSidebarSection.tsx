@@ -38,8 +38,8 @@ export function MailboxSidebarSection({
     const fgColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
 
-    const isExpanded = useMailSidebarStore(s => s.isExpanded(mailboxId, defaultExpanded))
-    const toggle = useMailSidebarStore(s => s.toggle)
+    const isExpanded = useMailSidebarStore((s) => s.isExpanded(mailboxId, defaultExpanded))
+    const toggle = useMailSidebarStore((s) => s.toggle)
 
     const aggregateUnread = counts.inbox
 
@@ -52,19 +52,13 @@ export function MailboxSidebarSection({
 
     return (
         <View>
-            <Pressable
-                onPress={handleHeaderPress}
-                className="flex-row gap-1 items-center pl-1 pr-3 py-2"
-            >
+            <Pressable onPress={handleHeaderPress} className="flex-row gap-1 items-center pl-1 pr-3 py-2">
                 {isExpanded ? (
                     <ChevronDown size={14} color={mutedColor} />
                 ) : (
                     <ChevronRight size={14} color={mutedColor} />
                 )}
-                <Text
-                    className="flex-1"
-                    style={{ fontSize: 13, fontWeight: '600', color: fgColor }}
-                >
+                <Text className="flex-1" style={{ fontSize: 13, fontWeight: '600', color: fgColor }}>
                     {mailboxLabel}
                 </Text>
                 {!isExpanded && aggregateUnread > 0 && (

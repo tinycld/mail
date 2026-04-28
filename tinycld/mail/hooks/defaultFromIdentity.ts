@@ -32,11 +32,7 @@ interface PickDefaultFromParams {
  *  - if no match, fall back to identities[0] primary.
  *  - returns { mailboxId: '', aliasId: null } when identities is empty.
  */
-export function pickDefaultFrom({
-    mode,
-    identities,
-    replyToAddresses,
-}: PickDefaultFromParams): FromIdentity {
+export function pickDefaultFrom({ mode, identities, replyToAddresses }: PickDefaultFromParams): FromIdentity {
     if (identities.length === 0) return { mailboxId: '', aliasId: null }
     const fallback: FromIdentity = { mailboxId: identities[0].mailboxId, aliasId: null }
 
@@ -79,7 +75,7 @@ export function filterOwnAddresses({
 }: FilterOwnAddressesParams): { name: string; email: string }[] {
     const own = new Set<string>([
         identity.primaryAddress.toLowerCase(),
-        ...identity.aliases.map(a => a.address.toLowerCase()),
+        ...identity.aliases.map((a) => a.address.toLowerCase()),
     ])
-    return recipients.filter(r => !own.has(r.email.toLowerCase()))
+    return recipients.filter((r) => !own.has(r.email.toLowerCase()))
 }

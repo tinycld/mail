@@ -63,20 +63,12 @@ export function ComposeFields({ control, errors, onSubjectBlur }: ComposeFieldsP
                     <View className="flex-row gap-2 ml-2">
                         {showCc ? null : (
                             <Pressable onPress={() => setShowCc(true)} tabIndex={-1}>
-                                <Text
-                                    style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}
-                                >
-                                    Cc
-                                </Text>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>Cc</Text>
                             </Pressable>
                         )}
                         {showBcc ? null : (
                             <Pressable onPress={() => setShowBcc(true)} tabIndex={-1}>
-                                <Text
-                                    style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}
-                                >
-                                    Bcc
-                                </Text>
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>Bcc</Text>
                             </Pressable>
                         )}
                     </View>

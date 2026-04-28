@@ -18,7 +18,7 @@ export function useAttachments() {
     const totalSize = attachments.reduce((sum, a) => sum + a.size, 0)
 
     const addFiles = (files: File[]) => {
-        const incoming = files.map(file => ({
+        const incoming = files.map((file) => ({
             id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
             name: file.name,
             size: file.size,
@@ -26,7 +26,7 @@ export function useAttachments() {
             file,
         }))
 
-        setAttachments(prev => {
+        setAttachments((prev) => {
             const combined = [...prev, ...incoming]
             if (combined.length > MAX_FILES) {
                 throw new Error(`Maximum ${MAX_FILES} attachments allowed`)
@@ -40,7 +40,7 @@ export function useAttachments() {
     }
 
     const removeFile = (id: string) => {
-        setAttachments(prev => prev.filter(a => a.id !== id))
+        setAttachments((prev) => prev.filter((a) => a.id !== id))
     }
 
     const clearAll = () => {

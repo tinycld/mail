@@ -15,12 +15,7 @@ import {
     useBridgeState,
     useEditorBridge,
 } from '@10play/tentap-editor'
-import type {
-    EditorCommands,
-    EditorHandle,
-    EditorResult,
-    EditorToolbarState,
-} from '@tinycld/core/lib/editor-types'
+import type { EditorCommands, EditorHandle, EditorResult, EditorToolbarState } from '@tinycld/core/lib/editor-types'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useMemo } from 'react'
 import { View } from 'react-native'

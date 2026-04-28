@@ -73,10 +73,8 @@ describe('flattenSendableIdentities', () => {
             [al('a1', 'mb2', 'help')],
             [dn('d1', 'acme.com')]
         )
-        expect(got.find(i => i.mailboxId === 'mb1')?.aliases).toEqual([])
-        expect(got.find(i => i.mailboxId === 'mb2')?.aliases).toEqual([
-            { id: 'a1', address: 'help@acme.com' },
-        ])
+        expect(got.find((i) => i.mailboxId === 'mb1')?.aliases).toEqual([])
+        expect(got.find((i) => i.mailboxId === 'mb2')?.aliases).toEqual([{ id: 'a1', address: 'help@acme.com' }])
     })
 
     it('falls back to address when display_name is empty', () => {
@@ -102,11 +100,7 @@ describe('flattenSendableIdentities', () => {
     })
 
     it('skips mailboxes whose domain is unknown', () => {
-        const got = flattenSendableIdentities(
-            [mb({ id: 'mb1', address: 'alice', domain: 'd_missing' })],
-            [],
-            []
-        )
+        const got = flattenSendableIdentities([mb({ id: 'mb1', address: 'alice', domain: 'd_missing' })], [], [])
         expect(got).toEqual([])
     })
 })

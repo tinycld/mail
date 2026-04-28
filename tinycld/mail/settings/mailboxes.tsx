@@ -8,11 +8,7 @@ import { Link } from 'expo-router'
 import { Plus } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import {
-    filterAndGroupMailboxes,
-    type MailboxListItem,
-    type TypeFilter,
-} from '../hooks/filterMailboxes'
+import { filterAndGroupMailboxes, type MailboxListItem, type TypeFilter } from '../hooks/filterMailboxes'
 import { type DrawerMode, MailboxDrawer } from './MailboxDrawer'
 import { MailboxListRow } from './MailboxListRow'
 import { MailboxSearchBar } from './MailboxSearchBar'
@@ -33,13 +29,7 @@ interface OrgMemberRow {
 }
 
 function useMailboxData(currentUserOrgId: string) {
-    const [
-        domainsCollection,
-        mailboxesCollection,
-        membersCollection,
-        aliasesCollection,
-        userOrgCollection,
-    ] = useStore(
+    const [domainsCollection, mailboxesCollection, membersCollection, aliasesCollection, userOrgCollection] = useStore(
         'mail_domains',
         'mail_mailboxes',
         'mail_mailbox_members',
@@ -48,36 +38,30 @@ function useMailboxData(currentUserOrgId: string) {
     )
 
     const { data: domains } = useOrgLiveQuery((query, { orgId }) =>
-        query
-            .from({ mail_domains: domainsCollection })
-            .where(({ mail_domains }) => eq(mail_domains.org, orgId))
+        query.from({ mail_domains: domainsCollection }).where(({ mail_domains }) => eq(mail_domains.org, orgId))
     )
 
     const domainId = (domains ?? [])[0]?.id ?? ''
     const { data: mailboxes } = useOrgLiveQuery(
-        query =>
+        (query) =>
             query
                 .from({ mail_mailboxes: mailboxesCollection })
                 .where(({ mail_mailboxes }) => eq(mail_mailboxes.domain, domainId)),
         [domainId]
     )
 
-    const { data: members } = useOrgLiveQuery(query =>
-        query.from({ mail_mailbox_members: membersCollection })
-    )
+    const { data: members } = useOrgLiveQuery((query) => query.from({ mail_mailbox_members: membersCollection }))
 
-    const { data: aliases } = useOrgLiveQuery(query =>
-        query.from({ mail_mailbox_aliases: aliasesCollection })
-    )
+    const { data: aliases } = useOrgLiveQuery((query) => query.from({ mail_mailbox_aliases: aliasesCollection }))
 
     const { data: userOrgs } = useOrgLiveQuery((query, { orgId }) =>
         query.from({ user_org: userOrgCollection }).where(({ user_org }) => eq(user_org.org, orgId))
     )
 
-    const domainMap = new Map((domains ?? []).map(d => [d.id, d.domain]))
+    const domainMap = new Map((domains ?? []).map((d) => [d.id, d.domain]))
 
     const userOrgsById = new Map(
-        (userOrgs ?? []).map(uo => [
+        (userOrgs ?? []).map((uo) => [
             uo.id,
             {
                 userOrgId: uo.id,
@@ -112,8 +96,8 @@ function useMailboxData(currentUserOrgId: string) {
     }
 
     const items: MailboxListItem[] = (mailboxes ?? [])
-        .filter(mb => domainMap.has(mb.domain))
-        .map(mb => {
+        .filter((mb) => domainMap.has(mb.domain))
+        .map((mb) => {
             const mbMembers = membersByMailbox.get(mb.id) ?? []
             const mbAliases = aliasesByMailbox.get(mb.id) ?? []
             return {
@@ -124,15 +108,15 @@ function useMailboxData(currentUserOrgId: string) {
                 type: mb.type,
                 memberCount: mbMembers.length,
                 aliasCount: mbAliases.length,
-                memberNames: mbMembers.map(m => m.userName),
-                memberEmails: mbMembers.map(m => m.userEmail).filter(Boolean),
+                memberNames: mbMembers.map((m) => m.userName),
+                memberEmails: mbMembers.map((m) => m.userEmail).filter(Boolean),
                 aliasAddresses: mbAliases,
             }
         })
 
     const orgMembersList: OrgMemberRow[] = Array.from(userOrgsById.values())
 
-    const rawMailboxes = new Map((mailboxes ?? []).map(mb => [mb.id, mb]))
+    const rawMailboxes = new Map((mailboxes ?? []).map((mb) => [mb.id, mb]))
 
     return {
         domains: domains ?? [],
@@ -165,14 +149,13 @@ export default function MailboxesSettings() {
         [data.items, query, typeFilter]
     )
 
-    const selectedMailboxId =
-        drawerMode.kind === 'view' || drawerMode.kind === 'edit' ? drawerMode.mailboxId : null
+    const selectedMailboxId = drawerMode.kind === 'view' || drawerMode.kind === 'edit' ? drawerMode.mailboxId : null
 
     const selectedMailbox = useMemo(() => {
         if (!selectedMailboxId) return null
         const raw = data.rawMailboxes.get(selectedMailboxId)
         if (!raw) return null
-        const domainName = data.domains.find(d => d.id === raw.domain)?.domain ?? ''
+        const domainName = data.domains.find((d) => d.id === raw.domain)?.domain ?? ''
         return {
             id: raw.id,
             address: raw.address,
@@ -184,37 +167,27 @@ export default function MailboxesSettings() {
         }
     }, [data.domains, data.rawMailboxes, selectedMailboxId])
 
-    const selectedMembers = selectedMailboxId
-        ? (data.membersByMailbox.get(selectedMailboxId) ?? [])
-        : []
+    const selectedMembers = selectedMailboxId ? (data.membersByMailbox.get(selectedMailboxId) ?? []) : []
 
     if (!isAdmin) {
         return (
-            <View
-                className="flex-1 items-center justify-center p-5"
-                style={{ backgroundColor: bgColor }}
-            >
+            <View className="flex-1 items-center justify-center p-5" style={{ backgroundColor: bgColor }}>
                 <Text style={{ color: mutedColor }}>Admin access required</Text>
             </View>
         )
     }
 
-    const domainOptions = data.domains.map(d => ({ label: d.domain, value: d.id }))
+    const domainOptions = data.domains.map((d) => ({ label: d.domain, value: d.id }))
     const hasDomains = data.domains.length > 0
 
     return (
         <>
-            <ScrollView
-                contentContainerStyle={{ flexGrow: 1 }}
-                style={{ backgroundColor: bgColor }}
-            >
+            <ScrollView contentContainerStyle={{ flexGrow: 1 }} style={{ backgroundColor: bgColor }}>
                 <View className="flex-1 gap-5 p-5">
                     <View className="flex-row items-start justify-between gap-4 flex-wrap">
                         <View className="gap-1 flex-1" style={{ minWidth: 220 }}>
                             <Text style={{ fontSize: 11, color: mutedColor }}>Settings · Mail</Text>
-                            <Text style={{ fontSize: 22, fontWeight: '700', color: fgColor }}>
-                                Mailboxes
-                            </Text>
+                            <Text style={{ fontSize: 22, fontWeight: '700', color: fgColor }}>Mailboxes</Text>
                             <Text style={{ fontSize: 13, color: mutedColor }}>
                                 Manage shared mailboxes, members, and aliases for your organization.
                             </Text>
@@ -231,11 +204,7 @@ export default function MailboxesSettings() {
                             }}
                         >
                             <Plus size={14} color={primaryFgColor} />
-                            <Text
-                                style={{ color: primaryFgColor, fontSize: 13, fontWeight: '600' }}
-                            >
-                                New mailbox
-                            </Text>
+                            <Text style={{ color: primaryFgColor, fontSize: 13, fontWeight: '600' }}>New mailbox</Text>
                         </Pressable>
                     </View>
 
@@ -247,9 +216,7 @@ export default function MailboxesSettings() {
                                     section: ['mail', 'provider'],
                                 })}
                             >
-                                <Text
-                                    style={{ color: accentColor, textDecorationLine: 'underline' }}
-                                >
+                                <Text style={{ color: accentColor, textDecorationLine: 'underline' }}>
                                     Add a domain in Provider settings
                                 </Text>
                             </Link>{' '}
@@ -292,38 +259,32 @@ export default function MailboxesSettings() {
                                 </View>
                             )}
 
-                            {data.items.length > 0 &&
-                                grouped.shared.length === 0 &&
-                                grouped.personal.length === 0 && (
-                                    <View className="items-center gap-2 p-6">
-                                        <Text style={{ color: mutedColor }}>
-                                            No mailboxes match "{query}".
+                            {data.items.length > 0 && grouped.shared.length === 0 && grouped.personal.length === 0 && (
+                                <View className="items-center gap-2 p-6">
+                                    <Text style={{ color: mutedColor }}>No mailboxes match "{query}".</Text>
+                                    <Pressable onPress={() => setQuery('')}>
+                                        <Text
+                                            style={{
+                                                color: accentColor,
+                                                fontSize: 13,
+                                                fontWeight: '600',
+                                            }}
+                                        >
+                                            Clear search
                                         </Text>
-                                        <Pressable onPress={() => setQuery('')}>
-                                            <Text
-                                                style={{
-                                                    color: accentColor,
-                                                    fontSize: 13,
-                                                    fontWeight: '600',
-                                                }}
-                                            >
-                                                Clear search
-                                            </Text>
-                                        </Pressable>
-                                    </View>
-                                )}
+                                    </Pressable>
+                                </View>
+                            )}
 
                             {grouped.shared.length > 0 && (
                                 <View className="gap-1">
                                     <GroupLabel label="Shared" count={grouped.shared.length} />
-                                    {grouped.shared.map(item => (
+                                    {grouped.shared.map((item) => (
                                         <MailboxListRow
                                             key={item.id}
                                             item={item}
                                             isActive={selectedMailboxId === item.id}
-                                            onPress={() =>
-                                                setDrawerMode({ kind: 'view', mailboxId: item.id })
-                                            }
+                                            onPress={() => setDrawerMode({ kind: 'view', mailboxId: item.id })}
                                         />
                                     ))}
                                 </View>
@@ -332,14 +293,12 @@ export default function MailboxesSettings() {
                             {grouped.personal.length > 0 && (
                                 <View className="gap-1">
                                     <GroupLabel label="Personal" count={grouped.personal.length} />
-                                    {grouped.personal.map(item => (
+                                    {grouped.personal.map((item) => (
                                         <MailboxListRow
                                             key={item.id}
                                             item={item}
                                             isActive={selectedMailboxId === item.id}
-                                            onPress={() =>
-                                                setDrawerMode({ kind: 'view', mailboxId: item.id })
-                                            }
+                                            onPress={() => setDrawerMode({ kind: 'view', mailboxId: item.id })}
                                         />
                                     ))}
                                 </View>
@@ -353,9 +312,7 @@ export default function MailboxesSettings() {
                                     <Text style={{ fontSize: 12, color: mutedColor }}>
                                         {data.items.length} mailbox
                                         {data.items.length !== 1 ? 'es' : ''}
-                                        {data.domains[0]?.domain
-                                            ? ` · ${data.domains[0].domain}`
-                                            : ''}
+                                        {data.domains[0]?.domain ? ` · ${data.domains[0].domain}` : ''}
                                     </Text>
                                     <Link
                                         href={orgHref('settings/[...section]', {
@@ -382,8 +339,8 @@ export default function MailboxesSettings() {
             <MailboxDrawer
                 mode={drawerMode}
                 onClose={() => setDrawerMode({ kind: 'closed' })}
-                onSwitchToEdit={id => setDrawerMode({ kind: 'edit', mailboxId: id })}
-                onSwitchToView={id => setDrawerMode({ kind: 'view', mailboxId: id })}
+                onSwitchToEdit={(id) => setDrawerMode({ kind: 'edit', mailboxId: id })}
+                onSwitchToView={(id) => setDrawerMode({ kind: 'view', mailboxId: id })}
                 mailbox={selectedMailbox}
                 members={selectedMembers}
                 orgMembers={data.orgMembers}

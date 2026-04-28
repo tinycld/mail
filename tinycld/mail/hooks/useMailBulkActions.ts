@@ -5,10 +5,7 @@ import type { ThreadListItem } from '../components/thread-list-item'
 import type { MailThreadState } from '../types'
 
 interface ThreadStateCollection {
-    update(
-        id: string | number,
-        callback: (draft: MailThreadState) => void
-    ): Transaction<Record<string, unknown>>
+    update(id: string | number, callback: (draft: MailThreadState) => void): Transaction<Record<string, unknown>>
 }
 
 export function useMailBulkActions(
@@ -22,8 +19,8 @@ export function useMailBulkActions(
 
     const archiveSelected = useMutation({
         mutationFn: mutation(function* () {
-            yield selectedItems.map(item =>
-                col.update(item.stateId, draft => {
+            yield selectedItems.map((item) =>
+                col.update(item.stateId, (draft) => {
                     draft.folder = 'archive'
                 })
             )
@@ -33,8 +30,8 @@ export function useMailBulkActions(
 
     const spamSelected = useMutation({
         mutationFn: mutation(function* () {
-            yield selectedItems.map(item =>
-                col.update(item.stateId, draft => {
+            yield selectedItems.map((item) =>
+                col.update(item.stateId, (draft) => {
                     draft.folder = 'spam'
                 })
             )
@@ -44,8 +41,8 @@ export function useMailBulkActions(
 
     const trashSelected = useMutation({
         mutationFn: mutation(function* () {
-            yield selectedItems.map(item =>
-                col.update(item.stateId, draft => {
+            yield selectedItems.map((item) =>
+                col.update(item.stateId, (draft) => {
                     draft.folder = 'trash'
                 })
             )
@@ -55,8 +52,8 @@ export function useMailBulkActions(
 
     const toggleReadSelected = useMutation<void, Error, { markAsRead: boolean }>({
         mutationFn: mutation(function* ({ markAsRead }) {
-            yield selectedItems.map(item =>
-                col.update(item.stateId, draft => {
+            yield selectedItems.map((item) =>
+                col.update(item.stateId, (draft) => {
                     draft.is_read = markAsRead
                 })
             )
@@ -66,8 +63,8 @@ export function useMailBulkActions(
 
     const moveSelected = useMutation<void, Error, MailThreadState['folder']>({
         mutationFn: mutation(function* (folder) {
-            yield selectedItems.map(item =>
-                col.update(item.stateId, draft => {
+            yield selectedItems.map((item) =>
+                col.update(item.stateId, (draft) => {
                     draft.folder = folder
                 })
             )
@@ -77,8 +74,8 @@ export function useMailBulkActions(
 
     const toggleStarSelected = useMutation<void, Error, { star: boolean }>({
         mutationFn: mutation(function* ({ star }) {
-            yield selectedItems.map(item =>
-                col.update(item.stateId, draft => {
+            yield selectedItems.map((item) =>
+                col.update(item.stateId, (draft) => {
                     draft.is_starred = star
                 })
             )

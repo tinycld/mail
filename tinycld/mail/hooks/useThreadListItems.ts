@@ -36,7 +36,7 @@ export function useThreadListItems(
     const { labels, labelMap } = useLabels()
 
     const { data: threadStates } = useOrgLiveQuery(
-        query =>
+        (query) =>
             query
                 .from({ mail_thread_state: threadStateCollection })
                 .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, userOrgId)),
@@ -76,15 +76,12 @@ export function useThreadListItems(
         query
             .from({ label_assignments: assignmentsCollection })
             .where(({ label_assignments }) =>
-                and(
-                    eq(label_assignments.collection, 'mail_thread_state'),
-                    eq(label_assignments.user_org, userOrgId)
-                )
+                and(eq(label_assignments.collection, 'mail_thread_state'), eq(label_assignments.user_org, userOrgId))
             )
     )
 
     const { data: targetMailbox } = useOrgLiveQuery(
-        query =>
+        (query) =>
             query
                 .from({ mail_mailboxes: mailboxesCollection })
                 .where(({ mail_mailboxes }) => eq(mail_mailboxes.id, filter.mailboxId)),
@@ -93,25 +90,20 @@ export function useThreadListItems(
     const mailboxType = targetMailbox?.[0]?.type ?? 'personal'
 
     const { data: coMembers } = useOrgLiveQuery(
-        query =>
+        (query) =>
             query
                 .from({ mail_mailbox_members: membersCollection })
-                .where(({ mail_mailbox_members }) =>
-                    eq(mail_mailbox_members.mailbox, filter.mailboxId)
-                ),
+                .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.mailbox, filter.mailboxId)),
         [filter.mailboxId]
     )
 
-    const needsSharedTeamStates =
-        mailboxType === 'shared' && (filter.folder === 'sent' || filter.folder === 'drafts')
+    const needsSharedTeamStates = mailboxType === 'shared' && (filter.folder === 'sent' || filter.folder === 'drafts')
 
     const { data: sharedFolderStates } = useOrgLiveQuery(
-        query =>
+        (query) =>
             query
                 .from({ mail_thread_state: threadStateCollection })
-                .where(({ mail_thread_state }) =>
-                    eq(mail_thread_state.folder, filter.folder ?? 'sent')
-                ),
+                .where(({ mail_thread_state }) => eq(mail_thread_state.folder, filter.folder ?? 'sent')),
         [filter.folder]
     )
 
@@ -152,9 +144,7 @@ export function useThreadListItems(
         return map
     }, [threads])
 
-    const { data: allMailboxes } = useOrgLiveQuery(query =>
-        query.from({ mail_mailboxes: mailboxesCollection })
-    )
+    const { data: allMailboxes } = useOrgLiveQuery((query) => query.from({ mail_mailboxes: mailboxesCollection }))
 
     const { data: userMemberships } = useOrgLiveQuery((query, { userOrgId }) =>
         query
@@ -166,7 +156,7 @@ export function useThreadListItems(
 
     const mailboxLabelMap = useMemo(() => {
         if (!isUnified || !allMailboxes || !userMemberships) return null
-        const myMailboxIds = new Set(userMemberships.map(m => m.mailbox))
+        const myMailboxIds = new Set(userMemberships.map((m) => m.mailbox))
         const map = new Map<string, string>()
         for (const mb of allMailboxes) {
             if (!myMailboxIds.has(mb.id)) continue
@@ -188,53 +178,42 @@ export function useThreadListItems(
         let baseStates: MailThreadState[] = threadStates as MailThreadState[]
 
         if (needsSharedTeamStates && coMembers && sharedFolderStates) {
-            const coMemberIds = coMembers.map(m => m.user_org)
-            baseStates = mergeSharedFolderStates(
-                sharedFolderStates as MailThreadState[],
-                coMemberIds
-            )
+            const coMemberIds = coMembers.map((m) => m.user_org)
+            baseStates = mergeSharedFolderStates(sharedFolderStates as MailThreadState[], coMemberIds)
         }
 
         const mapped = baseStates
-            .filter(state => threadIsInMailbox(state.thread))
-            .map(state => {
+            .filter((state) => threadIsInMailbox(state.thread))
+            .map((state) => {
                 const thread = threadMap.get(state.thread)
                 const labelIds = assignmentsByRecord.get(state.id) ?? []
                 const stateLabels = labelIds
-                    .map(id => labelMap.get(id))
+                    .map((id) => labelMap.get(id))
                     .filter((l): l is { id: string; name: string; color: string } => l != null)
                 const hasDraft = draftByThread.has(state.thread)
                 const hasAttachments = threadsWithAttachments.has(state.thread)
-                const mailboxLabel =
-                    isUnified && thread ? mailboxLabelMap?.get(thread.mailbox) : undefined
-                return toThreadListItem(
-                    state,
-                    thread,
-                    stateLabels,
-                    hasDraft,
-                    hasAttachments,
-                    mailboxLabel
-                )
+                const mailboxLabel = isUnified && thread ? mailboxLabelMap?.get(thread.mailbox) : undefined
+                return toThreadListItem(state, thread, stateLabels, hasDraft, hasAttachments, mailboxLabel)
             })
             .sort((a, b) => new Date(b.latestDate).getTime() - new Date(a.latestDate).getTime())
 
         const { folder, labels } = filter
         if (labels.length > 0) {
-            return mapped.filter(item => item.labels.some(l => labels.includes(l.id)))
+            return mapped.filter((item) => item.labels.some((l) => labels.includes(l.id)))
         }
 
         const activeFolder = folder ?? 'inbox'
         if (activeFolder === 'starred') {
-            return mapped.filter(item => item.isStarred)
+            return mapped.filter((item) => item.isStarred)
         }
         if (activeFolder === 'all') {
             return mapped
         }
         if (activeFolder === 'inbox' || activeFolder === 'all-inboxes') {
-            return mapped.filter(item => item.folder === 'inbox')
+            return mapped.filter((item) => item.folder === 'inbox')
         }
 
-        return mapped.filter(item => item.folder === activeFolder)
+        return mapped.filter((item) => item.folder === activeFolder)
     }, [
         threadStates,
         sharedFolderStates,

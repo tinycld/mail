@@ -16,12 +16,7 @@ export function useMailboxFolderCounts() {
             .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, userOrgId))
     )
 
-    const { data: threads } = useOrgLiveQuery(query =>
-        query.from({ mail_threads: threadsCollection })
-    )
+    const { data: threads } = useOrgLiveQuery((query) => query.from({ mail_threads: threadsCollection }))
 
-    return useMemo(
-        () => computeMailboxFolderCounts(threadStates ?? [], threads ?? []),
-        [threadStates, threads]
-    )
+    return useMemo(() => computeMailboxFolderCounts(threadStates ?? [], threads ?? []), [threadStates, threads])
 }

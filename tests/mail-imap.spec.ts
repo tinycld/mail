@@ -15,7 +15,7 @@ test.describe('Mail — IMAP Integration', () => {
     test('lists mailboxes and reads appended messages via IMAP', async () => {
         const subject = `IMAP-roundtrip-${Date.now()}`
 
-        await withImapClient(async client => {
+        await withImapClient(async (client) => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
 
@@ -27,7 +27,7 @@ test.describe('Mail — IMAP Integration', () => {
             })
 
             const messages = await listMessages(client, inbox)
-            const subjects = messages.map(m => m.subject)
+            const subjects = messages.map((m) => m.subject)
             expect(subjects).toContain(subject)
         })
     })
@@ -35,7 +35,7 @@ test.describe('Mail — IMAP Integration', () => {
     test('IMAP APPEND appears in web UI', async ({ page }) => {
         const subject = `IMAP-test-${Date.now()}`
 
-        await withImapClient(async client => {
+        await withImapClient(async (client) => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
             await appendMessage(client, inbox, {
@@ -55,15 +55,13 @@ test.describe('Mail — IMAP Integration', () => {
         const subject = `IMAP-label-${Date.now()}`
         const labelName = `test-label-${Date.now()}`
 
-        await withImapClient(async client => {
+        await withImapClient(async (client) => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
 
             // Create the label folder and append a test message
             const labelFolder = inbox.replace('/INBOX', `/Labels/${labelName}`)
-            const fullLabelPath = labelFolder.includes('/Labels/')
-                ? labelFolder
-                : `Labels/${labelName}`
+            const fullLabelPath = labelFolder.includes('/Labels/') ? labelFolder : `Labels/${labelName}`
             await client.mailboxCreate(fullLabelPath)
             await appendMessage(client, inbox, {
                 from: 'labeler@example.com',
@@ -79,12 +77,12 @@ test.describe('Mail — IMAP Integration', () => {
 
             // Gmail-like: message should still be in INBOX (label is additive)
             const inboxMsgs = await listMessages(client, inbox)
-            const stillInInbox = inboxMsgs.some(m => m.subject === subject)
+            const stillInInbox = inboxMsgs.some((m) => m.subject === subject)
             expect(stillInInbox).toBe(true)
 
             // And should also appear in the label folder
             const labelMsgs = await listMessages(client, fullLabelPath)
-            const inLabel = labelMsgs.some(m => m.subject === subject)
+            const inLabel = labelMsgs.some((m) => m.subject === subject)
             expect(inLabel).toBe(true)
         })
     })
@@ -92,7 +90,7 @@ test.describe('Mail — IMAP Integration', () => {
     test('MOVE to Trash changes thread_state folder', async () => {
         const subject = `IMAP-trash-${Date.now()}`
 
-        await withImapClient(async client => {
+        await withImapClient(async (client) => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
             const trashFolder = inbox.replace('INBOX', 'Trash')
@@ -113,18 +111,18 @@ test.describe('Mail — IMAP Integration', () => {
             // thread_state.folder. The thread_state.folder IS updated to
             // "trash", but the IMAP listing doesn't respect it yet.
             const inboxMsgs = await listMessages(client, inbox)
-            expect(inboxMsgs.some(m => m.subject === subject)).toBe(true)
+            expect(inboxMsgs.some((m) => m.subject === subject)).toBe(true)
 
             // Trash also shows the message (same mailbox, no folder filter)
             const trashMsgs = await listMessages(client, trashFolder)
-            expect(trashMsgs.some(m => m.subject === subject)).toBe(true)
+            expect(trashMsgs.some((m) => m.subject === subject)).toBe(true)
         })
     })
 
     test('IMAP DELETE removes from web UI', async ({ page }) => {
         const subject = `IMAP-delete-${Date.now()}`
 
-        await withImapClient(async client => {
+        await withImapClient(async (client) => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
             await appendMessage(client, inbox, {
@@ -139,7 +137,7 @@ test.describe('Mail — IMAP Integration', () => {
         await navigateToPackage(page, 'mail')
         await expect(page.getByText(subject)).toBeVisible({ timeout: 10_000 })
 
-        await withImapClient(async client => {
+        await withImapClient(async (client) => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
             const msg = await fetchMessageBySubject(client, inbox, subject)

@@ -25,7 +25,7 @@ export function computeMailboxFolderCounts(
     threadStates: MailThreadState[],
     threads: MailThreads[]
 ): Map<string, FolderCounts> {
-    const threadToMailbox = new Map(threads.map(t => [t.id, t.mailbox]))
+    const threadToMailbox = new Map(threads.map((t) => [t.id, t.mailbox]))
     const counts = new Map<string, FolderCounts>()
 
     for (const s of threadStates) {

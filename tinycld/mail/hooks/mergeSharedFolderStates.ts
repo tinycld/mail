@@ -1,9 +1,6 @@
 import type { MailThreadState } from '../types'
 
-export function mergeSharedFolderStates(
-    states: MailThreadState[],
-    coMemberUserOrgIds: string[]
-): MailThreadState[] {
+export function mergeSharedFolderStates(states: MailThreadState[], coMemberUserOrgIds: string[]): MailThreadState[] {
     const coMemberSet = new Set(coMemberUserOrgIds)
     const seen = new Set<string>()
     const merged: MailThreadState[] = []

@@ -99,10 +99,7 @@ function parseDuration(value: string): number {
     }
 }
 
-export function useMailSearch(
-    query: string,
-    filters: AdvancedSearchFilters = {}
-): UseMailSearchReturn {
+export function useMailSearch(query: string, filters: AdvancedSearchFilters = {}): UseMailSearchReturn {
     const [results, setResults] = useState<MailSearchResult[]>([])
     const [total, setTotal] = useState(0)
     const [isSearching, setIsSearching] = useState(false)

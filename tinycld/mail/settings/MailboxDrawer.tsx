@@ -78,11 +78,7 @@ export function MailboxDrawer({
             <DrawerBackdrop />
             <DrawerContent>
                 {mode.kind === 'create' && (
-                    <CreateView
-                        domainOptions={domainOptions}
-                        userOrgId={userOrgId}
-                        onDone={onClose}
-                    />
+                    <CreateView domainOptions={domainOptions} userOrgId={userOrgId} onDone={onClose} />
                 )}
                 {mode.kind === 'edit' && mailbox && (
                     <EditView
@@ -120,9 +116,7 @@ function CreateView({
         <>
             <DrawerHeader>
                 <View>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: fgColor }}>
-                        New shared mailbox
-                    </Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: fgColor }}>New shared mailbox</Text>
                     <Text style={{ fontSize: 12.5, color: mutedColor, marginTop: 2 }}>
                         Choose an address and display name to get started.
                     </Text>
@@ -132,26 +126,13 @@ function CreateView({
                 </DrawerCloseButton>
             </DrawerHeader>
             <DrawerBody>
-                <MailboxForm
-                    mode="create"
-                    domainOptions={domainOptions}
-                    userOrgId={userOrgId}
-                    onDone={onDone}
-                />
+                <MailboxForm mode="create" domainOptions={domainOptions} userOrgId={userOrgId} onDone={onDone} />
             </DrawerBody>
         </>
     )
 }
 
-function EditView({
-    mailbox,
-    onDone,
-    onCancel,
-}: {
-    mailbox: ViewMailbox
-    onDone: () => void
-    onCancel: () => void
-}) {
+function EditView({ mailbox, onDone, onCancel }: { mailbox: ViewMailbox; onDone: () => void; onCancel: () => void }) {
     const fgColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const initial: MailboxFormValues = {
@@ -163,9 +144,7 @@ function EditView({
         <>
             <DrawerHeader>
                 <View>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: fgColor }}>
-                        Edit mailbox
-                    </Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: fgColor }}>Edit mailbox</Text>
                     <Text style={{ fontSize: 12.5, color: mutedColor, marginTop: 2 }}>
                         {mailbox.address}@{mailbox.domainName}
                     </Text>
@@ -203,9 +182,7 @@ function ViewMode({
     const fgColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const primaryColor = useThemeColor('primary')
-    const [tab, setTab] = useState<'members' | 'aliases'>(
-        mailbox.type === 'shared' ? 'members' : 'aliases'
-    )
+    const [tab, setTab] = useState<'members' | 'aliases'>(mailbox.type === 'shared' ? 'members' : 'aliases')
     const avatarInitial = (mailbox.displayName || mailbox.address).trim().charAt(0).toUpperCase()
 
     return (
@@ -216,20 +193,14 @@ function ViewMode({
                         className="items-center justify-center rounded-lg"
                         style={{ width: 40, height: 40, backgroundColor: `${primaryColor}1F` }}
                     >
-                        <Text style={{ color: primaryColor, fontWeight: '700', fontSize: 15 }}>
-                            {avatarInitial}
-                        </Text>
+                        <Text style={{ color: primaryColor, fontWeight: '700', fontSize: 15 }}>{avatarInitial}</Text>
                     </View>
                     <View className="flex-1" style={{ minWidth: 0 }}>
                         <Text style={{ fontSize: 16, fontWeight: '700', color: fgColor }}>
                             {mailbox.address}
-                            <Text style={{ color: mutedColor, fontWeight: '500' }}>
-                                @{mailbox.domainName}
-                            </Text>
+                            <Text style={{ color: mutedColor, fontWeight: '500' }}>@{mailbox.domainName}</Text>
                         </Text>
-                        <Text style={{ fontSize: 12.5, color: mutedColor, marginTop: 1 }}>
-                            {mailbox.displayName}
-                        </Text>
+                        <Text style={{ fontSize: 12.5, color: mutedColor, marginTop: 1 }}>{mailbox.displayName}</Text>
                     </View>
                 </View>
                 <View className="flex-row gap-1">
@@ -244,10 +215,7 @@ function ViewMode({
                 </View>
             </DrawerHeader>
 
-            <View
-                className="flex-row gap-2 items-center flex-wrap"
-                style={{ paddingHorizontal: 4, paddingBottom: 8 }}
-            >
+            <View className="flex-row gap-2 items-center flex-wrap" style={{ paddingHorizontal: 4, paddingBottom: 8 }}>
                 <TypeBadge type={mailbox.type} />
                 <DomainBadge domainName={mailbox.domainName} />
                 <Text style={{ fontSize: 11, color: mutedColor }}>
@@ -256,20 +224,13 @@ function ViewMode({
             </View>
 
             {mailbox.type === 'shared' && (
-                <View
-                    className="flex-row gap-2"
-                    style={{ paddingHorizontal: 4, paddingTop: 4, paddingBottom: 4 }}
-                >
+                <View className="flex-row gap-2" style={{ paddingHorizontal: 4, paddingTop: 4, paddingBottom: 4 }}>
                     <TabButton
                         label={`Members · ${members.length}`}
                         active={tab === 'members'}
                         onPress={() => setTab('members')}
                     />
-                    <TabButton
-                        label="Aliases"
-                        active={tab === 'aliases'}
-                        onPress={() => setTab('aliases')}
-                    />
+                    <TabButton label="Aliases" active={tab === 'aliases'} onPress={() => setTab('aliases')} />
                 </View>
             )}
 
@@ -349,15 +310,7 @@ function formatCreatedDate(iso: string): string {
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-function TabButton({
-    label,
-    active,
-    onPress,
-}: {
-    label: string
-    active: boolean
-    onPress: () => void
-}) {
+function TabButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
     const fgColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const primaryColor = useThemeColor('primary')
@@ -423,15 +376,15 @@ function MembersTab({
 
     const toggleRoleMutation = useMutation({
         mutationFn: mutation(function* ({ id, next }: { id: string; next: Role }) {
-            yield membersCollection.update(id, draft => {
+            yield membersCollection.update(id, (draft) => {
                 draft.role = next
             })
         }),
     })
 
-    const existingIds = new Set(members.map(m => m.userOrgId))
-    const available = orgMembers.filter(o => !existingIds.has(o.userOrgId))
-    const ownerCount = members.filter(m => m.role === 'owner').length
+    const existingIds = new Set(members.map((m) => m.userOrgId))
+    const available = orgMembers.filter((o) => !existingIds.has(o.userOrgId))
+    const ownerCount = members.filter((m) => m.role === 'owner').length
 
     return (
         <View className="gap-3">
@@ -446,7 +399,7 @@ function MembersTab({
             >
                 Who has access
             </Text>
-            {members.map(m => (
+            {members.map((m) => (
                 <MailboxMemberRow
                     key={m.id}
                     name={m.userName}
@@ -476,13 +429,10 @@ function MembersTab({
             )}
 
             {adding && (
-                <View
-                    className="gap-2 rounded-lg p-3"
-                    style={{ borderWidth: 1, borderColor, borderStyle: 'dashed' }}
-                >
+                <View className="gap-2 rounded-lg p-3" style={{ borderWidth: 1, borderColor, borderStyle: 'dashed' }}>
                     <Text style={{ fontSize: 12, color: mutedColor }}>Select a member:</Text>
                     <View className="flex-row gap-1 flex-wrap">
-                        {available.map(o => {
+                        {available.map((o) => {
                             const isSelected = selected === o.userOrgId
                             return (
                                 <Pressable
@@ -493,9 +443,7 @@ function MembersTab({
                                         paddingVertical: 6,
                                         borderWidth: 1,
                                         borderColor: isSelected ? primaryColor : borderColor,
-                                        backgroundColor: isSelected
-                                            ? `${primaryColor}14`
-                                            : undefined,
+                                        backgroundColor: isSelected ? `${primaryColor}14` : undefined,
                                     }}
                                 >
                                     <Text style={{ fontSize: 12.5 }}>{o.userName}</Text>
@@ -515,9 +463,7 @@ function MembersTab({
                                 opacity: !selected || addMutation.isPending ? 0.5 : 1,
                             }}
                         >
-                            <Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '600' }}>
-                                Add
-                            </Text>
+                            <Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '600' }}>Add</Text>
                         </Pressable>
                         <Pressable
                             onPress={() => {
@@ -556,9 +502,7 @@ function DangerZone({ mailboxId, onDeleted }: { mailboxId: string; onDeleted: ()
     return (
         <View className="flex-row items-center justify-between gap-3">
             <View className="flex-1">
-                <Text style={{ fontSize: 12.5, color: fgColor, fontWeight: '600' }}>
-                    Delete this mailbox.
-                </Text>
+                <Text style={{ fontSize: 12.5, color: fgColor, fontWeight: '600' }}>Delete this mailbox.</Text>
                 <Text style={{ fontSize: 11.5, color: mutedColor }}>
                     Members lose access. Aliases are freed. Messages stay on disk.
                 </Text>
@@ -576,9 +520,7 @@ function DangerZone({ mailboxId, onDeleted }: { mailboxId: string; onDeleted: ()
                 >
                     <View className="flex-row gap-1.5 items-center">
                         <Trash2 size={14} color={dangerColor} />
-                        <Text style={{ color: dangerColor, fontSize: 12, fontWeight: '600' }}>
-                            Delete
-                        </Text>
+                        <Text style={{ color: dangerColor, fontSize: 12, fontWeight: '600' }}>Delete</Text>
                     </View>
                 </Pressable>
             ) : (
@@ -599,9 +541,7 @@ function DangerZone({ mailboxId, onDeleted }: { mailboxId: string; onDeleted: ()
                             backgroundColor: dangerColor,
                         }}
                     >
-                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
-                            Really delete
-                        </Text>
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>Really delete</Text>
                     </Pressable>
                 </View>
             )}

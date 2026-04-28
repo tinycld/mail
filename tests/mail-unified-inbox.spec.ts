@@ -33,20 +33,14 @@ test.describe('Mail — Unified inbox', () => {
         // shared mailbox label comes from its display_name ("Support").
         // Scope the assertions to email rows so we don't false-match the
         // sidebar header or the "Personal" color label.
-        const supportRow = page
-            .getByTestId('email-row')
-            .filter({ hasText: 'Refund request for order #84210' })
+        const supportRow = page.getByTestId('email-row').filter({ hasText: 'Refund request for order #84210' })
         await expect(supportRow.getByText('Support', { exact: true })).toBeVisible()
 
-        const personalRow = page
-            .getByTestId('email-row')
-            .filter({ hasText: 'Q2 Product Roadmap Review' })
+        const personalRow = page.getByTestId('email-row').filter({ hasText: 'Q2 Product Roadmap Review' })
         await expect(personalRow.getByText('Personal', { exact: true })).toBeVisible()
     })
 
-    test('opening a thread from All Inboxes preserves the unified context on back', async ({
-        page,
-    }) => {
+    test('opening a thread from All Inboxes preserves the unified context on back', async ({ page }) => {
         await clickSidebarItem(page, 'All Inboxes')
         await expect(page).toHaveURL(/folder=all-inboxes/)
 
