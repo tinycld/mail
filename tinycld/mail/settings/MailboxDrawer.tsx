@@ -575,8 +575,8 @@ function DangerZone({
                         borderColor: `${dangerColor}55`,
                     }}
                 >
-                    <View className="flex-row gap-1 items-center">
-                        <Trash2 size={12} color={dangerColor} />
+                    <View className="flex-row gap-1.5 items-center">
+                        <Trash2 size={14} color={dangerColor} />
                         <Text style={{ color: dangerColor, fontSize: 12, fontWeight: '600' }}>
                             Delete
                         </Text>

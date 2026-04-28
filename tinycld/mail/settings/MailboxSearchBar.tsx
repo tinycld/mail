@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react-native'
-import { Pressable, Text, TextInput, View } from 'react-native'
+import { Platform, Pressable, Text, TextInput, View } from 'react-native'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import type { TypeFilter } from '../hooks/filterMailboxes'
 
@@ -36,7 +36,15 @@ export function MailboxSearchBar({ query, onQueryChange, type, onTypeChange, cou
                     onChangeText={onQueryChange}
                     placeholder="Search address, display name, or member…"
                     placeholderTextColor={mutedColor}
-                    style={{ flex: 1, color: fgColor, fontSize: 13, padding: 0 }}
+                    style={{
+                        flex: 1,
+                        color: fgColor,
+                        fontSize: 13,
+                        padding: 0,
+                        ...(Platform.OS === 'web'
+                            ? ({ outlineStyle: 'none' } as Record<string, unknown>)
+                            : {}),
+                    }}
                     autoCorrect={false}
                     autoCapitalize="none"
                 />
