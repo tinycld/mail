@@ -83,6 +83,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const onSubjectBlur = useCallback(() => setHeaderTitle(getValues('subject')), [getValues])
 
     useEffect(() => {
+        if (!isVisible) return
         let cleanup: (() => void) | undefined
         if (draftContext) {
             draftIdRef.current = draftContext.messageId
@@ -113,9 +114,10 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             draftIdRef.current = null
             reset({ to: '', cc: '', bcc: '', subject: '' })
             setHeaderTitle('')
+            editorRef.current.clear()
         }
         return () => cleanup?.()
-    }, [replyContext, draftContext, reset])
+    }, [isVisible, replyContext, draftContext, reset])
 
     const [messagesCollection] = useStore('mail_messages')
 
