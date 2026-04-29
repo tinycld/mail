@@ -545,20 +545,23 @@ migrate(
         app.save(mailboxesCol)
 
         // mail_mailbox_members: own records readable, only mailbox owners can add/modify members.
-        // The create rule has two clauses: (1) an existing owner can add anyone, (2) bootstrap —
-        // when a mailbox has no members yet, an org member can self-insert as the first owner.
-        // Without (2), the very first owner can never be added because the owner-check chain
-        // resolves to an empty set on a freshly-created mailbox. Mirrored in
-        // 1713000016_mail_mailbox_members_bootstrap_owner.js.
+        // Two paths permit a create:
+        //   (1) ownerCanAdd — an existing owner of the mailbox adds any user_org from the
+        //       owning org. Cross-org adds are blocked by `user_org.org = mailbox.domain.org`.
+        //   (2) bootstrapFirstOwner — when a mailbox has no members yet, an org member may
+        //       self-insert as the first owner. Without this, the very first owner could never
+        //       be added because the owner-check chain resolves to an empty set on a freshly
+        //       created mailbox.
+        // Mirrored in 1713000017_mail_mailbox_members_owner_adds_member.js.
         const mbMembersCol = app.findCollectionByNameOrId('mail_mailbox_members')
         const ownerCanAdd =
-            'mailbox.mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
+            'mailbox.mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner" && user_org.org = mailbox.domain.org'
         const bootstrapFirstOwner =
-            'role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = "" && mailbox.domain.org.user_org_via_org.user ?= @request.auth.id'
+            'user_org.user = @request.auth.id && role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = "" && mailbox.domain.org.user_org_via_org.user ?= @request.auth.id'
         setRules(mbMembersCol, {
             list: userOrgRule,
             view: userOrgRule,
-            create: `user_org.user = @request.auth.id && ((${ownerCanAdd}) || (${bootstrapFirstOwner}))`,
+            create: `(${ownerCanAdd}) || (${bootstrapFirstOwner})`,
             update: 'mailbox.mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"',
             del: userOrgRule,
         })

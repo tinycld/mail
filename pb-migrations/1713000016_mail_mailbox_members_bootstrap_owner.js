@@ -1,8 +1,7 @@
 /// <reference path="../../../server/pb_data/types.d.ts" />
-// NOTE: this rule is mirrored in 1713000000_create_mail_collections.js. The
-// fresh-install path applies the rule there directly; this migration upgrades
-// existing installs. Any change to mail_mailbox_members.create must update
-// BOTH files.
+// NOTE: this rule is superseded by 1713000017_mail_mailbox_members_owner_adds_member.js.
+// Kept for upgrade ordering — fresh installs apply the final form from
+// 1713000000_create_mail_collections.js directly.
 //
 // Why the bootstrap clause exists: the original rule required the requester to
 // already be an owner of the mailbox. That made it impossible to add the very
