@@ -1,6 +1,7 @@
 import { rowFocusStyle } from '@tinycld/core/components/focusable-row'
 import { HoverAction } from '@tinycld/core/components/HoverAction'
 import { LabelBadge, LabelDots } from '@tinycld/core/components/LabelBadge'
+import { RowHoverActions } from '@tinycld/core/components/RowHoverActions'
 import { StarIcon } from '@tinycld/core/components/StarIcon'
 import { SwipeableRow } from '@tinycld/core/components/SwipeableRow'
 import { hexToRgba } from '@tinycld/core/lib/color-utils'
@@ -252,7 +253,7 @@ function MobileEmailRow({ email, onToggleStar, onPress, onArchive, onTrash, onTo
     )
 }
 
-function RowHoverActions({
+function EmailRowActions({
     email,
     isSelected,
     onArchive,
@@ -406,20 +407,28 @@ function DesktopEmailRow({
                         {email.snippet}
                     </Text>
                 </View>
-                {!isHovered && email.labels.length > 0 ? <LabelDots labels={email.labels} max={3} /> : null}
-                {!isHovered && email.hasAttachments ? <Paperclip size={14} color={mutedColor} /> : null}
-                {isHovered ? (
-                    <RowHoverActions
-                        email={email}
-                        isSelected={isSelected}
-                        onArchive={onArchive}
-                        onTrash={onTrash}
-                        onToggleRead={onToggleRead}
-                        tooltipPosition={index === 0 ? 'below' : 'above'}
-                    />
-                ) : (
-                    <Text style={[styles.date, { color: mutedColor }]}>{dateDisplay}</Text>
-                )}
+                <RowHoverActions
+                    isHovered={isHovered}
+                    width={120}
+                    backgroundColor={rowBg}
+                    rest={
+                        <View className="flex-row items-center" style={{ gap: 8 }}>
+                            {email.labels.length > 0 ? <LabelDots labels={email.labels} max={3} /> : null}
+                            {email.hasAttachments ? <Paperclip size={14} color={mutedColor} /> : null}
+                            <Text style={[styles.date, { color: mutedColor }]}>{dateDisplay}</Text>
+                        </View>
+                    }
+                    hover={
+                        <EmailRowActions
+                            email={email}
+                            isSelected={isSelected}
+                            onArchive={onArchive}
+                            onTrash={onTrash}
+                            onToggleRead={onToggleRead}
+                            tooltipPosition={index === 0 ? 'below' : 'above'}
+                        />
+                    }
+                />
             </View>
         </RowWrapper>
     )
