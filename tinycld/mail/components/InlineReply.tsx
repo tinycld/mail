@@ -3,8 +3,8 @@ import { captureException } from '@tinycld/core/lib/errors'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useForm, zodResolver } from '@tinycld/core/ui/form'
 import { Forward, Reply, ReplyAll } from 'lucide-react-native'
-import { useEffect, useRef } from 'react'
-import { Platform, Pressable, Text, View } from 'react-native'
+import { useRef } from 'react'
+import { KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { filterOwnAddresses, pickDefaultFrom } from '../hooks/defaultFromIdentity'
 import { useAttachments } from '../hooks/useAttachments'
@@ -185,12 +185,6 @@ function InlineComposeForm({
         },
     })
 
-    // Replies pre-fill recipients and subject; the user almost always wants to
-    // start typing the body. Focus the editor on mount so they don't have to
-    // click into it.
-    useEffect(() => {
-        editor.focus('start')
-    }, [editor])
 
     const onSend = handleSubmit(async (data) => {
         if (!mailboxId) {
@@ -234,7 +228,8 @@ function InlineComposeForm({
     }
 
     return (
-        <View
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             className="m-4 border rounded-lg"
             style={{
                 minHeight: 200,
@@ -243,7 +238,7 @@ function InlineComposeForm({
             }}
         >
             <ComposeFields control={control} errors={errors} />
-            <View className="flex-1 p-3" style={{ minHeight: 120 }}>
+            <View className="p-3" style={{ minHeight: 120, maxHeight: 280 }}>
                 <EditorComponent />
             </View>
             <AttachmentRibbon isVisible={attachments.length > 0} attachments={attachments} onRemove={removeFile} />
@@ -264,6 +259,6 @@ function InlineComposeForm({
                 onAttach={handleAttach}
                 isPending={isPending}
             />
-        </View>
+        </KeyboardAvoidingView>
     )
 }
