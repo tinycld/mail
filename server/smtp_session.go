@@ -11,6 +11,7 @@ import (
 	"github.com/emersion/go-smtp"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/coreserver"
 )
 
 type smtpBackend struct {
@@ -318,12 +319,20 @@ func (s *smtpSession) Data(r io.Reader) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	result, err := provider.Send(ctx, sendReq)
-	if err != nil {
-		return &smtp.SMTPError{
-			Code:         451,
-			EnhancedCode: smtp.EnhancedCode{4, 7, 0},
-			Message:      "Temporary delivery failure",
+	var result *SendResult
+	if s.user != nil && coreserver.IsDemoUser(s.app, s.user.Id) {
+		// Demo user: skip relay, synthesize a result so the local Sent-folder
+		// persistence below runs unchanged.
+		result = &SendResult{MessageID: demoMessageID()}
+	} else {
+		var sendErr error
+		result, sendErr = provider.Send(ctx, sendReq)
+		if sendErr != nil {
+			return &smtp.SMTPError{
+				Code:         451,
+				EnhancedCode: smtp.EnhancedCode{4, 7, 0},
+				Message:      "Temporary delivery failure",
+			}
 		}
 	}
 

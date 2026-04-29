@@ -1,7 +1,9 @@
 package mail
 
 import (
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,7 +14,17 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
+	"tinycld.org/core/coreserver"
 )
+
+// demoMessageID returns a synthesized RFC-822-ish Message-ID for messages
+// "sent" by demo accounts. The "demo-" prefix makes simulated sends easy to
+// distinguish from real ones in the database for forensic purposes.
+func demoMessageID() string {
+	buf := make([]byte, 8)
+	_, _ = rand.Read(buf)
+	return "demo-" + hex.EncodeToString(buf) + "@tinycld.local"
+}
 
 type sendRequest struct {
 	MailboxID          string      `json:"mailbox_id"`
@@ -133,9 +145,18 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		Attachments: fileAttachments,
 	}
 
-	result, err := provider.Send(re.Request.Context(), sendReq)
-	if err != nil {
-		return router.NewApiError(http.StatusBadGateway, "Failed to send email", err)
+	var result *SendResult
+	if coreserver.IsDemoUser(app, userID) {
+		// Demo accounts: skip the provider call but synthesize a result so
+		// the rest of the persistence path runs unchanged. Message lands in
+		// the user's Sent folder; nothing leaves the box.
+		result = &SendResult{MessageID: demoMessageID()}
+	} else {
+		var sendErr error
+		result, sendErr = provider.Send(re.Request.Context(), sendReq)
+		if sendErr != nil {
+			return router.NewApiError(http.StatusBadGateway, "Failed to send email", sendErr)
+		}
 	}
 
 	// Store in database
