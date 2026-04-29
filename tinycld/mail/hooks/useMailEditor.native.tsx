@@ -17,7 +17,7 @@ import {
 } from '@10play/tentap-editor'
 import type { EditorCommands, EditorHandle, EditorResult, EditorToolbarState } from '@tinycld/core/lib/editor-types'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { View } from 'react-native'
 
 function buildEditorCSS(colors: { bg: string; fg: string; placeholder: string; primary: string }) {
@@ -99,11 +99,22 @@ export function useMailEditor(options: UseMailEditorOptions = {}): EditorResult 
 
     const editorTheme = useMemo(() => ({ webview: { backgroundColor: bgColor } }), [bgColor])
 
-    const bridge = useEditorBridge({
+    const liveBridge = useEditorBridge({
         initialContent: options.initialContent,
         bridgeExtensions,
         theme: editorTheme,
+        autofocus: true,
+        avoidIosKeyboard: true,
     })
+
+    // useEditorBridge returns a fresh wrapper object every render even though
+    // its underlying refs (webviewRef, state subscriptions) are stable. If we
+    // pass that fresh object to <RichText> the webview remounts on every
+    // re-render, which steals focus on every keystroke. Pin the first wrapper
+    // so RichText always sees the same identity; the underlying refs route
+    // commands and state subscriptions correctly regardless.
+    const bridgeRef = useRef(liveBridge)
+    const bridge = bridgeRef.current
 
     const bridgeState = useBridgeState(bridge)
 
