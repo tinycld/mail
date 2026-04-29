@@ -1,8 +1,6 @@
 import type { EditorCommands, EditorHandle, EditorResult, EditorToolbarState } from '@tinycld/core/lib/editor-types'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
-import Underline from '@tiptap/extension-underline'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { useMemo } from 'react'
@@ -21,9 +19,7 @@ export function useMailEditor(options: UseMailEditorOptions = {}): EditorResult 
 
     const tiptapEditor = useEditor({
         extensions: [
-            StarterKit,
-            Underline,
-            Link.configure({ openOnClick: false }),
+            StarterKit.configure({ link: { openOnClick: false } }),
             Placeholder.configure({ placeholder: options.placeholder ?? '' }),
         ],
         content: options.initialContent ?? '',
