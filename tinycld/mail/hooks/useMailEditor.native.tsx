@@ -74,6 +74,7 @@ const baseBridgeExtensions = [
 interface UseMailEditorOptions {
     initialContent?: string
     placeholder?: string
+    autofocus?: boolean
 }
 
 export function useMailEditor(options: UseMailEditorOptions = {}): EditorResult {
@@ -103,7 +104,7 @@ export function useMailEditor(options: UseMailEditorOptions = {}): EditorResult 
         initialContent: options.initialContent,
         bridgeExtensions,
         theme: editorTheme,
-        autofocus: true,
+        autofocus: options.autofocus ?? false,
         avoidIosKeyboard: true,
     })
 

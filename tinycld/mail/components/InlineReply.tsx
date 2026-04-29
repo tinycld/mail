@@ -156,6 +156,7 @@ function InlineComposeForm({
     const aliasId = useComposeStore((s) => s.aliasId)
     const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
         placeholder: 'Compose reply',
+        autofocus: true,
     })
     const { attachments, addFiles, removeFile, clearAll: clearAttachments } = useAttachments()
 

@@ -12,6 +12,7 @@ import '../styles/editor.css'
 interface UseMailEditorOptions {
     initialContent?: string
     placeholder?: string
+    autofocus?: boolean
 }
 
 export function useMailEditor(options: UseMailEditorOptions = {}): EditorResult {
