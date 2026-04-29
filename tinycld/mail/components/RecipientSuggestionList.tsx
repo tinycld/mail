@@ -96,7 +96,7 @@ export function RecipientSuggestionList({ suggestions, query, onSelect }: Recipi
                                 gap: 8,
                                 paddingHorizontal: 12,
                                 paddingVertical: 8,
-                                backgroundColor: pressed ? hoverBgColor : undefined,
+                                backgroundColor: pressed ? hoverBgColor : backgroundColor,
                                 cursor: 'pointer' as 'auto',
                             })}
                         >
