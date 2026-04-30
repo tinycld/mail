@@ -186,7 +186,6 @@ function InlineComposeForm({
         },
     })
 
-
     const onSend = handleSubmit(async (data) => {
         if (!mailboxId) {
             setError('to', { message: 'No mailbox configured — contact your admin' })

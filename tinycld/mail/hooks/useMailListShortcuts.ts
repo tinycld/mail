@@ -61,8 +61,7 @@ export function useMailListShortcuts({
         }
         const lastIndex = Math.max(items.length - 1, 0)
         // First j/k from no-focus lands on row 0 instead of advancing past it.
-        const next = () =>
-            hasFocus ? setFocusedIndex((i) => Math.min(i + 1, lastIndex)) : setFocusedIndex(0)
+        const next = () => (hasFocus ? setFocusedIndex((i) => Math.min(i + 1, lastIndex)) : setFocusedIndex(0))
         const prev = () => (hasFocus ? setFocusedIndex((i) => Math.max(i - 1, 0)) : setFocusedIndex(0))
         return [
             {
