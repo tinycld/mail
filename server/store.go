@@ -72,6 +72,40 @@ func findOrCreateThread(app *pocketbase.PocketBase, mailboxID, subject, inReplyT
 	return thread, nil
 }
 
+// findMessageInMailbox returns an existing mail_messages record (and its
+// thread) when one with the given Message-ID already exists in the given
+// mailbox. Returns (nil, nil, nil) when no match exists or messageID is
+// empty (an empty Message-ID would falsely collapse unrelated messages).
+// Used to dedup the SMTP-submission + IMAP-APPEND-to-Sent collision: most
+// IMAP clients append a copy of a sent message to the Sent folder after
+// SMTP submission, and without this check we'd store both copies.
+func findMessageInMailbox(app *pocketbase.PocketBase, mailboxID, messageID string) (*core.Record, *core.Record, error) {
+	if messageID == "" || mailboxID == "" {
+		return nil, nil, nil
+	}
+	candidates, err := app.FindRecordsByFilter(
+		"mail_messages",
+		"message_id = {:messageID}",
+		"",
+		10,
+		0,
+		map[string]any{"messageID": messageID},
+	)
+	if err != nil || len(candidates) == 0 {
+		return nil, nil, nil
+	}
+	for _, msg := range candidates {
+		thread, err := app.FindRecordById("mail_threads", msg.GetString("thread"))
+		if err != nil {
+			continue
+		}
+		if thread.GetString("mailbox") == mailboxID {
+			return msg, thread, nil
+		}
+	}
+	return nil, nil, nil
+}
+
 func findThreadByMessageID(app *pocketbase.PocketBase, mailboxID, messageID string) (*core.Record, error) {
 	messages, err := app.FindRecordsByFilter(
 		"mail_messages",

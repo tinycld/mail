@@ -37,9 +37,10 @@ type imapSession struct {
 	multiMailbox bool // true when the user has more than one mailbox
 
 	// Selected state
-	selectedMailboxID string
-	selectedOrgID     string
-	selectedUserOrgID string
+	selectedMailboxID  string
+	selectedOrgID      string
+	selectedUserOrgID  string
+	selectedFolderName string // bare IMAP folder name (e.g. "INBOX", "Sent", "Labels/Foo")
 	// Per-session \Deleted flags (executed on EXPUNGE)
 	deleted map[string]bool // message record ID → true
 }
@@ -61,6 +62,7 @@ func (s *imapSession) Close() error {
 	s.mailboxIndex = nil
 	s.multiMailbox = false
 	s.selectedMailboxID = ""
+	s.selectedFolderName = ""
 	s.deleted = nil
 	return nil
 }
@@ -214,6 +216,7 @@ func (s *imapSession) Select(name string, options *imap.SelectOptions) (*imap.Se
 	s.selectedMailboxID = mailboxID
 	s.selectedOrgID = orgID
 	s.selectedUserOrgID = userOrgID
+	s.selectedFolderName = bareName
 	s.deleted = make(map[string]bool)
 
 	return s.buildSelectData(bareName)
@@ -224,6 +227,7 @@ func (s *imapSession) Unselect() error {
 	s.selectedMailboxID = ""
 	s.selectedOrgID = ""
 	s.selectedUserOrgID = ""
+	s.selectedFolderName = ""
 	s.deleted = make(map[string]bool)
 	return nil
 }
@@ -541,32 +545,44 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 		msg.DeliveryStatus = "delivered"
 	}
 
-	thread, err := findOrCreateThread(s.app, mailboxID, msg.Subject, msg.InReplyTo, "")
-	if err != nil {
-		return nil, err
-	}
+	// Dedup: if a message with this Message-ID already exists in this mailbox
+	// (e.g. SMTP submission already saved it before the client APPENDed), reuse
+	// the existing thread and message. Folder/flag updates below still apply,
+	// so a subsequent APPEND-to-Drafts of the same message correctly retags.
+	existingMsg, existingThread, _ := findMessageInMailbox(s.app, mailboxID, msg.MessageID)
 
-	record, err := storeMessage(s.app, thread.Id, msg)
-	if err != nil {
-		return nil, err
-	}
-
-	// Store raw headers
-	if len(raw) > 0 {
-		headerEnd := bytes.Index(raw, []byte("\r\n\r\n"))
-		if headerEnd < 0 {
-			headerEnd = bytes.Index(raw, []byte("\n\n"))
+	var thread, record *core.Record
+	if existingMsg != nil {
+		thread = existingThread
+		record = existingMsg
+	} else {
+		thread, err = findOrCreateThread(s.app, mailboxID, msg.Subject, msg.InReplyTo, "")
+		if err != nil {
+			return nil, err
 		}
-		if headerEnd > 0 {
-			storeRawHeaders(s.app, record, raw[:headerEnd])
-		}
-	}
 
-	snippet := msg.TextBody
-	if snippet == "" {
-		snippet = msg.Subject
+		record, err = storeMessage(s.app, thread.Id, msg)
+		if err != nil {
+			return nil, err
+		}
+
+		// Store raw headers
+		if len(raw) > 0 {
+			headerEnd := bytes.Index(raw, []byte("\r\n\r\n"))
+			if headerEnd < 0 {
+				headerEnd = bytes.Index(raw, []byte("\n\n"))
+			}
+			if headerEnd > 0 {
+				storeRawHeaders(s.app, record, raw[:headerEnd])
+			}
+		}
+
+		snippet := msg.TextBody
+		if snippet == "" {
+			snippet = msg.Subject
+		}
+		updateThreadMetadata(s.app, thread, msg.SenderName, msg.SenderEmail, snippet, msg.Date)
 	}
-	updateThreadMetadata(s.app, thread, msg.SenderName, msg.SenderEmail, snippet, msg.Date)
 
 	ensureThreadState(s.app, thread.Id, userOrgID, folder, false)
 
@@ -864,45 +880,22 @@ func (s *imapSession) selectedMessages() (map[int]*core.Record, error) {
 }
 
 // messagesForSelectedFolder loads messages for whatever folder is currently
-// selected. Uses selectedMailboxID and selectedUserOrgID.
+// selected. Routes through messagesForFolder so SELECT respects the
+// mail_thread_state.folder filter (consistent with STATUS).
 func (s *imapSession) messagesForSelectedFolder() (map[int]*core.Record, error) {
-	// Get all threads for this mailbox
-	threads, err := s.app.FindRecordsByFilter(
-		"mail_threads",
-		"mailbox = {:mailbox}",
-		"latest_date",
-		0,
-		0,
-		map[string]any{"mailbox": s.selectedMailboxID},
-	)
+	msgs, err := s.messagesForFolder(s.selectedFolderName, s.selectedMailboxID, s.selectedOrgID, s.selectedUserOrgID)
 	if err != nil {
 		return nil, err
 	}
 
 	result := make(map[int]*core.Record)
 	seqNum := 1
-
-	for _, thread := range threads {
-		// Load messages for this thread
-		messages, err := s.app.FindRecordsByFilter(
-			"mail_messages",
-			"thread = {:thread}",
-			"imap_uid",
-			0,
-			0,
-			map[string]any{"thread": thread.Id},
-		)
-		if err != nil {
-			continue
-		}
-		for _, msg := range messages {
-			if msg.GetInt("imap_uid") > 0 {
-				result[seqNum] = msg
-				seqNum++
-			}
+	for _, msg := range msgs {
+		if msg.GetInt("imap_uid") > 0 {
+			result[seqNum] = msg
+			seqNum++
 		}
 	}
-
 	return result, nil
 }
 

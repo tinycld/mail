@@ -342,6 +342,17 @@ func (s *smtpSession) Data(r io.Reader) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	mailboxID := s.mailbox.Id
 
+	// Dedup: if the client already APPENDed this Message-ID via IMAP (or this
+	// is an SMTP retry), reuse the existing thread and just retag the folder.
+	existingMsg, existingThread, _ := findMessageInMailbox(s.app, mailboxID, result.MessageID)
+	if existingMsg != nil {
+		if err := ensureThreadState(s.app, existingThread.Id, s.userOrg.Id, "sent", true); err != nil {
+			s.app.Logger().Error("SMTP: failed to create thread state for deduped message", "error", err)
+		}
+		globalNotifier.notify(mailboxID)
+		return nil
+	}
+
 	thread, err := findOrCreateThread(s.app, mailboxID, msg.Subject, inReplyToHeader, referencesHeader)
 	if err != nil {
 		s.app.Logger().Error("SMTP: message sent but failed to create thread — will not appear in Sent folder",
