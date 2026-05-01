@@ -37,7 +37,15 @@ function useIframeAutoHeight(html: string) {
         // Prevent infinite resize loop: without this, setting the iframe
         // height to scrollHeight can cause the content to grow to match
         const style = doc.createElement('style')
-        style.textContent = 'html, body { height: auto !important; }'
+        style.textContent = `
+            html, body { height: auto !important; }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                font-size: 14px;
+                line-height: 1.5;
+                color: #1f2937;
+            }
+        `
         doc.head.appendChild(style)
 
         const updateHeight = () => {
