@@ -1,12 +1,22 @@
 import { LabelBadge } from '@tinycld/core/components/LabelBadge'
 import { StarIcon } from '@tinycld/core/components/StarIcon'
+import { ToolbarIconButton } from '@tinycld/core/components/ToolbarIconButton'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { hexToRgba } from '@tinycld/core/lib/color-utils'
 import { formatRelativeDate } from '@tinycld/core/lib/format-utils'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { ChevronDown, ChevronUp, Forward, MoreVertical, Reply, ReplyAll } from 'lucide-react-native'
-import { Pressable, Text, View } from 'react-native'
+import { Platform, Pressable, Text, View } from 'react-native'
 import { MenuActionItem, ToolbarMenu } from './DropdownMenu'
+
+function Tooltip({ title, children }: { title: string; children: React.ReactNode }) {
+    if (Platform.OS !== 'web') return <>{children}</>
+    return (
+        <div title={title} style={{ display: 'inline-flex' }}>
+            {children}
+        </div>
+    )
+}
 
 interface ThreadSubjectHeaderProps {
     subject: string
@@ -143,20 +153,22 @@ export function MessageHeader({
                     </View>
                     <Text style={{ fontSize: 12, flexShrink: 0, color: mutedColor }}>{dateDisplay}</Text>
                     {isStarred != null ? (
-                        <Pressable className="rounded-full" style={{ padding: 6 }} onPress={onToggleStar}>
-                            <StarIcon isStarred={!!isStarred} size={18} />
-                        </Pressable>
+                        <Tooltip title={isStarred ? 'Remove star' : 'Add star'}>
+                            <Pressable className="rounded-full" style={{ padding: 6 }} onPress={onToggleStar}>
+                                <StarIcon isStarred={!!isStarred} size={18} />
+                            </Pressable>
+                        </Tooltip>
                     ) : null}
-                    <Pressable className="rounded-full" style={{ padding: 6 }} onPress={onReply}>
-                        <Reply size={18} color={mutedColor} />
-                    </Pressable>
-                    <Pressable className="rounded-full" style={{ padding: 6 }}>
-                        {isExpanded ? (
-                            <ChevronUp size={18} color={mutedColor} />
-                        ) : (
-                            <ChevronDown size={18} color={mutedColor} />
-                        )}
-                    </Pressable>
+                    <ToolbarIconButton icon={Reply} label="Reply" onPress={onReply} />
+                    <Tooltip title={isExpanded ? 'Collapse' : 'Expand'}>
+                        <Pressable className="rounded-full" style={{ padding: 6 }} onPress={onToggleExpand}>
+                            {isExpanded ? (
+                                <ChevronUp size={18} color={mutedColor} />
+                            ) : (
+                                <ChevronDown size={18} color={mutedColor} />
+                            )}
+                        </Pressable>
+                    </Tooltip>
                     <ToolbarMenu icon={MoreVertical} label="More options">
                         <MenuActionItem label="Reply" icon={Reply} onPress={onReply ?? (() => {})} />
                         <MenuActionItem label="Reply all" icon={ReplyAll} onPress={onReplyAll ?? (() => {})} />
