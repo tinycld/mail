@@ -4,7 +4,6 @@ import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { type Shortcut, useRegisterShortcut, useShortcutScope } from '@tinycld/core/lib/shortcuts'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -50,9 +49,6 @@ export default function MailDetailScreen() {
     const { id = '' } = useLocalSearchParams<{ id: string }>()
     const router = useRouter()
     const { openReply } = useCompose()
-    const _mutedColor = useThemeColor('muted-foreground')
-    const _borderColor = useThemeColor('border')
-    const backgroundColor = useThemeColor('background')
 
     const [threadStateCollection, messagesCollection, threadsCollection] = useStore(
         'mail_thread_state',
@@ -184,7 +180,7 @@ export default function MailDetailScreen() {
     }
 
     return (
-        <View className="flex-1" style={{ backgroundColor }}>
+        <View className="flex-1 bg-background">
             <ScreenHeader isScrolled={isScrolled}>
                 <EmailDetailToolbar
                     threadState={threadState}
@@ -316,18 +312,10 @@ export default function MailDetailScreen() {
 }
 
 function CollapsedSnippet({ snippet, onPress }: { snippet: string; onPress: () => void }) {
-    const mutedColor = useThemeColor('muted-foreground')
-    const borderColor = useThemeColor('border')
     return (
         <Pressable onPress={onPress}>
-            <View
-                className="px-4 py-2"
-                style={{
-                    borderBottomWidth: 1,
-                    borderBottomColor: borderColor,
-                }}
-            >
-                <Text style={{ fontSize: 13, color: mutedColor }} numberOfLines={1}>
+            <View className="px-4 py-2 border-b border-border">
+                <Text className="text-muted-foreground" style={{ fontSize: 13 }} numberOfLines={1}>
                     {snippet}
                 </Text>
             </View>

@@ -15,7 +15,6 @@ interface Props {
 }
 
 export function MailboxMemberRow({ name, email, isYou = false, role, canRemove, onToggleRole, onRemove }: Props) {
-    const fgColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const primaryColor = useThemeColor('primary')
     const dangerColor = useThemeColor('danger')
@@ -26,11 +25,20 @@ export function MailboxMemberRow({ name, email, isYou = false, role, canRemove, 
     return (
         <View className="flex-row items-center gap-3 py-2">
             <View className="flex-1" style={{ minWidth: 0 }}>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: fgColor }}>
+                <Text className="text-foreground" style={{ fontSize: 13, fontWeight: '600' }}>
                     {name}
-                    {isYou && <Text style={{ color: mutedColor, fontWeight: '500' }}> · you</Text>}
+                    {isYou && (
+                        <Text className="text-muted-foreground" style={{ fontWeight: '500' }}>
+                            {' '}
+                            · you
+                        </Text>
+                    )}
                 </Text>
-                {email ? <Text style={{ fontSize: 11.5, color: mutedColor, marginTop: 1 }}>{email}</Text> : null}
+                {email ? (
+                    <Text className="text-muted-foreground" style={{ fontSize: 11.5, marginTop: 1 }}>
+                        {email}
+                    </Text>
+                ) : null}
             </View>
             <Pressable
                 onPress={onToggleRole}

@@ -26,9 +26,7 @@ export function ComposeToolbar({
 }: ComposeToolbarProps) {
     const iconColor = useThemeColor('muted-foreground')
     const activeColor = useThemeColor('primary')
-    const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
-    const borderColor = useThemeColor('border')
 
     const handleLink = useCallback(() => {
         const defaultUrl = toolbarState.currentLink ?? 'https://'
@@ -68,13 +66,12 @@ export function ComposeToolbar({
                 key: 'send',
                 element: (
                     <Pressable
-                        className="rounded-full items-center"
+                        className="rounded-full items-center bg-primary"
                         style={[
                             {
                                 paddingHorizontal: 20,
                                 paddingVertical: 6,
                                 minWidth: 72,
-                                backgroundColor: primaryColor,
                             },
                             (isPending || isSendDisabled) && { opacity: 0.6 },
                         ]}
@@ -84,7 +81,9 @@ export function ComposeToolbar({
                         {isPending ? (
                             <ActivityIndicator size="small" color={primaryFgColor} />
                         ) : (
-                            <Text style={{ fontSize: 14, fontWeight: '600', color: primaryFgColor }}>Send</Text>
+                            <Text className="text-primary-foreground" style={{ fontSize: 14, fontWeight: '600' }}>
+                                Send
+                            </Text>
                         )}
                     </Pressable>
                 ),
@@ -213,7 +212,6 @@ export function ComposeToolbar({
             },
         ],
         [
-            primaryColor,
             primaryFgColor,
             isPending,
             isSendDisabled,
@@ -233,7 +231,7 @@ export function ComposeToolbar({
     )
 
     return (
-        <View style={{ borderTopWidth: 1, borderTopColor: borderColor }}>
+        <View className="border-t border-border">
             <ResponsiveToolbar items={items} rightItems={rightItems} />
         </View>
     )

@@ -1,6 +1,8 @@
+import { LoadingState } from '@tinycld/core/components/LoadingState'
 import { ScreenHeader } from '@tinycld/core/components/ScreenHeader'
 import { SwipeableRowProvider } from '@tinycld/core/components/SwipeableRow'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
+import { captureException } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { pb, queryClient } from '@tinycld/core/lib/pocketbase'
@@ -9,21 +11,20 @@ import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Archive, Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native'
 import { ComposeFAB } from '../components/ComposeFAB'
 import { EmailListToolbar } from '../components/EmailListToolbar'
 import { EmailRow } from '../components/EmailRow'
 import type { ThreadListItem } from '../components/thread-list-item'
+import { prettifyFolderKey, searchResultToThreadListItem } from '../hooks/mailListHelpers'
 import { useCompose } from '../hooks/useComposeState'
 import { useMailBulkActions } from '../hooks/useMailBulkActions'
 import { useMailboxes } from '../hooks/useMailboxes'
 import { useMailListShortcuts } from '../hooks/useMailListShortcuts'
-import type { MailSearchResult } from '../hooks/useMailSearch'
 import { useMailSelection } from '../hooks/useMailSelection'
 import { useMailSearchState } from '../hooks/useSearchState'
 import { UNIFIED_INBOX, useThreadListItems } from '../hooks/useThreadListItems'
-import { useThreadListContext } from '../stores/thread-list-store'
 
 function useQueryParams() {
     const { folder, label, mailbox } = useLocalSearchParams<{
@@ -36,11 +37,12 @@ function useQueryParams() {
 }
 
 function EmptyState({ folderTitle, isVisible }: { folderTitle: string; isVisible: boolean }) {
-    const mutedColor = useThemeColor('muted-foreground')
     if (!isVisible) return null
     return (
         <View className="flex-1 items-center justify-center p-8">
-            <Text style={{ fontSize: 16, color: mutedColor }}>No conversations in {folderTitle}</Text>
+            <Text className="text-muted-foreground" style={{ fontSize: 16 }}>
+                No conversations in {folderTitle}
+            </Text>
         </View>
     )
 }
@@ -53,10 +55,6 @@ const FOLDER_ICONS: Record<string, typeof Inbox> = {
     starred: Star,
     archive: Archive,
     'all-inboxes': Inbox,
-}
-
-const FOLDER_TITLES: Record<string, string> = {
-    'all-inboxes': 'All Inboxes',
 }
 
 function LabelChip({
@@ -119,7 +117,7 @@ function ActiveViewBanner({
     }
 
     const folderKey = folder ?? ''
-    const displayName = FOLDER_TITLES[folderKey] ?? folderKey.charAt(0).toUpperCase() + folderKey.slice(1)
+    const displayName = prettifyFolderKey(folderKey)
     const FolderIcon = folder ? (FOLDER_ICONS[folder] ?? Tag) : Tag
 
     return (
@@ -133,7 +131,9 @@ function ActiveViewBanner({
                 }}
             >
                 <FolderIcon size={14} color={accentColor} />
-                <Text style={{ fontSize: 13, fontWeight: '600', color: accentColor }}>{displayName}</Text>
+                <Text className="text-primary" style={{ fontSize: 13, fontWeight: '600' }}>
+                    {displayName}
+                </Text>
                 <Pressable onPress={() => router.replace(orgHref('mail'))} hitSlop={8}>
                     <X size={14} color={accentColor} />
                 </Pressable>
@@ -143,46 +143,13 @@ function ActiveViewBanner({
 }
 
 function SearchResultsHeader({ total, isSearching }: { total: number; isSearching: boolean }) {
-    const mutedColor = useThemeColor('muted-foreground')
     return (
         <View className="px-3 py-2">
-            <Text style={{ fontSize: 13, color: mutedColor }}>
+            <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
                 {isSearching ? 'Searching...' : `${total} result${total !== 1 ? 's' : ''}`}
             </Text>
         </View>
     )
-}
-
-function stripHtmlTags(html: string): string {
-    return html.replace(/<[^>]*>/g, '')
-}
-
-function searchResultToThreadListItem(result: MailSearchResult): ThreadListItem {
-    let participants: { name: string; email: string }[] = []
-    try {
-        participants =
-            typeof result.participants === 'string' ? JSON.parse(result.participants) : (result.participants ?? [])
-    } catch {
-        // ignore parse errors
-    }
-
-    return {
-        stateId: result.thread_id,
-        threadId: result.thread_id,
-        subject: result.subject,
-        snippet: stripHtmlTags(result.snippet_highlight) || '',
-        latestDate: result.latest_date,
-        messageCount: result.message_count,
-        senderName: participants[0]?.name ?? '',
-        senderEmail: participants[0]?.email ?? '',
-        participants,
-        isRead: true,
-        isStarred: false,
-        labels: [],
-        folder: 'search',
-        hasDraft: false,
-        hasAttachments: false,
-    }
 }
 
 export default function MailListScreen() {
@@ -194,9 +161,6 @@ export default function MailListScreen() {
     const { isScrolled, onScroll } = useScrollShadow()
     const { openDraft } = useCompose()
     const search = useMailSearchState()
-    const mutedColor = useThemeColor('muted-foreground')
-    const primaryColor = useThemeColor('primary')
-    const _backgroundColor = useThemeColor('background')
     const { personal } = useMailboxes()
     const isUnifiedView = folder === 'all-inboxes'
     const mailboxId = isUnifiedView ? UNIFIED_INBOX : (mailbox ?? personal?.id ?? '')
@@ -208,32 +172,30 @@ export default function MailListScreen() {
         draftByThread,
         threadMap,
         threadStateCollection,
+        isLoading,
     } = useThreadListItems(userOrgId, {
         folder,
         labels,
         mailboxId,
     })
 
-    const { setThreadIds } = useThreadListContext()
-    const prevIdsRef = useRef('')
-    useEffect(() => {
-        const ids = items.map((i) => i.threadId)
-        const key = ids.join(',')
-        if (key !== prevIdsRef.current) {
-            prevIdsRef.current = key
-            setThreadIds(ids)
-        }
-    }, [items, setThreadIds])
-
     const [isRefreshing, setIsRefreshing] = useState(false)
-    const handleRefresh = useCallback(() => {
+    const handleRefresh = useCallback(async () => {
         setIsRefreshing(true)
-        queryClient.invalidateQueries()
-        setTimeout(() => setIsRefreshing(false), 800)
+        try {
+            await queryClient.invalidateQueries()
+        } finally {
+            setIsRefreshing(false)
+        }
     }, [])
 
     const selection = useMailSelection(items, folder, labels)
     const bulkActions = useMailBulkActions(threadStateCollection, selection.selectedItems, selection.clearSelection)
+
+    const flatListRef = useRef<FlatList<ThreadListItem>>(null)
+    const scrollToFocusedIndex = useCallback((index: number) => {
+        flatListRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true })
+    }, [])
 
     const { focusedIndex } = useMailListShortcuts({
         items,
@@ -242,6 +204,7 @@ export default function MailListScreen() {
         isEnabled: !search.isActive,
         folder,
         labels,
+        onFocusIndex: scrollToFocusedIndex,
     })
 
     const selectedItemLabelIds = useMemo(() => {
@@ -289,13 +252,14 @@ export default function MailListScreen() {
             const draft = draftByThread.get(item.threadId)
             if (!draft) return
 
-            let htmlBody = ''
-            if (draft.body_html) {
-                const url = pb.files.getURL({ collectionId: 'mail_messages', id: draft.id }, draft.body_html)
-                htmlBody = await fetch(url)
-                    .then((r) => r.text())
-                    .catch(() => '')
-            }
+            const htmlBody = draft.body_html
+                ? await fetch(pb.files.getURL({ collectionId: 'mail_messages', id: draft.id }, draft.body_html))
+                      .then((r) => r.text())
+                      .catch((err) => {
+                          captureException('mail.openDraft.fetchBody', err, { messageId: draft.id })
+                          return ''
+                      })
+                : ''
 
             const draftThread = threadMap.get(draft.thread)
             openDraft({
@@ -316,14 +280,17 @@ export default function MailListScreen() {
 
     const searchItems = useMemo(() => search.results.map(searchResultToThreadListItem), [search.results])
 
-    const activeLabels = labels
-        .map((id) => labelMap.get(id))
-        .filter((l): l is { id: string; name: string; color: string } => l != null)
+    const activeLabels = useMemo(
+        () =>
+            labels
+                .map((id) => labelMap.get(id))
+                .filter((l): l is { id: string; name: string; color: string } => l != null),
+        [labels, labelMap]
+    )
+
     const folderKey = folder ?? 'inbox'
     const folderTitle =
-        activeLabels.length > 0
-            ? activeLabels.map((l) => l.name).join(', ')
-            : (FOLDER_TITLES[folderKey] ?? folderKey.charAt(0).toUpperCase() + folderKey.slice(1))
+        activeLabels.length > 0 ? activeLabels.map((l) => l.name).join(', ') : prettifyFolderKey(folderKey)
 
     const isNonDefaultView = labels.length > 0 || (!!folder && folder !== 'inbox')
 
@@ -341,17 +308,46 @@ export default function MailListScreen() {
 
     const isMobile = breakpoint === 'mobile'
 
+    const renderRow = useCallback(
+        ({ item, index }: { item: ThreadListItem; index: number }) => (
+            <MailListRow
+                item={item}
+                index={index}
+                isMobile={isMobile}
+                isFocused={index === focusedIndex}
+                isSelected={selection.selectedIds.has(item.stateId)}
+                onToggleSelect={selection.toggle}
+                onToggleStar={toggleStar.mutate}
+                onArchive={archiveThread.mutate}
+                onTrash={trashThread.mutate}
+                onToggleRead={toggleRead.mutate}
+                onDraftPress={handleDraftPress}
+            />
+        ),
+        [
+            isMobile,
+            focusedIndex,
+            selection.selectedIds,
+            selection.toggle,
+            toggleStar.mutate,
+            archiveThread.mutate,
+            trashThread.mutate,
+            toggleRead.mutate,
+            handleDraftPress,
+        ]
+    )
+
     if (search.isActive) {
         return (
             <View className="flex-1">
                 <SearchResultsHeader total={search.total} isSearching={search.isSearching} />
                 {search.isSearching && searchItems.length === 0 ? (
-                    <View className="flex-1 items-center justify-center">
-                        <ActivityIndicator size="large" color={primaryColor} />
-                    </View>
+                    <LoadingState />
                 ) : searchItems.length === 0 ? (
                     <View className="flex-1 items-center justify-center p-8">
-                        <Text style={{ fontSize: 16, color: mutedColor }}>No results found</Text>
+                        <Text className="text-muted-foreground" style={{ fontSize: 16 }}>
+                            No results found
+                        </Text>
                     </View>
                 ) : (
                     <SwipeableRowProvider>
@@ -367,6 +363,8 @@ export default function MailListScreen() {
     }
 
     const isEmpty = items.length === 0
+    const showEmptyState = isEmpty && !isLoading
+    const showLoadingState = isEmpty && isLoading
 
     return (
         <View className="flex-1">
@@ -399,49 +397,26 @@ export default function MailListScreen() {
                     isRefreshing={isRefreshing}
                 />
             </ScreenHeader>
-            <EmptyState folderTitle={folderTitle} isVisible={isEmpty} />
-            {isEmpty ? null : (
+            {showLoadingState && <LoadingState />}
+            <EmptyState folderTitle={folderTitle} isVisible={showEmptyState} />
+            {!isEmpty && (
                 <SwipeableRowProvider>
                     <FlatList
+                        ref={flatListRef}
                         data={items}
                         keyExtractor={(item) => item.stateId}
                         onScroll={onScroll}
                         scrollEventThrottle={16}
-                        renderItem={({ item, index }) => (
-                            <EmailRow
-                                email={item}
-                                isMobile={isMobile}
-                                index={index}
-                                isFocused={index === focusedIndex}
-                                isSelected={selection.selectedIds.has(item.stateId)}
-                                onToggleSelect={() => selection.toggle(item.stateId)}
-                                onToggleStar={() =>
-                                    toggleStar.mutate({
-                                        stateId: item.stateId,
-                                        currentStarred: item.isStarred,
-                                    })
-                                }
-                                onPress={item.hasDraft ? () => handleDraftPress(item) : undefined}
-                                onArchive={() =>
-                                    archiveThread.mutate({
-                                        stateId: item.stateId,
-                                        folder: item.folder,
-                                    })
-                                }
-                                onTrash={() =>
-                                    trashThread.mutate({
-                                        stateId: item.stateId,
-                                        folder: item.folder,
-                                    })
-                                }
-                                onToggleRead={() =>
-                                    toggleRead.mutate({
-                                        stateId: item.stateId,
-                                        currentRead: item.isRead,
-                                    })
-                                }
-                            />
-                        )}
+                        renderItem={renderRow}
+                        onScrollToIndexFailed={() => {
+                            // FlatList hasn't measured the target row yet — fall back to no-op.
+                            // The next j/k will succeed once rows have rendered.
+                        }}
+                        refreshControl={
+                            isMobile ? (
+                                <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+                            ) : undefined
+                        }
                     />
                 </SwipeableRowProvider>
             )}
@@ -449,3 +424,66 @@ export default function MailListScreen() {
         </View>
     )
 }
+
+interface MailListRowProps {
+    item: ThreadListItem
+    index: number
+    isMobile: boolean
+    isFocused: boolean
+    isSelected: boolean
+    onToggleSelect: (stateId: string) => void
+    onToggleStar: (args: { stateId: string; currentStarred: boolean }) => void
+    onArchive: (args: { stateId: string; folder: string }) => void
+    onTrash: (args: { stateId: string; folder: string }) => void
+    onToggleRead: (args: { stateId: string; currentRead: boolean }) => void
+    onDraftPress: (item: ThreadListItem) => void
+}
+
+const MailListRow = memo(function MailListRow({
+    item,
+    index,
+    isMobile,
+    isFocused,
+    isSelected,
+    onToggleSelect,
+    onToggleStar,
+    onArchive,
+    onTrash,
+    onToggleRead,
+    onDraftPress,
+}: MailListRowProps) {
+    const handleToggleSelect = useCallback(() => onToggleSelect(item.stateId), [onToggleSelect, item.stateId])
+    const handleToggleStar = useCallback(
+        () => onToggleStar({ stateId: item.stateId, currentStarred: item.isStarred }),
+        [onToggleStar, item.stateId, item.isStarred]
+    )
+    const handleArchive = useCallback(
+        () => onArchive({ stateId: item.stateId, folder: item.folder }),
+        [onArchive, item.stateId, item.folder]
+    )
+    const handleTrash = useCallback(
+        () => onTrash({ stateId: item.stateId, folder: item.folder }),
+        [onTrash, item.stateId, item.folder]
+    )
+    const handleToggleRead = useCallback(
+        () => onToggleRead({ stateId: item.stateId, currentRead: item.isRead }),
+        [onToggleRead, item.stateId, item.isRead]
+    )
+    const handlePress = useMemo(() => (item.hasDraft ? () => onDraftPress(item) : undefined), [item, onDraftPress])
+
+    return (
+        <EmailRow
+            email={item}
+            isMobile={isMobile}
+            index={index}
+            isFocused={isFocused}
+            isSelected={isSelected}
+            onToggleSelect={handleToggleSelect}
+            onToggleStar={handleToggleStar}
+            onPress={handlePress}
+            onArchive={handleArchive}
+            onTrash={handleTrash}
+            onToggleRead={handleToggleRead}
+        />
+    )
+})

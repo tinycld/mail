@@ -195,9 +195,6 @@ function FormLayout({
     primaryColor,
     primaryFgColor,
 }: FormLayoutProps) {
-    const borderColor = useThemeColor('border')
-    const mutedColor = useThemeColor('muted-foreground')
-    const fgColor = useThemeColor('foreground')
     const previewInitial = (preview.displayName || preview.address || '?').trim().charAt(0).toUpperCase()
 
     return (
@@ -220,24 +217,30 @@ function FormLayout({
                 placeholder="Support Team"
                 hint="shown in the From: header and in the admin list"
             />
-            <View className="flex-row gap-3 items-center rounded-lg p-3" style={{ borderWidth: 1, borderColor }}>
+            <View className="flex-row gap-3 items-center rounded-lg p-3 border border-border">
                 <View
-                    className="items-center justify-center rounded-lg"
-                    style={{ width: 30, height: 30, backgroundColor: `${primaryColor}1F` }}
+                    className="items-center justify-center rounded-lg bg-primary/10"
+                    style={{ width: 30, height: 30 }}
                 >
-                    <Text style={{ color: primaryColor, fontWeight: '700', fontSize: 13 }}>{previewInitial}</Text>
+                    <Text className="text-primary" style={{ fontWeight: '700', fontSize: 13 }}>
+                        {previewInitial}
+                    </Text>
                 </View>
                 <View className="flex-1" style={{ minWidth: 0 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: fgColor }}>
+                    <Text className="text-foreground" style={{ fontSize: 13, fontWeight: '600' }}>
                         {preview.address || '…'}
-                        <Text style={{ color: mutedColor, fontWeight: '500' }}>@{preview.domainName || '…'}</Text>
+                        <Text className="text-muted-foreground" style={{ fontWeight: '500' }}>
+                            @{preview.domainName || '…'}
+                        </Text>
                     </Text>
-                    <Text style={{ fontSize: 11.5, color: mutedColor }}>{preview.displayName || 'Display name'}</Text>
+                    <Text className="text-muted-foreground" style={{ fontSize: 11.5 }}>
+                        {preview.displayName || 'Display name'}
+                    </Text>
                 </View>
                 <Text
+                    className="text-muted-foreground"
                     style={{
                         fontSize: 10,
-                        color: mutedColor,
                         textTransform: 'uppercase',
                         fontWeight: '600',
                         letterSpacing: 0.6,

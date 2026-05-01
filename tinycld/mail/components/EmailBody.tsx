@@ -77,7 +77,7 @@ export function EmailBody({ collectionId, recordId, filename }: EmailBodyProps) 
 
     if (Platform.OS === 'web') {
         return (
-            <View className="p-4 flex-1 rounded-lg" style={{ backgroundColor: '#fff' }}>
+            <View className="p-4 flex-1 rounded-lg bg-white">
                 <iframe
                     ref={iframeRef}
                     sandbox="allow-same-origin"
@@ -96,8 +96,10 @@ export function EmailBody({ collectionId, recordId, filename }: EmailBodyProps) 
     }
 
     return (
-        <View className="p-4 flex-1 rounded-lg" style={{ backgroundColor: '#fff' }}>
-            <Text style={{ fontSize: 14, lineHeight: 22, color: '#000' }}>{html.replace(/<[^>]*>/g, '')}</Text>
+        <View className="p-4 flex-1 rounded-lg bg-white">
+            <Text className="text-black" style={{ fontSize: 14, lineHeight: 22 }}>
+                {html.replace(/<[^>]*>/g, '')}
+            </Text>
         </View>
     )
 }

@@ -128,13 +128,8 @@ function useMailboxData(currentUserOrgId: string) {
 }
 
 export default function MailboxesSettings() {
-    const fgColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted-foreground')
     const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
-    const bgColor = useThemeColor('background')
-    const borderColor = useThemeColor('border')
-    const accentColor = useThemeColor('primary')
 
     const { isAdmin, userOrgId } = useCurrentRole()
     const data = useMailboxData(userOrgId)
@@ -171,8 +166,8 @@ export default function MailboxesSettings() {
 
     if (!isAdmin) {
         return (
-            <View className="flex-1 items-center justify-center p-5" style={{ backgroundColor: bgColor }}>
-                <Text style={{ color: mutedColor }}>Admin access required</Text>
+            <View className="flex-1 items-center justify-center p-5 bg-background">
+                <Text className="text-muted-foreground">Admin access required</Text>
             </View>
         )
     }
@@ -182,13 +177,17 @@ export default function MailboxesSettings() {
 
     return (
         <>
-            <ScrollView contentContainerStyle={{ flexGrow: 1 }} style={{ backgroundColor: bgColor }}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="bg-background">
                 <View className="flex-1 gap-5 p-5">
                     <View className="flex-row items-start justify-between gap-4 flex-wrap">
                         <View className="gap-1 flex-1" style={{ minWidth: 220 }}>
-                            <Text style={{ fontSize: 11, color: mutedColor }}>Settings · Mail</Text>
-                            <Text style={{ fontSize: 22, fontWeight: '700', color: fgColor }}>Mailboxes</Text>
-                            <Text style={{ fontSize: 13, color: mutedColor }}>
+                            <Text className="text-muted-foreground" style={{ fontSize: 11 }}>
+                                Settings · Mail
+                            </Text>
+                            <Text className="text-foreground" style={{ fontSize: 22, fontWeight: '700' }}>
+                                Mailboxes
+                            </Text>
+                            <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
                                 Manage shared mailboxes, members, and aliases for your organization.
                             </Text>
                         </View>
@@ -209,14 +208,14 @@ export default function MailboxesSettings() {
                     </View>
 
                     {!hasDomains && (
-                        <Text style={{ color: mutedColor }}>
+                        <Text className="text-muted-foreground">
                             No mail domains configured.{' '}
                             <Link
                                 href={orgHref('settings/[...section]', {
                                     section: ['mail', 'provider'],
                                 })}
                             >
-                                <Text style={{ color: accentColor, textDecorationLine: 'underline' }}>
+                                <Text className="text-primary" style={{ textDecorationLine: 'underline' }}>
                                     Add a domain in Provider settings
                                 </Text>
                             </Link>{' '}
@@ -236,7 +235,7 @@ export default function MailboxesSettings() {
 
                             {data.items.length === 0 && (
                                 <View className="items-center gap-2 p-6">
-                                    <Text style={{ color: mutedColor }}>No mailboxes yet.</Text>
+                                    <Text className="text-muted-foreground">No mailboxes yet.</Text>
                                     <Pressable
                                         onPress={() => setDrawerMode({ kind: 'create' })}
                                         className="rounded-lg"
@@ -261,15 +260,9 @@ export default function MailboxesSettings() {
 
                             {data.items.length > 0 && grouped.shared.length === 0 && grouped.personal.length === 0 && (
                                 <View className="items-center gap-2 p-6">
-                                    <Text style={{ color: mutedColor }}>No mailboxes match "{query}".</Text>
+                                    <Text className="text-muted-foreground">No mailboxes match "{query}".</Text>
                                     <Pressable onPress={() => setQuery('')}>
-                                        <Text
-                                            style={{
-                                                color: accentColor,
-                                                fontSize: 13,
-                                                fontWeight: '600',
-                                            }}
-                                        >
+                                        <Text className="text-primary" style={{ fontSize: 13, fontWeight: '600' }}>
                                             Clear search
                                         </Text>
                                     </Pressable>
@@ -305,11 +298,8 @@ export default function MailboxesSettings() {
                             )}
 
                             {data.items.length > 0 && (
-                                <View
-                                    className="flex-row items-center justify-between pt-3"
-                                    style={{ borderTopWidth: 1, borderColor: borderColor }}
-                                >
-                                    <Text style={{ fontSize: 12, color: mutedColor }}>
+                                <View className="flex-row items-center justify-between pt-3 border-t border-border">
+                                    <Text className="text-muted-foreground" style={{ fontSize: 12 }}>
                                         {data.items.length} mailbox
                                         {data.items.length !== 1 ? 'es' : ''}
                                         {data.domains[0]?.domain ? ` · ${data.domains[0].domain}` : ''}
@@ -319,13 +309,7 @@ export default function MailboxesSettings() {
                                             section: ['mail', 'provider'],
                                         })}
                                     >
-                                        <Text
-                                            style={{
-                                                fontSize: 12,
-                                                color: accentColor,
-                                                fontWeight: '600',
-                                            }}
-                                        >
+                                        <Text className="text-primary" style={{ fontSize: 12, fontWeight: '600' }}>
                                             Manage domains ›
                                         </Text>
                                     </Link>
@@ -352,14 +336,13 @@ export default function MailboxesSettings() {
 }
 
 function GroupLabel({ label, count }: { label: string; count: number }) {
-    const mutedColor = useThemeColor('muted-foreground')
     return (
         <View className="flex-row items-center gap-2 pt-3 pb-1 px-2">
             <Text
+                className="text-muted-foreground"
                 style={{
                     fontSize: 10.5,
                     fontWeight: '600',
-                    color: mutedColor,
                     textTransform: 'uppercase',
                     letterSpacing: 0.8,
                 }}
@@ -367,10 +350,10 @@ function GroupLabel({ label, count }: { label: string; count: number }) {
                 {label}
             </Text>
             <Text
+                className="text-muted-foreground"
                 style={{
                     fontSize: 10.5,
                     fontWeight: '600',
-                    color: mutedColor,
                 }}
             >
                 {count}

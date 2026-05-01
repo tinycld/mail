@@ -53,7 +53,7 @@ export function MailboxSearchBar({ query, onQueryChange, type, onTypeChange, cou
                     autoCapitalize="none"
                 />
             </View>
-            <View className="flex-row rounded-lg overflow-hidden" style={{ borderWidth: 1, borderColor }}>
+            <View className="flex-row rounded-lg overflow-hidden border border-border">
                 {SEGMENTS.map((seg) => {
                     const isActive = type === seg.value
                     const count = counts[seg.value]

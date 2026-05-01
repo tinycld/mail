@@ -110,14 +110,15 @@ function CreateView({
     userOrgId: string
     onDone: () => void
 }) {
-    const fgColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     return (
         <>
             <DrawerHeader>
                 <View>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: fgColor }}>New shared mailbox</Text>
-                    <Text style={{ fontSize: 12.5, color: mutedColor, marginTop: 2 }}>
+                    <Text className="text-foreground" style={{ fontSize: 16, fontWeight: '700' }}>
+                        New shared mailbox
+                    </Text>
+                    <Text className="text-muted-foreground" style={{ fontSize: 12.5, marginTop: 2 }}>
                         Choose an address and display name to get started.
                     </Text>
                 </View>
@@ -133,7 +134,6 @@ function CreateView({
 }
 
 function EditView({ mailbox, onDone, onCancel }: { mailbox: ViewMailbox; onDone: () => void; onCancel: () => void }) {
-    const fgColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const initial: MailboxFormValues = {
         address: mailbox.address,
@@ -144,8 +144,10 @@ function EditView({ mailbox, onDone, onCancel }: { mailbox: ViewMailbox; onDone:
         <>
             <DrawerHeader>
                 <View>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: fgColor }}>Edit mailbox</Text>
-                    <Text style={{ fontSize: 12.5, color: mutedColor, marginTop: 2 }}>
+                    <Text className="text-foreground" style={{ fontSize: 16, fontWeight: '700' }}>
+                        Edit mailbox
+                    </Text>
+                    <Text className="text-muted-foreground" style={{ fontSize: 12.5, marginTop: 2 }}>
                         {mailbox.address}@{mailbox.domainName}
                     </Text>
                 </View>
@@ -179,9 +181,7 @@ function ViewMode({
     onEdit: () => void
     onDeleted: () => void
 }) {
-    const fgColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
-    const primaryColor = useThemeColor('primary')
     const [tab, setTab] = useState<'members' | 'aliases'>(mailbox.type === 'shared' ? 'members' : 'aliases')
     const avatarInitial = (mailbox.displayName || mailbox.address).trim().charAt(0).toUpperCase()
 
@@ -190,17 +190,23 @@ function ViewMode({
             <DrawerHeader>
                 <View className="flex-row items-start gap-3 flex-1">
                     <View
-                        className="items-center justify-center rounded-lg"
-                        style={{ width: 40, height: 40, backgroundColor: `${primaryColor}1F` }}
+                        className="items-center justify-center rounded-lg bg-primary/10"
+                        style={{ width: 40, height: 40 }}
                     >
-                        <Text style={{ color: primaryColor, fontWeight: '700', fontSize: 15 }}>{avatarInitial}</Text>
+                        <Text className="text-primary" style={{ fontWeight: '700', fontSize: 15 }}>
+                            {avatarInitial}
+                        </Text>
                     </View>
                     <View className="flex-1" style={{ minWidth: 0 }}>
-                        <Text style={{ fontSize: 16, fontWeight: '700', color: fgColor }}>
+                        <Text className="text-foreground" style={{ fontSize: 16, fontWeight: '700' }}>
                             {mailbox.address}
-                            <Text style={{ color: mutedColor, fontWeight: '500' }}>@{mailbox.domainName}</Text>
+                            <Text className="text-muted-foreground" style={{ fontWeight: '500' }}>
+                                @{mailbox.domainName}
+                            </Text>
                         </Text>
-                        <Text style={{ fontSize: 12.5, color: mutedColor, marginTop: 1 }}>{mailbox.displayName}</Text>
+                        <Text className="text-muted-foreground" style={{ fontSize: 12.5, marginTop: 1 }}>
+                            {mailbox.displayName}
+                        </Text>
                     </View>
                 </View>
                 <View className="flex-row gap-1">
@@ -218,7 +224,7 @@ function ViewMode({
             <View className="flex-row gap-2 items-center flex-wrap" style={{ paddingHorizontal: 4, paddingBottom: 8 }}>
                 <TypeBadge type={mailbox.type} />
                 <DomainBadge domainName={mailbox.domainName} />
-                <Text style={{ fontSize: 11, color: mutedColor }}>
+                <Text className="text-muted-foreground" style={{ fontSize: 11 }}>
                     · created {formatCreatedDate(mailbox.createdAt)}
                 </Text>
             </View>
@@ -284,21 +290,20 @@ function TypeBadge({ type }: { type: 'shared' | 'personal' }) {
 }
 
 function DomainBadge({ domainName }: { domainName: string }) {
-    const mutedColor = useThemeColor('muted-foreground')
-    const primaryColor = useThemeColor('primary')
-    const borderColor = useThemeColor('border')
     return (
         <View
-            className="flex-row items-center gap-1 rounded-full"
+            className="flex-row items-center gap-1 rounded-full border border-border"
             style={{
                 paddingHorizontal: 8,
                 paddingVertical: 2,
-                borderWidth: 1,
-                borderColor,
             }}
         >
-            <Text style={{ fontSize: 11, color: primaryColor, fontWeight: '700' }}>✓</Text>
-            <Text style={{ fontSize: 11, color: mutedColor, fontWeight: '500' }}>{domainName}</Text>
+            <Text className="text-primary" style={{ fontSize: 11, fontWeight: '700' }}>
+                ✓
+            </Text>
+            <Text className="text-muted-foreground" style={{ fontSize: 11, fontWeight: '500' }}>
+                {domainName}
+            </Text>
         </View>
     )
 }
@@ -389,10 +394,10 @@ function MembersTab({
     return (
         <View className="gap-3">
             <Text
+                className="text-muted-foreground"
                 style={{
                     fontSize: 11,
                     fontWeight: '600',
-                    color: mutedColor,
                     textTransform: 'uppercase',
                     letterSpacing: 0.6,
                 }}
@@ -420,17 +425,21 @@ function MembersTab({
             {!adding && available.length > 0 && (
                 <Pressable
                     onPress={() => setAdding(true)}
-                    className="flex-row gap-2 items-center rounded-lg p-3"
-                    style={{ borderWidth: 1, borderColor, borderStyle: 'dashed' }}
+                    className="flex-row gap-2 items-center rounded-lg p-3 border border-border"
+                    style={{ borderStyle: 'dashed' }}
                 >
                     <UserPlus size={14} color={mutedColor} />
-                    <Text style={{ fontSize: 13, color: mutedColor }}>Add member</Text>
+                    <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
+                        Add member
+                    </Text>
                 </Pressable>
             )}
 
             {adding && (
-                <View className="gap-2 rounded-lg p-3" style={{ borderWidth: 1, borderColor, borderStyle: 'dashed' }}>
-                    <Text style={{ fontSize: 12, color: mutedColor }}>Select a member:</Text>
+                <View className="gap-2 rounded-lg p-3 border border-border" style={{ borderStyle: 'dashed' }}>
+                    <Text className="text-muted-foreground" style={{ fontSize: 12 }}>
+                        Select a member:
+                    </Text>
                     <View className="flex-row gap-1 flex-wrap">
                         {available.map((o) => {
                             const isSelected = selected === o.userOrgId
@@ -463,7 +472,9 @@ function MembersTab({
                                 opacity: !selected || addMutation.isPending ? 0.5 : 1,
                             }}
                         >
-                            <Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '600' }}>Add</Text>
+                            <Text className="text-white" style={{ fontSize: 12.5, fontWeight: '600' }}>
+                                Add
+                            </Text>
                         </Pressable>
                         <Pressable
                             onPress={() => {
@@ -483,8 +494,6 @@ function MembersTab({
 }
 
 function DangerZone({ mailboxId, onDeleted }: { mailboxId: string; onDeleted: () => void }) {
-    const mutedColor = useThemeColor('muted-foreground')
-    const fgColor = useThemeColor('foreground')
     const dangerColor = useThemeColor('danger')
     const [mailboxesCollection] = useStore('mail_mailboxes')
     const [confirming, setConfirming] = useState(false)
@@ -502,8 +511,10 @@ function DangerZone({ mailboxId, onDeleted }: { mailboxId: string; onDeleted: ()
     return (
         <View className="flex-row items-center justify-between gap-3">
             <View className="flex-1">
-                <Text style={{ fontSize: 12.5, color: fgColor, fontWeight: '600' }}>Delete this mailbox.</Text>
-                <Text style={{ fontSize: 11.5, color: mutedColor }}>
+                <Text className="text-foreground" style={{ fontSize: 12.5, fontWeight: '600' }}>
+                    Delete this mailbox.
+                </Text>
+                <Text className="text-muted-foreground" style={{ fontSize: 11.5 }}>
                     Members lose access. Aliases are freed. Messages stay on disk.
                 </Text>
             </View>
@@ -541,7 +552,9 @@ function DangerZone({ mailboxId, onDeleted }: { mailboxId: string; onDeleted: ()
                             backgroundColor: dangerColor,
                         }}
                     >
-                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>Really delete</Text>
+                        <Text className="text-white" style={{ fontSize: 12, fontWeight: '600' }}>
+                            Really delete
+                        </Text>
                     </Pressable>
                 </View>
             )}

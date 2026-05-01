@@ -26,8 +26,6 @@ interface Props {
 export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) {
     const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
-    const mutedColor = useThemeColor('muted-foreground')
-    const borderColor = useThemeColor('border')
 
     const [aliasesCollection, mailboxesCollection] = useStore('mail_mailbox_aliases', 'mail_mailboxes')
 
@@ -88,13 +86,15 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
         <View className="gap-2">
             <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
             <View
-                className="flex-row gap-2 items-center rounded-lg px-2"
-                style={{ borderWidth: 1, borderColor, borderStyle: 'dashed' }}
+                className="flex-row gap-2 items-center rounded-lg px-2 border border-border"
+                style={{ borderStyle: 'dashed' }}
             >
                 <View className="flex-1">
                     <TextInput control={control} name="address" placeholder="new-alias" />
                 </View>
-                <Text style={{ color: mutedColor, fontSize: 13 }}>@{domainName}</Text>
+                <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
+                    @{domainName}
+                </Text>
                 <Pressable
                     onPress={onSubmit}
                     disabled={!canSubmit}

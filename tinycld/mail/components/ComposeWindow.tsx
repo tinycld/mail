@@ -4,7 +4,6 @@ import { performMutations } from '@tinycld/core/lib/mutations'
 import { notify } from '@tinycld/core/lib/notify'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { type Shortcut, useRegisterShortcut, useShortcutScope } from '@tinycld/core/lib/shortcuts'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { FormErrorSummary, useForm, zodResolver } from '@tinycld/core/ui/form'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, View } from 'react-native'
@@ -41,9 +40,6 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const toastedBlockerRef = useRef<string | null>(null)
     const [headerTitle, setHeaderTitle] = useState('')
     const { attachments, addFiles, removeFile, clearAll: clearAttachments } = useAttachments()
-    const backgroundColor = useThemeColor('background')
-    const borderColor = useThemeColor('border')
-
     useEffect(() => {
         if (!isVisible) {
             toastedBlockerRef.current = null
@@ -238,12 +234,10 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
     const composeWindow = (
         <View
-            className="absolute border rounded-lg"
+            className="absolute border border-border bg-background rounded-lg"
             style={[
                 {
                     zIndex: 1000,
-                    backgroundColor,
-                    borderColor,
                 },
                 windowStyle,
                 webShadow,

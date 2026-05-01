@@ -15,8 +15,6 @@ interface Props {
 }
 
 export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: Props) {
-    const mutedColor = useThemeColor('muted-foreground')
-    const fgColor = useThemeColor('foreground')
     const primaryColor = useThemeColor('primary')
     const dangerColor = useThemeColor('danger')
 
@@ -43,10 +41,10 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
         <View className="gap-3">
             <View className="flex-row items-center justify-between">
                 <Text
+                    className="text-muted-foreground"
                     style={{
                         fontSize: 11,
                         fontWeight: '600',
-                        color: mutedColor,
                         textTransform: 'uppercase',
                         letterSpacing: 0.6,
                     }}
@@ -55,14 +53,14 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
                 </Text>
                 <Pressable onPress={() => setShowForm((s) => !s)} className="flex-row gap-1 items-center">
                     <Plus size={12} color={primaryColor} />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: primaryColor }}>
+                    <Text className="text-primary" style={{ fontSize: 12, fontWeight: '600' }}>
                         {showForm ? 'Cancel' : 'Add alias'}
                     </Text>
                 </Pressable>
             </View>
 
             {items.length === 0 && !showForm && (
-                <Text style={{ fontSize: 12.5, color: mutedColor }}>
+                <Text className="text-muted-foreground" style={{ fontSize: 12.5 }}>
                     No aliases yet. Add one to route more addresses to this mailbox.
                 </Text>
             )}
@@ -75,9 +73,9 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
                     >
                         <Tag size={14} color={primaryColor} />
                     </View>
-                    <Text className="flex-1" style={{ fontSize: 13, color: fgColor }}>
+                    <Text className="flex-1 text-foreground" style={{ fontSize: 13 }}>
                         {alias.address}
-                        <Text style={{ color: mutedColor }}>@{domainName}</Text>
+                        <Text className="text-muted-foreground">@{domainName}</Text>
                     </Text>
                     <Pressable onPress={() => remove.mutate(alias.id)} className="p-1">
                         <X size={14} color={dangerColor} />

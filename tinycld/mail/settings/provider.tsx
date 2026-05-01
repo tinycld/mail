@@ -31,11 +31,7 @@ const addDomainSchema = z.object({
 })
 
 export default function ProviderSettings() {
-    const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted-foreground')
     const primaryColor = useThemeColor('primary')
-    const primaryFgColor = useThemeColor('primary-foreground')
-    const backgroundColor = useThemeColor('background')
     const { orgId } = useOrgInfo()
     const settings = useSettings('mail', orgId)
     const [settingsCollection] = useStore('settings')
@@ -89,12 +85,14 @@ export default function ProviderSettings() {
     const canSubmit = !saveMutation.isPending && isDirty
 
     return (
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }} style={{ backgroundColor }}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="bg-background">
             <View className="flex-1 gap-5 p-5" style={{ maxWidth: 600 }}>
                 <View className="gap-2">
                     <Globe size={32} color={primaryColor} />
-                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: foregroundColor }}>Mail Provider</Text>
-                    <Text style={{ fontSize: 13, color: mutedColor }}>
+                    <Text className="text-foreground" style={{ fontSize: 20, fontWeight: 'bold' }}>
+                        Mail Provider
+                    </Text>
+                    <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
                         Configure the email provider and domains for your organization.
                     </Text>
                 </View>
@@ -120,10 +118,9 @@ export default function ProviderSettings() {
                 <Pressable
                     onPress={onSubmit}
                     disabled={!canSubmit}
-                    className={`items-center justify-center rounded-lg h-11 ${canSubmit ? 'opacity-100' : 'opacity-50'}`}
-                    style={{ backgroundColor: primaryColor }}
+                    className={`items-center justify-center rounded-lg h-11 bg-primary ${canSubmit ? 'opacity-100' : 'opacity-50'}`}
                 >
-                    <Text style={{ fontWeight: '600', color: primaryFgColor }}>
+                    <Text className="text-primary-foreground" style={{ fontWeight: '600' }}>
                         {saveMutation.isPending ? 'Saving...' : 'Save'}
                     </Text>
                 </Pressable>
@@ -150,8 +147,6 @@ interface DomainRow {
 }
 
 function DomainsSection({ orgId }: { orgId: string }) {
-    const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted-foreground')
     const [domainsCollection] = useStore('mail_domains')
 
     const { data: domains } = useOrgLiveQuery((query, { orgId }) =>
@@ -176,8 +171,10 @@ function DomainsSection({ orgId }: { orgId: string }) {
 
     return (
         <View className="gap-3">
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: foregroundColor }}>Domains</Text>
-            <Text style={{ fontSize: 13, color: mutedColor }}>
+            <Text className="text-foreground" style={{ fontSize: 18, fontWeight: 'bold' }}>
+                Domains
+            </Text>
+            <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
                 Add domains your organization can send and receive email on. Click Verify to re-check DNS and provider
                 status.
             </Text>
@@ -194,15 +191,16 @@ function DomainsSection({ orgId }: { orgId: string }) {
 }
 
 function NoDomainsBanner({ isVisible }: { isVisible: boolean }) {
-    const mutedColor = useThemeColor('muted-foreground')
     if (!isVisible) return null
-    return <Text style={{ fontSize: 13, color: mutedColor, fontStyle: 'italic' }}>No domains added yet.</Text>
+    return (
+        <Text className="text-muted-foreground" style={{ fontSize: 13, fontStyle: 'italic' }}>
+            No domains added yet.
+        </Text>
+    )
 }
 
 function DomainRowItem({ domain }: { domain: DomainRow }) {
-    const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
-    const borderColor = useThemeColor('border')
     const successColor = useThemeColor('success')
     const dangerColor = useThemeColor('danger')
     const [domainsCollection] = useStore('mail_domains')
@@ -230,17 +228,14 @@ function DomainRowItem({ domain }: { domain: DomainRow }) {
     const verifiedColor = domain.verified ? successColor : dangerColor
 
     return (
-        <View
-            className="gap-3 border rounded-xl p-3"
-            style={{
-                borderColor,
-            }}
-        >
+        <View className="gap-3 border border-border rounded-xl p-3">
             <View className="flex-row justify-between items-center">
                 <View className="flex-row gap-2 items-center flex-1">
                     <VerifiedIcon size={18} color={verifiedColor} />
                     <View>
-                        <Text style={{ fontWeight: '600', color: foregroundColor }}>{domain.domain}</Text>
+                        <Text className="text-foreground" style={{ fontWeight: '600' }}>
+                            {domain.domain}
+                        </Text>
                         <Text style={{ fontSize: 11, color: verifiedColor }}>
                             {domain.verified ? 'Verified' : 'Unverified'}
                         </Text>
@@ -298,7 +293,7 @@ function WebhookURLs({ domainId }: { domainId: string }) {
     if (!urls) {
         return (
             <Pressable onPress={() => fetchUrls.mutate()} disabled={fetchUrls.isPending}>
-                <Text style={{ fontSize: 12, color: mutedColor, textDecorationLine: 'underline' }}>
+                <Text className="text-muted-foreground" style={{ fontSize: 12, textDecorationLine: 'underline' }}>
                     {fetchUrls.isPending ? 'Loading...' : 'Show webhook URLs'}
                 </Text>
             </Pressable>
@@ -307,7 +302,9 @@ function WebhookURLs({ domainId }: { domainId: string }) {
 
     return (
         <View className="gap-2">
-            <Text style={{ fontSize: 12, fontWeight: '600', color: foregroundColor }}>Webhook URLs</Text>
+            <Text className="text-foreground" style={{ fontSize: 12, fontWeight: '600' }}>
+                Webhook URLs
+            </Text>
             <WebhookURLRow
                 label="Inbound"
                 url={urls.inbound}
@@ -375,18 +372,16 @@ function WebhookURLRow({
 }
 
 function VerifyButton({ isPending, onPress }: { isPending: boolean; onPress: () => void }) {
-    const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
     const Icon = isPending ? Loader2 : RefreshCw
     return (
         <Pressable
             onPress={isPending ? undefined : onPress}
             disabled={isPending}
-            className={`flex-row items-center gap-1 px-3 rounded-md py-1.5 ${isPending ? 'opacity-60' : 'opacity-100'}`}
-            style={{ backgroundColor: primaryColor }}
+            className={`flex-row items-center gap-1 px-3 rounded-md py-1.5 bg-primary ${isPending ? 'opacity-60' : 'opacity-100'}`}
         >
             <Icon size={14} color={primaryFgColor} />
-            <Text style={{ fontSize: 12, fontWeight: '600', color: primaryFgColor }}>
+            <Text className="text-primary-foreground" style={{ fontSize: 12, fontWeight: '600' }}>
                 {isPending ? 'Verifying…' : 'Verify'}
             </Text>
         </Pressable>
@@ -394,9 +389,12 @@ function VerifyButton({ isPending, onPress }: { isPending: boolean; onPress: () 
 }
 
 function VerifyErrorBanner({ message }: { message: string | null }) {
-    const dangerColor = useThemeColor('danger')
     if (!message) return null
-    return <Text style={{ fontSize: 11, color: dangerColor }}>Verification request failed: {message}</Text>
+    return (
+        <Text className="text-danger" style={{ fontSize: 11 }}>
+            Verification request failed: {message}
+        </Text>
+    )
 }
 
 function LastCheckedLabel({ lastCheckedAt, mutedColor }: { lastCheckedAt: string; mutedColor: string }) {
@@ -453,7 +451,6 @@ function DomainVerificationPanel({ domain }: { domain: DomainRow }) {
 
 function CheckRow({ label, ok, hint, advisory }: { label: string; ok: boolean; hint: string; advisory?: boolean }) {
     const mutedColor = useThemeColor('muted-foreground')
-    const foregroundColor = useThemeColor('foreground')
     const successColor = useThemeColor('success')
     const dangerColor = useThemeColor('danger')
     const Icon = ok ? CheckCircle : XCircle
@@ -462,11 +459,18 @@ function CheckRow({ label, ok, hint, advisory }: { label: string; ok: boolean; h
         <View className="flex-row gap-2 items-start">
             <Icon size={14} color={iconColor} style={{ marginTop: 2 }} />
             <View className="flex-1">
-                <Text style={{ fontSize: 12, color: foregroundColor }}>
+                <Text className="text-foreground" style={{ fontSize: 12 }}>
                     {label}
-                    {advisory ? <Text style={{ fontSize: 10, color: mutedColor }}> (optional)</Text> : null}
+                    {advisory ? (
+                        <Text className="text-muted-foreground" style={{ fontSize: 10 }}>
+                            {' '}
+                            (optional)
+                        </Text>
+                    ) : null}
                 </Text>
-                <Text style={{ fontSize: 11, color: mutedColor }}>{hint}</Text>
+                <Text className="text-muted-foreground" style={{ fontSize: 11 }}>
+                    {hint}
+                </Text>
             </View>
         </View>
     )
@@ -484,20 +488,20 @@ function DeleteDomainButton({
     onCancel: () => void
 }) {
     const dangerColor = useThemeColor('danger')
-    const dangerFgColor = useThemeColor('danger-foreground')
 
     if (confirming) {
         return (
             <View className="flex-row gap-2">
                 <Pressable
                     onPress={onConfirm}
-                    className="px-3 rounded-md"
+                    className="px-3 rounded-md bg-danger"
                     style={{
                         paddingVertical: 6,
-                        backgroundColor: dangerColor,
                     }}
                 >
-                    <Text style={{ fontSize: 13, color: dangerFgColor }}>Remove</Text>
+                    <Text className="text-danger-foreground" style={{ fontSize: 13 }}>
+                        Remove
+                    </Text>
                 </Pressable>
                 <Pressable
                     onPress={onCancel}
@@ -520,7 +524,6 @@ function DeleteDomainButton({
 }
 
 function AddDomainForm({ orgId }: { orgId: string }) {
-    const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
     const [domainsCollection] = useStore('mail_domains')
 
@@ -564,11 +567,10 @@ function AddDomainForm({ orgId }: { orgId: string }) {
         <Pressable
             onPress={onSubmit}
             disabled={!canSubmit}
-            className={`flex-row items-center gap-1 px-4 rounded-lg py-2.5 ${canSubmit ? 'opacity-100' : 'opacity-50'}`}
-            style={{ backgroundColor: primaryColor }}
+            className={`flex-row items-center gap-1 px-4 rounded-lg py-2.5 bg-primary ${canSubmit ? 'opacity-100' : 'opacity-50'}`}
         >
             <Plus size={16} color={primaryFgColor} />
-            <Text style={{ fontWeight: '600', color: primaryFgColor }}>
+            <Text className="text-primary-foreground" style={{ fontWeight: '600' }}>
                 {addMutation.isPending ? 'Adding...' : 'Add'}
             </Text>
         </Pressable>
