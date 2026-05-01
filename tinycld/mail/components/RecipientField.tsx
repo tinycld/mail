@@ -25,7 +25,7 @@ function RecipientChip({ name, email, onRemove }: { name: string; email: string;
 
     return (
         <View
-            className="flex-row items-center gap-1 pl-0.5 pr-1.5 py-0.5 rounded-xl border"
+            className="flex-row items-center gap-1.5 px-1 py-0.5 rounded-xl border"
             style={{
                 backgroundColor: surfaceColor,
                 borderColor,
@@ -35,7 +35,7 @@ function RecipientChip({ name, email, onRemove }: { name: string; email: string;
             <Text style={{ fontSize: 12, maxWidth: 140, color: foregroundColor }} numberOfLines={1}>
                 {displayName}
             </Text>
-            <Pressable onPress={onRemove} hitSlop={4}>
+            <Pressable onPress={onRemove} hitSlop={6} className="">
                 <Text style={{ fontSize: 15, lineHeight: 16, fontWeight: '600', color: mutedColor }}>x</Text>
             </Pressable>
         </View>

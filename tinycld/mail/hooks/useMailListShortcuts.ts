@@ -13,6 +13,12 @@ interface UseMailListShortcutsArgs {
     isEnabled: boolean
     folder: string | null
     labels: string[]
+    /**
+     * Optional callback invoked after the focused index moves via j/k so the
+     * caller can scroll the row into view. Decoupled from FlatList here to
+     * keep the hook UI-framework-agnostic.
+     */
+    onFocusIndex?: (index: number) => void
 }
 
 export function useMailListShortcuts({
@@ -22,6 +28,7 @@ export function useMailListShortcuts({
     isEnabled,
     folder,
     labels,
+    onFocusIndex,
 }: UseMailListShortcutsArgs) {
     const storedIndex = useThreadListStore((s) => s.focusedIndex)
     const hasFocus = useThreadListStore((s) => s.hasFocus)
@@ -61,8 +68,32 @@ export function useMailListShortcuts({
         }
         const lastIndex = Math.max(items.length - 1, 0)
         // First j/k from no-focus lands on row 0 instead of advancing past it.
-        const next = () => (hasFocus ? setFocusedIndex((i) => Math.min(i + 1, lastIndex)) : setFocusedIndex(0))
-        const prev = () => (hasFocus ? setFocusedIndex((i) => Math.max(i - 1, 0)) : setFocusedIndex(0))
+        const next = () => {
+            const setter = (i: number) => Math.min(i + 1, lastIndex)
+            if (hasFocus) {
+                setFocusedIndex((i) => {
+                    const n = setter(i)
+                    onFocusIndex?.(n)
+                    return n
+                })
+            } else {
+                setFocusedIndex(0)
+                onFocusIndex?.(0)
+            }
+        }
+        const prev = () => {
+            const setter = (i: number) => Math.max(i - 1, 0)
+            if (hasFocus) {
+                setFocusedIndex((i) => {
+                    const n = setter(i)
+                    onFocusIndex?.(n)
+                    return n
+                })
+            } else {
+                setFocusedIndex(0)
+                onFocusIndex?.(0)
+            }
+        }
         return [
             {
                 id: 'mail.list.next',
@@ -116,7 +147,18 @@ export function useMailListShortcuts({
                 run: () => composeEvents.emit(),
             },
         ]
-    }, [isEnabled, items.length, hasFocus, focusedId, focusedThreadId, orgHref, router, setFocusedIndex, toggleSelect])
+    }, [
+        isEnabled,
+        items.length,
+        hasFocus,
+        focusedId,
+        focusedThreadId,
+        orgHref,
+        router,
+        setFocusedIndex,
+        toggleSelect,
+        onFocusIndex,
+    ])
 
     useRegisterShortcuts(shortcuts)
 

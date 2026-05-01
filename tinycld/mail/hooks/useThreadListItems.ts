@@ -1,9 +1,10 @@
 import { and, eq } from '@tanstack/db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { ThreadListItem } from '../components/thread-list-item'
 import { toThreadListItem } from '../components/thread-list-item'
+import { useThreadListStore } from '../stores/thread-list-store'
 import type { MailMessages, MailThreadState } from '../types'
 import { mergeSharedFolderStates } from './mergeSharedFolderStates'
 import { useLabels } from './useLabels'
@@ -35,7 +36,7 @@ export function useThreadListItems(
 
     const { labels, labelMap } = useLabels()
 
-    const { data: threadStates } = useOrgLiveQuery(
+    const { data: threadStates, isLoading: threadStatesLoading } = useOrgLiveQuery(
         (query) =>
             query
                 .from({ mail_thread_state: threadStateCollection })
@@ -43,7 +44,7 @@ export function useThreadListItems(
         [userOrgId]
     )
 
-    const { data: threads } = useOrgLiveQuery((query, { orgId }) =>
+    const { data: threads, isLoading: threadsLoading } = useOrgLiveQuery((query, { orgId }) =>
         query
             .from({ t: threadsCollection })
             .join({ mb: mailboxesCollection }, ({ t, mb }) => eq(t.mailbox, mb.id))
@@ -52,7 +53,7 @@ export function useThreadListItems(
             .select(({ t }) => t)
     )
 
-    const { data: draftMessages } = useOrgLiveQuery((query, { orgId }) =>
+    const { data: draftMessages, isLoading: draftMessagesLoading } = useOrgLiveQuery((query, { orgId }) =>
         query
             .from({ msg: messagesCollection })
             .join({ t: threadsCollection }, ({ msg, t }) => eq(msg.thread, t.id))
@@ -62,7 +63,7 @@ export function useThreadListItems(
             .select(({ msg }) => msg)
     )
 
-    const { data: attachmentMessages } = useOrgLiveQuery((query, { orgId }) =>
+    const { data: attachmentMessages, isLoading: attachmentMessagesLoading } = useOrgLiveQuery((query, { orgId }) =>
         query
             .from({ msg: messagesCollection })
             .join({ t: threadsCollection }, ({ msg, t }) => eq(msg.thread, t.id))
@@ -72,7 +73,7 @@ export function useThreadListItems(
             .select(({ msg }) => msg)
     )
 
-    const { data: allAssignments } = useOrgLiveQuery((query, { userOrgId }) =>
+    const { data: allAssignments, isLoading: assignmentsLoading } = useOrgLiveQuery((query, { userOrgId }) =>
         query
             .from({ label_assignments: assignmentsCollection })
             .where(({ label_assignments }) =>
@@ -229,6 +230,29 @@ export function useThreadListItems(
         mailboxLabelMap,
     ])
 
+    // First-load gate: any always-needed query still hydrating. Mode-specific
+    // queries (sharedFolderStates, mailboxLabelMap inputs) are intentionally
+    // excluded — their absence at most omits a label chip on a row, not the
+    // row itself.
+    const isLoading =
+        threadStatesLoading || threadsLoading || draftMessagesLoading || attachmentMessagesLoading || assignmentsLoading
+
+    // Publish the visible thread IDs to the cross-screen store so the
+    // conversation detail screen can navigate prev/next within the same scope.
+    // Done here (in the data layer) rather than in the screen via
+    // useEffect+ref so it stays consistent with the source of truth and
+    // doesn't fire from ref-equality false positives.
+    const setThreadIds = useThreadListStore((s) => s.setThreadIds)
+    const prevIdsKeyRef = useRef('')
+    useEffect(() => {
+        const ids = items.map((i) => i.threadId)
+        const key = ids.join(',')
+        if (key !== prevIdsKeyRef.current) {
+            prevIdsKeyRef.current = key
+            setThreadIds(ids)
+        }
+    }, [items, setThreadIds])
+
     return {
         items,
         labels,
@@ -236,5 +260,6 @@ export function useThreadListItems(
         draftByThread,
         threadMap,
         threadStateCollection,
+        isLoading,
     }
 }
