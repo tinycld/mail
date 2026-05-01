@@ -87,7 +87,7 @@ test.describe('Mail — IMAP Integration', () => {
         })
     })
 
-    test('MOVE to Trash changes thread_state folder', async () => {
+    test('MOVE to Trash removes from INBOX and shows in Trash', async () => {
         const subject = `IMAP-trash-${Date.now()}`
 
         await withImapClient(async (client) => {
@@ -106,16 +106,72 @@ test.describe('Mail — IMAP Integration', () => {
             expect(msg).not.toBeNull()
             await moveMessage(client, inbox, msg?.uid ?? 0, trashFolder)
 
-            // BUG: message still appears in INBOX because selectedMessages()
-            // loads all messages for the mailbox without filtering by
-            // thread_state.folder. The thread_state.folder IS updated to
-            // "trash", but the IMAP listing doesn't respect it yet.
             const inboxMsgs = await listMessages(client, inbox)
-            expect(inboxMsgs.some((m) => m.subject === subject)).toBe(true)
+            expect(inboxMsgs.some((m) => m.subject === subject)).toBe(false)
 
-            // Trash also shows the message (same mailbox, no folder filter)
             const trashMsgs = await listMessages(client, trashFolder)
             expect(trashMsgs.some((m) => m.subject === subject)).toBe(true)
+        })
+    })
+
+    test('LIST advertises RFC 6154 SPECIAL-USE attributes', async () => {
+        await withImapClient(async (client) => {
+            const mailboxes = await listMailboxes(client)
+            const byBareName = (suffix: string) =>
+                mailboxes.find((mb) => mb.name === suffix || mb.name.endsWith(`/${suffix}`))
+
+            expect(byBareName('Sent')?.specialUse).toBe('\\Sent')
+            expect(byBareName('Drafts')?.specialUse).toBe('\\Drafts')
+            expect(byBareName('Trash')?.specialUse).toBe('\\Trash')
+            expect(byBareName('Spam')?.specialUse).toBe('\\Junk')
+            expect(byBareName('Archive')?.specialUse).toBe('\\Archive')
+        })
+    })
+
+    test('APPEND to Sent appears in Sent only, not INBOX', async () => {
+        const subject = `IMAP-sent-only-${Date.now()}`
+
+        await withImapClient(async (client) => {
+            const mailboxes = await listMailboxes(client)
+            const inbox = findPersonalInbox(mailboxes)
+            const sent = inbox.replace('INBOX', 'Sent')
+
+            await appendMessage(client, sent, {
+                from: 'user@tinycld.org',
+                to: 'recipient@example.com',
+                subject,
+                body: 'A message saved directly to Sent.',
+            })
+
+            const sentMsgs = await listMessages(client, sent)
+            expect(sentMsgs.filter((m) => m.subject === subject).length).toBe(1)
+
+            const inboxMsgs = await listMessages(client, inbox)
+            expect(inboxMsgs.some((m) => m.subject === subject)).toBe(false)
+        })
+    })
+
+    test('APPEND deduplicates by Message-ID within a mailbox', async () => {
+        const subject = `IMAP-dedup-${Date.now()}`
+        const messageId = `<dedup-${Date.now()}@tinycld.test>`
+
+        await withImapClient(async (client) => {
+            const mailboxes = await listMailboxes(client)
+            const inbox = findPersonalInbox(mailboxes)
+            const sent = inbox.replace('INBOX', 'Sent')
+
+            const opts = {
+                from: 'user@tinycld.org',
+                to: 'recipient@example.com',
+                subject,
+                body: 'This message is appended twice with the same Message-ID.',
+                messageId,
+            }
+            await appendMessage(client, sent, opts)
+            await appendMessage(client, sent, opts)
+
+            const sentMsgs = await listMessages(client, sent)
+            expect(sentMsgs.filter((m) => m.subject === subject).length).toBe(1)
         })
     })
 
