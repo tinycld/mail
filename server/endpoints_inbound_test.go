@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -210,5 +209,27 @@ func seedMember(t *testing.T, app core.App, mailboxID, userOrgID string) {
 	}
 }
 
-// silence unused import warnings until tests below use them
-var _ = fmt.Sprintf
+// TestHandleInbound_UnknownRecipientReturns403 — when the only To address
+// doesn't resolve to any mailbox, return 403 so Postmark generates a bounce.
+func TestHandleInbound_UnknownRecipientReturns403(t *testing.T) {
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "acme.com", "real", "mb_unknown_001")
+
+	body := postmarkPayload(t, []string{"nobody@acme.com"}, "test", "hello", "<msg-unknown-1@example.org>")
+	re, rec := makeInboundRequest(t, app, "tok-unknown", body)
+
+	provider := &stubProvider{parse: (&PostmarkProvider{}).ParseInbound}
+
+	err := handleInbound(app, provider, re, "tok-unknown")
+	if err == nil {
+		t.Fatalf("expected error response (403), got nil (recorder body: %s)", rec.Body.String())
+	}
+
+	apiErr, ok := err.(interface{ Status() int })
+	if !ok {
+		t.Fatalf("expected error to satisfy Status() int, got %T: %v", err, err)
+	}
+	if apiErr.Status() != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", apiErr.Status())
+	}
+}

@@ -6,11 +6,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
-func handleInbound(app *pocketbase.PocketBase, provider Provider, re *core.RequestEvent, secret string) error {
+func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secret string) error {
 	// Validate secret token (constant-time comparison to prevent timing attacks)
 	token := re.Request.PathValue("token")
 	if secret == "" || subtle.ConstantTimeCompare([]byte(token), []byte(secret)) != 1 {
@@ -75,7 +74,7 @@ func handleInbound(app *pocketbase.PocketBase, provider Provider, re *core.Reque
 	return re.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func processInboundForMailbox(app *pocketbase.PocketBase, mailbox *core.Record, msg *InboundMessage) error {
+func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMessage) error {
 	mailboxID := mailbox.Id
 
 	// Idempotency: skip if message with this message_id already exists in a thread for this mailbox
