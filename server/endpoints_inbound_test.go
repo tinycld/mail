@@ -211,6 +211,29 @@ func seedMember(t *testing.T, app core.App, mailboxID, userOrgID string) {
 	}
 }
 
+// TestHandleInbound_MixedKnownAndUnknownReturns200 — when at least one
+// recipient resolves and storage succeeds, return 200 even if other
+// recipients are unknown.
+func TestHandleInbound_MixedKnownAndUnknownReturns200(t *testing.T) {
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_mixed_001")
+	seedMember(t, app, "mb_mixed_001", "userorg_alice")
+
+	body := postmarkPayload(t, []string{"alice@acme.com", "ghost@acme.com"}, "mixed", "body", "<msg-mixed-1@example.org>")
+	re, _ := makeInboundRequest(t, app, "tok-mixed", body)
+
+	provider := &stubProvider{parse: (&PostmarkProvider{}).ParseInbound}
+
+	if err := handleInbound(app, provider, re, "tok-mixed"); err != nil {
+		t.Fatalf("expected nil (200), got %v", err)
+	}
+
+	msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "mixed"})
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message stored (for alice), got %d", len(msgs))
+	}
+}
+
 // TestHandleInbound_StorageFailureReturns500 — when storeMessage fails for a
 // known mailbox, return 500 so Postmark retries. No thread row should be
 // left behind (orphan cleanup).
