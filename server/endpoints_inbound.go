@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/router"
 )
 
 func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secret string) error {
@@ -36,7 +37,8 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 
 	msg, err := provider.ParseInbound(body)
 	if err != nil {
-		return re.BadRequestError("Failed to parse inbound message", err)
+		app.Logger().Error("inbound: parse failed", "error", err)
+		return router.NewApiError(http.StatusUnprocessableEntity, "Unprocessable inbound payload", err)
 	}
 
 	// Route to mailboxes: check all To and Cc addresses
