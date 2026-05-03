@@ -155,8 +155,14 @@ func Register(app *pocketbase.PocketBase) {
 		indexMessageRecordFromStorage(app, e.Record)
 		return e.Next()
 	})
-	// On update: always re-index from storage (e.g. draft edits via updateDraftRecord).
+	// On update: re-index from storage (e.g. draft edits via
+	// updateDraftRecord). The recentlyIndexed sentinel lets follow-up
+	// saves that don't change indexed content (cid_map after inbound)
+	// skip a duplicate reindex.
 	app.OnRecordAfterUpdateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
+		if _, ok := recentlyIndexed.LoadAndDelete(e.Record.Id); ok {
+			return e.Next()
+		}
 		indexMessageRecordFromStorage(app, e.Record)
 		return e.Next()
 	})

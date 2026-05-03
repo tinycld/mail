@@ -96,6 +96,7 @@ export interface MailMessages {
     total_size?: number
     body_html: string
     attachments: string[]
+    cid_map: Record<string, string> | null
     delivery_status: 'sending' | 'sent' | 'delivered' | 'bounced' | 'spam_complaint' | 'draft'
     bounce_reason: string
     imap_uid: number

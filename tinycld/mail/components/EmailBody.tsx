@@ -2,14 +2,21 @@ import { pb } from '@tinycld/core/lib/pocketbase'
 import { proxyImageUrls } from '@tinycld/core/lib/proxy-image-urls'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Platform, Text, View } from 'react-native'
+import { rewriteCidReferences } from './rewrite-cid-references'
 
 interface EmailBodyProps {
     collectionId: string
     recordId: string
     filename: string
+    cidMap?: Record<string, string> | null
 }
 
-function useEmailHtml(collectionId: string, recordId: string, filename: string) {
+function useEmailHtml(
+    collectionId: string,
+    recordId: string,
+    filename: string,
+    cidMap: Record<string, string> | null | undefined
+) {
     const [html, setHtml] = useState('')
 
     useEffect(() => {
@@ -18,10 +25,20 @@ function useEmailHtml(collectionId: string, recordId: string, filename: string) 
         const token = pb.authStore.token
         const url = pb.files.getURL({ collectionId, id: recordId }, filename)
         fetch(url)
-            .then((res) => res.text())
-            .then((raw) => setHtml(proxyImageUrls(raw, token)))
+            .then(res => res.text())
+            .then(raw => {
+                // Resolve cid: → PB file URL AFTER proxyImageUrls. The proxy
+                // wraps remote http(s) <img src> for privacy/auth-token
+                // injection but should not re-wrap our own PB-internal
+                // attachment URLs — wrapping them sends the request through
+                // the image-proxy endpoint which then tries to fetch back
+                // from the PB host, breaking under any cross-origin dev
+                // setup (Expo on a different port from PB).
+                const proxied = proxyImageUrls(raw, token)
+                setHtml(rewriteCidReferences(proxied, collectionId, recordId, cidMap))
+            })
             .catch(() => setHtml(''))
-    }, [collectionId, recordId, filename])
+    }, [collectionId, recordId, filename, cidMap])
 
     return html
 }
@@ -77,8 +94,8 @@ function useIframeAutoHeight(html: string) {
     return { iframeRef, height, handleLoad }
 }
 
-export function EmailBody({ collectionId, recordId, filename }: EmailBodyProps) {
-    const html = useEmailHtml(collectionId, recordId, filename)
+export function EmailBody({ collectionId, recordId, filename, cidMap }: EmailBodyProps) {
+    const html = useEmailHtml(collectionId, recordId, filename, cidMap)
     const { iframeRef, height, handleLoad } = useIframeAutoHeight(html)
 
     if (!filename) return null

@@ -281,6 +281,7 @@ export default function MailDetailScreen() {
                                     collectionId="mail_messages"
                                     recordId={msg.id}
                                     filename={msg.body_html}
+                                    cidMap={msg.cid_map}
                                 />
                             ) : (
                                 <CollapsedSnippet

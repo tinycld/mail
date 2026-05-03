@@ -215,6 +215,24 @@ func storeMessage(app *pocketbase.PocketBase, threadID string, msg *storedMessag
 		return nil, fmt.Errorf("failed to store message: %w", err)
 	}
 
+	// Build cid → stored-filename map for inline images. Stored as JSON on
+	// the message so the client can resolve <img src="cid:foo"> against
+	// pb.files.getURL at render time. Doing the resolution client-side
+	// keeps the URL host correct under every deployment (dev, test, prod
+	// can serve PB on different hosts than the web app).
+	cidMap := buildCIDMap(msg.Attachments, record.GetStringSlice("attachments"))
+	if len(cidMap) > 0 {
+		cidJSON, err := json.Marshal(cidMap)
+		if err == nil {
+			record.Set("cid_map", string(cidJSON))
+			recentlyIndexed.Store(record.Id, true)
+			if err := app.Save(record); err != nil {
+				recentlyIndexed.Delete(record.Id)
+				app.Logger().Warn("failed to save cid_map", "messageID", record.Id, "error", err)
+			}
+		}
+	}
+
 	// Assign IMAP UID for the new message
 	thread, err := app.FindRecordById("mail_threads", threadID)
 	if err == nil {
