@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -207,6 +208,34 @@ func seedMember(t *testing.T, app core.App, mailboxID, userOrgID string) {
 	member.Set("role", "owner")
 	if err := app.Save(member); err != nil {
 		t.Fatalf("failed to save mailbox member: %v", err)
+	}
+}
+
+// TestHandleInbound_ParseFailureReturns422 — when ParseInbound returns an
+// error, return 422 (Unprocessable Entity) so Postmark stops retrying.
+func TestHandleInbound_ParseFailureReturns422(t *testing.T) {
+	app := setupInboundTestApp(t)
+
+	body := []byte(`{"this":"is","not":"an","inbound":"email"}`)
+	re, _ := makeInboundRequest(t, app, "tok-parse", body)
+
+	provider := &stubProvider{
+		parse: func(_ []byte) (*InboundMessage, error) {
+			return nil, fmt.Errorf("synthetic parse error")
+		},
+	}
+
+	err := handleInbound(app, provider, re, "tok-parse")
+	if err == nil {
+		t.Fatalf("expected error response, got nil")
+	}
+
+	apiErr, ok := err.(*router.ApiError)
+	if !ok {
+		t.Fatalf("expected *router.ApiError, got %T: %v", err, err)
+	}
+	if apiErr.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d", apiErr.Status)
 	}
 }
 
