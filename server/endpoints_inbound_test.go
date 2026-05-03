@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -324,6 +325,9 @@ func TestHandleInbound_StorageFailureReturns500(t *testing.T) {
 	if apiErr.Status != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", apiErr.Status)
 	}
+	if !strings.Contains(apiErr.Message, "synthetic storage failure") {
+		t.Fatalf("expected message to include underlying error, got %q", apiErr.Message)
+	}
 
 	msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "__force_storage_failure__"})
 	if len(msgs) != 0 {
@@ -392,10 +396,14 @@ func TestHandleInbound_ParseFailureReturns422(t *testing.T) {
 	if apiErr.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422, got %d", apiErr.Status)
 	}
+	if !strings.Contains(apiErr.Message, "synthetic parse error") {
+		t.Fatalf("expected message to include parse error, got %q", apiErr.Message)
+	}
 }
 
 // TestHandleInbound_UnknownRecipientReturns403 — when the only To address
-// doesn't resolve to any mailbox, return 403 so Postmark generates a bounce.
+// doesn't resolve to any mailbox, return 403 with the unknown address(es)
+// listed in the message so the bounce is informative.
 func TestHandleInbound_UnknownRecipientReturns403(t *testing.T) {
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "real", "mb_unknown_001")
@@ -416,5 +424,8 @@ func TestHandleInbound_UnknownRecipientReturns403(t *testing.T) {
 	}
 	if apiErr.Status != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", apiErr.Status)
+	}
+	if !strings.Contains(apiErr.Message, "nobody@acme.com") {
+		t.Fatalf("expected message to mention unknown address, got %q", apiErr.Message)
 	}
 }
