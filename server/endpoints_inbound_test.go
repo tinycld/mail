@@ -211,6 +211,55 @@ func seedMember(t *testing.T, app core.App, mailboxID, userOrgID string) {
 	}
 }
 
+// TestHandleInbound_StorageFailureReturns500 — when storeMessage fails for a
+// known mailbox, return 500 so Postmark retries. No thread row should be
+// left behind (orphan cleanup).
+func TestHandleInbound_StorageFailureReturns500(t *testing.T) {
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_storefail_001")
+	seedMember(t, app, "mb_storefail_001", "userorg_alice")
+
+	// Hook: reject any mail_messages save with subject "__force_storage_failure__".
+	app.OnRecordValidate("mail_messages").BindFunc(func(e *core.RecordEvent) error {
+		if e.Record.GetString("subject") == "__force_storage_failure__" {
+			return fmt.Errorf("synthetic storage failure")
+		}
+		return e.Next()
+	})
+
+	body := postmarkPayload(t, []string{"alice@acme.com"}, "__force_storage_failure__", "body", "<msg-fail-1@example.org>")
+	re, _ := makeInboundRequest(t, app, "tok-storefail", body)
+
+	provider := &stubProvider{parse: (&PostmarkProvider{}).ParseInbound}
+
+	err := handleInbound(app, provider, re, "tok-storefail")
+	if err == nil {
+		t.Fatalf("expected 500 error, got nil")
+	}
+	apiErr, ok := err.(*router.ApiError)
+	if !ok {
+		t.Fatalf("expected *router.ApiError, got %T: %v", err, err)
+	}
+	if apiErr.Status != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", apiErr.Status)
+	}
+
+	msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "__force_storage_failure__"})
+	if len(msgs) != 0 {
+		t.Fatalf("expected no messages stored, got %d", len(msgs))
+	}
+
+	// No orphaned thread row should remain. Any thread with zero messages
+	// indicates an orphan.
+	threads, _ := app.FindRecordsByFilter("mail_threads", "id != {:zero}", "", 100, 0, map[string]any{"zero": ""})
+	for _, th := range threads {
+		count, _ := app.FindRecordsByFilter("mail_messages", "thread = {:t}", "", 10, 0, map[string]any{"t": th.Id})
+		if len(count) == 0 {
+			t.Fatalf("found orphaned thread id=%s subject=%q after storage failure", th.Id, th.GetString("subject"))
+		}
+	}
+}
+
 // TestHandleInbound_KnownRecipientStoresMessage — happy path: a To address
 // matches a known mailbox, the message is stored, response is 200.
 func TestHandleInbound_KnownRecipientStoresMessage(t *testing.T) {
