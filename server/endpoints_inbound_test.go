@@ -211,6 +211,39 @@ func seedMember(t *testing.T, app core.App, mailboxID, userOrgID string) {
 	}
 }
 
+// TestHandleInbound_MembersLookupFailureReturns500 — if getMailboxMembers
+// fails (DB issue, missing collection), the message must not be silently
+// stored without thread state. Return 500 so Postmark retries.
+func TestHandleInbound_MembersLookupFailureReturns500(t *testing.T) {
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_memfail_001")
+
+	col, err := app.FindCollectionByNameOrId("mail_mailbox_members")
+	if err != nil {
+		t.Fatalf("members collection missing: %v", err)
+	}
+	if err := app.Delete(col); err != nil {
+		t.Fatalf("failed to drop members collection: %v", err)
+	}
+
+	body := postmarkPayload(t, []string{"alice@acme.com"}, "memfail", "body", "<msg-memfail-1@example.org>")
+	re, _ := makeInboundRequest(t, app, "tok-memfail", body)
+
+	provider := &stubProvider{parse: (&PostmarkProvider{}).ParseInbound}
+
+	err = handleInbound(app, provider, re, "tok-memfail")
+	if err == nil {
+		t.Fatalf("expected 500 error, got nil")
+	}
+	apiErr, ok := err.(*router.ApiError)
+	if !ok {
+		t.Fatalf("expected *router.ApiError, got %T: %v", err, err)
+	}
+	if apiErr.Status != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", apiErr.Status)
+	}
+}
+
 // TestHandleInbound_IdempotentRetry — submitting the same Message-ID twice
 // stores only one mail_messages row. Validates the idempotency check the
 // 500-retry behavior depends on.
