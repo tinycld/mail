@@ -211,6 +211,31 @@ func seedMember(t *testing.T, app core.App, mailboxID, userOrgID string) {
 	}
 }
 
+// TestHandleInbound_KnownRecipientStoresMessage — happy path: a To address
+// matches a known mailbox, the message is stored, response is 200.
+func TestHandleInbound_KnownRecipientStoresMessage(t *testing.T) {
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_known_001")
+	seedMember(t, app, "mb_known_001", "userorg_alice")
+
+	body := postmarkPayload(t, []string{"alice@acme.com"}, "Hello", "Body text", "<msg-known-1@example.org>")
+	re, _ := makeInboundRequest(t, app, "tok-known", body)
+
+	provider := &stubProvider{parse: (&PostmarkProvider{}).ParseInbound}
+
+	if err := handleInbound(app, provider, re, "tok-known"); err != nil {
+		t.Fatalf("expected nil error (200), got %v", err)
+	}
+
+	msgs, err := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "Hello"})
+	if err != nil {
+		t.Fatalf("failed to query mail_messages: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected exactly 1 message stored, got %d", len(msgs))
+	}
+}
+
 // TestHandleInbound_ParseFailureReturns422 — when ParseInbound returns an
 // error, return 422 (Unprocessable Entity) so Postmark stops retrying.
 func TestHandleInbound_ParseFailureReturns422(t *testing.T) {
