@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"time"
 
+	"github.com/jaytaylor/html2text"
 	"github.com/mrz1836/postmark"
 	"tinycld.org/core/mailer"
 )
@@ -80,6 +81,21 @@ func (p *PostmarkProvider) ParseInbound(body []byte) (*InboundMessage, error) {
 		return nil, fmt.Errorf("failed to parse inbound payload: %w", err)
 	}
 
+	textBody := payload.TextBody
+	// When the sender provides no text/plain part, Postmark synthesizes
+	// TextBody from HtmlBody by inserting <br/>\n for line breaks but
+	// leaving the rest of the markup intact, which makes the result useless
+	// for snippets and FTS. If we have an HtmlBody, we regenerate TextBody
+	// from it via html2text. We deliberately do not touch StrippedTextReply:
+	// it's "what Postmark could parse as the new (un-quoted) content" and
+	// the consumers fall back to TextBody when it's empty, which is the
+	// correct behavior for HTML-only mail where reply-stripping is unreliable.
+	if payload.HTMLBody != "" {
+		if converted, err := html2text.FromString(payload.HTMLBody, html2text.Options{}); err == nil {
+			textBody = converted
+		}
+	}
+
 	msg := &InboundMessage{
 		From: Recipient{
 			Name:  payload.FromFull.Name,
@@ -89,7 +105,7 @@ func (p *PostmarkProvider) ParseInbound(body []byte) (*InboundMessage, error) {
 		Cc:       convertRecipients(payload.CcFull),
 		Subject:       payload.Subject,
 		HTMLBody:       payload.HTMLBody,
-		TextBody:       payload.TextBody,
+		TextBody:       textBody,
 		StrippedReply:  payload.StrippedTextReply,
 		Date:           normalizePostmarkDate(payload.Date),
 	}

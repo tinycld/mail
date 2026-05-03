@@ -73,3 +73,95 @@ func TestParseInbound_NormalizesDateFromRealPostmarkPayload(t *testing.T) {
 		t.Fatalf("Date didn't preserve the day, got %q", msg.Date)
 	}
 }
+
+// TestParseInbound_RegeneratesTextBodyFromHTML — when the sender provides no
+// text/plain part, Postmark synthesizes TextBody from HtmlBody by inserting
+// <br/>\n for line breaks but leaving tags and entities intact, which makes
+// the result useless for snippets and FTS. We replace it with html2text
+// output derived from HtmlBody. StrippedTextReply is left as-is — it's
+// already empty for HTML-only mail Postmark can't parse, and consumers fall
+// back to TextBody when it's empty.
+func TestParseInbound_RegeneratesTextBodyFromHTML(t *testing.T) {
+	body := []byte(`{
+		"FromFull": {"Email": "sender@example.org", "Name": "Sender"},
+		"ToFull": [{"Email": "alice@acme.com"}],
+		"Subject": "test",
+		"HtmlBody": "<p>Hello <b>world</b></p><p>Line two &amp; more.</p>",
+		"TextBody": "<p>Hello <b>world</b></p><br/>\n<p>Line two &amp; more.</p>",
+		"StrippedTextReply": "",
+		"Date": "Sat, 2 May 2026 20:35:46 -0700",
+		"MessageID": "abc-123"
+	}`)
+
+	p := &PostmarkProvider{}
+	msg, err := p.ParseInbound(body)
+	if err != nil {
+		t.Fatalf("ParseInbound failed: %v", err)
+	}
+	if strings.Contains(msg.TextBody, "<p>") || strings.Contains(msg.TextBody, "<b>") {
+		t.Fatalf("TextBody still contains HTML markup: %q", msg.TextBody)
+	}
+	if strings.Contains(msg.TextBody, "&amp;") {
+		t.Fatalf("TextBody still contains HTML entities: %q", msg.TextBody)
+	}
+	if !strings.Contains(msg.TextBody, "Hello") || !strings.Contains(msg.TextBody, "world") {
+		t.Fatalf("TextBody lost the actual content: %q", msg.TextBody)
+	}
+	if !strings.Contains(msg.TextBody, "Line two & more") {
+		t.Fatalf("TextBody didn't decode entities: %q", msg.TextBody)
+	}
+	if msg.StrippedReply != "" {
+		t.Fatalf("StrippedReply should be passed through unchanged (empty), got %q", msg.StrippedReply)
+	}
+}
+
+// TestParseInbound_PassesThroughNonEmptyStrippedReply — when Postmark can
+// parse the reply boundary (typical for plain-text mail), StrippedTextReply
+// is non-empty and we trust it. We do not synthesize a value here.
+func TestParseInbound_PassesThroughNonEmptyStrippedReply(t *testing.T) {
+	body := []byte(`{
+		"FromFull": {"Email": "sender@example.org", "Name": "Sender"},
+		"ToFull": [{"Email": "alice@acme.com"}],
+		"Subject": "test",
+		"TextBody": "Just the new bit\n\nOn Mon, someone wrote:\n> old stuff",
+		"StrippedTextReply": "Just the new bit",
+		"Date": "Sat, 2 May 2026 20:35:46 -0700",
+		"MessageID": "abc-123"
+	}`)
+
+	p := &PostmarkProvider{}
+	msg, err := p.ParseInbound(body)
+	if err != nil {
+		t.Fatalf("ParseInbound failed: %v", err)
+	}
+	if msg.StrippedReply != "Just the new bit" {
+		t.Fatalf("StrippedReply changed: got %q", msg.StrippedReply)
+	}
+}
+
+// TestParseInbound_PreservesTextBodyWhenNoHTML — when there's no HtmlBody,
+// the sender's text/plain part is trustworthy and we leave it alone.
+func TestParseInbound_PreservesTextBodyWhenNoHTML(t *testing.T) {
+	body := []byte(`{
+		"FromFull": {"Email": "sender@example.org", "Name": "Sender"},
+		"ToFull": [{"Email": "alice@acme.com"}],
+		"Subject": "test",
+		"TextBody": "Plain content with < and > characters and an & ampersand",
+		"StrippedTextReply": "Plain content with < and > characters and an & ampersand",
+		"Date": "Sat, 2 May 2026 20:35:46 -0700",
+		"MessageID": "abc-123"
+	}`)
+
+	p := &PostmarkProvider{}
+	msg, err := p.ParseInbound(body)
+	if err != nil {
+		t.Fatalf("ParseInbound failed: %v", err)
+	}
+	want := "Plain content with < and > characters and an & ampersand"
+	if msg.TextBody != want {
+		t.Fatalf("TextBody changed unexpectedly: got %q, want %q", msg.TextBody, want)
+	}
+	if msg.StrippedReply != want {
+		t.Fatalf("StrippedReply changed unexpectedly: got %q, want %q", msg.StrippedReply, want)
+	}
+}
