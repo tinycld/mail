@@ -4,10 +4,24 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/mail"
+	"time"
 
 	"github.com/mrz1836/postmark"
 	"tinycld.org/core/mailer"
 )
+
+// normalizePostmarkDate converts an RFC-2822 date header (Postmark's wire
+// format) into the RFC-3339 string the rest of the mail package expects.
+// Falls back to the current UTC time if the input is empty or unparseable —
+// the message itself is more valuable than the timestamp, so we never reject
+// inbound mail over a malformed Date header.
+func normalizePostmarkDate(s string) string {
+	if t, err := mail.ParseDate(s); err == nil {
+		return t.UTC().Format(time.RFC3339)
+	}
+	return time.Now().UTC().Format(time.RFC3339)
+}
 
 type PostmarkProvider struct {
 	sender *mailer.PostmarkSender
@@ -77,7 +91,7 @@ func (p *PostmarkProvider) ParseInbound(body []byte) (*InboundMessage, error) {
 		HTMLBody:       payload.HTMLBody,
 		TextBody:       payload.TextBody,
 		StrippedReply:  payload.StrippedTextReply,
-		Date:           payload.Date,
+		Date:           normalizePostmarkDate(payload.Date),
 	}
 
 	for _, h := range payload.Headers {
