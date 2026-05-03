@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 )
@@ -17,7 +16,7 @@ import (
 //  1. In-Reply-To header → match against mail_messages.message_id in the same mailbox
 //  2. References header → match any referenced message_id in the same mailbox
 //  3. Subject prefix match (Re:, Fwd:) → match by normalized subject in the same mailbox
-func findOrCreateThread(app *pocketbase.PocketBase, mailboxID, subject, inReplyTo, references string) (*core.Record, error) {
+func findOrCreateThread(app core.App, mailboxID, subject, inReplyTo, references string) (*core.Record, error) {
 	// 1. Match by In-Reply-To
 	if inReplyTo != "" {
 		thread, err := findThreadByMessageID(app, mailboxID, inReplyTo)
@@ -79,7 +78,7 @@ func findOrCreateThread(app *pocketbase.PocketBase, mailboxID, subject, inReplyT
 // Used to dedup the SMTP-submission + IMAP-APPEND-to-Sent collision: most
 // IMAP clients append a copy of a sent message to the Sent folder after
 // SMTP submission, and without this check we'd store both copies.
-func findMessageInMailbox(app *pocketbase.PocketBase, mailboxID, messageID string) (*core.Record, *core.Record, error) {
+func findMessageInMailbox(app core.App, mailboxID, messageID string) (*core.Record, *core.Record, error) {
 	if messageID == "" || mailboxID == "" {
 		return nil, nil, nil
 	}
@@ -106,7 +105,7 @@ func findMessageInMailbox(app *pocketbase.PocketBase, mailboxID, messageID strin
 	return nil, nil, nil
 }
 
-func findThreadByMessageID(app *pocketbase.PocketBase, mailboxID, messageID string) (*core.Record, error) {
+func findThreadByMessageID(app core.App, mailboxID, messageID string) (*core.Record, error) {
 	messages, err := app.FindRecordsByFilter(
 		"mail_messages",
 		"message_id = {:messageID}",
@@ -134,7 +133,7 @@ func findThreadByMessageID(app *pocketbase.PocketBase, mailboxID, messageID stri
 }
 
 // storeMessage creates a mail_messages record with body_html stored as a file.
-func storeMessage(app *pocketbase.PocketBase, threadID string, msg *storedMessage) (*core.Record, error) {
+func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Record, error) {
 	collection, err := app.FindCollectionByNameOrId("mail_messages")
 	if err != nil {
 		return nil, fmt.Errorf("mail_messages collection not found: %w", err)
@@ -269,7 +268,7 @@ type storedMessage struct {
 }
 
 // updateThreadMetadata updates the thread's snippet, latest_date, message_count, and participants.
-func updateThreadMetadata(app *pocketbase.PocketBase, thread *core.Record, senderName, senderEmail, snippet, date string) error {
+func updateThreadMetadata(app core.App, thread *core.Record, senderName, senderEmail, snippet, date string) error {
 	count := thread.GetInt("message_count") + 1
 	thread.Set("message_count", count)
 	thread.Set("snippet", truncateSnippet(snippet, 200))
@@ -305,7 +304,7 @@ func updateThreadMetadata(app *pocketbase.PocketBase, thread *core.Record, sende
 }
 
 // ensureThreadState creates or updates a mail_thread_state record for a user_org.
-func ensureThreadState(app *pocketbase.PocketBase, threadID, userOrgID, folder string, isRead bool) error {
+func ensureThreadState(app core.App, threadID, userOrgID, folder string, isRead bool) error {
 	// Check for existing thread state
 	records, err := app.FindRecordsByFilter(
 		"mail_thread_state",
@@ -385,7 +384,7 @@ func resolveMailboxByAddress(app core.App, localPart, domainStr string) (*core.R
 }
 
 // getMailboxMembers returns all mail_mailbox_members for a given mailbox.
-func getMailboxMembers(app *pocketbase.PocketBase, mailboxID string) ([]*core.Record, error) {
+func getMailboxMembers(app core.App, mailboxID string) ([]*core.Record, error) {
 	return app.FindRecordsByFilter(
 		"mail_mailbox_members",
 		"mailbox = {:mailbox}",

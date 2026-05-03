@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -18,7 +17,7 @@ func mailboxUIDMutex(mailboxID string) *sync.Mutex {
 
 // getOrCreateMailboxState returns the mail_imap_mailbox_state record for a
 // mailbox, creating one if it doesn't exist (uid_validity=1, uid_next=1).
-func getOrCreateMailboxState(app *pocketbase.PocketBase, mailboxID string) (*core.Record, error) {
+func getOrCreateMailboxState(app core.App, mailboxID string) (*core.Record, error) {
 	records, err := app.FindRecordsByFilter(
 		"mail_imap_mailbox_state",
 		"mailbox = {:mailbox}",
@@ -47,7 +46,7 @@ func getOrCreateMailboxState(app *pocketbase.PocketBase, mailboxID string) (*cor
 
 // assignUID atomically allocates the next UID for a message within a mailbox
 // and sets imap_uid on the message record.
-func assignUID(app *pocketbase.PocketBase, mailboxID string, messageRecord *core.Record) (uint32, error) {
+func assignUID(app core.App, mailboxID string, messageRecord *core.Record) (uint32, error) {
 	mu := mailboxUIDMutex(mailboxID)
 	mu.Lock()
 	defer mu.Unlock()
@@ -76,7 +75,7 @@ func assignUID(app *pocketbase.PocketBase, mailboxID string, messageRecord *core
 
 // ensureMessageUID assigns a UID to a message if it doesn't have one yet.
 // Called on message creation paths (inbound, send, draft).
-func ensureMessageUID(app *pocketbase.PocketBase, mailboxID string, messageRecord *core.Record) (uint32, error) {
+func ensureMessageUID(app core.App, mailboxID string, messageRecord *core.Record) (uint32, error) {
 	existing := messageRecord.GetInt("imap_uid")
 	if existing > 0 {
 		return uint32(existing), nil
@@ -85,7 +84,7 @@ func ensureMessageUID(app *pocketbase.PocketBase, mailboxID string, messageRecor
 }
 
 // lookupMessagesByUID queries mail_messages by imap_uid range within a mailbox's threads.
-func lookupMessagesByUID(app *pocketbase.PocketBase, mailboxID string, uidLow, uidHigh uint32) ([]*core.Record, error) {
+func lookupMessagesByUID(app core.App, mailboxID string, uidLow, uidHigh uint32) ([]*core.Record, error) {
 	// Find all threads for this mailbox
 	threads, err := app.FindRecordsByFilter(
 		"mail_threads",
@@ -120,7 +119,7 @@ func lookupMessagesByUID(app *pocketbase.PocketBase, mailboxID string, uidLow, u
 }
 
 // getMailboxUIDValidity returns the UIDVALIDITY for a mailbox.
-func getMailboxUIDValidity(app *pocketbase.PocketBase, mailboxID string) (uint32, error) {
+func getMailboxUIDValidity(app core.App, mailboxID string) (uint32, error) {
 	state, err := getOrCreateMailboxState(app, mailboxID)
 	if err != nil {
 		return 0, err
@@ -129,7 +128,7 @@ func getMailboxUIDValidity(app *pocketbase.PocketBase, mailboxID string) (uint32
 }
 
 // getMailboxUIDNext returns the next UID that will be assigned for a mailbox.
-func getMailboxUIDNext(app *pocketbase.PocketBase, mailboxID string) (uint32, error) {
+func getMailboxUIDNext(app core.App, mailboxID string) (uint32, error) {
 	state, err := getOrCreateMailboxState(app, mailboxID)
 	if err != nil {
 		return 0, err

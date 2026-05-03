@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 
 	"tinycld.org/core/textextract"
@@ -81,7 +80,7 @@ func sanitizeFTSQuery(input string) string {
 
 // syncThreadToFTS upserts a mail_threads record into the FTS index.
 // FTS5 doesn't support UPDATE, so we DELETE then INSERT.
-func syncThreadToFTS(app *pocketbase.PocketBase, record *core.Record, op string) {
+func syncThreadToFTS(app core.App, record *core.Record, op string) {
 	db := app.NonconcurrentDB()
 	recordID := record.Id
 
@@ -119,7 +118,7 @@ func syncThreadToFTS(app *pocketbase.PocketBase, record *core.Record, op string)
 // syncMessageToFTS indexes a message into FTS. Called inline from storeMessage()
 // so we have access to the full TextBody (not persisted as a PB field).
 // attachmentText is optional text extracted from text-based attachments.
-func syncMessageToFTS(app *pocketbase.PocketBase, recordID string, msg *storedMessage, attachmentText string) {
+func syncMessageToFTS(app core.App, recordID string, msg *storedMessage, attachmentText string) {
 	db := app.NonconcurrentDB()
 
 	// Delete first (idempotent upsert)
@@ -160,7 +159,7 @@ func syncMessageToFTS(app *pocketbase.PocketBase, recordID string, msg *storedMe
 }
 
 // deleteMessageFromFTS removes a message from the FTS index.
-func deleteMessageFromFTS(app *pocketbase.PocketBase, recordID string) {
+func deleteMessageFromFTS(app core.App, recordID string) {
 	db := app.NonconcurrentDB()
 	_, err := db.NewQuery("DELETE FROM fts_mail_messages WHERE record_id = {:id}").
 		Bind(map[string]any{"id": recordID}).Execute()
@@ -218,7 +217,7 @@ func extractTextFromAttachments(attachments []InboundAttachment) string {
 // loadTextAttachments extracts searchable text from stored attachments for a record.
 // Used by the record hook when storeMessage wasn't involved.
 // Supports all formats registered in textextract (PDF, DOCX, XLSX, PPTX, etc).
-func loadTextAttachments(app *pocketbase.PocketBase, record *core.Record) string {
+func loadTextAttachments(app core.App, record *core.Record) string {
 	filenames := record.GetStringSlice("attachments")
 	if len(filenames) == 0 {
 		return ""
