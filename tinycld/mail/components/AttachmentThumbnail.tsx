@@ -3,65 +3,14 @@ import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { Download, File, FileArchive, FileImage, FileSpreadsheet, FileText } from 'lucide-react-native'
 import { Linking, Platform, Pressable, Text, View } from 'react-native'
 
-interface EmailAttachmentsProps {
-    isVisible: boolean
-    collectionId: string
-    recordId: string
-    filenames: string[]
-}
-
-export function EmailAttachments({ isVisible, collectionId, recordId, filenames }: EmailAttachmentsProps) {
-    const borderColor = useThemeColor('border')
-    const mutedColor = useThemeColor('muted-foreground')
-
-    if (!isVisible) return null
-
-    return (
-        <View
-            className="px-4 py-3 gap-2"
-            style={{
-                borderTopWidth: 1,
-                borderTopColor: borderColor,
-            }}
-        >
-            <Text
-                style={{
-                    fontSize: 12,
-                    fontWeight: '600',
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.5,
-                    color: mutedColor,
-                }}
-            >
-                {filenames.length} attachment{filenames.length !== 1 ? 's' : ''}
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-                {filenames.map((filename) => (
-                    <AttachmentThumbnail
-                        key={filename}
-                        collectionId={collectionId}
-                        recordId={recordId}
-                        filename={filename}
-                    />
-                ))}
-            </View>
-        </View>
-    )
-}
-
-function AttachmentThumbnail({
-    collectionId,
-    recordId,
-    filename,
-}: {
+interface AttachmentThumbnailProps {
     collectionId: string
     recordId: string
     filename: string
-}) {
-    const borderColor = useThemeColor('border')
+}
+
+export function AttachmentThumbnail({ collectionId, recordId, filename }: AttachmentThumbnailProps) {
     const mutedColor = useThemeColor('muted-foreground')
-    const foregroundColor = useThemeColor('foreground')
-    const surfaceColor = useThemeColor('surface-secondary')
     const url = pb.files.getURL({ collectionId, id: recordId }, filename)
     const isImage = /\.(jpe?g|png|gif|webp|svg|bmp)$/i.test(filename)
     const displayName = cleanFilename(filename)
@@ -77,35 +26,24 @@ function AttachmentThumbnail({
 
     return (
         <Pressable
-            className="rounded-lg border overflow-hidden"
-            style={{
-                width: 160,
-                borderColor,
-                backgroundColor: surfaceColor,
-            }}
+            className="rounded-lg border border-border overflow-hidden bg-surface-secondary"
+            style={{ width: 160 }}
             onPress={handlePress}
         >
             {isImage ? (
-                <ImagePreview url={url} mutedColor={mutedColor} surfaceColor={surfaceColor} />
+                <ImagePreview url={url} mutedColor={mutedColor} />
             ) : (
                 <View
-                    className="w-full items-center justify-center"
-                    style={{
-                        height: 90,
-                        backgroundColor: surfaceColor,
-                    }}
+                    className="w-full items-center justify-center bg-surface-secondary"
+                    style={{ height: 90 }}
                 >
                     <Icon size={24} color={mutedColor} />
                 </View>
             )}
             <View className="flex-row items-center px-2 gap-1" style={{ paddingVertical: 6 }}>
                 <Text
-                    className="flex-1"
-                    style={{
-                        fontSize: 12,
-                        fontWeight: '500',
-                        color: foregroundColor,
-                    }}
+                    className="flex-1 text-foreground"
+                    style={{ fontSize: 12, fontWeight: '500' }}
                     numberOfLines={1}
                 >
                     {displayName}
@@ -118,15 +56,12 @@ function AttachmentThumbnail({
     )
 }
 
-function ImagePreview({ url, mutedColor, surfaceColor }: { url: string; mutedColor: string; surfaceColor: string }) {
+function ImagePreview({ url, mutedColor }: { url: string; mutedColor: string }) {
     if (Platform.OS !== 'web') {
         return (
             <View
-                className="w-full items-center justify-center"
-                style={{
-                    height: 90,
-                    backgroundColor: surfaceColor,
-                }}
+                className="w-full items-center justify-center bg-surface-secondary"
+                style={{ height: 90 }}
             >
                 <FileImage size={24} color={mutedColor} />
             </View>

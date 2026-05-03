@@ -8,9 +8,10 @@ import { useNavigateBack } from '@tinycld/core/lib/use-navigate-back'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams } from 'expo-router'
-import { useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import { EmailAttachments } from '../components/EmailAttachments'
+import { type AttachmentGroup, AttachmentStrip } from '../components/AttachmentStrip'
 import { EmailBody } from '../components/EmailBody'
 import { EmailDetailToolbar } from '../components/EmailDetailToolbar'
 import { MessageHeader, ThreadSubjectHeader } from '../components/EmailHeader'
@@ -20,9 +21,11 @@ import { filterOwnAddresses, pickDefaultFrom } from '../hooks/defaultFromIdentit
 import { useCompose } from '../hooks/useComposeState'
 import { useLabels, useThreadLabels } from '../hooks/useLabels'
 import { useMailboxes } from '../hooks/useMailboxes'
+import { useScrolledToBottom } from '../hooks/useScrolledToBottom'
 import { useSendableIdentities } from '../hooks/useSendableIdentities'
 import { useThreadActions } from '../hooks/useThreadActions'
 import { useThreadNavigation } from '../hooks/useThreadNavigation'
+import { useAttachmentStripStore } from '../stores/attachment-strip-store'
 import { useThreadExpansionStore } from '../stores/thread-expansion-store'
 import { useThreadListContext } from '../stores/thread-list-store'
 import type { MailMessages } from '../types'
@@ -135,10 +138,19 @@ export default function MailDetailScreen() {
     const { threadIds } = useThreadListContext()
     const { hasPrevious, hasNext, goToPrevious, goToNext } = useThreadNavigation(threadIds, id)
 
-    const { isScrolled, onScroll } = useScrollShadow()
+    const { isScrolled, onScroll: onScrollShadow } = useScrollShadow()
+    const { isAtBottom, onScroll: onScrollBottom } = useScrolledToBottom()
+    const handleScroll = useCallback(
+        (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+            onScrollShadow(e)
+            onScrollBottom(e)
+        },
+        [onScrollShadow, onScrollBottom]
+    )
     const toggledMessages = useThreadExpansionStore(s => s.toggled)
     const toggleExpanded = useThreadExpansionStore(s => s.toggle)
     useThreadExpansionStore.getState().resetForThread(id)
+    useAttachmentStripStore.getState().resetForThread(id)
 
     const messageList = messages ?? []
     const lastMessage = messageList[messageList.length - 1] as MailMessages | undefined
@@ -153,11 +165,20 @@ export default function MailDetailScreen() {
 
     const subject = messages?.[0]?.subject ?? ''
 
-    const visibleAttachments = messageList.flatMap((msg, index) => {
+    const attachmentGroups: AttachmentGroup[] = messageList.flatMap((msg, index) => {
         if (!isMessageExpanded(msg, index)) return []
         if (!msg.has_attachments || !msg.attachments?.length) return []
-        return [{ recordId: msg.id, filenames: msg.attachments as string[] }]
+        return [
+            {
+                messageId: msg.id,
+                senderName: msg.sender_name,
+                date: msg.date,
+                filenames: msg.attachments as string[],
+            },
+        ]
     })
+
+    const totalAttachmentCount = attachmentGroups.reduce((n, g) => n + g.filenames.length, 0)
 
     const mailboxId = thread?.mailbox ?? ''
 
@@ -201,7 +222,7 @@ export default function MailDetailScreen() {
             <ScrollView
                 className="flex-1"
                 contentContainerStyle={{ flexGrow: 1 }}
-                onScroll={onScroll}
+                onScroll={handleScroll}
                 scrollEventThrottle={16}
             >
                 <ThreadSubjectHeader subject={subject} labels={labels} />
@@ -293,15 +314,12 @@ export default function MailDetailScreen() {
                     )
                 })}
             </ScrollView>
-            {visibleAttachments.map(({ recordId, filenames }) => (
-                <EmailAttachments
-                    key={recordId}
-                    isVisible
-                    collectionId="mail_messages"
-                    recordId={recordId}
-                    filenames={filenames}
-                />
-            ))}
+            <AttachmentStrip
+                collectionId="mail_messages"
+                groups={attachmentGroups}
+                totalCount={totalAttachmentCount}
+                isAtBottom={isAtBottom}
+            />
             {lastMessage ? (
                 <InlineReply
                     messageId={lastMessage.id}
