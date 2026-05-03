@@ -2,6 +2,7 @@ package mail
 
 import (
 	"crypto/subtle"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -9,6 +10,15 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
 )
+
+// routingResult aggregates the per-recipient outcomes of an inbound delivery.
+// Used to decide the HTTP response code: any storage failure → 500;
+// no recipients matched but at least one was unknown → 403; any stored → 200.
+type routingResult struct {
+	storedCount     int
+	unknownCount    int
+	storageFailures []error
+}
 
 func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secret string) error {
 	// Validate secret token (constant-time comparison to prevent timing attacks)
@@ -41,39 +51,59 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 		return router.NewApiError(http.StatusUnprocessableEntity, "Unprocessable inbound payload", err)
 	}
 
-	// Route to mailboxes: check all To and Cc addresses
 	allRecipients := make([]Recipient, 0, len(msg.To)+len(msg.Cc))
 	allRecipients = append(allRecipients, msg.To...)
 	allRecipients = append(allRecipients, msg.Cc...)
-	matched := false
+
+	result := routingResult{}
 
 	for _, rcpt := range allRecipients {
 		localPart, domain := splitAddress(rcpt.Email)
 		if localPart == "" || domain == "" {
+			app.Logger().Warn("inbound: malformed recipient address", "email", rcpt.Email)
 			continue
 		}
 
-		// Handle plus-addressing: strip +tag before lookup
 		localPart = stripPlusTag(localPart)
 
 		mailbox, _, err := resolveMailboxByAddress(app, localPart, domain)
 		if err != nil {
-			continue // not our mailbox
+			result.unknownCount++
+			app.Logger().Info("inbound: unknown recipient",
+				"local", localPart, "domain", domain, "messageID", msg.MessageID)
+			continue
 		}
 
 		if err := processInboundForMailbox(app, mailbox, msg); err != nil {
+			result.storageFailures = append(result.storageFailures, err)
+			app.Logger().Error("inbound: storage failed",
+				"mailboxID", mailbox.Id, "messageID", msg.MessageID, "error", err)
 			continue
 		}
-		matched = true
+		result.storedCount++
 	}
 
-	if !matched {
-		// No recipient resolved to a known mailbox — return 403 so Postmark
-		// generates a bounce back to the sender.
+	// Any storage failure fails the whole batch so Postmark retries.
+	if len(result.storageFailures) > 0 {
+		return router.NewApiError(
+			http.StatusInternalServerError,
+			fmt.Sprintf("storage failed for %d recipient(s)", len(result.storageFailures)),
+			result.storageFailures[0],
+		)
+	}
+
+	// Nothing stored, but we had at least one syntactically-valid recipient
+	// that didn't resolve to a mailbox → 403 (bounce).
+	if result.storedCount == 0 && result.unknownCount > 0 {
 		return re.ForbiddenError("No mailbox for any recipient", nil)
 	}
 
-	// Postmark requires empty 200 response
+	// Nothing stored and no unknowns means every recipient was malformed.
+	// Treat as parse-level failure — Postmark won't retry.
+	if result.storedCount == 0 {
+		return router.NewApiError(http.StatusUnprocessableEntity, "No valid recipients", nil)
+	}
+
 	return re.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -99,11 +129,13 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 		}
 	}
 
-	// Find or create thread
+	// Find or create thread. Track whether we created a new one so we can
+	// roll it back if storeMessage fails.
 	thread, err := findOrCreateThread(app, mailboxID, msg.Subject, msg.InReplyTo, msg.References)
 	if err != nil {
-		return err
+		return fmt.Errorf("findOrCreateThread: %w", err)
 	}
+	threadWasNew := thread.GetInt("message_count") == 0
 
 	stored := &storedMessage{
 		MessageID:     msg.MessageID,
@@ -121,7 +153,13 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 	}
 
 	if _, err := storeMessage(app, thread.Id, stored); err != nil {
-		return err
+		if threadWasNew {
+			if delErr := app.Delete(thread); delErr != nil {
+				app.Logger().Error("inbound: failed to clean up empty thread after storage error",
+					"threadID", thread.Id, "error", delErr)
+			}
+		}
+		return fmt.Errorf("storeMessage: %w", err)
 	}
 
 	// Use stripped reply for snippet when available (just the new content, no quoted history)
@@ -133,18 +171,21 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 		snippet = msg.Subject
 	}
 	if err := updateThreadMetadata(app, thread, msg.From.Name, msg.From.Email, snippet, msg.Date); err != nil {
-		return err
+		return fmt.Errorf("updateThreadMetadata: %w", err)
 	}
 
-	// Create thread_state for each mailbox member
+	// Member lookup failure means we can't deliver to any user — propagate so
+	// the caller returns 500 and Postmark retries.
 	members, err := getMailboxMembers(app, mailboxID)
 	if err != nil {
-		return err
+		return fmt.Errorf("getMailboxMembers: %w", err)
 	}
 	for _, member := range members {
 		userOrgID := member.GetString("user_org")
 		if err := ensureThreadState(app, thread.Id, userOrgID, "inbox", false); err != nil {
-			app.Logger().Error("failed to create thread state",
+			// Per-member state failure is non-fatal: the message is stored,
+			// the affected user's thread state can be reconciled later.
+			app.Logger().Error("inbound: failed to create thread state",
 				"threadID", thread.Id, "userOrgID", userOrgID, "error", err)
 		}
 	}
