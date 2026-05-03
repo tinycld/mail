@@ -16,7 +16,7 @@ import (
 // no recipients matched but at least one was unknown → 403; any stored → 200.
 type routingResult struct {
 	storedCount     int
-	unknownCount    int
+	unknownAddrs    []string
 	storageFailures []error
 }
 
@@ -31,7 +31,7 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 	const maxInboundBodySize = 25 << 20
 	body, err := io.ReadAll(io.LimitReader(re.Request.Body, maxInboundBodySize))
 	if err != nil {
-		return re.BadRequestError("Failed to read request body", err)
+		return re.BadRequestError(fmt.Sprintf("Failed to read request body: %v", err), err)
 	}
 
 	// Verify webhook signature (provider-specific)
@@ -48,7 +48,11 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 	msg, err := provider.ParseInbound(body)
 	if err != nil {
 		app.Logger().Error("inbound: parse failed", "error", err)
-		return router.NewApiError(http.StatusUnprocessableEntity, "Unprocessable inbound payload", err)
+		return router.NewApiError(
+			http.StatusUnprocessableEntity,
+			fmt.Sprintf("Unprocessable inbound payload: %v", err),
+			err,
+		)
 	}
 
 	allRecipients := make([]Recipient, 0, len(msg.To)+len(msg.Cc))
@@ -68,9 +72,10 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 
 		mailbox, _, err := resolveMailboxByAddress(app, localPart, domain)
 		if err != nil {
-			result.unknownCount++
+			fullAddr := localPart + "@" + domain
+			result.unknownAddrs = append(result.unknownAddrs, fullAddr)
 			app.Logger().Info("inbound: unknown recipient",
-				"local", localPart, "domain", domain, "messageID", msg.MessageID)
+				"address", fullAddr, "messageID", msg.MessageID)
 			continue
 		}
 
@@ -87,21 +92,24 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 	if len(result.storageFailures) > 0 {
 		return router.NewApiError(
 			http.StatusInternalServerError,
-			fmt.Sprintf("storage failed for %d recipient(s)", len(result.storageFailures)),
+			fmt.Sprintf("Storage failed for %d recipient(s): %v", len(result.storageFailures), result.storageFailures[0]),
 			result.storageFailures[0],
 		)
 	}
 
 	// Nothing stored, but we had at least one syntactically-valid recipient
 	// that didn't resolve to a mailbox → 403 (bounce).
-	if result.storedCount == 0 && result.unknownCount > 0 {
-		return re.ForbiddenError("No mailbox for any recipient", nil)
+	if result.storedCount == 0 && len(result.unknownAddrs) > 0 {
+		return re.ForbiddenError(
+			fmt.Sprintf("No mailbox for recipient(s): %s", strings.Join(result.unknownAddrs, ", ")),
+			nil,
+		)
 	}
 
 	// Nothing stored and no unknowns means every recipient was malformed.
 	// Treat as parse-level failure — Postmark won't retry.
 	if result.storedCount == 0 {
-		return router.NewApiError(http.StatusUnprocessableEntity, "No valid recipients", nil)
+		return router.NewApiError(http.StatusUnprocessableEntity, "No valid recipients in To/Cc", nil)
 	}
 
 	return re.JSON(http.StatusOK, map[string]string{"status": "ok"})
