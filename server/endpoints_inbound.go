@@ -66,8 +66,9 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 	}
 
 	if !matched {
-		// Return 200 anyway — Postmark expects it, and we don't want retries for unknown recipients
-		return re.JSON(http.StatusOK, map[string]string{"status": "no matching mailbox"})
+		// No recipient resolved to a known mailbox — return 403 so Postmark
+		// generates a bounce back to the sender.
+		return re.ForbiddenError("No mailbox for any recipient", nil)
 	}
 
 	// Postmark requires empty 200 response

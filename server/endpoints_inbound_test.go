@@ -10,6 +10,7 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
+	"github.com/pocketbase/pocketbase/tools/router"
 )
 
 // makeInboundRequest constructs a *core.RequestEvent suitable for calling
@@ -225,11 +226,11 @@ func TestHandleInbound_UnknownRecipientReturns403(t *testing.T) {
 		t.Fatalf("expected error response (403), got nil (recorder body: %s)", rec.Body.String())
 	}
 
-	apiErr, ok := err.(interface{ Status() int })
+	apiErr, ok := err.(*router.ApiError)
 	if !ok {
-		t.Fatalf("expected error to satisfy Status() int, got %T: %v", err, err)
+		t.Fatalf("expected *router.ApiError, got %T: %v", err, err)
 	}
-	if apiErr.Status() != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d", apiErr.Status())
+	if apiErr.Status != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", apiErr.Status)
 	}
 }
