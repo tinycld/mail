@@ -1,5 +1,4 @@
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
-import { captureException } from '@tinycld/core/lib/errors'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useForm, zodResolver } from '@tinycld/core/ui/form'
 import { Forward, Reply, ReplyAll } from 'lucide-react-native'
@@ -10,6 +9,7 @@ import { filterOwnAddresses, pickDefaultFrom } from '../hooks/defaultFromIdentit
 import { useAttachments } from '../hooks/useAttachments'
 import { useCompose } from '../hooks/useComposeState'
 import { useDefaultMailbox } from '../hooks/useDefaultMailbox'
+import { useFileDrop } from '../hooks/useFileDrop'
 import { useMailEditor } from '../hooks/useMailEditor'
 import { useSendableIdentities } from '../hooks/useSendableIdentities'
 import { useSendEmail } from '../hooks/useSendEmail'
@@ -17,6 +17,7 @@ import { useComposeStore } from '../stores/compose-store'
 import { AttachmentRibbon } from './AttachmentRibbon'
 import { ComposeFields } from './ComposeFields'
 import { ComposeToolbar } from './ComposeToolbar'
+import { DropOverlay } from './DropOverlay'
 
 interface InlineReplyProps {
     messageId: string
@@ -158,7 +159,7 @@ function InlineComposeForm({
         placeholder: 'Compose reply',
         autofocus: true,
     })
-    const { attachments, addFiles, removeFile, clearAll: clearAttachments } = useAttachments()
+    const { attachments, addFilesSafely, removeFile, clearAll: clearAttachments } = useAttachments()
 
     const toValue =
         replyContext.to.map((r) => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
@@ -216,14 +217,15 @@ function InlineComposeForm({
         fileInputRef.current?.click()
     }
 
+    const { isDragging, dropRef } = useFileDrop({
+        onFiles: addFilesSafely,
+        isEnabled: !!mailboxId,
+    })
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files
         if (!files?.length) return
-        try {
-            addFiles(Array.from(files))
-        } catch (err) {
-            captureException('Failed to add attachments', err)
-        }
+        addFilesSafely(Array.from(files))
         e.target.value = ''
     }
 
@@ -237,28 +239,35 @@ function InlineComposeForm({
                 backgroundColor,
             }}
         >
-            <ComposeFields control={control} errors={errors} />
-            <View className="p-3" style={{ minHeight: 120, maxHeight: 280 }}>
-                <EditorComponent />
-            </View>
-            <AttachmentRibbon isVisible={attachments.length > 0} attachments={attachments} onRemove={removeFile} />
-            {Platform.OS === 'web' && (
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    style={{ display: 'none' }}
-                    onChange={handleFileChange}
+            <View ref={dropRef} className="flex-1">
+                <ComposeFields control={control} errors={errors} />
+                <View className="p-3" style={{ minHeight: 120, maxHeight: 280 }}>
+                    <EditorComponent />
+                </View>
+                <AttachmentRibbon
+                    isVisible={attachments.length > 0}
+                    attachments={attachments}
+                    onRemove={removeFile}
                 />
-            )}
-            <ComposeToolbar
-                commands={commands}
-                toolbarState={toolbarState}
-                onDiscard={onClose}
-                onSend={onSend}
-                onAttach={handleAttach}
-                isPending={isPending}
-            />
+                {Platform.OS === 'web' && (
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        style={{ display: 'none' }}
+                        onChange={handleFileChange}
+                    />
+                )}
+                <ComposeToolbar
+                    commands={commands}
+                    toolbarState={toolbarState}
+                    onDiscard={onClose}
+                    onSend={onSend}
+                    onAttach={handleAttach}
+                    isPending={isPending}
+                />
+                <DropOverlay isVisible={isDragging} />
+            </View>
         </KeyboardAvoidingView>
     )
 }

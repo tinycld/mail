@@ -1,5 +1,4 @@
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
-import { captureException } from '@tinycld/core/lib/errors'
 import { performMutations } from '@tinycld/core/lib/mutations'
 import { notify } from '@tinycld/core/lib/notify'
 import { useStore } from '@tinycld/core/lib/pocketbase'
@@ -10,6 +9,7 @@ import { Platform, View } from 'react-native'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
 import { useCompose } from '../hooks/useComposeState'
+import { useFileDrop } from '../hooks/useFileDrop'
 import { setContentWhenReady, useMailEditor } from '../hooks/useMailEditor'
 import { useMailSendReadiness } from '../hooks/useMailSendReadiness'
 import { useSaveDraft } from '../hooks/useSaveDraft'
@@ -20,6 +20,7 @@ import { ComposeFields } from './ComposeFields'
 import { ComposeFromRow } from './ComposeFromRow'
 import { ComposeHeader } from './ComposeHeader'
 import { ComposeToolbar } from './ComposeToolbar'
+import { DropOverlay } from './DropOverlay'
 
 export type { ComposeFormData } from '../hooks/composeSchema'
 
@@ -39,7 +40,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const draftIdRef = useRef<string | null>(null)
     const toastedBlockerRef = useRef<string | null>(null)
     const [headerTitle, setHeaderTitle] = useState('')
-    const { attachments, addFiles, removeFile, clearAll: clearAttachments } = useAttachments()
+    const { attachments, addFilesSafely, removeFile, clearAll: clearAttachments } = useAttachments()
     useEffect(() => {
         if (!isVisible) {
             toastedBlockerRef.current = null
@@ -138,6 +139,11 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
     const { saveDraft } = useSaveDraft()
 
+    const { isDragging, dropRef } = useFileDrop({
+        onFiles: addFilesSafely,
+        isEnabled: !!mailboxId,
+    })
+
     const handleClose = async () => {
         const text = await editor.getText()
         if (!text?.trim() || !mailboxId) {
@@ -224,11 +230,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files
         if (!files?.length) return
-        try {
-            addFiles(Array.from(files))
-        } catch (err) {
-            captureException('Failed to add attachments', err)
-        }
+        addFilesSafely(Array.from(files))
         e.target.value = ''
     }
 
@@ -250,7 +252,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                 onMaximize={isMaximized ? open : maximize}
                 onClose={handleClose}
             />
-            <View className={isMinimized ? 'hidden' : 'flex-1'}>
+            <View ref={dropRef} className={isMinimized ? 'hidden' : 'flex-1'}>
                 <ComposeFromRow />
                 <ComposeFields control={control} errors={errors} onSubjectBlur={onSubjectBlur} />
                 <View className="px-3 pt-2">
@@ -278,6 +280,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                     isPending={isPending}
                     isSendDisabled={!mailboxId}
                 />
+                <DropOverlay isVisible={isDragging} />
             </View>
         </View>
     )
