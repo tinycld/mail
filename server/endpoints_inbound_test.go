@@ -211,6 +211,31 @@ func seedMember(t *testing.T, app core.App, mailboxID, userOrgID string) {
 	}
 }
 
+// TestHandleInbound_IdempotentRetry — submitting the same Message-ID twice
+// stores only one mail_messages row. Validates the idempotency check the
+// 500-retry behavior depends on.
+func TestHandleInbound_IdempotentRetry(t *testing.T) {
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_idem_001")
+	seedMember(t, app, "mb_idem_001", "userorg_alice")
+
+	body := postmarkPayload(t, []string{"alice@acme.com"}, "retry-test", "body", "<msg-idem-1@example.org>")
+
+	provider := &stubProvider{parse: (&PostmarkProvider{}).ParseInbound}
+
+	for i := 0; i < 2; i++ {
+		re, _ := makeInboundRequest(t, app, "tok-idem", body)
+		if err := handleInbound(app, provider, re, "tok-idem"); err != nil {
+			t.Fatalf("delivery %d: expected 200, got %v", i+1, err)
+		}
+	}
+
+	msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "retry-test"})
+	if len(msgs) != 1 {
+		t.Fatalf("expected exactly 1 message after 2 deliveries (idempotency), got %d", len(msgs))
+	}
+}
+
 // TestHandleInbound_MixedKnownAndUnknownReturns200 — when at least one
 // recipient resolves and storage succeeds, return 200 even if other
 // recipients are unknown.
