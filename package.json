@@ -25,7 +25,7 @@
         "react": ">=19",
         "react-native": ">=0.83",
         "expo-router": ">=55.0.0",
-        "pbtsdb": ">=0.3",
+        "pbtsdb": ">=0.5",
         "@tanstack/react-db": ">=0.1",
         "@tanstack/db": ">=0.6"
     }
