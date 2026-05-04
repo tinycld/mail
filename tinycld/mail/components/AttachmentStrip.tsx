@@ -1,3 +1,4 @@
+import { downloadFile } from '@tinycld/core/file-viewer/file-url'
 import { PreviewModal } from '@tinycld/core/file-viewer/PreviewModal'
 import { getPreviewActionFactories } from '@tinycld/core/file-viewer/preview-action-registry'
 import type { FilePreviewSource } from '@tinycld/core/file-viewer/types'
@@ -108,6 +109,7 @@ export function AttachmentStrip({ collectionId, groups, totalCount, isAtBottom }
                 onClose={closePreview}
                 onNext={hasNext ? handleNext : undefined}
                 onPrevious={hasPrevious ? handlePrevious : undefined}
+                onDownload={activeSource ? () => downloadFile(activeSource) : undefined}
                 actions={previewActions}
             />
         </View>
