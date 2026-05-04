@@ -25,6 +25,7 @@ import { useScrolledToBottom } from '../hooks/useScrolledToBottom'
 import { useSendableIdentities } from '../hooks/useSendableIdentities'
 import { useThreadActions } from '../hooks/useThreadActions'
 import { useThreadNavigation } from '../hooks/useThreadNavigation'
+import { useAttachmentPreviewStore } from '../stores/attachment-preview-store'
 import { useAttachmentStripStore } from '../stores/attachment-strip-store'
 import { useThreadExpansionStore } from '../stores/thread-expansion-store'
 import { useThreadListContext } from '../stores/thread-list-store'
@@ -151,6 +152,7 @@ export default function MailDetailScreen() {
     const toggleExpanded = useThreadExpansionStore(s => s.toggle)
     useThreadExpansionStore.getState().resetForThread(id)
     useAttachmentStripStore.getState().resetForThread(id)
+    useAttachmentPreviewStore.getState().close()
 
     const messageList = messages ?? []
     const lastMessage = messageList[messageList.length - 1] as MailMessages | undefined
@@ -168,12 +170,17 @@ export default function MailDetailScreen() {
     const attachmentGroups: AttachmentGroup[] = messageList.flatMap((msg, index) => {
         if (!isMessageExpanded(msg, index)) return []
         if (!msg.has_attachments || !msg.attachments?.length) return []
+        // attachment_thumbnail_map is added by the 1713000019 migration; the
+        // generated schema may not include it yet on a fresh checkout, so read
+        // it via a permissive accessor.
+        const thumbnailMap = readThumbnailMap(msg)
         return [
             {
                 messageId: msg.id,
                 senderName: msg.sender_name,
                 date: msg.date,
                 filenames: msg.attachments as string[],
+                thumbnailMap,
             },
         ]
     })
@@ -346,4 +353,14 @@ function CollapsedSnippet({ snippet, onPress }: { snippet: string; onPress: () =
             </View>
         </Pressable>
     )
+}
+
+function readThumbnailMap(msg: unknown): Record<string, string> | undefined {
+    const raw = (msg as { attachment_thumbnail_map?: unknown })?.attachment_thumbnail_map
+    if (!raw || typeof raw !== 'object') return undefined
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+        if (typeof v === 'string') out[k] = v
+    }
+    return Object.keys(out).length > 0 ? out : undefined
 }

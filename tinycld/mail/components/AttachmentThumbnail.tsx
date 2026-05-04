@@ -1,28 +1,23 @@
 import { pb } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { Download, File, FileArchive, FileImage, FileSpreadsheet, FileText } from 'lucide-react-native'
-import { Linking, Platform, Pressable, Text, View } from 'react-native'
+import { Platform, Pressable, Text, View } from 'react-native'
 
 interface AttachmentThumbnailProps {
     collectionId: string
     recordId: string
     filename: string
+    onPress?: () => void
 }
 
-export function AttachmentThumbnail({ collectionId, recordId, filename }: AttachmentThumbnailProps) {
+export function AttachmentThumbnail({ collectionId, recordId, filename, onPress }: AttachmentThumbnailProps) {
     const mutedColor = useThemeColor('muted-foreground')
     const url = pb.files.getURL({ collectionId, id: recordId }, filename)
     const isImage = /\.(jpe?g|png|gif|webp|svg|bmp)$/i.test(filename)
     const displayName = cleanFilename(filename)
     const Icon = getFileIcon(filename)
 
-    const handlePress = () => {
-        if (Platform.OS === 'web') {
-            window.open(url, '_blank')
-        } else {
-            Linking.openURL(url)
-        }
-    }
+    const handlePress = onPress ?? (() => {})
 
     return (
         <Pressable
