@@ -120,8 +120,14 @@ export function EmailBody({ collectionId, recordId, filename, cidMap }: EmailBod
         )
     }
 
+    // Native: render the stripped HTML as plain text. Do NOT set `flex-1`
+    // here — this view sits inside a ScrollView whose contentContainer has
+    // `flexGrow: 1`, and `flex-1` on a ScrollView child takes all the
+    // available height of the content container. On native that interacts
+    // badly with sibling layout (notably the AttachmentStrip's expanding
+    // panel) and can collapse the visible body area to zero.
     return (
-        <View className="p-4 flex-1 rounded-lg bg-white">
+        <View className="p-4 rounded-lg bg-white">
             <Text className="text-black" style={{ fontSize: 14, lineHeight: 22 }}>
                 {html.replace(/<[^>]*>/g, '')}
             </Text>
