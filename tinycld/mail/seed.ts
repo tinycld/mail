@@ -1,7 +1,31 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import type PocketBase from 'pocketbase'
 
 function log(...args: unknown[]) {
     process.stdout.write(`[seed:mail] ${args.join(' ')}\n`)
+}
+
+// Resolve fixture files relative to the mail package root so the seed can
+// attach them to test messages. mail/tinycld/mail/seed.ts → mail/tests/fixtures
+const FIXTURES_DIR = path.resolve(import.meta.dirname, '../../tests/fixtures')
+
+function fixtureFile(name: string, type: string): File {
+    const bytes = readFileSync(path.join(FIXTURES_DIR, name))
+    return new File([new Uint8Array(bytes)], name, { type })
+}
+
+const MIME_BY_EXT: Record<string, string> = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    gif: 'image/gif',
+    pdf: 'application/pdf',
+}
+
+function mimeFromName(name: string): string {
+    const ext = name.split('.').pop()?.toLowerCase() ?? ''
+    return MIME_BY_EXT[ext] ?? 'application/octet-stream'
 }
 
 interface SeedContext {
@@ -19,6 +43,8 @@ interface SeedMessage {
     snippet: string
     body_html: string
     in_reply_to?: string
+    /** Filenames in mail/tests/fixtures/ to attach to the message. */
+    attachments?: string[]
 }
 
 function htmlBlob(html: string) {
@@ -1509,6 +1535,99 @@ const SHARED_THREADS: typeof THREADS = [
             },
         ],
     },
+    {
+        subject: 'Hippo photo from the safari',
+        snippet: 'Spotted this beauty at the watering hole on day three — couldn’t believe how close he came.',
+        message_count: 1,
+        latest_date: '2026-05-01 18:30:00.000Z',
+        participants: [
+            { name: 'Priya Sharma', email: 'priya.sharma@tinycld.org' },
+        ],
+        folder: 'inbox',
+        is_read: false,
+        is_starred: true,
+        labels: ['Personal'],
+        messages: [
+            {
+                sender_name: 'Priya Sharma',
+                sender_email: 'priya.sharma@tinycld.org',
+                recipients_to: [{ name: 'Team', email: 'support@tinycld.org' }],
+                date: '2026-05-01 18:30:00.000Z',
+                subject: 'Hippo photo from the safari',
+                snippet:
+                    'Spotted this beauty at the watering hole on day three — couldn’t believe how close he came.',
+                body_html:
+                    '<p>Hey all,</p><p>Spotted this beauty at the watering hole on day three. Couldn’t believe how close he came to the boat.</p><p>More pics coming once I sort through the SD card.</p><p>— Priya</p>',
+                attachments: ['hippo.jpg'],
+            },
+        ],
+    },
+    {
+        subject: 'Re: Hippo conservation status update',
+        snippet: 'Attaching the photo I took last month for the newsletter — feel free to use it.',
+        message_count: 2,
+        latest_date: '2026-04-30 11:15:00.000Z',
+        participants: [
+            { name: 'Marcus Johnson', email: 'marcus.johnson@tinycld.org' },
+            { name: 'Rachel Moore', email: 'rachel.moore@tinycld.org' },
+        ],
+        folder: 'inbox',
+        is_read: false,
+        is_starred: false,
+        labels: ['Work'],
+        messages: [
+            {
+                sender_name: 'Rachel Moore',
+                sender_email: 'rachel.moore@tinycld.org',
+                recipients_to: [{ name: 'Marcus Johnson', email: 'marcus.johnson@tinycld.org' }],
+                date: '2026-04-29 14:00:00.000Z',
+                subject: 'Hippo conservation status update',
+                snippet:
+                    'Marcus — do you have any recent hippo photos we could include in the May newsletter?',
+                body_html:
+                    '<p>Marcus,</p><p>Do you have any recent hippo photos we could include in the May newsletter? Trying to lead with something visually striking.</p><p>— Rachel</p>',
+            },
+            {
+                sender_name: 'Marcus Johnson',
+                sender_email: 'marcus.johnson@tinycld.org',
+                recipients_to: [{ name: 'Rachel Moore', email: 'rachel.moore@tinycld.org' }],
+                in_reply_to: 'hippo-conservation-status-update-1@tinycld.org',
+                date: '2026-04-30 11:15:00.000Z',
+                subject: 'Re: Hippo conservation status update',
+                snippet: 'Attaching the photo I took last month for the newsletter — feel free to use it.',
+                body_html:
+                    '<p>Rachel,</p><p>Here you go — feel free to crop or recolor as needed for the layout.</p><p>— Marcus</p>',
+                attachments: ['hippo.jpg'],
+            },
+        ],
+    },
+    {
+        subject: 'Hippo plush toy fundraiser kickoff',
+        snippet: 'Mock-up attached. Quote from the supplier comes in tomorrow; orders open Friday.',
+        message_count: 1,
+        latest_date: '2026-04-29 09:00:00.000Z',
+        participants: [
+            { name: 'Sarah Kim', email: 'sarah.kim@tinycld.org' },
+        ],
+        folder: 'inbox',
+        is_read: true,
+        is_starred: false,
+        labels: ['Work', 'Newsletters'],
+        messages: [
+            {
+                sender_name: 'Sarah Kim',
+                sender_email: 'sarah.kim@tinycld.org',
+                recipients_to: [{ name: 'Team', email: 'support@tinycld.org' }],
+                date: '2026-04-29 09:00:00.000Z',
+                subject: 'Hippo plush toy fundraiser kickoff',
+                snippet:
+                    'Mock-up attached. Quote from the supplier comes in tomorrow; orders open Friday.',
+                body_html:
+                    '<p>Team,</p><p>Mock-up of the hippo plush is attached. The supplier quote lands tomorrow; we’ll open pre-orders on Friday.</p><p>— Sarah</p>',
+                attachments: ['hippo.jpg'],
+            },
+        ],
+    },
 ]
 
 function deriveAddress(email: string) {
@@ -1682,8 +1801,12 @@ async function seedThreadsForMailbox(
             formData.append('date', msg.date)
             formData.append('subject', msg.subject)
             formData.append('snippet', msg.snippet)
-            formData.append('has_attachments', 'false')
+            const attachmentFiles = (msg.attachments ?? []).map((name) => fixtureFile(name, mimeFromName(name)))
+            formData.append('has_attachments', attachmentFiles.length > 0 ? 'true' : 'false')
             formData.append('body_html', htmlBlob(msg.body_html))
+            for (const file of attachmentFiles) {
+                formData.append('attachments', file, file.name)
+            }
 
             if (msg.in_reply_to) {
                 formData.append('in_reply_to', msg.in_reply_to)
