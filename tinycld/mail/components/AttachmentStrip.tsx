@@ -1,3 +1,4 @@
+import { getPreviewActionFactories } from '@tinycld/core/file-viewer/preview-action-registry'
 import { PreviewModal } from '@tinycld/core/file-viewer/PreviewModal'
 import type { FilePreviewSource } from '@tinycld/core/file-viewer/types'
 import { formatRelativeDate } from '@tinycld/core/lib/format-utils'
@@ -36,6 +37,12 @@ export function AttachmentStrip({ collectionId, groups, totalCount, isAtBottom }
     const closePreview = useAttachmentPreviewStore((s) => s.close)
     const setActive = useAttachmentPreviewStore((s) => s.setActive)
     const openPreview = useAttachmentPreviewStore((s) => s.open)
+
+    // Resolve any consumer-supplied preview actions (e.g. drive's "Save to
+    // Drive"). Factories are registered at module load time by linked packages,
+    // so the factory list is stable for the lifetime of the app — calling each
+    // factory unconditionally here is safe under the rules of hooks.
+    const previewActions = getPreviewActionFactories().map((factory) => factory())
 
     const wasAtBottomRef = useRef(false)
     useEffect(() => {
@@ -106,6 +113,7 @@ export function AttachmentStrip({ collectionId, groups, totalCount, isAtBottom }
                 onClose={closePreview}
                 onNext={hasNext ? handleNext : undefined}
                 onPrevious={hasPrevious ? handlePrevious : undefined}
+                actions={previewActions}
             />
         </View>
     )
