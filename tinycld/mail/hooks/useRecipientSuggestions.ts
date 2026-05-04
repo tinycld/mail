@@ -1,14 +1,10 @@
+import type { ContactSuggestion } from '@tinycld/core/lib/contacts/use-contact-suggestions'
 import { useMemo } from 'react'
+
+export type { ContactSuggestion }
 
 export interface Recipient {
     name: string
-    email: string
-}
-
-export interface ContactSuggestion {
-    id: string
-    first_name: string
-    last_name: string
     email: string
 }
 
