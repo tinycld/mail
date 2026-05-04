@@ -239,11 +239,7 @@ function InlineComposeForm({
                 <View className="p-3" style={{ minHeight: 120, maxHeight: 280 }}>
                     <EditorComponent />
                 </View>
-                <AttachmentRibbon
-                    isVisible={attachments.length > 0}
-                    attachments={attachments}
-                    onRemove={removeFile}
-                />
+                <AttachmentRibbon isVisible={attachments.length > 0} attachments={attachments} onRemove={removeFile} />
                 <ComposeToolbar
                     commands={commands}
                     toolbarState={toolbarState}

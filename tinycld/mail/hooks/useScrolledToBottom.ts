@@ -3,11 +3,7 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 
 const BOTTOM_THRESHOLD_PX = 24
 
-export function isScrolledToBottom(metrics: {
-    contentOffsetY: number
-    contentHeight: number
-    layoutHeight: number
-}) {
+export function isScrolledToBottom(metrics: { contentOffsetY: number; contentHeight: number; layoutHeight: number }) {
     const distanceFromBottom = metrics.contentHeight - (metrics.contentOffsetY + metrics.layoutHeight)
     return distanceFromBottom <= BOTTOM_THRESHOLD_PX
 }

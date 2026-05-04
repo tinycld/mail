@@ -37,22 +37,12 @@ describe('rewriteCidReferences', () => {
     })
 
     it('matches when other attributes precede src', () => {
-        const out = rewriteCidReferences(
-            '<img alt="x" src="cid:foo">',
-            COLL,
-            REC,
-            { foo: 'foo_xyz.jpg' }
-        )
+        const out = rewriteCidReferences('<img alt="x" src="cid:foo">', COLL, REC, { foo: 'foo_xyz.jpg' })
         expect(out).toContain('foo_xyz.jpg')
     })
 
     it('matches when other attributes follow src', () => {
-        const out = rewriteCidReferences(
-            '<img src="cid:foo" alt="x">',
-            COLL,
-            REC,
-            { foo: 'foo_xyz.jpg' }
-        )
+        const out = rewriteCidReferences('<img src="cid:foo" alt="x">', COLL, REC, { foo: 'foo_xyz.jpg' })
         expect(out).toContain('foo_xyz.jpg')
     })
 
@@ -62,12 +52,7 @@ describe('rewriteCidReferences', () => {
     })
 
     it('lowercases and trims angle brackets in cid', () => {
-        const out = rewriteCidReferences(
-            '<img src="cid:FOO">',
-            COLL,
-            REC,
-            { foo: 'foo_xyz.jpg' }
-        )
+        const out = rewriteCidReferences('<img src="cid:FOO">', COLL, REC, { foo: 'foo_xyz.jpg' })
         expect(out).toContain('foo_xyz.jpg')
     })
 

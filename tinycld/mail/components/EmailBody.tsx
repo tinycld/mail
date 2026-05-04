@@ -25,8 +25,8 @@ function useEmailHtml(
         const token = pb.authStore.token
         const url = pb.files.getURL({ collectionId, id: recordId }, filename)
         fetch(url)
-            .then(res => res.text())
-            .then(raw => {
+            .then((res) => res.text())
+            .then((raw) => {
                 // Resolve cid: → PB file URL AFTER proxyImageUrls. The proxy
                 // wraps remote http(s) <img src> for privacy/auth-token
                 // injection but should not re-wrap our own PB-internal

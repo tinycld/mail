@@ -1540,9 +1540,7 @@ const SHARED_THREADS: typeof THREADS = [
         snippet: 'Spotted this beauty at the watering hole on day three — couldn’t believe how close he came.',
         message_count: 1,
         latest_date: '2026-05-01 18:30:00.000Z',
-        participants: [
-            { name: 'Priya Sharma', email: 'priya.sharma@tinycld.org' },
-        ],
+        participants: [{ name: 'Priya Sharma', email: 'priya.sharma@tinycld.org' }],
         folder: 'inbox',
         is_read: false,
         is_starred: true,
@@ -1554,8 +1552,7 @@ const SHARED_THREADS: typeof THREADS = [
                 recipients_to: [{ name: 'Team', email: 'support@tinycld.org' }],
                 date: '2026-05-01 18:30:00.000Z',
                 subject: 'Hippo photo from the safari',
-                snippet:
-                    'Spotted this beauty at the watering hole on day three — couldn’t believe how close he came.',
+                snippet: 'Spotted this beauty at the watering hole on day three — couldn’t believe how close he came.',
                 body_html:
                     '<p>Hey all,</p><p>Spotted this beauty at the watering hole on day three. Couldn’t believe how close he came to the boat.</p><p>More pics coming once I sort through the SD card.</p><p>— Priya</p>',
                 attachments: ['hippo.jpg'],
@@ -1582,8 +1579,7 @@ const SHARED_THREADS: typeof THREADS = [
                 recipients_to: [{ name: 'Marcus Johnson', email: 'marcus.johnson@tinycld.org' }],
                 date: '2026-04-29 14:00:00.000Z',
                 subject: 'Hippo conservation status update',
-                snippet:
-                    'Marcus — do you have any recent hippo photos we could include in the May newsletter?',
+                snippet: 'Marcus — do you have any recent hippo photos we could include in the May newsletter?',
                 body_html:
                     '<p>Marcus,</p><p>Do you have any recent hippo photos we could include in the May newsletter? Trying to lead with something visually striking.</p><p>— Rachel</p>',
             },
@@ -1606,9 +1602,7 @@ const SHARED_THREADS: typeof THREADS = [
         snippet: 'Mock-up attached. Quote from the supplier comes in tomorrow; orders open Friday.',
         message_count: 1,
         latest_date: '2026-04-29 09:00:00.000Z',
-        participants: [
-            { name: 'Sarah Kim', email: 'sarah.kim@tinycld.org' },
-        ],
+        participants: [{ name: 'Sarah Kim', email: 'sarah.kim@tinycld.org' }],
         folder: 'inbox',
         is_read: true,
         is_starred: false,
@@ -1620,8 +1614,7 @@ const SHARED_THREADS: typeof THREADS = [
                 recipients_to: [{ name: 'Team', email: 'support@tinycld.org' }],
                 date: '2026-04-29 09:00:00.000Z',
                 subject: 'Hippo plush toy fundraiser kickoff',
-                snippet:
-                    'Mock-up attached. Quote from the supplier comes in tomorrow; orders open Friday.',
+                snippet: 'Mock-up attached. Quote from the supplier comes in tomorrow; orders open Friday.',
                 body_html:
                     '<p>Team,</p><p>Mock-up of the hippo plush is attached. The supplier quote lands tomorrow; we’ll open pre-orders on Friday.</p><p>— Sarah</p>',
                 attachments: ['hippo.jpg'],

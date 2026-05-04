@@ -1,5 +1,5 @@
-import { getPreviewActionFactories } from '@tinycld/core/file-viewer/preview-action-registry'
 import { PreviewModal } from '@tinycld/core/file-viewer/PreviewModal'
+import { getPreviewActionFactories } from '@tinycld/core/file-viewer/preview-action-registry'
 import type { FilePreviewSource } from '@tinycld/core/file-viewer/types'
 import { formatRelativeDate } from '@tinycld/core/lib/format-utils'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
@@ -101,12 +101,7 @@ export function AttachmentStrip({ collectionId, groups, totalCount, isAtBottom }
     return (
         <View className="border-t border-border">
             <Header totalCount={totalCount} expanded={expanded} onPress={toggle} />
-            <ExpandedPanel
-                isVisible={expanded}
-                groups={groups}
-                sources={flatSources}
-                onOpen={handleOpen}
-            />
+            <ExpandedPanel isVisible={expanded} groups={groups} sources={flatSources} onOpen={handleOpen} />
             <PreviewModal
                 isVisible={activeSource !== null}
                 source={activeSource}
@@ -119,15 +114,7 @@ export function AttachmentStrip({ collectionId, groups, totalCount, isAtBottom }
     )
 }
 
-function Header({
-    totalCount,
-    expanded,
-    onPress,
-}: {
-    totalCount: number
-    expanded: boolean
-    onPress: () => void
-}) {
+function Header({ totalCount, expanded, onPress }: { totalCount: number; expanded: boolean; onPress: () => void }) {
     const mutedColor = useThemeColor('muted-foreground')
     const Chevron = expanded ? ChevronDown : ChevronUp
     const label = `${totalCount} attachment${totalCount === 1 ? '' : 's'}`

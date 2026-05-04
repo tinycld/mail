@@ -1,5 +1,5 @@
-import { getThumbnailURL } from '@tinycld/core/file-viewer/file-url'
 import { getFileIconForMime } from '@tinycld/core/file-viewer/file-icons'
+import { getThumbnailURL } from '@tinycld/core/file-viewer/file-url'
 import type { FilePreviewSource } from '@tinycld/core/file-viewer/types'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { Download } from 'lucide-react-native'
@@ -42,11 +42,7 @@ export function AttachmentThumbnail({ source, onPress }: AttachmentThumbnailProp
                 </View>
             )}
             <View className="flex-row items-center px-2 gap-1" style={{ paddingVertical: 6 }}>
-                <Text
-                    className="flex-1 text-foreground"
-                    style={{ fontSize: 12, fontWeight: '500' }}
-                    numberOfLines={1}
-                >
+                <Text className="flex-1 text-foreground" style={{ fontSize: 12, fontWeight: '500' }} numberOfLines={1}>
                     {source.displayName}
                 </Text>
                 <View className="flex-row gap-1">
