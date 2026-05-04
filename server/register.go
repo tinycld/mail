@@ -195,6 +195,21 @@ func Register(app *pocketbase.PocketBase) {
 		return e.Next()
 	})
 
+	// Generate thumbnails for any supported attachments (PDF, Office docs, HEIC).
+	// AfterUpdate fires from our own Save below, so the hook short-circuits when
+	// the attachments list hasn't changed since the last time we ran.
+	app.OnRecordAfterCreateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
+		go generateAttachmentThumbnails(app, e.Record)
+		return e.Next()
+	})
+	app.OnRecordAfterUpdateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
+		if !attachmentsChanged(e.Record) {
+			return e.Next()
+		}
+		go generateAttachmentThumbnails(app, e.Record)
+		return e.Next()
+	})
+
 	registerAliasHooks(app)
 
 	audit.RegisterCollection(app, "mail_mailbox_aliases", &audit.CollectionConfig{
