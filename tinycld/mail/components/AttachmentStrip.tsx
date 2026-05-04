@@ -96,8 +96,8 @@ export function AttachmentStrip({ collectionId, groups, totalCount, isAtBottom }
             <Header totalCount={totalCount} expanded={expanded} onPress={toggle} />
             <ExpandedPanel
                 isVisible={expanded}
-                collectionId={collectionId}
                 groups={groups}
+                sources={flatSources}
                 onOpen={handleOpen}
             />
             <PreviewModal
@@ -139,18 +139,20 @@ function Header({
 
 function ExpandedPanel({
     isVisible,
-    collectionId,
     groups,
+    sources,
     onOpen,
 }: {
     isVisible: boolean
-    collectionId: string
     groups: AttachmentGroup[]
+    sources: FilePreviewSource[]
     onOpen: (filename: string, recordId: string) => void
 }) {
     if (!isVisible) return null
 
     const showSectionHeaders = groups.length > 1
+    const sourceFor = (recordId: string, fileName: string) =>
+        sources.find((s) => s.recordId === recordId && s.fileName === fileName)
 
     return (
         <ScrollView style={{ maxHeight: PANEL_MAX_HEIGHT }} className="border-t border-border">
@@ -158,9 +160,9 @@ function ExpandedPanel({
                 {groups.map((group) => (
                     <GroupBlock
                         key={group.messageId}
-                        collectionId={collectionId}
                         group={group}
                         showHeader={showSectionHeaders}
+                        sourceFor={sourceFor}
                         onOpen={onOpen}
                     />
                 ))}
@@ -170,14 +172,14 @@ function ExpandedPanel({
 }
 
 function GroupBlock({
-    collectionId,
     group,
     showHeader,
+    sourceFor,
     onOpen,
 }: {
-    collectionId: string
     group: AttachmentGroup
     showHeader: boolean
+    sourceFor: (recordId: string, fileName: string) => FilePreviewSource | undefined
     onOpen: (filename: string, recordId: string) => void
 }) {
     return (
@@ -191,15 +193,17 @@ function GroupBlock({
                 </Text>
             ) : null}
             <View className="flex-row flex-wrap gap-2">
-                {group.filenames.map((filename) => (
-                    <AttachmentThumbnail
-                        key={filename}
-                        collectionId={collectionId}
-                        recordId={group.messageId}
-                        filename={filename}
-                        onPress={() => onOpen(filename, group.messageId)}
-                    />
-                ))}
+                {group.filenames.map((filename) => {
+                    const source = sourceFor(group.messageId, filename)
+                    if (!source) return null
+                    return (
+                        <AttachmentThumbnail
+                            key={filename}
+                            source={source}
+                            onPress={() => onOpen(filename, group.messageId)}
+                        />
+                    )
+                })}
             </View>
         </View>
     )

@@ -1,38 +1,44 @@
-import { pb } from '@tinycld/core/lib/pocketbase'
+import { getThumbnailURL } from '@tinycld/core/file-viewer/file-url'
+import { getFileIconForMime } from '@tinycld/core/file-viewer/file-icons'
+import type { FilePreviewSource } from '@tinycld/core/file-viewer/types'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { Download, File, FileArchive, FileImage, FileSpreadsheet, FileText } from 'lucide-react-native'
-import { Platform, Pressable, Text, View } from 'react-native'
+import { Download } from 'lucide-react-native'
+import { Image, Pressable, Text, View } from 'react-native'
+
+const CARD_WIDTH = 160
+const CARD_HEIGHT = 90
 
 interface AttachmentThumbnailProps {
-    collectionId: string
-    recordId: string
-    filename: string
+    source: FilePreviewSource
     onPress?: () => void
 }
 
-export function AttachmentThumbnail({ collectionId, recordId, filename, onPress }: AttachmentThumbnailProps) {
+export function AttachmentThumbnail({ source, onPress }: AttachmentThumbnailProps) {
     const mutedColor = useThemeColor('muted-foreground')
-    const url = pb.files.getURL({ collectionId, id: recordId }, filename)
-    const isImage = /\.(jpe?g|png|gif|webp|svg|bmp)$/i.test(filename)
-    const displayName = cleanFilename(filename)
-    const Icon = getFileIcon(filename)
-
-    const handlePress = onPress ?? (() => {})
+    const { icon: FileIcon, color: iconColor } = getFileIconForMime(source.mimeType, mutedColor)
+    // Request a thumbnail sized roughly for the card. The dedicated
+    // attachment_thumbnail field (PDF first-page render, etc.) is preferred
+    // when present; image MIME types fall back to PocketBase's ?thumb=.
+    const thumbnailUrl = getThumbnailURL(source, `${CARD_WIDTH * 2}x${CARD_HEIGHT * 2}`)
 
     return (
         <Pressable
             className="rounded-lg border border-border overflow-hidden bg-surface-secondary"
-            style={{ width: 160 }}
-            onPress={handlePress}
+            style={{ width: CARD_WIDTH }}
+            onPress={onPress}
         >
-            {isImage ? (
-                <ImagePreview url={url} mutedColor={mutedColor} />
+            {thumbnailUrl ? (
+                <Image
+                    source={{ uri: thumbnailUrl }}
+                    style={{ width: '100%', height: CARD_HEIGHT }}
+                    resizeMode="cover"
+                />
             ) : (
                 <View
                     className="w-full items-center justify-center bg-surface-secondary"
-                    style={{ height: 90 }}
+                    style={{ height: CARD_HEIGHT }}
                 >
-                    <Icon size={24} color={mutedColor} />
+                    <FileIcon size={24} color={iconColor} />
                 </View>
             )}
             <View className="flex-row items-center px-2 gap-1" style={{ paddingVertical: 6 }}>
@@ -41,7 +47,7 @@ export function AttachmentThumbnail({ collectionId, recordId, filename, onPress 
                     style={{ fontSize: 12, fontWeight: '500' }}
                     numberOfLines={1}
                 >
-                    {displayName}
+                    {source.displayName}
                 </Text>
                 <View className="flex-row gap-1">
                     <Download size={14} color={mutedColor} />
@@ -49,50 +55,4 @@ export function AttachmentThumbnail({ collectionId, recordId, filename, onPress 
             </View>
         </Pressable>
     )
-}
-
-function ImagePreview({ url, mutedColor }: { url: string; mutedColor: string }) {
-    if (Platform.OS !== 'web') {
-        return (
-            <View
-                className="w-full items-center justify-center bg-surface-secondary"
-                style={{ height: 90 }}
-            >
-                <FileImage size={24} color={mutedColor} />
-            </View>
-        )
-    }
-
-    return (
-        <View className="w-full overflow-hidden" style={{ height: 90 }}>
-            <img
-                src={url}
-                alt=""
-                style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    borderTopLeftRadius: 7,
-                    borderTopRightRadius: 7,
-                }}
-            />
-        </View>
-    )
-}
-
-function getFileIcon(filename: string) {
-    const ext = filename.split('.').pop()?.toLowerCase() ?? ''
-
-    if (/^(jpe?g|png|gif|webp|svg|bmp|ico)$/.test(ext)) return FileImage
-    if (/^(pdf|doc|docx|txt|rtf|odt|md)$/.test(ext)) return FileText
-    if (/^(zip|rar|7z|tar|gz|bz2)$/.test(ext)) return FileArchive
-    if (/^(xls|xlsx|csv|ods)$/.test(ext)) return FileSpreadsheet
-
-    return File
-}
-
-// PocketBase stores files as {name}_{random10}.{ext} — strip the random suffix for display
-function cleanFilename(filename: string) {
-    const match = filename.match(/^(.+)_[a-zA-Z0-9]{10}(\.\w+)$/)
-    return match ? match[1] + match[2] : filename
 }
