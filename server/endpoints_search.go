@@ -21,6 +21,7 @@ type searchResultItem struct {
 	Participants     string `json:"participants"`
 	MessageCount     int    `json:"message_count"`
 	MailboxID        string `json:"mailbox_id"`
+	HasAttachments   bool   `json:"has_attachments"`
 }
 
 type searchResponse struct {
@@ -37,6 +38,7 @@ type searchResultRow struct {
 	Participants     string `db:"participants"`
 	MessageCount     int    `db:"message_count"`
 	MailboxID        string `db:"mailbox_id"`
+	HasAttachments   bool   `db:"has_attachments"`
 }
 
 func mapResults(rows []searchResultRow) []searchResultItem {
@@ -51,10 +53,16 @@ func mapResults(rows []searchResultRow) []searchResultItem {
 			Participants:     r.Participants,
 			MessageCount:     r.MessageCount,
 			MailboxID:        r.MailboxID,
+			HasAttachments:   r.HasAttachments,
 		}
 	}
 	return items
 }
+
+// threadHasAttachmentsExpr returns a SQL expression that evaluates to 1 if any
+// message in thread `t` has attachments, else 0. Aggregated per-thread so the
+// indicator is correct regardless of which message matched the FTS query.
+const threadHasAttachmentsExpr = `EXISTS (SELECT 1 FROM mail_messages WHERE thread = t.id AND has_attachments = 1)`
 
 // advancedFilters holds parsed advanced search parameters.
 type advancedFilters struct {
@@ -245,6 +253,7 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 			t.participants,
 			t.message_count,
 			t.mailbox as mailbox_id,
+			` + threadHasAttachmentsExpr + ` as has_attachments,
 			fts_mail_threads.rank
 		FROM fts_mail_threads
 		JOIN mail_threads t ON t.id = fts_mail_threads.record_id` + folderJoin + `
@@ -261,6 +270,7 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 			t.participants,
 			t.message_count,
 			t.mailbox as mailbox_id,
+			` + threadHasAttachmentsExpr + ` as has_attachments,
 			fts_mail_messages.rank
 		FROM fts_mail_messages
 		JOIN mail_messages m ON m.id = fts_mail_messages.record_id
@@ -275,7 +285,8 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 			   MAX(latest_date) as latest_date,
 			   MAX(participants) as participants,
 			   MAX(message_count) as message_count,
-			   MAX(mailbox_id) as mailbox_id
+			   MAX(mailbox_id) as mailbox_id,
+			   MAX(has_attachments) as has_attachments
 		FROM (
 			` + threadQuery + `
 			UNION ALL
@@ -351,7 +362,8 @@ func handleStructuredSearch(
 			t.latest_date,
 			t.participants,
 			t.message_count,
-			t.mailbox as mailbox_id
+			t.mailbox as mailbox_id,
+			` + threadHasAttachmentsExpr + ` as has_attachments
 		FROM mail_threads t
 		JOIN mail_messages m ON m.thread = t.id` + folderJoin + `
 		WHERE t.mailbox IN ` + inClause + messageWhere + `

@@ -12,6 +12,7 @@ export interface MailSearchResult {
     participants: string
     message_count: number
     mailbox_id: string
+    has_attachments: boolean
 }
 
 interface MailSearchResponse {

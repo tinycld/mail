@@ -46,6 +46,6 @@ export function searchResultToThreadListItem(result: MailSearchResult): ThreadLi
         labels: [],
         folder: 'search',
         hasDraft: false,
-        hasAttachments: false,
+        hasAttachments: result.has_attachments ?? false,
     }
 }

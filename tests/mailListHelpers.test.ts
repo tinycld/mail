@@ -73,6 +73,7 @@ describe('searchResultToThreadListItem', () => {
                 { name: 'Ada', email: 'ada@example.com' },
                 { name: 'Grace', email: 'grace@example.com' },
             ]),
+            has_attachments: false,
             ...overrides,
         }
     }
@@ -101,5 +102,10 @@ describe('searchResultToThreadListItem', () => {
     it('falls back to empty snippet when stripping leaves nothing', () => {
         const item = searchResultToThreadListItem(buildResult({ snippet_highlight: '<br/>' }))
         expect(item.snippet).toBe('')
+    })
+
+    it('forwards has_attachments so the paperclip indicator renders for matched threads with attachments', () => {
+        expect(searchResultToThreadListItem(buildResult({ has_attachments: true })).hasAttachments).toBe(true)
+        expect(searchResultToThreadListItem(buildResult({ has_attachments: false })).hasAttachments).toBe(false)
     })
 })
