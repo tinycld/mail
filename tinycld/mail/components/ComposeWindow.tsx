@@ -1,4 +1,5 @@
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
+import { usePickFiles } from '@tinycld/core/file-viewer/use-pick-files'
 import { performMutations } from '@tinycld/core/lib/mutations'
 import { notify } from '@tinycld/core/lib/notify'
 import { useStore } from '@tinycld/core/lib/pocketbase'
@@ -33,7 +34,6 @@ interface ComposeWindowProps {
 export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const { mode, replyContext, draftContext, minimize, maximize, open, close } = useCompose()
     const breakpoint = useBreakpoint()
-    const fileInputRef = useRef<HTMLInputElement>(null)
     const readiness = useMailSendReadiness()
     const mailboxId = readiness.mailboxId
     const aliasId = useComposeStore((s) => s.aliasId)
@@ -144,6 +144,12 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         isEnabled: !!mailboxId,
     })
 
+    const { pickFiles, ActionSheetElement: PickerActionSheet } = usePickFiles()
+    const handleAttach = useCallback(async () => {
+        const picked = await pickFiles({ sources: ['photoLibrary', 'camera', 'documents'], multiple: true })
+        if (picked.length > 0) addFilesSafely(picked.map((p) => p.file))
+    }, [pickFiles, addFilesSafely])
+
     const handleClose = async () => {
         const text = await editor.getText()
         if (!text?.trim() || !mailboxId) {
@@ -223,17 +229,6 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         })
     })
 
-    const handleAttach = () => {
-        fileInputRef.current?.click()
-    }
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files
-        if (!files?.length) return
-        addFilesSafely(Array.from(files))
-        e.target.value = ''
-    }
-
     const composeWindow = (
         <View
             className="absolute border border-border bg-background rounded-lg"
@@ -262,15 +257,6 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                     <EditorComponent />
                 </View>
                 <AttachmentRibbon isVisible={attachments.length > 0} attachments={attachments} onRemove={removeFile} />
-                {Platform.OS === 'web' && (
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        style={{ display: 'none' }}
-                        onChange={handleFileChange}
-                    />
-                )}
                 <ComposeToolbar
                     commands={commands}
                     toolbarState={toolbarState}
@@ -300,6 +286,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         >
             <ComposeShortcuts onSend={onSend} />
             {composeWindow}
+            {PickerActionSheet}
         </View>
     )
 }

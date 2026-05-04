@@ -1,8 +1,9 @@
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
+import { usePickFiles } from '@tinycld/core/file-viewer/use-pick-files'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useForm, zodResolver } from '@tinycld/core/ui/form'
 import { Forward, Reply, ReplyAll } from 'lucide-react-native'
-import { useRef } from 'react'
+import { useCallback } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { filterOwnAddresses, pickDefaultFrom } from '../hooks/defaultFromIdentity'
@@ -152,7 +153,6 @@ function InlineComposeForm({
 }) {
     const borderColor = useThemeColor('border')
     const backgroundColor = useThemeColor('background')
-    const fileInputRef = useRef<HTMLInputElement>(null)
     const mailboxId = useDefaultMailbox()
     const aliasId = useComposeStore((s) => s.aliasId)
     const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
@@ -213,21 +213,16 @@ function InlineComposeForm({
         })
     })
 
-    const handleAttach = () => {
-        fileInputRef.current?.click()
-    }
-
     const { isDragging, dropRef } = useFileDrop({
         onFiles: addFilesSafely,
         isEnabled: !!mailboxId,
     })
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files
-        if (!files?.length) return
-        addFilesSafely(Array.from(files))
-        e.target.value = ''
-    }
+    const { pickFiles, ActionSheetElement: PickerActionSheet } = usePickFiles()
+    const handleAttach = useCallback(async () => {
+        const picked = await pickFiles({ sources: ['photoLibrary', 'camera', 'documents'], multiple: true })
+        if (picked.length > 0) addFilesSafely(picked.map((p) => p.file))
+    }, [pickFiles, addFilesSafely])
 
     return (
         <KeyboardAvoidingView
@@ -249,15 +244,6 @@ function InlineComposeForm({
                     attachments={attachments}
                     onRemove={removeFile}
                 />
-                {Platform.OS === 'web' && (
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        style={{ display: 'none' }}
-                        onChange={handleFileChange}
-                    />
-                )}
                 <ComposeToolbar
                     commands={commands}
                     toolbarState={toolbarState}
@@ -268,6 +254,7 @@ function InlineComposeForm({
                 />
                 <DropOverlay isVisible={isDragging} />
             </View>
+            {PickerActionSheet}
         </KeyboardAvoidingView>
     )
 }
