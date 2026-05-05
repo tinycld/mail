@@ -11,7 +11,7 @@ import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Archive, Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
-import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native'
 import { ComposeFAB } from '../components/ComposeFAB'
 import { EmailListToolbar } from '../components/EmailListToolbar'
@@ -173,6 +173,13 @@ export default function MailListScreen() {
     const isDefaultView = folder === null && mailbox === null && labels.length === 0
     const isUnifiedView = folder === 'all-inboxes' || (isDefaultView && unifiedAvailable)
     const mailboxId = isUnifiedView ? UNIFIED_INBOX : (mailbox ?? personal?.id ?? '')
+
+    // mail_folder_counts is a view collection (no realtime). Refetch on
+    // folder/mailbox/label change so the sidebar self-heals on every nav.
+    const labelKey = labels.join(',')
+    useEffect(() => {
+        queryClient.invalidateQueries({ queryKey: ['mail_folder_counts'] })
+    }, [folder, mailbox, labelKey])
 
     const {
         items,
