@@ -112,10 +112,14 @@ test.describe('Mail — Attachments', () => {
         await expect(inlineImg).toBeVisible()
         await expectImageLoaded(inlineImg)
 
+        // The attachment strip is collapsed by default; expand it so the
+        // thumbnail <img> renders.
+        await page.getByText('2 attachments').click()
+
         // Attachment ribbon thumbnail: <img> served from PocketBase's files
-        // endpoint. The filename gets a 10-char random suffix, so match the
-        // path prefix and extension rather than the literal filename.
-        const thumb = page.locator('img[src*="/api/files/"][src*="hippo"][src$=".jpg"]').first()
+        // endpoint. The filename gets a 10-char random suffix and the URL
+        // carries a ?thumb= query, so match against the path prefix only.
+        const thumb = page.locator('img[src*="/api/files/"][src*="hippo"]').first()
         await expect(thumb).toBeVisible()
         await expectImageLoaded(thumb)
     })
