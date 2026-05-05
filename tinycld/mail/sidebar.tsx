@@ -31,13 +31,20 @@ function useActiveView() {
         mailbox?: string
     }>()
     if (pathname.includes('/mail/')) {
-        return { folder: null, activeLabels: new Set<string>(), activeMailbox: mailbox ?? null }
+        return {
+            folder: null,
+            activeLabels: new Set<string>(),
+            activeMailbox: mailbox ?? null,
+            isDefaultView: false,
+        }
     }
     const activeLabels = new Set(label ? label.split(',').filter(Boolean) : [])
+    const isDefaultView = !folder && activeLabels.size === 0 && !mailbox
     return {
         folder: activeLabels.size > 0 ? null : (folder ?? 'inbox'),
         activeLabels,
         activeMailbox: mailbox ?? null,
+        isDefaultView,
     }
 }
 
@@ -46,7 +53,7 @@ const EMPTY_COUNTS = { inbox: 0, drafts: 0, sent: 0, starred: 0, trash: 0, spam:
 export default function MailSidebar(_props: MailSidebarProps) {
     const router = useRouter()
     const mutedColor = useThemeColor('muted-foreground')
-    const { folder: activeFolder, activeLabels, activeMailbox } = useActiveView()
+    const { folder: activeFolder, activeLabels, activeMailbox, isDefaultView } = useActiveView()
     const orgHref = useOrgHref()
     const [labelManagerOpen, setLabelManagerOpen] = useState(false)
 
@@ -54,10 +61,10 @@ export default function MailSidebar(_props: MailSidebarProps) {
     const { personal, shared } = useMailboxes()
     const counts = useMailboxFolderCounts()
 
-    const activeMailboxId = activeMailbox ?? personal?.id ?? ''
     const mailboxCount = (personal ? 1 : 0) + shared.length
     const showUnifiedInbox = mailboxCount >= 2
-    const isUnifiedActive = activeFolder === 'all-inboxes'
+    const isUnifiedActive = activeFolder === 'all-inboxes' || (isDefaultView && showUnifiedInbox)
+    const activeMailboxId = isUnifiedActive ? '' : (activeMailbox ?? personal?.id ?? '')
 
     const unifiedUnread = useMemo(() => {
         let total = 0
@@ -69,6 +76,12 @@ export default function MailSidebar(_props: MailSidebarProps) {
         const params: Record<string, string> = {}
         if (mailboxId && mailboxId !== personal?.id) params.mailbox = mailboxId
         if (folder !== 'inbox') params.folder = folder
+        // When "All Inboxes" is the default view at /mail, the personal inbox
+        // click would otherwise collapse to bare /mail and resolve back to the
+        // unified view. Pass an explicit folder=inbox to disambiguate.
+        if (showUnifiedInbox && mailboxId === personal?.id && folder === 'inbox') {
+            params.folder = 'inbox'
+        }
         router.push(orgHref('mail', Object.keys(params).length ? params : undefined))
     }
 

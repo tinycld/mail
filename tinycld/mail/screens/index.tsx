@@ -24,16 +24,23 @@ import { useMailboxes } from '../hooks/useMailboxes'
 import { useMailListShortcuts } from '../hooks/useMailListShortcuts'
 import { useMailSelection } from '../hooks/useMailSelection'
 import { useMailSearchState } from '../hooks/useSearchState'
-import { UNIFIED_INBOX, useThreadListItems } from '../hooks/useThreadListItems'
+import { PAGE_SIZE, UNIFIED_INBOX, useThreadListItems } from '../hooks/useThreadListItems'
 
 function useQueryParams() {
-    const { folder, label, mailbox } = useLocalSearchParams<{
+    const { folder, label, mailbox, page } = useLocalSearchParams<{
         folder?: string
         label?: string
         mailbox?: string
+        page?: string
     }>()
     const labels = label ? label.split(',').filter(Boolean) : []
-    return { folder: folder ?? null, labels, mailbox: mailbox ?? null }
+    const parsedPage = page ? Number.parseInt(page, 10) : 1
+    return {
+        folder: folder ?? null,
+        labels,
+        mailbox: mailbox ?? null,
+        page: Number.isFinite(parsedPage) && parsedPage >= 1 ? parsedPage : 1,
+    }
 }
 
 function EmptyState({ folderTitle, isVisible }: { folderTitle: string; isVisible: boolean }) {
@@ -153,7 +160,7 @@ function SearchResultsHeader({ total, isSearching }: { total: number; isSearchin
 }
 
 export default function MailListScreen() {
-    const { folder, labels, mailbox } = useQueryParams()
+    const { folder, labels, mailbox, page } = useQueryParams()
     const router = useRouter()
     const orgHref = useOrgHref()
     const breakpoint = useBreakpoint()
@@ -161,8 +168,10 @@ export default function MailListScreen() {
     const { isScrolled, onScroll } = useScrollShadow()
     const { openDraft } = useCompose()
     const search = useMailSearchState()
-    const { personal } = useMailboxes()
-    const isUnifiedView = folder === 'all-inboxes'
+    const { personal, shared } = useMailboxes()
+    const unifiedAvailable = (personal ? 1 : 0) + shared.length >= 2
+    const isDefaultView = folder === null && mailbox === null && labels.length === 0
+    const isUnifiedView = folder === 'all-inboxes' || (isDefaultView && unifiedAvailable)
     const mailboxId = isUnifiedView ? UNIFIED_INBOX : (mailbox ?? personal?.id ?? '')
 
     const {
@@ -173,11 +182,36 @@ export default function MailListScreen() {
         threadMap,
         threadStateCollection,
         isLoading,
-    } = useThreadListItems(userOrgId, {
-        folder,
-        labels,
-        mailboxId,
-    })
+        totalItems,
+    } = useThreadListItems(
+        userOrgId,
+        {
+            folder,
+            labels,
+            mailboxId,
+        },
+        { page }
+    )
+
+    const navigateToPage = useCallback(
+        (nextPage: number) => {
+            const params: Record<string, string> = {}
+            if (folder) params.folder = folder
+            if (mailbox) params.mailbox = mailbox
+            if (labels.length > 0) params.label = labels.join(',')
+            if (nextPage > 1) params.page = String(nextPage)
+            router.replace(orgHref('mail', params))
+        },
+        [router, orgHref, folder, mailbox, labels]
+    )
+
+    const handlePrevPage = useCallback(() => {
+        if (page > 1) navigateToPage(page - 1)
+    }, [navigateToPage, page])
+
+    const handleNextPage = useCallback(() => {
+        if (page * PAGE_SIZE < totalItems) navigateToPage(page + 1)
+    }, [navigateToPage, page, totalItems])
 
     const [isRefreshing, setIsRefreshing] = useState(false)
     const handleRefresh = useCallback(async () => {
@@ -395,6 +429,11 @@ export default function MailListScreen() {
                     onUpdateLabel={(labelId, add) => bulkActions.updateLabelsSelected.mutate({ labelId, add })}
                     onRefresh={handleRefresh}
                     isRefreshing={isRefreshing}
+                    page={page}
+                    pageSize={PAGE_SIZE}
+                    totalItems={totalItems}
+                    onPrevPage={handlePrevPage}
+                    onNextPage={handleNextPage}
                 />
             </ScreenHeader>
             {showLoadingState && <LoadingState />}

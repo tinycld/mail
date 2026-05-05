@@ -48,6 +48,14 @@ interface EmailListToolbarProps {
     onUpdateLabel: (labelId: string, add: boolean) => void
     onRefresh?: () => void
     isRefreshing?: boolean
+    /** 1-based page number. */
+    page: number
+    /** Visible items on the current page. */
+    pageSize: number
+    /** Total threads across every page. */
+    totalItems: number
+    onPrevPage: () => void
+    onNextPage: () => void
 }
 
 export function EmailListToolbar(props: EmailListToolbarProps) {
@@ -59,10 +67,18 @@ export function EmailListToolbar(props: EmailListToolbarProps) {
     return <DefaultToolbar {...props} />
 }
 
-function DefaultToolbar({ emailCount, onToggleAll, onRefresh, isRefreshing }: EmailListToolbarProps) {
+function DefaultToolbar({
+    emailCount,
+    onToggleAll,
+    onRefresh,
+    isRefreshing,
+    page,
+    pageSize,
+    totalItems,
+    onPrevPage,
+    onNextPage,
+}: EmailListToolbarProps) {
     const mutedColor = useThemeColor('muted-foreground')
-
-    const paginationText = emailCount > 0 ? `1\u2013${emailCount} of ${emailCount}` : 'No conversations'
 
     const items: ToolbarItem[] = useMemo(
         () => [
@@ -87,18 +103,14 @@ function DefaultToolbar({ emailCount, onToggleAll, onRefresh, isRefreshing }: Em
         [onToggleAll, mutedColor, onRefresh, isRefreshing]
     )
 
-    const rightItems: ToolbarItem[] = useMemo(
-        () => [
-            {
-                type: 'custom',
-                key: 'pagination-text',
-                element: <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>{paginationText}</Text>,
-            },
-            { type: 'button', key: 'newer', icon: ChevronLeft, label: 'Newer', onPress: () => {} },
-            { type: 'button', key: 'older', icon: ChevronRight, label: 'Older', onPress: () => {} },
-        ],
-        [mutedColor, paginationText]
-    )
+    const rightItems = usePaginationRightItems({
+        emailCount,
+        page,
+        pageSize,
+        totalItems,
+        onPrevPage,
+        onNextPage,
+    })
 
     return <ResponsiveToolbar items={items} rightItems={rightItems} />
 }
@@ -129,14 +141,16 @@ function BulkActionsToolbar({
     onMove,
     onToggleStar,
     onUpdateLabel,
+    page,
+    pageSize,
+    totalItems,
+    onPrevPage,
+    onNextPage,
 }: EmailListToolbarProps) {
     const foregroundColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted-foreground')
     const primaryColor = useThemeColor('primary')
 
     const SelectIcon = allSelected ? SquareCheck : someSelected ? SquareMinus : Square
-
-    const paginationText = emailCount > 0 ? `1\u2013${emailCount} of ${emailCount}` : 'No conversations'
 
     const ReadIcon = allSelectedRead ? MailOpen : Mail
     const readLabel = allSelectedRead ? 'Mark as unread' : 'Mark as read'
@@ -235,18 +249,72 @@ function BulkActionsToolbar({
         ]
     )
 
-    const rightItems: ToolbarItem[] = useMemo(
+    const rightItems = usePaginationRightItems({
+        emailCount,
+        page,
+        pageSize,
+        totalItems,
+        onPrevPage,
+        onNextPage,
+    })
+
+    return <ResponsiveToolbar items={items} rightItems={rightItems} />
+}
+
+interface PaginationParams {
+    emailCount: number
+    page: number
+    pageSize: number
+    totalItems: number
+    onPrevPage: () => void
+    onNextPage: () => void
+}
+
+function usePaginationRightItems({
+    emailCount,
+    page,
+    pageSize,
+    totalItems,
+    onPrevPage,
+    onNextPage,
+}: PaginationParams): ToolbarItem[] {
+    const mutedColor = useThemeColor('muted-foreground')
+
+    const text = useMemo(() => {
+        if (totalItems === 0 && emailCount === 0) return 'No conversations'
+        const start = (page - 1) * pageSize + 1
+        const end = start + Math.max(0, emailCount - 1)
+        const total = totalItems > 0 ? totalItems : emailCount
+        return `${start}–${end} of ${total}`
+    }, [emailCount, page, pageSize, totalItems])
+
+    const hasPrev = page > 1
+    const hasNext = totalItems > 0 ? page * pageSize < totalItems : false
+
+    return useMemo(
         () => [
             {
                 type: 'custom',
                 key: 'pagination-text',
-                element: <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>{paginationText}</Text>,
+                element: <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>{text}</Text>,
             },
-            { type: 'button', key: 'newer', icon: ChevronLeft, label: 'Newer', onPress: () => {} },
-            { type: 'button', key: 'older', icon: ChevronRight, label: 'Older', onPress: () => {} },
+            {
+                type: 'button',
+                key: 'newer',
+                icon: ChevronLeft,
+                label: 'Newer',
+                onPress: onPrevPage,
+                disabled: !hasPrev,
+            },
+            {
+                type: 'button',
+                key: 'older',
+                icon: ChevronRight,
+                label: 'Older',
+                onPress: onNextPage,
+                disabled: !hasNext,
+            },
         ],
-        [mutedColor, paginationText]
+        [mutedColor, text, hasPrev, hasNext, onPrevPage, onNextPage]
     )
-
-    return <ResponsiveToolbar items={items} rightItems={rightItems} />
 }
