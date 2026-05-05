@@ -75,6 +75,8 @@ export interface MailThreads {
     message_count: number
     latest_date: string
     participants: { name: string; email: string }[]
+    has_draft: boolean
+    has_attachments: boolean
     created: string
     updated: string
 }
@@ -123,6 +125,18 @@ export interface MailImapMailboxState {
     uid_next: number
     created: string
     updated: string
+}
+
+export interface MailFolderCounts {
+    id: string
+    user_org: string
+    mailbox: string
+    inbox: number
+    drafts: number
+    sent: number
+    starred: number
+    trash: number
+    spam: number
 }
 
 export type MailSchema = {
@@ -174,6 +188,13 @@ export type MailSchema = {
     mail_imap_mailbox_state: {
         type: MailImapMailboxState
         relations: {
+            mailbox: MailMailboxes
+        }
+    }
+    mail_folder_counts: {
+        type: MailFolderCounts
+        relations: {
+            user_org: UserOrg
             mailbox: MailMailboxes
         }
     }

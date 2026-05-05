@@ -38,7 +38,15 @@ export function registerCollections(
 
     const mail_threads = newCollection('mail_threads', {
         omitOnInsert: ['created', 'updated'] as const,
-        expand: { mailbox: mail_mailboxes },
+        // No `expand`: each on-demand thread fetch would otherwise carry
+        // duplicate mail_mailboxes rows for every visible thread. The
+        // mailbox is already loaded eagerly via mail_mailboxes; consumers
+        // look it up by id (see useThreadListItems / useMailboxes).
+        // Mailboxes can carry hundreds of thousands of threads. With on-demand,
+        // each useLiveQuery against mail_threads translates its where/orderBy
+        // into a PocketBase filter and runs server-side, so a folder view loads
+        // only its visible page instead of the entire org's history.
+        syncMode: 'on-demand' as const,
         collectionOptions: {
             autoIndex: 'eager' as const,
             defaultIndexType: BasicIndex,
@@ -56,7 +64,14 @@ export function registerCollections(
 
     const mail_messages = newCollection('mail_messages', {
         omitOnInsert: ['created', 'updated'] as const,
-        expand: { thread: mail_threads, alias: mail_mailbox_aliases },
+        // No `expand`: under on-demand mode each fetched message would
+        // pull a copy of its parent mail_threads row plus the alias row.
+        // Both are already loaded eagerly elsewhere (mail_threads via
+        // useThreadListItems' page query, mail_mailbox_aliases as eager).
+        // On-demand for the same reason as mail_threads: a power user can have
+        // hundreds of thousands of message rows. Each useLiveQuery now runs
+        // server-side filtered, e.g. messages for a single open thread.
+        syncMode: 'on-demand' as const,
         collectionOptions: {
             autoIndex: 'eager' as const,
             defaultIndexType: BasicIndex,
@@ -84,6 +99,21 @@ export function registerCollections(
         },
     })
 
+    // Server-side aggregation of (user_org, mailbox) → folder counts. Backed by
+    // a PocketBase view collection (see pb-migrations/1713000020). Eager: at
+    // most one row per mailbox per user, used everywhere the sidebar renders.
+    // No omitOnInsert — view collections are read-only.
+    const mail_folder_counts = newCollection('mail_folder_counts', {
+        expand: {
+            user_org: coreStores.user_org,
+            mailbox: mail_mailboxes,
+        },
+        collectionOptions: {
+            autoIndex: 'eager' as const,
+            defaultIndexType: BasicIndex,
+        },
+    })
+
     return {
         mail_domains,
         mail_mailboxes,
@@ -93,5 +123,6 @@ export function registerCollections(
         mail_messages,
         mail_thread_state,
         mail_imap_mailbox_state,
+        mail_folder_counts,
     }
 }

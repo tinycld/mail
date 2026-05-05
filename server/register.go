@@ -211,6 +211,7 @@ func Register(app *pocketbase.PocketBase) {
 	})
 
 	registerAliasHooks(app)
+	registerThreadMarkerHooks(app)
 
 	audit.RegisterCollection(app, "mail_mailbox_aliases", &audit.CollectionConfig{
 		ResolveOrg: func(a core.App, record *core.Record) string {
