@@ -28,9 +28,9 @@ Part of [TinyCld](https://tinycld.org/) — the open-source, self-hosted Google 
 | IMAP     | RFC 9051  | 993  | Read email from any mail client        |
 | SMTP     | RFC 5321  | 465  | Send email through any mail client     |
 
-## Relationship to core
+## Relationship to the app shell
 
-`@tinycld/mail` is a feature package for `@tinycld/core` — the [TinyCld](https://tinycld.org/) app shell that provides auth, routing, storage, and UI primitives. Core ships with **no** feature packages; install this one to add a Mail app.
+`@tinycld/mail` is a feature package for the [TinyCld app shell](https://github.com/tinycld/tinycld), which bundles `@tinycld/core` (auth, routing, storage, UI primitives). The app shell ships with **no** feature packages; install this one to add a Mail app.
 
 This package contributes:
 
@@ -39,19 +39,19 @@ This package contributes:
 - **Nav entry** — sidebar icon with keyboard shortcut `t m` / `m`.
 - **Collections** — `mail_domains`, `mail_mailboxes`, `mail_mailbox_members`, `mail_threads`, `mail_messages`, `mail_thread_state`, `mail_imap_mailbox_state`.
 - **Migrations** — schema and indexes under `pb-migrations/`.
-- **Go server module** — IMAP server, SMTP server, sanitizer, image proxy, bounce webhooks, inbound webhook, draft/send endpoints, domain verification ticker, and search — all wired into core's PocketBase binary.
+- **Go server module** — IMAP server, SMTP server, sanitizer, image proxy, bounce webhooks, inbound webhook, draft/send endpoints, domain verification ticker, and search — all wired into the app shell's PocketBase binary.
 
-The package depends on core at runtime (React, pbtsdb, `~/lib/*`). Core has no knowledge of this package at compile time — everything is discovered at generator time from `tinycld.packages.ts`.
+The package depends on `@tinycld/core` at runtime (React, pbtsdb, `~/lib/*`). The app shell has no knowledge of this package at compile time — everything is discovered at generator time by scanning `tinycld/packages/`.
 
 ## Installation
 
-From inside your `core/` checkout:
+From inside your app shell checkout (`tinycld/tinycld`):
 
 ```sh
 bun run packages:install <this-repo-git-url>
 ```
 
-That clones the repo next to core, symlinks it into `core/packages/@tinycld/mail`, appends the package name to `tinycld.packages.ts`, and runs the generator to wire up routes, collections, migrations, settings panels, and Go server extensions.
+That clones the repo next to the app shell, symlinks it into `tinycld/packages/@tinycld/mail`, and runs the generator to wire up routes, collections, migrations, settings panels, and Go server extensions.
 
 To remove:
 
@@ -61,16 +61,16 @@ bun run packages:unlink @tinycld/mail
 
 ## Development
 
-This package is not run standalone — it only makes sense inside a `core/` checkout.
+This package is not run standalone — it only makes sense inside an app shell checkout.
 
 ```sh
-cd ../core
+cd ../tinycld
 bun run dev              # expo + pocketbase (with IMAP/SMTP servers) with mail linked
 bun run test:unit        # includes this package's sanitizer, image-proxy, and domain-verify tests
-bun run checks           # biome + tsc across core + linked packages
+bun run checks           # biome + tsc across the app shell + linked packages
 ```
 
-**Do not** run `bun install` inside this directory. Peer dependencies resolve through core's `node_modules/`; installing here creates duplicate copies of `react`, `react-native`, etc. and breaks TypeScript.
+**Do not** run `bun install` inside this directory. Peer dependencies resolve through the app shell's `node_modules/`; installing here creates duplicate copies of `react`, `react-native`, etc. and breaks TypeScript.
 
 ## License
 
