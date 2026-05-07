@@ -12,8 +12,8 @@ import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Archive, Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FlashList } from '@shopify/flash-list'
-import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native'
+import { FlashList, type FlashListRef } from '@shopify/flash-list'
+import { Pressable, RefreshControl, Text, View } from 'react-native'
 import { ComposeFAB } from '../components/ComposeFAB'
 import { EmailListToolbar } from '../components/EmailListToolbar'
 import { EmailRow } from '../components/EmailRow'
@@ -234,9 +234,9 @@ export default function MailListScreen() {
     const selection = useMailSelection(items, folder, labels)
     const bulkActions = useMailBulkActions(threadStateCollection, selection.selectedItems, selection.clearSelection)
 
-    const flatListRef = useRef<FlatList<ThreadListItem>>(null)
+    const listRef = useRef<FlashListRef<ThreadListItem>>(null)
     const scrollToFocusedIndex = useCallback((index: number) => {
-        flatListRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true })
+        listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true })
     }, [])
 
     const { focusedIndex } = useMailListShortcuts({
@@ -350,6 +350,8 @@ export default function MailListScreen() {
 
     const isMobile = breakpoint === 'mobile'
 
+    const getItemType = useCallback(() => (isMobile ? 'mobile' : 'desktop'), [isMobile])
+
     const renderRow = useCallback(
         ({ item, index }: { item: ThreadListItem; index: number }) => (
             <MailListRow
@@ -448,17 +450,14 @@ export default function MailListScreen() {
             <EmptyState folderTitle={folderTitle} isVisible={showEmptyState} />
             {!isEmpty && (
                 <SwipeableRowProvider>
-                    <FlatList
-                        ref={flatListRef}
+                    <FlashList
+                        ref={listRef}
                         data={items}
                         keyExtractor={(item) => item.stateId}
+                        getItemType={getItemType}
                         onScroll={onScroll}
                         scrollEventThrottle={16}
                         renderItem={renderRow}
-                        onScrollToIndexFailed={() => {
-                            // FlatList hasn't measured the target row yet — fall back to no-op.
-                            // The next j/k will succeed once rows have rendered.
-                        }}
                         refreshControl={
                             isMobile ? (
                                 <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
