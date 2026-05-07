@@ -1,6 +1,7 @@
-import { downloadFile, getThumbnailURL } from '@tinycld/core/file-viewer/file-url'
+import { downloadFile } from '@tinycld/core/file-viewer/file-url'
 import { getFileIconForMime } from '@tinycld/core/file-viewer/file-icons'
 import type { FilePreviewSource } from '@tinycld/core/file-viewer/types'
+import { useAuthedThumbnailURL } from '@tinycld/core/file-viewer/use-authed-file-url'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { Download } from 'lucide-react-native'
 import { Image, Pressable, Text, View } from 'react-native'
@@ -19,7 +20,7 @@ export function AttachmentThumbnail({ source, onPress }: AttachmentThumbnailProp
     // Request a thumbnail sized roughly for the card. The dedicated
     // attachment_thumbnail field (PDF first-page render, etc.) is preferred
     // when present; image MIME types fall back to PocketBase's ?thumb=.
-    const thumbnailUrl = getThumbnailURL(source, `${CARD_WIDTH * 2}x${CARD_HEIGHT * 2}`)
+    const { url: thumbnailUrl } = useAuthedThumbnailURL(source, `${CARD_WIDTH * 2}x${CARD_HEIGHT * 2}`)
 
     return (
         <Pressable
