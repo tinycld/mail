@@ -11,8 +11,8 @@ import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import type { Href } from 'expo-router'
 import { Link } from 'expo-router'
 import { Archive, Inbox, Mail, MailOpen, Paperclip, Square, SquareCheck, Trash2 } from 'lucide-react-native'
+import { useRecyclingState } from '@shopify/flash-list'
 import type { ReactNode } from 'react'
-import { useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import type { ThreadListItem } from './thread-list-item'
 
@@ -322,7 +322,7 @@ function DesktopEmailRow({
     const activeIndicator = useThemeColor('active-indicator')
     const dangerColor = useThemeColor('danger')
     const orgHref = useOrgHref()
-    const [isHovered, setIsHovered] = useState(false)
+    const [isHovered, setIsHovered] = useRecyclingState(false, [email.threadId])
 
     const rowBg = isSelected ? hexToRgba(accentBgColor, 0.09) : email.isRead ? 'transparent' : surfaceColor
     const senderWeight = email.isRead ? '400' : '700'
