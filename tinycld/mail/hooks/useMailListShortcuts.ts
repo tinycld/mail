@@ -15,8 +15,8 @@ interface UseMailListShortcutsArgs {
     labels: string[]
     /**
      * Optional callback invoked after the focused index moves via j/k so the
-     * caller can scroll the row into view. Decoupled from FlatList here to
-     * keep the hook UI-framework-agnostic.
+     * caller can scroll the row into view. Decoupled from the list primitive
+     * here to keep the hook UI-framework-agnostic.
      */
     onFocusIndex?: (index: number) => void
 }
