@@ -12,6 +12,7 @@ import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Archive, Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FlashList } from '@shopify/flash-list'
 import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native'
 import { ComposeFAB } from '../components/ComposeFAB'
 import { EmailListToolbar } from '../components/EmailListToolbar'
@@ -392,7 +393,7 @@ export default function MailListScreen() {
                     </View>
                 ) : (
                     <SwipeableRowProvider>
-                        <FlatList
+                        <FlashList
                             data={searchItems}
                             keyExtractor={(item) => item.threadId}
                             renderItem={({ item }) => <EmailRow email={item} isMobile={isMobile} />}
