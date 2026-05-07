@@ -322,7 +322,7 @@ function DesktopEmailRow({
     const activeIndicator = useThemeColor('active-indicator')
     const dangerColor = useThemeColor('danger')
     const orgHref = useOrgHref()
-    const [isHovered, setIsHovered] = useRecyclingState(false, [email.threadId])
+    const [isHovered, setIsHovered] = useRecyclingState(false, [email.stateId])
 
     const rowBg = isSelected ? hexToRgba(accentBgColor, 0.09) : email.isRead ? 'transparent' : surfaceColor
     const senderWeight = email.isRead ? '400' : '700'
