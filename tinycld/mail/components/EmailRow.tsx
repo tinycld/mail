@@ -71,6 +71,7 @@ export function EmailRow({
                 onArchive={onArchive}
                 onTrash={onTrash}
                 onToggleRead={onToggleRead}
+                index={index}
             />
         )
     return (
@@ -89,16 +90,21 @@ export function EmailRow({
     )
 }
 
-function RowWrapper({ href, onPress, children }: { href: Href; onPress?: () => void; children: ReactNode }) {
+function RowWrapper({
+    href,
+    onPress,
+    testID,
+    children,
+}: { href: Href; onPress?: () => void; testID?: string; children: ReactNode }) {
     if (onPress) {
         return (
-            <Pressable onPress={onPress} className="flex w-full">
+            <Pressable onPress={onPress} testID={testID} className="flex w-full">
                 {children}
             </Pressable>
         )
     }
     return (
-        <Link href={href} className="flex w-full">
+        <Link href={href} testID={testID} className="flex w-full">
             {children}
         </Link>
     )
@@ -142,7 +148,7 @@ function SenderWithDraft({
     )
 }
 
-function MobileEmailRow({ email, onToggleStar, onPress, onArchive, onTrash, onToggleRead }: EmailRowProps) {
+function MobileEmailRow({ email, onToggleStar, onPress, onArchive, onTrash, onToggleRead, index }: EmailRowProps) {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const backgroundColor = useThemeColor('background')
@@ -195,7 +201,11 @@ function MobileEmailRow({ email, onToggleStar, onPress, onArchive, onTrash, onTo
 
     return (
         <SwipeableRow actions={swipeActions}>
-            <RowWrapper href={orgHref('mail/[id]', { id: email.threadId })} onPress={onPress}>
+            <RowWrapper
+                href={orgHref('mail/[id]', { id: email.threadId })}
+                onPress={onPress}
+                testID={index !== undefined ? `mail-thread-row-${index}` : undefined}
+            >
                 <View
                     style={[
                         mobileStyles.row,
@@ -344,7 +354,11 @@ function DesktopEmailRow({
     const effectStyle = rowFocusStyle({ isFocused, isHovered, borderColor, activeIndicator })
 
     return (
-        <RowWrapper href={orgHref('mail/[id]', { id: email.threadId })} onPress={onPress}>
+        <RowWrapper
+            href={orgHref('mail/[id]', { id: email.threadId })}
+            onPress={onPress}
+            testID={index !== undefined ? `mail-thread-row-${index}` : undefined}
+        >
             <View
                 style={[
                     styles.row,
