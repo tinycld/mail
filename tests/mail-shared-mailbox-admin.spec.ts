@@ -2,7 +2,9 @@ import { expect, test } from '@playwright/test'
 import PocketBase from 'pocketbase'
 import { ORG_SLUG } from '../../../../tests/e2e/helpers'
 
-const PB_URL = 'http://127.0.0.1:7091'
+// PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
+// through to PB transparently — see scripts/dev.ts::isPbPath.
+const PB_URL = 'http://127.0.0.1:7200'
 const SUPERUSER_EMAIL = process.env.POCKETBASE_EMAIL || 'admin@tinycld.org'
 const SUPERUSER_PASSWORD = process.env.POCKETBASE_PASSWORD || 'AdminPass1234!'
 
