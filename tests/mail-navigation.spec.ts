@@ -23,8 +23,8 @@ test.describe('Mail — Navigation', () => {
         await clickSidebarItem(page, 'Starred')
         await expect(page).toHaveURL(/folder=starred/)
         // Seed has 2 starred threads
-        await expect(page.getByText('Q2 Product Roadmap Review')).toBeVisible()
-        await expect(page.getByText('Conference travel arrangements')).toBeVisible()
+        await expect(page.getByText('Q2 Product Roadmap Review').first()).toBeVisible()
+        await expect(page.getByText('Conference travel arrangements').first()).toBeVisible()
     })
 
     test('navigate to Trash shows trash items', async ({ page }) => {
@@ -43,6 +43,6 @@ test.describe('Mail — Navigation', () => {
         await clickSidebarItem(page, 'All Mail')
         await expect(page).toHaveURL(/folder=all/)
         // All Mail should show threads from multiple folders
-        await expect(page.getByText('Q2 Product Roadmap Review')).toBeVisible()
+        await expect(page.getByText('Q2 Product Roadmap Review').first()).toBeVisible()
     })
 })

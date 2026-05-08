@@ -20,11 +20,11 @@ test.describe('Mail — Labels', () => {
         await labelsSection.getByText('Work', { exact: true }).click()
         await expect(page).toHaveURL(/label=/)
 
-        await expect(page.getByText('Q2 Product Roadmap Review')).toBeVisible()
+        await expect(page.getByText('Q2 Product Roadmap Review').first()).toBeVisible()
     })
 
     test('thread detail shows labels toolbar', async ({ page }) => {
-        await page.getByText('Lunch tomorrow?').click()
+        await page.getByText('Lunch tomorrow?').first().click()
         await page.waitForURL(/\/mail\//)
 
         // Labels toolbar button should be visible

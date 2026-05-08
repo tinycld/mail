@@ -193,7 +193,7 @@ export default function MailDetailScreen() {
     }
 
     return (
-        <View className="flex-1 bg-background">
+        <View className="flex-1 bg-background" testID="mail-thread-detail">
             <ScreenHeader isScrolled={isScrolled}>
                 <EmailDetailToolbar
                     threadState={threadState}
