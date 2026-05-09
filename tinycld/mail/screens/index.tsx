@@ -334,7 +334,11 @@ export default function MailListScreen() {
     const folderTitle =
         activeLabels.length > 0 ? activeLabels.map((l) => l.name).join(', ') : prettifyFolderKey(folderKey)
 
-    const isNonDefaultView = labels.length > 0 || (!!folder && folder !== 'inbox')
+    const isMobile = breakpoint === 'mobile'
+
+    const isNonDefaultView =
+        labels.length > 0 || (!!folder && folder !== 'inbox' && folder !== 'all-inboxes')
+    const showActiveViewBanner = isMobile && isNonDefaultView
 
     const dismissLabel = useCallback(
         (labelId: string) => {
@@ -347,8 +351,6 @@ export default function MailListScreen() {
         },
         [labels, router, orgHref]
     )
-
-    const isMobile = breakpoint === 'mobile'
 
     const getItemType = useCallback(() => (isMobile ? 'mobile' : 'desktop'), [isMobile])
 
@@ -413,7 +415,7 @@ export default function MailListScreen() {
     return (
         <View className="flex-1">
             <ActiveViewBanner
-                isVisible={isNonDefaultView}
+                isVisible={showActiveViewBanner}
                 folder={folder}
                 labels={activeLabels}
                 onDismissLabel={dismissLabel}

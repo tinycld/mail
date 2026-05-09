@@ -1,6 +1,6 @@
+import { FrozenSlideStack } from '@tinycld/core/components/workspace/FrozenStack'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
-import { useWorkspaceLayout } from '@tinycld/core/components/workspace/useWorkspaceLayout'
-import { Slot } from 'expo-router'
+import { useWorkspaceStore } from '@tinycld/core/lib/stores/workspace-store'
 import { useEffect, useMemo, useState } from 'react'
 import { View } from 'react-native'
 import { ComposeWindow } from '../components/ComposeWindow'
@@ -22,7 +22,7 @@ export default function MailLayout() {
     const [advancedFilters, setAdvancedFilters] = useState<AdvancedSearchFilters>({})
     const [isFilterOpen, setIsFilterOpen] = useState(false)
     const breakpoint = useBreakpoint()
-    const { setDrawerOpen } = useWorkspaceLayout()
+    const setDrawerOpen = useWorkspaceStore((s) => s.setDrawerOpen)
     const composeMode = useComposeStore((s) => s.mode)
 
     useEffect(() => {
@@ -69,7 +69,7 @@ export default function MailLayout() {
                     />
                 </View>
                 <View className="flex-1">
-                    <Slot />
+                    <FrozenSlideStack />
                 </View>
                 <ComposeWindow isVisible={isComposeVisible} />
             </View>
