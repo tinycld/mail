@@ -3,6 +3,7 @@ import * as path from 'node:path'
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
 import PocketBase from 'pocketbase'
 import { login, navigateToPackage } from '../../../../tests/e2e/helpers'
+import { emailRow, openThread } from './helpers'
 
 // PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
 // through to PB transparently — see scripts/dev.ts::isPbPath.
@@ -84,9 +85,13 @@ async function deliverInbound(request: APIRequestContext, url: string, payload: 
 
 async function expectImageLoaded(target: Locator) {
     await expect
-        .poll(async () => target.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0), {
-            timeout: 5_000,
-        })
+        .poll(
+            async () =>
+                target.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0),
+            {
+                timeout: 5_000,
+            }
+        )
         .toBe(true)
 }
 
@@ -95,20 +100,27 @@ function inlineBodyImageLocator(page: Page): Locator {
 }
 
 test.describe('Mail — Attachments', () => {
-    test('inline + attached image render after Postmark inbound delivery', async ({ page, request }) => {
+    test('inline + attached image render after Postmark inbound delivery', async ({
+        page,
+        request,
+    }) => {
         const { base64, byteLength } = loadHippoFixture()
         const stamp = Date.now()
         const subject = `Attachments regression — hippo ${stamp}`
         const messageId = `attachment-test-${stamp}@tinycld.test`
 
         const inboundUrl = await getInboundWebhookUrl()
-        await deliverInbound(request, inboundUrl, buildPostmarkPayload({ subject, messageId, base64, byteLength }))
+        await deliverInbound(
+            request,
+            inboundUrl,
+            buildPostmarkPayload({ subject, messageId, base64, byteLength })
+        )
 
         await login(page)
         await navigateToPackage(page, 'mail')
 
-        await expect(page.getByText(subject).first()).toBeVisible({ timeout: 10_000 })
-        await page.getByText(subject).first().click()
+        await expect(emailRow(page, subject)).toBeVisible({ timeout: 10_000 })
+        await openThread(page, subject)
 
         const inlineImg = inlineBodyImageLocator(page)
         await expect(inlineImg).toBeVisible()
