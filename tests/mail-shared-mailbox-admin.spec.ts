@@ -56,7 +56,9 @@ async function loginAs(page: import('@playwright/test').Page, user: SeededUser) 
 }
 
 test.describe('Mail — Shared mailbox lifecycle as admin', () => {
-    test('creating a shared mailbox with a duplicate address surfaces a form error', async ({ page }) => {
+    test('creating a shared mailbox with a duplicate address surfaces a form error', async ({
+        page,
+    }) => {
         const admin = await seedOrgUser('admin', 'dupadmin')
 
         await loginAs(page, admin)
@@ -64,22 +66,33 @@ test.describe('Mail — Shared mailbox lifecycle as admin', () => {
         await page.waitForLoadState('domcontentloaded')
         await expect(page.getByText('Mailboxes', { exact: true }).first()).toBeVisible()
 
-        // The seed already creates a shared "support" mailbox in test-org/tinycld.org.
-        // Trying to create another mailbox with the same (address, domain) pair
-        // hits the unique index `idx_mail_mailboxes_addr_domain` and PocketBase
-        // returns a validation_not_unique error on the `address` field.
+        // Create a baseline mailbox owned by this test, then attempt to
+        // create a second one with the same address. The unique index
+        // `idx_mail_mailboxes_addr_domain` rejects the duplicate and
+        // PocketBase returns validation_not_unique. We don't reuse the
+        // seeded "support" mailbox — other parallel specs may
+        // delete/rename it.
+        const address = `dup-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+
         await page.getByText('New mailbox', { exact: true }).click()
         await expect(page.getByText('New shared mailbox')).toBeVisible()
-        await page.getByTestId('address').fill('support')
+        await page.getByTestId('address').fill(address)
+        await page.getByTestId('display_name').fill('Original')
+        await page.getByText('Create mailbox', { exact: true }).click()
+        await expect(page.getByText('New shared mailbox')).toBeHidden({ timeout: 10_000 })
+
+        // Now the duplicate attempt.
+        await page.getByText('New mailbox', { exact: true }).click()
+        await expect(page.getByText('New shared mailbox')).toBeVisible()
+        await page.getByTestId('address').fill(address)
         await page.getByTestId('display_name').fill('Duplicate Test')
         await page.getByText('Create mailbox', { exact: true }).click()
 
-        // The drawer must stay open and surface the error to the user (rather than
-        // closing with a silent failure or generic toast). The address field is
-        // where the per-field validation lives, but the FormErrorSummary also
-        // mirrors it at the top of the form.
+        // The drawer must stay open and surface the error to the user.
         await expect(page.getByText('New shared mailbox')).toBeVisible({ timeout: 5_000 })
-        await expect(page.getByText(/already|unique|in use|exists/i).first()).toBeVisible({ timeout: 5_000 })
+        await expect(page.getByText(/already|unique|in use|exists/i).first()).toBeVisible({
+            timeout: 5_000,
+        })
     })
 
     test('admin can create a shared mailbox and add another org member to it', async ({ page }) => {

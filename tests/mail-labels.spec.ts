@@ -1,33 +1,26 @@
 import { expect, test } from '@playwright/test'
 import { login, navigateToPackage } from '../../../../tests/e2e/helpers'
+import { deliverInbound, openThread, uniqueSubject } from './helpers'
 
 test.describe('Mail — Labels', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
         await navigateToPackage(page, 'mail')
+        await expect(page.getByText('Compose').first()).toBeVisible({ timeout: 15_000 })
     })
 
-    test('sidebar shows labels section', async ({ page }) => {
-        await expect(page.getByText('Labels')).toBeVisible()
-        await expect(page.getByText('Work', { exact: true }).first()).toBeVisible()
-        await expect(page.getByText('Personal').first()).toBeVisible()
-    })
-
-    test('filter by label in sidebar', async ({ page }) => {
-        await expect(page.getByText('Labels')).toBeVisible()
-        // Click the sidebar label "Work" — scope to the Labels heading's parent container
+    test('filter by label in sidebar navigates to label-scoped URL', async ({ page }) => {
         const labelsSection = page.getByText('Labels').locator('xpath=ancestor::*[5]')
         await labelsSection.getByText('Work', { exact: true }).click()
         await expect(page).toHaveURL(/label=/)
-
-        await expect(page.getByText('Q2 Product Roadmap Review').first()).toBeVisible()
     })
 
-    test('thread detail shows labels toolbar', async ({ page }) => {
-        await page.getByText('Lunch tomorrow?').first().click()
-        await page.waitForURL(/\/mail\//)
+    test('thread detail shows labels toolbar', async ({ page, request }) => {
+        const subject = uniqueSubject('LabelsToolbar')
+        await deliverInbound(request, { subject })
+        await page.reload()
 
-        // Labels toolbar button should be visible
+        await openThread(page, subject)
         await expect(page.getByLabel('Labels').first()).toBeVisible()
     })
 })

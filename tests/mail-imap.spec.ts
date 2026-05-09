@@ -15,7 +15,7 @@ test.describe('Mail — IMAP Integration', () => {
     test('lists mailboxes and reads appended messages via IMAP', async () => {
         const subject = `IMAP-roundtrip-${Date.now()}`
 
-        await withImapClient(async (client) => {
+        await withImapClient(async client => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
 
@@ -27,7 +27,7 @@ test.describe('Mail — IMAP Integration', () => {
             })
 
             const messages = await listMessages(client, inbox)
-            const subjects = messages.map((m) => m.subject)
+            const subjects = messages.map(m => m.subject)
             expect(subjects).toContain(subject)
         })
     })
@@ -35,7 +35,7 @@ test.describe('Mail — IMAP Integration', () => {
     test('IMAP APPEND appears in web UI', async ({ page }) => {
         const subject = `IMAP-test-${Date.now()}`
 
-        await withImapClient(async (client) => {
+        await withImapClient(async client => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
             await appendMessage(client, inbox, {
@@ -48,20 +48,29 @@ test.describe('Mail — IMAP Integration', () => {
 
         await login(page)
         await navigateToPackage(page, 'mail')
-        await expect(page.getByText(subject)).toBeVisible({ timeout: 10_000 })
+        // Anchor on the row testID + visible filter so we don't match
+        // the same subject text in a frozen detail screen mounted by an
+        // earlier mail test, and so a virtualized off-screen row still
+        // counts as "exists in DOM" via the filter only on attached
+        // visible elements.
+        await expect(
+            page.locator('[data-testid="email-row"]:visible').filter({ hasText: subject }).first()
+        ).toBeVisible({ timeout: 10_000 })
     })
 
     test('MOVE to label folder adds label (Gmail-like)', async () => {
         const subject = `IMAP-label-${Date.now()}`
         const labelName = `test-label-${Date.now()}`
 
-        await withImapClient(async (client) => {
+        await withImapClient(async client => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
 
             // Create the label folder and append a test message
             const labelFolder = inbox.replace('/INBOX', `/Labels/${labelName}`)
-            const fullLabelPath = labelFolder.includes('/Labels/') ? labelFolder : `Labels/${labelName}`
+            const fullLabelPath = labelFolder.includes('/Labels/')
+                ? labelFolder
+                : `Labels/${labelName}`
             await client.mailboxCreate(fullLabelPath)
             await appendMessage(client, inbox, {
                 from: 'labeler@example.com',
@@ -77,12 +86,12 @@ test.describe('Mail — IMAP Integration', () => {
 
             // Gmail-like: message should still be in INBOX (label is additive)
             const inboxMsgs = await listMessages(client, inbox)
-            const stillInInbox = inboxMsgs.some((m) => m.subject === subject)
+            const stillInInbox = inboxMsgs.some(m => m.subject === subject)
             expect(stillInInbox).toBe(true)
 
             // And should also appear in the label folder
             const labelMsgs = await listMessages(client, fullLabelPath)
-            const inLabel = labelMsgs.some((m) => m.subject === subject)
+            const inLabel = labelMsgs.some(m => m.subject === subject)
             expect(inLabel).toBe(true)
         })
     })
@@ -90,7 +99,7 @@ test.describe('Mail — IMAP Integration', () => {
     test('MOVE to Trash removes from INBOX and shows in Trash', async () => {
         const subject = `IMAP-trash-${Date.now()}`
 
-        await withImapClient(async (client) => {
+        await withImapClient(async client => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
             const trashFolder = inbox.replace('INBOX', 'Trash')
@@ -107,18 +116,18 @@ test.describe('Mail — IMAP Integration', () => {
             await moveMessage(client, inbox, msg?.uid ?? 0, trashFolder)
 
             const inboxMsgs = await listMessages(client, inbox)
-            expect(inboxMsgs.some((m) => m.subject === subject)).toBe(false)
+            expect(inboxMsgs.some(m => m.subject === subject)).toBe(false)
 
             const trashMsgs = await listMessages(client, trashFolder)
-            expect(trashMsgs.some((m) => m.subject === subject)).toBe(true)
+            expect(trashMsgs.some(m => m.subject === subject)).toBe(true)
         })
     })
 
     test('LIST advertises RFC 6154 SPECIAL-USE attributes', async () => {
-        await withImapClient(async (client) => {
+        await withImapClient(async client => {
             const mailboxes = await listMailboxes(client)
             const byBareName = (suffix: string) =>
-                mailboxes.find((mb) => mb.name === suffix || mb.name.endsWith(`/${suffix}`))
+                mailboxes.find(mb => mb.name === suffix || mb.name.endsWith(`/${suffix}`))
 
             expect(byBareName('Sent')?.specialUse).toBe('\\Sent')
             expect(byBareName('Drafts')?.specialUse).toBe('\\Drafts')
@@ -131,7 +140,7 @@ test.describe('Mail — IMAP Integration', () => {
     test('APPEND to Sent appears in Sent only, not INBOX', async () => {
         const subject = `IMAP-sent-only-${Date.now()}`
 
-        await withImapClient(async (client) => {
+        await withImapClient(async client => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
             const sent = inbox.replace('INBOX', 'Sent')
@@ -144,10 +153,10 @@ test.describe('Mail — IMAP Integration', () => {
             })
 
             const sentMsgs = await listMessages(client, sent)
-            expect(sentMsgs.filter((m) => m.subject === subject).length).toBe(1)
+            expect(sentMsgs.filter(m => m.subject === subject).length).toBe(1)
 
             const inboxMsgs = await listMessages(client, inbox)
-            expect(inboxMsgs.some((m) => m.subject === subject)).toBe(false)
+            expect(inboxMsgs.some(m => m.subject === subject)).toBe(false)
         })
     })
 
@@ -155,7 +164,7 @@ test.describe('Mail — IMAP Integration', () => {
         const subject = `IMAP-dedup-${Date.now()}`
         const messageId = `<dedup-${Date.now()}@tinycld.test>`
 
-        await withImapClient(async (client) => {
+        await withImapClient(async client => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
             const sent = inbox.replace('INBOX', 'Sent')
@@ -171,14 +180,14 @@ test.describe('Mail — IMAP Integration', () => {
             await appendMessage(client, sent, opts)
 
             const sentMsgs = await listMessages(client, sent)
-            expect(sentMsgs.filter((m) => m.subject === subject).length).toBe(1)
+            expect(sentMsgs.filter(m => m.subject === subject).length).toBe(1)
         })
     })
 
     test('IMAP DELETE removes from web UI', async ({ page }) => {
         const subject = `IMAP-delete-${Date.now()}`
 
-        await withImapClient(async (client) => {
+        await withImapClient(async client => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
             await appendMessage(client, inbox, {
@@ -191,9 +200,13 @@ test.describe('Mail — IMAP Integration', () => {
 
         await login(page)
         await navigateToPackage(page, 'mail')
-        await expect(page.getByText(subject)).toBeVisible({ timeout: 10_000 })
+        const row = page
+            .locator('[data-testid="email-row"]:visible')
+            .filter({ hasText: subject })
+            .first()
+        await expect(row).toBeVisible({ timeout: 10_000 })
 
-        await withImapClient(async (client) => {
+        await withImapClient(async client => {
             const mailboxes = await listMailboxes(client)
             const inbox = findPersonalInbox(mailboxes)
             const msg = await fetchMessageBySubject(client, inbox, subject)
@@ -202,8 +215,8 @@ test.describe('Mail — IMAP Integration', () => {
         })
 
         await page.reload()
-        await expect(page.getByText(subject)).not.toBeVisible({
-            timeout: 10_000,
-        })
+        await expect(
+            page.locator('[data-testid="email-row"]:visible').filter({ hasText: subject })
+        ).toHaveCount(0, { timeout: 10_000 })
     })
 })

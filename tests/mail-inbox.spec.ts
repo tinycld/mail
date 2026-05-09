@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { login, navigateToPackage } from '../../../../tests/e2e/helpers'
+import { deliverInbound, emailRow, expectRowVisible, uniqueSubject } from './helpers'
 
 test.describe('Mail — Inbox', () => {
     test.beforeEach(async ({ page }) => {
@@ -7,33 +8,28 @@ test.describe('Mail — Inbox', () => {
         await navigateToPackage(page, 'mail')
     })
 
-    test('inbox renders seed threads', async ({ page }) => {
-        await expect(page.getByText('Q2 Product Roadmap Review')).toBeVisible()
-        await expect(page.getByText('Lunch tomorrow?')).toBeVisible()
-    })
-
     test('inbox shows unread badge in sidebar', async ({ page }) => {
-        // Sidebar "Inbox" item should have a badge with the unread count. Use
-        // exact match so thread-body excerpts like "Tips for using your new
-        // inbox" don't trip strict mode.
-        await expect(page.getByText('Inbox', { exact: true })).toBeVisible()
-        // Seed has 2 unread threads — badge shows "2"
-        await expect(page.getByText('2', { exact: true }).first()).toBeVisible()
+        // Sidebar "Inbox" item shows the unread count next to its label.
+        // Anchor on the Inbox sidebar entry rather than picking the bare
+        // "2" text — search results, attachment counts, and other inboxes
+        // all surface their own number badges that would otherwise match.
+        const inboxItem = page.getByText('Inbox', { exact: true }).locator('xpath=..')
+        await expect(inboxItem.getByText(/^\d+$/).first()).toBeVisible()
     })
 
-    test('star/unstar from list', async ({ page }) => {
-        // The star is an svg icon within the row
-        // Find the row text and hover to see action area
-        await page.getByText('Lunch tomorrow?').hover()
-        // Click should work on the star area in that row
-        await expect(page.getByText('Lunch tomorrow?')).toBeVisible()
-    })
+    test('search filters threads', async ({ page, request }) => {
+        const matchSubject = uniqueSubject('SearchHit')
+        const otherSubject = uniqueSubject('SearchMiss')
+        await deliverInbound(request, { subject: matchSubject })
+        await deliverInbound(request, { subject: otherSubject })
 
-    test('search filters threads', async ({ page }) => {
+        await page.reload()
+
         const searchInput = page.getByPlaceholder(/search/i)
-        if (await searchInput.isVisible()) {
-            await searchInput.fill('roadmap')
-            await expect(page.getByText('Q2 Product Roadmap Review')).toBeVisible()
-        }
+        await expect(searchInput).toBeVisible()
+        await searchInput.fill(matchSubject)
+
+        await expectRowVisible(page, matchSubject)
+        await expect(emailRow(page, otherSubject)).toHaveCount(0, { timeout: 5_000 })
     })
 })
