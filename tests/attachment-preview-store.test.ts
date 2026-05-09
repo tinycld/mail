@@ -14,7 +14,10 @@ describe('attachment-preview-store', () => {
 
     it('open() sets active to { messageId, fileName }', () => {
         useAttachmentPreviewStore.getState().open('m1', 'invoice.pdf')
-        expect(useAttachmentPreviewStore.getState().active).toEqual({ messageId: 'm1', fileName: 'invoice.pdf' })
+        expect(useAttachmentPreviewStore.getState().active).toEqual({
+            messageId: 'm1',
+            fileName: 'invoice.pdf',
+        })
     })
 
     it('close() clears active', () => {
@@ -26,7 +29,10 @@ describe('attachment-preview-store', () => {
     it('setActive() replaces the current value', () => {
         useAttachmentPreviewStore.getState().open('m1', 'a.pdf')
         useAttachmentPreviewStore.getState().setActive({ messageId: 'm2', fileName: 'b.pdf' })
-        expect(useAttachmentPreviewStore.getState().active).toEqual({ messageId: 'm2', fileName: 'b.pdf' })
+        expect(useAttachmentPreviewStore.getState().active).toEqual({
+            messageId: 'm2',
+            fileName: 'b.pdf',
+        })
     })
 
     it('setActive(null) is equivalent to close', () => {

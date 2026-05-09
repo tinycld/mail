@@ -38,7 +38,10 @@ describe('mimeFromFilename', () => {
         ['backup.zip', 'application/zip'],
         ['video.mp4', 'video/mp4'],
         ['picture.heic', 'image/heic'],
-        ['contract.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        [
+            'contract.docx',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ],
     ])('%s → %s', (name, expected) => {
         expect(mimeFromFilename(name)).toBe(expected)
     })

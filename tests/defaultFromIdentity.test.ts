@@ -17,7 +17,9 @@ const support: SendableIdentity = {
 
 describe('pickDefaultFrom', () => {
     it('returns first identity primary for new message', () => {
-        expect(pickDefaultFrom({ mode: 'new', identities: [personal, support], replyToAddresses: [] })).toEqual({
+        expect(
+            pickDefaultFrom({ mode: 'new', identities: [personal, support], replyToAddresses: [] })
+        ).toEqual({
             mailboxId: 'mb1',
             aliasId: null,
         })
@@ -74,7 +76,9 @@ describe('pickDefaultFrom', () => {
     })
 
     it('returns empty mailboxId when no identities', () => {
-        expect(pickDefaultFrom({ mode: 'reply', identities: [], replyToAddresses: ['x@y.com'] })).toEqual({
+        expect(
+            pickDefaultFrom({ mode: 'reply', identities: [], replyToAddresses: ['x@y.com'] })
+        ).toEqual({
             mailboxId: '',
             aliasId: null,
         })

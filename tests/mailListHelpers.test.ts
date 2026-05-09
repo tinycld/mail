@@ -60,7 +60,9 @@ describe('stripHtmlTags', () => {
 })
 
 describe('searchResultToThreadListItem', () => {
-    function buildResult(overrides: Partial<Parameters<typeof searchResultToThreadListItem>[0]> = {}) {
+    function buildResult(
+        overrides: Partial<Parameters<typeof searchResultToThreadListItem>[0]> = {}
+    ) {
         return {
             thread_id: 't1',
             subject: 'Re: budget',
@@ -105,7 +107,11 @@ describe('searchResultToThreadListItem', () => {
     })
 
     it('forwards has_attachments so the paperclip indicator renders for matched threads with attachments', () => {
-        expect(searchResultToThreadListItem(buildResult({ has_attachments: true })).hasAttachments).toBe(true)
-        expect(searchResultToThreadListItem(buildResult({ has_attachments: false })).hasAttachments).toBe(false)
+        expect(
+            searchResultToThreadListItem(buildResult({ has_attachments: true })).hasAttachments
+        ).toBe(true)
+        expect(
+            searchResultToThreadListItem(buildResult({ has_attachments: false })).hasAttachments
+        ).toBe(false)
     })
 })
