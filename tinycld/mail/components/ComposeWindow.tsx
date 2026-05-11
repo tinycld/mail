@@ -310,3 +310,5 @@ function ComposeShortcuts({ onSend }: { onSend: () => void }) {
     useRegisterShortcut(shortcut)
     return null
 }
+
+export default ComposeWindow

@@ -1,9 +1,8 @@
 import { FrozenSlideStack } from '@tinycld/core/components/workspace/FrozenStack'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { useWorkspaceStore } from '@tinycld/core/lib/stores/workspace-store'
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { View } from 'react-native'
-import { ComposeWindow } from '../components/ComposeWindow'
 import { SearchBar } from '../components/SearchBar'
 import { composeEvents } from '../hooks/composeEvents'
 import { useMailSearch } from '../hooks/useMailSearch'
@@ -14,6 +13,11 @@ import {
     SearchContext,
 } from '../hooks/useSearchState'
 import { useComposeStore } from '../stores/compose-store'
+
+// Lazy boundary keeps the rich-text editor (and its transitive
+// prosemirror-view top-level DOM access) out of the static import
+// graph that mounts at app launch via expo-router's <Stack>.
+const ComposeWindow = lazy(() => import('../components/ComposeWindow'))
 
 export { useThreadListContext } from '../stores/thread-list-store'
 
@@ -71,7 +75,11 @@ export default function MailLayout() {
                 <View className="flex-1">
                     <FrozenSlideStack />
                 </View>
-                <ComposeWindow isVisible={isComposeVisible} />
+                {isComposeVisible ? (
+                    <Suspense fallback={null}>
+                        <ComposeWindow isVisible={isComposeVisible} />
+                    </Suspense>
+                ) : null}
             </View>
         </SearchContext.Provider>
     )
