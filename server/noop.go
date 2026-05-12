@@ -19,8 +19,15 @@ func (n *NoopProvider) ParseInbound(_ []byte) (*InboundMessage, error) {
 	return nil, errNoProvider
 }
 
+// VerifyWebhookSignature is a no-op even without a provider configured:
+// the per-domain webhook_secret embedded in the inbound URL (verified by
+// constant-time compare in handleInbound) is the actual auth boundary, and
+// the real PostmarkProvider's implementation is also a no-op since
+// Postmark uses basic auth on the inbound URL rather than signing payloads.
+// Returning an error here blocked CI/test scenarios where a domain has a
+// webhook_secret in the test seed but MAIL_PROVIDER isn't set.
 func (n *NoopProvider) VerifyWebhookSignature(_ map[string]string, _ []byte) error {
-	return errNoProvider
+	return nil
 }
 
 func (n *NoopProvider) ParseBounce(_ []byte) (*BounceEvent, error) {

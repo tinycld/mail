@@ -11,6 +11,8 @@ function t(id: string, mailbox: string): MailThreads {
         message_count: 1,
         latest_date: '2024-01-01T00:00:00Z',
         participants: [],
+        has_draft: false,
+        has_attachments: false,
         created: '',
         updated: '',
     }

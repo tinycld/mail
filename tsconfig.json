@@ -20,5 +20,5 @@
         "../tinycld/expo-env.d.ts",
         "../tinycld/.expo/types/**/*.ts"
     ],
-    "exclude": ["node_modules", "server", "pb-migrations", "tests/**/*.spec.ts"]
+    "exclude": ["node_modules", "server", "pb-migrations", "tests/**/*.spec.ts", "tests/helpers.ts"]
 }
