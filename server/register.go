@@ -331,9 +331,13 @@ func newProviderFromEnv() Provider {
 func newProviderByName(name, serverToken, accountToken string) Provider {
 	switch name {
 	case "postmark":
-		if serverToken == "" {
-			return &NoopProvider{}
-		}
+		// Return a PostmarkProvider even without a server token: ParseInbound
+		// and VerifyWebhookSignature don't need it (Postmark uses URL-based
+		// auth on the inbound webhook, not signed payloads), so test/dev
+		// scenarios that exercise the inbound flow without real Postmark
+		// credentials still work. Outbound Send() will fail at the API call
+		// when the token is empty, which is the right behavior — we don't
+		// want to silently drop outbound mail.
 		return NewPostmarkProvider(serverToken, accountToken)
 	default:
 		return &NoopProvider{}
