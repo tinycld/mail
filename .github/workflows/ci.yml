@@ -28,13 +28,14 @@ jobs:
           ref: ${{ env.APP_REF }}
           path: tinycld
       - uses: oven-sh/setup-bun@v2
-      - name: Install tinycld deps (biome + typescript come from here)
+      - name: Install tinycld deps (biome lives here)
         working-directory: tinycld
         run: bun install
-      - name: expose tinycld's node_modules to mail
-        run: ln -s ../tinycld/node_modules mail/node_modules
-      - name: Lint mail
-        working-directory: mail
+      - name: Link mail into tinycld so biome scans it
+        working-directory: tinycld
+        run: bun run packages:link ../mail
+      - name: Lint (biome runs from tinycld; scans linked mail via app rules)
+        working-directory: tinycld
         run: bun run lint
 
   typecheck:
