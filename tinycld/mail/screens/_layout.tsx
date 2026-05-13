@@ -4,7 +4,7 @@ import { useWorkspaceStore } from '@tinycld/core/lib/stores/workspace-store'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { View } from 'react-native'
 import { SearchBar } from '../components/SearchBar'
-import { composeEvents } from '../hooks/composeEvents'
+import { composeEvents, handleNewComposeIntent } from '../hooks/composeEvents'
 import { useMailSearch } from '../hooks/useMailSearch'
 import {
     type AdvancedSearchFilters,
@@ -31,10 +31,7 @@ export default function MailLayout() {
 
     useEffect(() => {
         return composeEvents.subscribe(() => {
-            const { mode, open } = useComposeStore.getState()
-            if (mode === 'closed') {
-                open()
-            }
+            handleNewComposeIntent(useComposeStore.getState())
         })
     }, [])
 
