@@ -5,6 +5,7 @@ import { Pressable, Text, View } from 'react-native'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { filterOwnAddresses, pickDefaultFrom } from '../hooks/defaultFromIdentity'
 import { useCompose } from '../hooks/useComposeState'
+import { useOpenReply } from '../hooks/useOpenReply'
 import { useSendableIdentities } from '../hooks/useSendableIdentities'
 
 // Lazy boundary keeps the rich-text editor (and its transitive
@@ -37,7 +38,8 @@ export function InlineReply({
     const borderColor = useThemeColor('border')
     const breakpoint = useBreakpoint()
     const isMobile = breakpoint === 'mobile'
-    const { mode, replyContext, openReply, close } = useCompose()
+    const { mode, replyContext, close } = useCompose()
+    const openReply = useOpenReply()
     const identities = useSendableIdentities()
 
     const isInlineActive = mode === 'inline' && replyContext?.threadId === threadId

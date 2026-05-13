@@ -100,7 +100,7 @@ export function AttachmentStrip({ collectionId, groups, totalCount, isAtBottom }
     }
 
     return (
-        <View className="border-t border-border">
+        <View className="border-t border-border bg-background">
             <Header totalCount={totalCount} expanded={expanded} onPress={toggle} />
             <ExpandedPanel isVisible={expanded} groups={groups} sources={flatSources} onOpen={handleOpen} />
             <PreviewModal

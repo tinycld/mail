@@ -2,7 +2,7 @@ import { usePickFiles } from '@tinycld/core/file-viewer/use-pick-files'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useForm, zodResolver } from '@tinycld/core/ui/form'
 import { useCallback } from 'react'
-import { KeyboardAvoidingView, Platform, View } from 'react-native'
+import { View } from 'react-native'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
 import type { useCompose } from '../hooks/useComposeState'
@@ -96,8 +96,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
     }, [pickFiles, addFilesSafely])
 
     return (
-        <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        <View
             className="m-4 border rounded-lg"
             style={{
                 minHeight: 200,
@@ -122,6 +121,6 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
                 <DropOverlay isVisible={isDragging} />
             </View>
             {PickerActionSheet}
-        </KeyboardAvoidingView>
+        </View>
     )
 }

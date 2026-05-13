@@ -8,9 +8,9 @@ import { useNavigateBack } from '@tinycld/core/lib/use-navigate-back'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams } from 'expo-router'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Dimensions, Keyboard, Platform, Pressable, ScrollView, Text, View } from 'react-native'
 import { type AttachmentGroup, AttachmentStrip } from '../components/AttachmentStrip'
 import { EmailBody } from '../components/EmailBody'
 import { EmailDetailToolbar } from '../components/EmailDetailToolbar'
@@ -18,9 +18,9 @@ import { MessageHeader, ThreadSubjectHeader } from '../components/EmailHeader'
 import { InlineReply } from '../components/InlineReply'
 import { NotFoundState } from '../components/NotFoundState'
 import { filterOwnAddresses, pickDefaultFrom } from '../hooks/defaultFromIdentity'
-import { useCompose } from '../hooks/useComposeState'
 import { useLabels, useThreadLabels } from '../hooks/useLabels'
 import { useMailboxes } from '../hooks/useMailboxes'
+import { useOpenReply } from '../hooks/useOpenReply'
 import { useScrolledToBottom } from '../hooks/useScrolledToBottom'
 import { useSendableIdentities } from '../hooks/useSendableIdentities'
 import { useThreadActions } from '../hooks/useThreadActions'
@@ -53,7 +53,7 @@ function useAutoMarkAsRead(
 
 export default function MailDetailScreen() {
     const { id = '' } = useLocalSearchParams<{ id: string }>()
-    const { openReply } = useCompose()
+    const openReply = useOpenReply()
 
     const [threadStateCollection, messagesCollection, threadsCollection] = useStore(
         'mail_thread_state',
@@ -129,8 +129,31 @@ export default function MailDetailScreen() {
 
     const { isScrolled, onScroll: onScrollShadow } = useScrollShadow()
     const [dockHeight, setDockHeight] = useState(0)
+    const [keyboardOffset, setKeyboardOffset] = useState(0)
+    const dockRef = useRef<View | null>(null)
     const onDockLayout = useCallback((e: LayoutChangeEvent) => {
         setDockHeight(e.nativeEvent.layout.height)
+    }, [])
+    useEffect(() => {
+        // The dock is `position: absolute, bottom: 0` of the screen root, but
+        // the screen root usually doesn't extend to the actual screen bottom
+        // (MobileTabBar / safe-area sit below). Measure how far below the
+        // dock's parent bottom the screen actually extends, and subtract that
+        // from the keyboard height so the dock rises exactly to the keyboard top.
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+        const showSub = Keyboard.addListener(showEvent, (e) => {
+            dockRef.current?.measureInWindow((_x, y, _w, h) => {
+                const screenH = Dimensions.get('screen').height
+                const distanceBelowDockBottom = Math.max(0, screenH - (y + h))
+                setKeyboardOffset(Math.max(0, e.endCoordinates.height - distanceBelowDockBottom))
+            })
+        })
+        const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardOffset(0))
+        return () => {
+            showSub.remove()
+            hideSub.remove()
+        }
     }, [])
     const {
         isAtBottom,
@@ -316,7 +339,9 @@ export default function MailDetailScreen() {
                 })}
             </ScrollView>
             <View
-                className="absolute left-0 right-0 bottom-0"
+                ref={dockRef}
+                className="absolute left-0 right-0 bg-background"
+                style={{ bottom: keyboardOffset }}
                 pointerEvents="box-none"
                 onLayout={onDockLayout}
             >
