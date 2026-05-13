@@ -8,8 +8,8 @@ import { useNavigateBack } from '@tinycld/core/lib/use-navigate-back'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams } from 'expo-router'
-import { useCallback, useMemo, useRef } from 'react'
-import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { type AttachmentGroup, AttachmentStrip } from '../components/AttachmentStrip'
 import { EmailBody } from '../components/EmailBody'
@@ -128,7 +128,16 @@ export default function MailDetailScreen() {
     const { hasPrevious, hasNext, goToPrevious, goToNext } = useThreadNavigation(threadIds, id)
 
     const { isScrolled, onScroll: onScrollShadow } = useScrollShadow()
-    const { isAtBottom, onScroll: onScrollBottom } = useScrolledToBottom()
+    const [dockHeight, setDockHeight] = useState(0)
+    const onDockLayout = useCallback((e: LayoutChangeEvent) => {
+        setDockHeight(e.nativeEvent.layout.height)
+    }, [])
+    const {
+        isAtBottom,
+        onScroll: onScrollBottom,
+        onContentSizeChange: onBottomContentSize,
+        onLayout: onBottomLayout,
+    } = useScrolledToBottom(dockHeight)
     const handleScroll = useCallback(
         (e: NativeSyntheticEvent<NativeScrollEvent>) => {
             onScrollShadow(e)
@@ -216,8 +225,10 @@ export default function MailDetailScreen() {
             </ScreenHeader>
             <ScrollView
                 className="flex-1"
-                contentContainerStyle={{ flexGrow: 1 }}
+                contentContainerStyle={{ flexGrow: 1, paddingBottom: dockHeight }}
                 onScroll={handleScroll}
+                onContentSizeChange={onBottomContentSize}
+                onLayout={onBottomLayout}
                 scrollEventThrottle={16}
             >
                 <ThreadSubjectHeader subject={subject} labels={labels} />
@@ -304,24 +315,30 @@ export default function MailDetailScreen() {
                     )
                 })}
             </ScrollView>
-            <AttachmentStrip
-                collectionId="mail_messages"
-                groups={attachmentGroups}
-                totalCount={totalAttachmentCount}
-                isAtBottom={isAtBottom}
-            />
-            {lastMessage ? (
-                <InlineReply
-                    messageId={lastMessage.id}
-                    threadId={id}
-                    subject={lastMessage.subject}
-                    senderName={lastMessage.sender_name}
-                    senderEmail={lastMessage.sender_email}
-                    recipientsTo={lastMessage.recipients_to ?? []}
-                    recipientsCc={lastMessage.recipients_cc ?? []}
-                    mailboxId={mailboxId}
+            <View
+                className="absolute left-0 right-0 bottom-0"
+                pointerEvents="box-none"
+                onLayout={onDockLayout}
+            >
+                <AttachmentStrip
+                    collectionId="mail_messages"
+                    groups={attachmentGroups}
+                    totalCount={totalAttachmentCount}
+                    isAtBottom={isAtBottom}
                 />
-            ) : null}
+                {lastMessage ? (
+                    <InlineReply
+                        messageId={lastMessage.id}
+                        threadId={id}
+                        subject={lastMessage.subject}
+                        senderName={lastMessage.sender_name}
+                        senderEmail={lastMessage.sender_email}
+                        recipientsTo={lastMessage.recipients_to ?? []}
+                        recipientsCc={lastMessage.recipients_cc ?? []}
+                        mailboxId={mailboxId}
+                    />
+                ) : null}
+            </View>
         </View>
     )
 }
