@@ -1,4 +1,4 @@
-import type { EditorCommands, EditorHandle, EditorResult, EditorToolbarState } from '@tinycld/core/lib/editor-types'
+import type { EditorCommands, EditorHandle, EditorResult, EditorToolbarState } from '@tinycld/core/lib/editor/types'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import Placeholder from '@tiptap/extension-placeholder'
 import { EditorContent, useEditor } from '@tiptap/react'

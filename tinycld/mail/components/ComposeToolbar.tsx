@@ -1,5 +1,5 @@
 import { ResponsiveToolbar, type ToolbarItem } from '@tinycld/core/components/ResponsiveToolbar'
-import type { EditorCommands, EditorToolbarState } from '@tinycld/core/lib/editor-types'
+import type { EditorCommands, EditorToolbarState } from '@tinycld/core/lib/editor/types'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { Bold, Italic, Link2, List, ListOrdered, Paperclip, Quote, Trash2, Underline } from 'lucide-react-native'
 import { useCallback, useMemo } from 'react'

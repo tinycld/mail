@@ -1,4 +1,4 @@
-import type { EditorHandle, EditorResult } from '@tinycld/core/lib/editor-types'
+import type { EditorHandle, EditorResult } from '@tinycld/core/lib/editor/types'
 
 interface UseMailEditorOptions {
     initialContent?: string
