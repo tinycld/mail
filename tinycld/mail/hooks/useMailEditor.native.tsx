@@ -126,6 +126,12 @@ export function useMailEditor(options: UseMailEditorOptions = {}): EditorResult 
             setContent: (html: string) => bridge.setContent(html),
             focus: (position?: 'start' | 'end') => bridge.focus(position ?? 'end'),
             clear: () => bridge.setContent(''),
+            // TenTap on its own doesn't expose a selection query; this
+            // path will only get wired if mail adopts useWebViewEditor
+            // and the in-WebView app responds to {app,getSelection,...}
+            // messages. Awareness cursors live in @tinycld/text, not
+            // mail, so null is acceptable here in v1.
+            getSelection: () => Promise.resolve(null),
         }),
         [bridge]
     )

@@ -38,6 +38,11 @@ export function useMailEditor(options: UseMailEditorOptions = {}): EditorResult 
                 }
             },
             clear: () => tiptapEditor?.commands.clearContent(),
+            getSelection: () => {
+                const selection = tiptapEditor?.state.selection
+                if (!selection) return Promise.resolve(null)
+                return Promise.resolve({ from: selection.from, to: selection.to })
+            },
         }),
         [tiptapEditor]
     )
