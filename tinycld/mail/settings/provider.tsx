@@ -1,5 +1,6 @@
 import { eq } from '@tanstack/db'
 import { useMutation as useReactQueryMutation } from '@tanstack/react-query'
+import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { errorToString, handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
@@ -89,9 +90,12 @@ export default function ProviderSettings() {
             <View className="flex-1 gap-5 p-5" style={{ maxWidth: 600 }}>
                 <View className="gap-2">
                     <Globe size={32} color={primaryColor} />
-                    <Text className="text-foreground" style={{ fontSize: 20, fontWeight: 'bold' }}>
-                        Mail Provider
-                    </Text>
+                    <View className="flex-row items-center gap-2">
+                        <Text className="text-foreground" style={{ fontSize: 20, fontWeight: 'bold' }}>
+                            Mail Provider
+                        </Text>
+                        <HelpIcon topic="mail:provider-setup" size={18} />
+                    </View>
                     <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
                         Configure the email provider and domains for your organization.
                     </Text>

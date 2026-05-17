@@ -3,7 +3,9 @@ import { ScreenHeader } from '@tinycld/core/components/ScreenHeader'
 import { SwipeableRowProvider } from '@tinycld/core/components/SwipeableRow'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { captureException } from '@tinycld/core/lib/errors'
+import type { HelpTopicId } from '@tinycld/core/lib/help/types'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
+
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { pb, queryClient } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
@@ -158,6 +160,17 @@ function SearchResultsHeader({ total, isSearching }: { total: number; isSearchin
             </Text>
         </View>
     )
+}
+
+function helpTopicForView(
+    folder: string | null,
+    labelCount: number,
+    isSearchActive: boolean
+): HelpTopicId {
+    if (isSearchActive) return 'mail:search'
+    if (labelCount > 0) return 'mail:labels'
+    if (folder === null || folder === 'inbox' || folder === 'all-inboxes') return 'mail:reading-threads'
+    return 'mail:folders'
 }
 
 export default function MailListScreen() {
@@ -411,6 +424,7 @@ export default function MailListScreen() {
     const isEmpty = items.length === 0
     const showEmptyState = isEmpty && !isLoading
     const showLoadingState = isEmpty && isLoading
+    const helpTopic = helpTopicForView(folder, labels.length, search.isActive)
 
     return (
         <View className="flex-1">
@@ -446,6 +460,7 @@ export default function MailListScreen() {
                     totalItems={totalItems}
                     onPrevPage={handlePrevPage}
                     onNextPage={handleNextPage}
+                    helpTopic={helpTopic}
                 />
             </ScreenHeader>
             {showLoadingState && <LoadingState />}

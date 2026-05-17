@@ -1,5 +1,7 @@
+import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { ResponsiveToolbar, type ToolbarItem } from '@tinycld/core/components/ResponsiveToolbar'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
+import type { HelpTopicId } from '@tinycld/core/lib/help/types'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import {
     Archive,
@@ -56,6 +58,7 @@ interface EmailListToolbarProps {
     totalItems: number
     onPrevPage: () => void
     onNextPage: () => void
+    helpTopic: HelpTopicId
 }
 
 export function EmailListToolbar(props: EmailListToolbarProps) {
@@ -65,6 +68,14 @@ export function EmailListToolbar(props: EmailListToolbarProps) {
 
     if (props.hasSelection) return <BulkActionsToolbar {...props} />
     return <DefaultToolbar {...props} />
+}
+
+function helpRightItem(topic: HelpTopicId): ToolbarItem {
+    return {
+        type: 'custom',
+        key: 'help',
+        element: <HelpIcon topic={topic} size={18} />,
+    }
 }
 
 function DefaultToolbar({
@@ -77,6 +88,7 @@ function DefaultToolbar({
     totalItems,
     onPrevPage,
     onNextPage,
+    helpTopic,
 }: EmailListToolbarProps) {
     const mutedColor = useThemeColor('muted-foreground')
 
@@ -103,7 +115,7 @@ function DefaultToolbar({
         [onToggleAll, mutedColor, onRefresh, isRefreshing]
     )
 
-    const rightItems = usePaginationRightItems({
+    const paginationItems = usePaginationRightItems({
         emailCount,
         page,
         pageSize,
@@ -111,6 +123,10 @@ function DefaultToolbar({
         onPrevPage,
         onNextPage,
     })
+    const rightItems = useMemo(
+        () => [...paginationItems, helpRightItem(helpTopic)],
+        [paginationItems, helpTopic]
+    )
 
     return <ResponsiveToolbar items={items} rightItems={rightItems} />
 }
@@ -146,6 +162,7 @@ function BulkActionsToolbar({
     totalItems,
     onPrevPage,
     onNextPage,
+    helpTopic,
 }: EmailListToolbarProps) {
     const foregroundColor = useThemeColor('foreground')
     const primaryColor = useThemeColor('primary')
@@ -249,7 +266,7 @@ function BulkActionsToolbar({
         ]
     )
 
-    const rightItems = usePaginationRightItems({
+    const paginationItems = usePaginationRightItems({
         emailCount,
         page,
         pageSize,
@@ -257,6 +274,10 @@ function BulkActionsToolbar({
         onPrevPage,
         onNextPage,
     })
+    const rightItems = useMemo(
+        () => [...paginationItems, helpRightItem(helpTopic)],
+        [paginationItems, helpTopic]
+    )
 
     return <ResponsiveToolbar items={items} rightItems={rightItems} />
 }

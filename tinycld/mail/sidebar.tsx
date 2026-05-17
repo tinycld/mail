@@ -6,10 +6,11 @@ import {
     SidebarItem,
     SidebarNav,
 } from '@tinycld/core/components/sidebar-primitives'
+import { openHelpPackage } from '@tinycld/core/lib/help/open-help'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
-import { Pencil, Settings } from 'lucide-react-native'
+import { HelpCircle, Pencil, Settings } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { Pressable } from 'react-native'
 import { MailboxSidebarSection } from './components/MailboxSidebarSection'
@@ -161,6 +162,15 @@ export default function MailSidebar(_props: MailSidebarProps) {
             </SidebarHeading>
 
             {labelItems}
+
+            <SidebarDivider />
+
+            <SidebarItem
+                label="Help"
+                icon={HelpCircle}
+                closesDrawer
+                onPress={() => openHelpPackage('mail')}
+            />
 
             <LabelManagerDialog isVisible={labelManagerOpen} onClose={() => setLabelManagerOpen(false)} />
         </SidebarNav>

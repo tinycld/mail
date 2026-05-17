@@ -1,6 +1,7 @@
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
+import { openHelp } from '@tinycld/core/lib/help/open-help'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { Maximize2, Minimize2, X } from 'lucide-react-native'
+import { HelpCircle, Maximize2, Minimize2, X } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import type { ComposeMode } from '../hooks/useComposeState'
 
@@ -45,6 +46,15 @@ export function ComposeHeader({ mode, title, onMinimize, onMaximize, onClose }: 
                         </Pressable>
                     </>
                 ) : null}
+                <Pressable
+                    className="rounded"
+                    style={{ padding: 6 }}
+                    onPress={() => openHelp('mail:composing')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open help"
+                >
+                    <HelpCircle size={14} color={backgroundColor} />
+                </Pressable>
                 <Pressable className="rounded" style={{ padding: 6 }} onPress={onClose}>
                     <X size={14} color={backgroundColor} />
                 </Pressable>

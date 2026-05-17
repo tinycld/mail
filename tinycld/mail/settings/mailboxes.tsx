@@ -1,4 +1,5 @@
 import { eq } from '@tanstack/db'
+import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
@@ -184,9 +185,12 @@ export default function MailboxesSettings() {
                             <Text className="text-muted-foreground" style={{ fontSize: 11 }}>
                                 Settings · Mail
                             </Text>
-                            <Text className="text-foreground" style={{ fontSize: 22, fontWeight: '700' }}>
-                                Mailboxes
-                            </Text>
+                            <View className="flex-row items-center gap-2">
+                                <Text className="text-foreground" style={{ fontSize: 22, fontWeight: '700' }}>
+                                    Mailboxes
+                                </Text>
+                                <HelpIcon topic="mail:mailboxes" size={18} />
+                            </View>
                             <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
                                 Manage shared mailboxes, members, and aliases for your organization.
                             </Text>
