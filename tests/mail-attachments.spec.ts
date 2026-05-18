@@ -126,14 +126,21 @@ test.describe('Mail — Attachments', () => {
         await expect(inlineImg).toBeVisible()
         await expectImageLoaded(inlineImg)
 
-        // The attachment strip is collapsed by default; expand it so the
-        // thumbnail <img> renders.
-        await page.getByText('2 attachments').click()
-
+        // The attachment strip auto-expands on first render when the thread
+        // fits on screen (useScrolledToBottom flips false→true after layout,
+        // which fires AttachmentStrip's expand effect). On taller threads
+        // it stays collapsed and the user clicks the header to open it.
+        // Cover both: if the thumbnail isn't already visible, click the
+        // "N attachments" header to expand. Polling is bounded by the
+        // toBeVisible timeout below.
+        //
         // Attachment ribbon thumbnail: <img> served from PocketBase's files
         // endpoint. The filename gets a 10-char random suffix and the URL
         // carries a ?thumb= query, so match against the path prefix only.
         const thumb = page.locator('img[src*="/api/files/"][src*="hippo"]').first()
+        if (!(await thumb.isVisible().catch(() => false))) {
+            await page.getByText('2 attachments').click()
+        }
         await expect(thumb).toBeVisible()
         await expectImageLoaded(thumb)
     })
