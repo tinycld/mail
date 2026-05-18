@@ -98,8 +98,14 @@ jobs:
           ./tinycld --dev serve &
           sleep 3
           kill %1 2>/dev/null || true
-      - name: expose tinycld's node_modules to mail
-        run: ln -s ../tinycld/node_modules mail/node_modules
+      - name: expose tinycld's node_modules to mail and drive
+        # Both siblings resolve peer deps (pbtsdb, react, etc.) through the
+        # app shell's install. Drive's collections.ts and other modules get
+        # walked by tsc when mail imports @tinycld/drive — without this
+        # symlink they fail to resolve pbtsdb/core.
+        run: |
+          ln -s ../tinycld/node_modules mail/node_modules
+          ln -s ../tinycld/node_modules drive/node_modules
       - name: Typecheck mail
         working-directory: mail
         env:
