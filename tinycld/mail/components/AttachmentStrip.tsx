@@ -45,10 +45,16 @@ export function AttachmentStrip({ collectionId, groups, totalCount, isAtBottom }
     // factory unconditionally here is safe under the rules of hooks.
     const previewActions = getPreviewActionFactories().map((factory) => factory())
 
-    const wasAtBottomRef = useRef(false)
+    // null sentinel so the first run records the initial isAtBottom value
+    // without firing expand(). The earlier `useRef(false)` always treated
+    // the first render as a "scrolled to bottom" transition when the thread
+    // fit on screen, which triggered an unwanted auto-expand and broke any
+    // caller that expected the strip to start collapsed.
+    const wasAtBottomRef = useRef<boolean | null>(null)
     useEffect(() => {
         const wasAtBottom = wasAtBottomRef.current
         wasAtBottomRef.current = isAtBottom
+        if (wasAtBottom === null) return
         if (!wasAtBottom && isAtBottom && !expanded) {
             expand()
         }
