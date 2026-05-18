@@ -9,6 +9,12 @@ on:
 env:
   APP_REPO: tinycld/tinycld
   APP_REF: main
+  # @tinycld/drive owns the comment_mentions migration that core's
+  # notify hook + TS store reference. Without drive linked, the schema
+  # regen below produces a pbSchema.ts missing comment_mentions and
+  # core's typecheck fails on its own store registration.
+  DRIVE_REPO: tinycld/drive
+  DRIVE_REF: main
   TEST_USER_LOGIN: user@tinycld.org
   TEST_USER_PW: TestUser1234!
   ADMIN_USER_LOGIN: admin@tinycld.org
@@ -27,6 +33,11 @@ jobs:
           repository: ${{ env.APP_REPO }}
           ref: ${{ env.APP_REF }}
           path: tinycld
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ env.DRIVE_REPO }}
+          ref: ${{ env.DRIVE_REF }}
+          path: drive
       - uses: actions/setup-node@v5
         with:
           node-version-file: tinycld/.node-version
@@ -35,6 +46,9 @@ jobs:
       - name: Install tinycld deps (biome lives here)
         working-directory: tinycld
         run: npm ci
+      - name: Link drive into tinycld
+        working-directory: tinycld
+        run: npm run packages:link ../drive
       - name: Link mail into tinycld so biome scans it
         working-directory: tinycld
         run: npm run packages:link ../mail
@@ -54,6 +68,11 @@ jobs:
           repository: ${{ env.APP_REPO }}
           ref: ${{ env.APP_REF }}
           path: tinycld
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ env.DRIVE_REPO }}
+          ref: ${{ env.DRIVE_REF }}
+          path: drive
       - uses: actions/setup-node@v5
         with:
           node-version-file: tinycld/.node-version
@@ -66,6 +85,9 @@ jobs:
       - name: Install tinycld deps
         working-directory: tinycld
         run: npm ci
+      - name: Link drive into tinycld (so schema regen + types include comment_mentions)
+        working-directory: tinycld
+        run: npm run packages:link ../drive
       - name: Link mail into tinycld (so ~/types/pbSchema sees mail collections)
         working-directory: tinycld
         run: npm run packages:link ../mail
@@ -96,6 +118,11 @@ jobs:
           repository: ${{ env.APP_REPO }}
           ref: ${{ env.APP_REF }}
           path: tinycld
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ env.DRIVE_REPO }}
+          ref: ${{ env.DRIVE_REF }}
+          path: drive
       - uses: actions/setup-node@v5
         with:
           node-version-file: tinycld/.node-version
@@ -109,6 +136,10 @@ jobs:
       - name: Install tinycld deps
         working-directory: tinycld
         run: npm ci
+
+      - name: Link drive into tinycld
+        working-directory: tinycld
+        run: npm run packages:link ../drive
 
       - name: Link mail into tinycld
         working-directory: tinycld
