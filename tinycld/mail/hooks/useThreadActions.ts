@@ -5,7 +5,10 @@ import { useLabelMutations } from '@tinycld/core/ui/hooks/useLabelMutations'
 import type { MailThreadState } from '../types'
 
 interface ThreadStateCollection {
-    update(id: string | number, callback: (draft: MailThreadState) => void): Transaction<Record<string, unknown>>
+    update(
+        id: string | number,
+        callback: (draft: MailThreadState) => void
+    ): Transaction<Record<string, unknown>>
 }
 
 export function useThreadActions(
@@ -24,7 +27,7 @@ export function useThreadActions(
     const archiveThread = useMutation({
         mutationFn: mutation(function* () {
             if (!threadState) return
-            yield col.update(threadState.id, (draft) => {
+            yield col.update(threadState.id, draft => {
                 draft.folder = 'archive'
             })
         }),
@@ -35,7 +38,7 @@ export function useThreadActions(
     const spamThread = useMutation({
         mutationFn: mutation(function* () {
             if (!threadState) return
-            yield col.update(threadState.id, (draft) => {
+            yield col.update(threadState.id, draft => {
                 draft.folder = 'spam'
             })
         }),
@@ -46,7 +49,7 @@ export function useThreadActions(
     const trashThread = useMutation({
         mutationFn: mutation(function* () {
             if (!threadState) return
-            yield col.update(threadState.id, (draft) => {
+            yield col.update(threadState.id, draft => {
                 draft.folder = 'trash'
             })
         }),
@@ -57,7 +60,7 @@ export function useThreadActions(
     const moveThread = useMutation({
         mutationFn: mutation(function* (folder: MailThreadState['folder']) {
             if (!threadState) return
-            yield col.update(threadState.id, (draft) => {
+            yield col.update(threadState.id, draft => {
                 draft.folder = folder
             })
         }),
@@ -68,7 +71,7 @@ export function useThreadActions(
     const toggleRead = useMutation({
         mutationFn: mutation(function* () {
             if (!threadState) return
-            yield col.update(threadState.id, (draft) => {
+            yield col.update(threadState.id, draft => {
                 draft.is_read = !draft.is_read
             })
         }),
@@ -78,7 +81,7 @@ export function useThreadActions(
     const toggleStar = useMutation({
         mutationFn: mutation(function* () {
             if (!threadState) return
-            yield col.update(threadState.id, (draft) => {
+            yield col.update(threadState.id, draft => {
                 draft.is_starred = !draft.is_starred
             })
         }),

@@ -1,12 +1,12 @@
-import { useQuery } from '@tanstack/react-query'
 import { and, eq } from '@tanstack/db'
+import { useQuery } from '@tanstack/react-query'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useEffect, useMemo, useRef } from 'react'
 import type { ThreadListItem } from '../components/thread-list-item'
 import { toThreadListItem } from '../components/thread-list-item'
 import { useThreadListStore } from '../stores/thread-list-store'
-import type { MailMessages, MailThreads, MailThreadState } from '../types'
+import type { MailMessages, MailThreadState, MailThreads } from '../types'
 import { useLabels } from './useLabels'
 import { getMailboxLabel } from './useMailboxes'
 
@@ -48,7 +48,7 @@ export function useThreadListItems(
 ) {
     const [
         threadStateCollection,
-        messagesCollection,
+        _messagesCollection,
         assignmentsCollection,
         mailboxesCollection,
         membersCollection,
@@ -63,22 +63,28 @@ export function useThreadListItems(
     const { labels, labelMap } = useLabels()
 
     const { data: threadStates, isLoading: threadStatesLoading } = useOrgLiveQuery(
-        (query) =>
+        query =>
             query
                 .from({ mail_thread_state: threadStateCollection })
                 .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, userOrgId)),
         [userOrgId]
     )
 
-    const { data: allAssignments, isLoading: assignmentsLoading } = useOrgLiveQuery((query, { userOrgId }) =>
-        query
-            .from({ label_assignments: assignmentsCollection })
-            .where(({ label_assignments }) =>
-                and(eq(label_assignments.collection, 'mail_thread_state'), eq(label_assignments.user_org, userOrgId))
-            )
+    const { data: allAssignments, isLoading: assignmentsLoading } = useOrgLiveQuery(
+        (query, { userOrgId }) =>
+            query
+                .from({ label_assignments: assignmentsCollection })
+                .where(({ label_assignments }) =>
+                    and(
+                        eq(label_assignments.collection, 'mail_thread_state'),
+                        eq(label_assignments.user_org, userOrgId)
+                    )
+                )
     )
 
-    const { data: allMailboxes } = useOrgLiveQuery((query) => query.from({ mail_mailboxes: mailboxesCollection }))
+    const { data: allMailboxes } = useOrgLiveQuery(query =>
+        query.from({ mail_mailboxes: mailboxesCollection })
+    )
 
     const { data: userMemberships } = useOrgLiveQuery((query, { userOrgId }) =>
         query
@@ -87,7 +93,7 @@ export function useThreadListItems(
     )
 
     const { data: targetMailbox } = useOrgLiveQuery(
-        (query) =>
+        query =>
             query
                 .from({ mail_mailboxes: mailboxesCollection })
                 .where(({ mail_mailboxes }) => eq(mail_mailboxes.id, filter.mailboxId)),
@@ -96,10 +102,12 @@ export function useThreadListItems(
     const mailboxType = targetMailbox?.[0]?.type ?? 'personal'
 
     const { data: coMembers } = useOrgLiveQuery(
-        (query) =>
+        query =>
             query
                 .from({ mail_mailbox_members: membersCollection })
-                .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.mailbox, filter.mailboxId)),
+                .where(({ mail_mailbox_members }) =>
+                    eq(mail_mailbox_members.mailbox, filter.mailboxId)
+                ),
         [filter.mailboxId]
     )
 
@@ -114,7 +122,7 @@ export function useThreadListItems(
         return [...ids]
     }, [isUnified, filter.mailboxId, userMemberships])
 
-    const folderKey = filter.folder ?? 'inbox'
+    const _folderKey = filter.folder ?? 'inbox'
     const userOrgIdsForFolder = useMemo(() => {
         // For shared mailboxes' Sent / Drafts views, we widen to co-members
         // so the team sees each others' outbound activity. Personal folders
@@ -127,8 +135,7 @@ export function useThreadListItems(
         return [...ids]
     }, [mailboxType, filter.folder, userOrgId, coMembers])
 
-    const pageQueryEnabled =
-        visibleMailboxIds.length > 0 && (isUnified ? !!userMemberships : true)
+    const pageQueryEnabled = visibleMailboxIds.length > 0 && (isUnified ? !!userMemberships : true)
 
     const pageQueryKey = useMemo(
         () => [
@@ -186,7 +193,7 @@ export function useThreadListItems(
             const mbClause =
                 visibleMailboxIds.length === 1
                     ? `thread.mailbox = ${quote(visibleMailboxIds[0])}`
-                    : `(${visibleMailboxIds.map((id) => `thread.mailbox = ${quote(id)}`).join(' || ')})`
+                    : `(${visibleMailboxIds.map(id => `thread.mailbox = ${quote(id)}`).join(' || ')})`
             return pb.collection('mail_messages').getFullList<MailMessages>({
                 filter: `delivery_status = "draft" && ${mbClause}`,
             })
@@ -227,7 +234,7 @@ export function useThreadListItems(
 
     const mailboxLabelMap = useMemo(() => {
         if (!isUnified || !allMailboxes || !userMemberships) return null
-        const myMailboxIds = new Set(userMemberships.map((m) => m.mailbox))
+        const myMailboxIds = new Set(userMemberships.map(m => m.mailbox))
         const map = new Map<string, string>()
         for (const mb of allMailboxes) {
             if (!myMailboxIds.has(mb.id)) continue
@@ -245,7 +252,7 @@ export function useThreadListItems(
             if (!state) continue // shouldn't happen — server filter requires a state row
             const labelIds = assignmentsByRecord.get(state.id) ?? []
             const stateLabels = labelIds
-                .map((id) => labelMap.get(id))
+                .map(id => labelMap.get(id))
                 .filter((l): l is { id: string; name: string; color: string } => l != null)
             const mailboxLabel = isUnified ? mailboxLabelMap?.get(thread.mailbox) : undefined
             out.push(
@@ -262,7 +269,7 @@ export function useThreadListItems(
 
         // Label intersection: filter to threads tagged with all selected labels.
         if (filter.labels.length > 0) {
-            return out.filter((item) => filter.labels.every((id) => item.labels.some((l) => l.id === id)))
+            return out.filter(item => filter.labels.every(id => item.labels.some(l => l.id === id)))
         }
         return out
     }, [
@@ -280,10 +287,10 @@ export function useThreadListItems(
 
     // Publish the visible thread IDs so the conversation detail screen can
     // navigate prev/next within the same page.
-    const setThreadIds = useThreadListStore((s) => s.setThreadIds)
+    const setThreadIds = useThreadListStore(s => s.setThreadIds)
     const prevIdsKeyRef = useRef('')
     useEffect(() => {
-        const ids = items.map((i) => i.threadId)
+        const ids = items.map(i => i.threadId)
         const key = ids.join(',')
         if (key !== prevIdsKeyRef.current) {
             prevIdsKeyRef.current = key
@@ -318,19 +325,17 @@ function buildThreadsFilter(params: {
     if (params.mailboxIds.length === 1) {
         clauses.push(`mailbox = ${quote(params.mailboxIds[0])}`)
     } else {
-        clauses.push(`(${params.mailboxIds.map((id) => `mailbox = ${quote(id)}`).join(' || ')})`)
+        clauses.push(`(${params.mailboxIds.map(id => `mailbox = ${quote(id)}`).join(' || ')})`)
     }
 
     // Each thread must have a thread_state row owned by one of the relevant
     // user_orgs (just the user normally; widened to co-members on shared
     // mailbox sent/drafts views).
     if (params.userOrgIds.length === 1) {
-        clauses.push(
-            `mail_thread_state_via_thread.user_org ?= ${quote(params.userOrgIds[0])}`
-        )
+        clauses.push(`mail_thread_state_via_thread.user_org ?= ${quote(params.userOrgIds[0])}`)
     } else {
         clauses.push(
-            `(${params.userOrgIds.map((id) => `mail_thread_state_via_thread.user_org ?= ${quote(id)}`).join(' || ')})`
+            `(${params.userOrgIds.map(id => `mail_thread_state_via_thread.user_org ?= ${quote(id)}`).join(' || ')})`
         )
     }
 

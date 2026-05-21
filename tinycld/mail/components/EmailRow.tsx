@@ -1,3 +1,4 @@
+import { useRecyclingState } from '@shopify/flash-list'
 import { rowFocusStyle } from '@tinycld/core/components/focusable-row'
 import { HoverAction } from '@tinycld/core/components/HoverAction'
 import { LabelBadge, LabelDots } from '@tinycld/core/components/LabelBadge'
@@ -10,8 +11,16 @@ import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import type { Href } from 'expo-router'
 import { Link } from 'expo-router'
-import { Archive, Inbox, Mail, MailOpen, Paperclip, Square, SquareCheck, Trash2 } from 'lucide-react-native'
-import { useRecyclingState } from '@shopify/flash-list'
+import {
+    Archive,
+    Inbox,
+    Mail,
+    MailOpen,
+    Paperclip,
+    Square,
+    SquareCheck,
+    Trash2,
+} from 'lucide-react-native'
 import type { ReactNode } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import type { ThreadListItem } from './thread-list-item'
@@ -95,7 +104,12 @@ function RowWrapper({
     onPress,
     testID,
     children,
-}: { href: Href; onPress?: () => void; testID?: string; children: ReactNode }) {
+}: {
+    href: Href
+    onPress?: () => void
+    testID?: string
+    children: ReactNode
+}) {
     if (onPress) {
         return (
             <Pressable onPress={onPress} testID={testID} className="flex w-full">
@@ -130,8 +144,8 @@ function SenderWithDraft({
     }
 
     const otherParticipants = email.participants
-        .filter((p) => p.email !== email.senderEmail)
-        .map((p) => p.name || p.email.split('@')[0])
+        .filter(p => p.email !== email.senderEmail)
+        .map(p => p.name || p.email.split('@')[0])
 
     if (otherParticipants.length === 0) {
         return (
@@ -148,7 +162,15 @@ function SenderWithDraft({
     )
 }
 
-function MobileEmailRow({ email, onToggleStar, onPress, onArchive, onTrash, onToggleRead, index }: EmailRowProps) {
+function MobileEmailRow({
+    email,
+    onToggleStar,
+    onPress,
+    onArchive,
+    onTrash,
+    onToggleRead,
+    index,
+}: EmailRowProps) {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const backgroundColor = useThemeColor('background')
@@ -169,7 +191,7 @@ function MobileEmailRow({ email, onToggleStar, onPress, onArchive, onTrash, onTo
     const initials = displayName
         .split(' ')
         .filter(Boolean)
-        .map((n) => n[0])
+        .map(n => n[0])
         .join('')
         .toUpperCase()
         .slice(0, 2)
@@ -216,22 +238,31 @@ function MobileEmailRow({ email, onToggleStar, onPress, onArchive, onTrash, onTo
                     ]}
                 >
                     <View style={[mobileStyles.avatar, { backgroundColor: accentBgColor }]}>
-                        <Text style={[mobileStyles.avatarText, { color: accentFgColor }]}>{initials}</Text>
+                        <Text style={[mobileStyles.avatarText, { color: accentFgColor }]}>
+                            {initials}
+                        </Text>
                     </View>
                     <View style={mobileStyles.content}>
                         <View style={mobileStyles.topRow}>
                             <SenderWithDraft
                                 email={email}
                                 dangerColor={dangerColor}
-                                style={[mobileStyles.sender, { color: foregroundColor, fontWeight: senderWeight }]}
+                                style={[
+                                    mobileStyles.sender,
+                                    { color: foregroundColor, fontWeight: senderWeight },
+                                ]}
                                 numberOfLines={1}
                             />
                             {email.mailboxLabel ? <MailboxChip label={email.mailboxLabel} /> : null}
-                            {email.hasAttachments ? <Paperclip size={14} color={mutedColor} /> : null}
-                            <Text style={[mobileStyles.date, { color: mutedColor }]}>{dateDisplay}</Text>
+                            {email.hasAttachments ? (
+                                <Paperclip size={14} color={mutedColor} />
+                            ) : null}
+                            <Text style={[mobileStyles.date, { color: mutedColor }]}>
+                                {dateDisplay}
+                            </Text>
                             <Pressable
                                 style={mobileStyles.starButton}
-                                onPress={(e) => {
+                                onPress={e => {
                                     e.stopPropagation()
                                     e.preventDefault()
                                     onToggleStar?.()
@@ -241,18 +272,28 @@ function MobileEmailRow({ email, onToggleStar, onPress, onArchive, onTrash, onTo
                             </Pressable>
                         </View>
                         <Text
-                            style={[mobileStyles.subject, { color: foregroundColor, fontWeight: subjectWeight }]}
+                            style={[
+                                mobileStyles.subject,
+                                { color: foregroundColor, fontWeight: subjectWeight },
+                            ]}
                             numberOfLines={1}
                         >
                             {email.subject}
                         </Text>
-                        <Text style={[mobileStyles.preview, { color: mutedColor }]} numberOfLines={2}>
+                        <Text
+                            style={[mobileStyles.preview, { color: mutedColor }]}
+                            numberOfLines={2}
+                        >
                             {email.snippet}
                         </Text>
                         {email.labels.length > 0 ? (
                             <View style={mobileStyles.labelRow}>
-                                {email.labels.slice(0, 3).map((label) => (
-                                    <LabelBadge key={label.id} name={label.name} color={label.color} />
+                                {email.labels.slice(0, 3).map(label => (
+                                    <LabelBadge
+                                        key={label.id}
+                                        name={label.name}
+                                        color={label.color}
+                                    />
                                 ))}
                             </View>
                         ) : null}
@@ -334,7 +375,11 @@ function DesktopEmailRow({
     const orgHref = useOrgHref()
     const [isHovered, setIsHovered] = useRecyclingState(false, [email.stateId])
 
-    const rowBg = isSelected ? hexToRgba(accentBgColor, 0.09) : email.isRead ? 'transparent' : surfaceColor
+    const rowBg = isSelected
+        ? hexToRgba(accentBgColor, 0.09)
+        : email.isRead
+          ? 'transparent'
+          : surfaceColor
     const senderWeight = email.isRead ? '400' : '700'
     const subjectWeight = email.isRead ? '400' : '600'
     const dateDisplay = formatRelativeDate(email.latestDate)
@@ -373,7 +418,7 @@ function DesktopEmailRow({
             >
                 <Pressable
                     style={styles.checkbox}
-                    onPress={(e) => {
+                    onPress={e => {
                         e.stopPropagation()
                         e.preventDefault()
                         onToggleSelect?.()
@@ -383,7 +428,7 @@ function DesktopEmailRow({
                 </Pressable>
                 <Pressable
                     style={styles.starButton}
-                    onPress={(e) => {
+                    onPress={e => {
                         e.stopPropagation()
                         e.preventDefault()
                         onToggleStar?.()
@@ -405,13 +450,18 @@ function DesktopEmailRow({
                         numberOfLines={1}
                     />
                     {email.messageCount > 1 ? (
-                        <Text style={[styles.threadBadge, { color: mutedColor }]}>{email.messageCount}</Text>
+                        <Text style={[styles.threadBadge, { color: mutedColor }]}>
+                            {email.messageCount}
+                        </Text>
                     ) : null}
                 </View>
                 {email.mailboxLabel ? <MailboxChip label={email.mailboxLabel} /> : null}
                 <View style={styles.subjectArea}>
                     <Text
-                        style={[styles.subject, { color: foregroundColor, fontWeight: subjectWeight as '400' | '600' }]}
+                        style={[
+                            styles.subject,
+                            { color: foregroundColor, fontWeight: subjectWeight as '400' | '600' },
+                        ]}
                         numberOfLines={1}
                     >
                         {email.subject}
@@ -427,8 +477,12 @@ function DesktopEmailRow({
                     backgroundColor={rowBg}
                     rest={
                         <View className="flex-row items-center" style={{ gap: 8 }}>
-                            {email.labels.length > 0 ? <LabelDots labels={email.labels} max={3} /> : null}
-                            {email.hasAttachments ? <Paperclip size={14} color={mutedColor} /> : null}
+                            {email.labels.length > 0 ? (
+                                <LabelDots labels={email.labels} max={3} />
+                            ) : null}
+                            {email.hasAttachments ? (
+                                <Paperclip size={14} color={mutedColor} />
+                            ) : null}
                             <Text style={[styles.date, { color: mutedColor }]}>{dateDisplay}</Text>
                         </View>
                     }

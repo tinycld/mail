@@ -30,20 +30,25 @@ interface AttachmentStripProps {
 
 const PANEL_MAX_HEIGHT = 280
 
-export function AttachmentStrip({ collectionId, groups, totalCount, isAtBottom }: AttachmentStripProps) {
-    const expanded = useAttachmentStripStore((s) => s.expanded)
-    const expand = useAttachmentStripStore((s) => s.expand)
-    const toggle = useAttachmentStripStore((s) => s.toggle)
-    const active = useAttachmentPreviewStore((s) => s.active)
-    const closePreview = useAttachmentPreviewStore((s) => s.close)
-    const setActive = useAttachmentPreviewStore((s) => s.setActive)
-    const openPreview = useAttachmentPreviewStore((s) => s.open)
+export function AttachmentStrip({
+    collectionId,
+    groups,
+    totalCount,
+    isAtBottom,
+}: AttachmentStripProps) {
+    const expanded = useAttachmentStripStore(s => s.expanded)
+    const expand = useAttachmentStripStore(s => s.expand)
+    const toggle = useAttachmentStripStore(s => s.toggle)
+    const active = useAttachmentPreviewStore(s => s.active)
+    const closePreview = useAttachmentPreviewStore(s => s.close)
+    const setActive = useAttachmentPreviewStore(s => s.setActive)
+    const openPreview = useAttachmentPreviewStore(s => s.open)
 
     // Resolve any consumer-supplied preview actions (e.g. drive's "Save to
     // Drive"). Factories are registered at module load time by linked packages,
     // so the factory list is stable for the lifetime of the app — calling each
     // factory unconditionally here is safe under the rules of hooks.
-    const previewActions = getPreviewActionFactories().map((factory) => factory())
+    const previewActions = getPreviewActionFactories().map(factory => factory())
 
     const wasAtBottomRef = useRef(false)
     useEffect(() => {
@@ -79,7 +84,9 @@ export function AttachmentStrip({ collectionId, groups, totalCount, isAtBottom }
     if (totalCount === 0) return null
 
     const activeIndex = active
-        ? flatSources.findIndex((s) => s.recordId === active.messageId && s.fileName === active.fileName)
+        ? flatSources.findIndex(
+              s => s.recordId === active.messageId && s.fileName === active.fileName
+          )
         : -1
     const activeSource = activeIndex >= 0 ? flatSources[activeIndex] : null
     const hasPrevious = activeIndex > 0
@@ -102,7 +109,12 @@ export function AttachmentStrip({ collectionId, groups, totalCount, isAtBottom }
     return (
         <View className="border-t border-border bg-background">
             <Header totalCount={totalCount} expanded={expanded} onPress={toggle} />
-            <ExpandedPanel isVisible={expanded} groups={groups} sources={flatSources} onOpen={handleOpen} />
+            <ExpandedPanel
+                isVisible={expanded}
+                groups={groups}
+                sources={flatSources}
+                onOpen={handleOpen}
+            />
             <PreviewModal
                 isVisible={activeSource !== null}
                 source={activeSource}
@@ -116,7 +128,15 @@ export function AttachmentStrip({ collectionId, groups, totalCount, isAtBottom }
     )
 }
 
-function Header({ totalCount, expanded, onPress }: { totalCount: number; expanded: boolean; onPress: () => void }) {
+function Header({
+    totalCount,
+    expanded,
+    onPress,
+}: {
+    totalCount: number
+    expanded: boolean
+    onPress: () => void
+}) {
     const mutedColor = useThemeColor('muted-foreground')
     const Chevron = expanded ? ChevronDown : ChevronUp
     const label = `${totalCount} attachment${totalCount === 1 ? '' : 's'}`
@@ -149,12 +169,12 @@ function ExpandedPanel({
 
     const showSectionHeaders = groups.length > 1
     const sourceFor = (recordId: string, fileName: string) =>
-        sources.find((s) => s.recordId === recordId && s.fileName === fileName)
+        sources.find(s => s.recordId === recordId && s.fileName === fileName)
 
     return (
         <ScrollView style={{ maxHeight: PANEL_MAX_HEIGHT }} className="border-t border-border">
             <View className="px-4 py-3 gap-3">
-                {groups.map((group) => (
+                {groups.map(group => (
                     <GroupBlock
                         key={group.messageId}
                         group={group}
@@ -190,7 +210,7 @@ function GroupBlock({
                 </Text>
             ) : null}
             <View className="flex-row flex-wrap gap-2">
-                {group.filenames.map((filename) => {
+                {group.filenames.map(filename => {
                     const source = sourceFor(group.messageId, filename)
                     if (!source) return null
                     return (

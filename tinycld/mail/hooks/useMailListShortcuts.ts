@@ -30,10 +30,10 @@ export function useMailListShortcuts({
     labels,
     onFocusIndex,
 }: UseMailListShortcutsArgs) {
-    const storedIndex = useThreadListStore((s) => s.focusedIndex)
-    const hasFocus = useThreadListStore((s) => s.hasFocus)
-    const setFocusedIndex = useThreadListStore((s) => s.setFocusedIndex)
-    const clearFocus = useThreadListStore((s) => s.clearFocus)
+    const storedIndex = useThreadListStore(s => s.focusedIndex)
+    const hasFocus = useThreadListStore(s => s.hasFocus)
+    const setFocusedIndex = useThreadListStore(s => s.setFocusedIndex)
+    const clearFocus = useThreadListStore(s => s.clearFocus)
     const orgHref = useOrgHref()
 
     useShortcutScope('list')
@@ -71,7 +71,7 @@ export function useMailListShortcuts({
         const next = () => {
             const setter = (i: number) => Math.min(i + 1, lastIndex)
             if (hasFocus) {
-                setFocusedIndex((i) => {
+                setFocusedIndex(i => {
                     const n = setter(i)
                     onFocusIndex?.(n)
                     return n
@@ -84,7 +84,7 @@ export function useMailListShortcuts({
         const prev = () => {
             const setter = (i: number) => Math.max(i - 1, 0)
             if (hasFocus) {
-                setFocusedIndex((i) => {
+                setFocusedIndex(i => {
                     const n = setter(i)
                     onFocusIndex?.(n)
                     return n

@@ -3,8 +3,13 @@ import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 
 
 const BOTTOM_THRESHOLD_PX = 24
 
-export function isScrolledToBottom(metrics: { contentOffsetY: number; contentHeight: number; layoutHeight: number }) {
-    const distanceFromBottom = metrics.contentHeight - (metrics.contentOffsetY + metrics.layoutHeight)
+export function isScrolledToBottom(metrics: {
+    contentOffsetY: number
+    contentHeight: number
+    layoutHeight: number
+}) {
+    const distanceFromBottom =
+        metrics.contentHeight - (metrics.contentOffsetY + metrics.layoutHeight)
     return distanceFromBottom <= BOTTOM_THRESHOLD_PX
 }
 

@@ -16,19 +16,19 @@ export function useMailSelection(items: ThreadListItem[], folder: string | null,
         }
     }
 
-    const itemIds = new Set(items.map((i) => i.stateId))
-    const selectedItems = items.filter((i) => selectedIds.has(i.stateId))
+    const itemIds = new Set(items.map(i => i.stateId))
+    const selectedItems = items.filter(i => selectedIds.has(i.stateId))
     const selectedCount = selectedItems.length
     const hasSelection = selectedCount > 0
     const allSelected = selectedCount > 0 && selectedCount === items.length
     const someSelected = selectedCount > 0 && selectedCount < items.length
 
-    const allSelectedRead = hasSelection && selectedItems.every((i) => i.isRead)
-    const allSelectedStarred = hasSelection && selectedItems.every((i) => i.isStarred)
+    const allSelectedRead = hasSelection && selectedItems.every(i => i.isRead)
+    const allSelectedStarred = hasSelection && selectedItems.every(i => i.isStarred)
 
     function toggle(stateId: string) {
         if (!itemIds.has(stateId)) return
-        setSelectedIds((prev) => {
+        setSelectedIds(prev => {
             const next = new Set(prev)
             if (next.has(stateId)) {
                 next.delete(stateId)
@@ -43,7 +43,7 @@ export function useMailSelection(items: ThreadListItem[], folder: string | null,
         if (allSelected) {
             setSelectedIds(new Set())
         } else {
-            setSelectedIds(new Set(items.map((i) => i.stateId)))
+            setSelectedIds(new Set(items.map(i => i.stateId)))
         }
     }
 

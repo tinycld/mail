@@ -1,3 +1,4 @@
+import { FlashList, type FlashListRef } from '@shopify/flash-list'
 import { LoadingState } from '@tinycld/core/components/LoadingState'
 import { ScreenHeader } from '@tinycld/core/components/ScreenHeader'
 import { SwipeableRowProvider } from '@tinycld/core/components/SwipeableRow'
@@ -5,7 +6,6 @@ import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { captureException } from '@tinycld/core/lib/errors'
 import type { HelpTopicId } from '@tinycld/core/lib/help/types'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
-
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { pb, queryClient } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
@@ -14,7 +14,6 @@ import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Archive, Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FlashList, type FlashListRef } from '@shopify/flash-list'
 import { Pressable, RefreshControl, Text, View } from 'react-native'
 import { ComposeFAB } from '../components/ComposeFAB'
 import { EmailListToolbar } from '../components/EmailListToolbar'
@@ -89,7 +88,9 @@ function LabelChip({
                     backgroundColor: label.color,
                 }}
             />
-            <Text style={{ fontSize: 13, fontWeight: '600', color: label.color }}>{label.name}</Text>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: label.color }}>
+                {label.name}
+            </Text>
             <Pressable onPress={onDismiss} hitSlop={8}>
                 <X size={14} color={label.color} />
             </Pressable>
@@ -119,8 +120,12 @@ function ActiveViewBanner({
     if (isLabelView) {
         return (
             <View className="flex-row px-4 py-2 items-center gap-2 flex-wrap">
-                {labels.map((label) => (
-                    <LabelChip key={label.id} label={label} onDismiss={() => onDismissLabel(label.id)} />
+                {labels.map(label => (
+                    <LabelChip
+                        key={label.id}
+                        label={label}
+                        onDismiss={() => onDismissLabel(label.id)}
+                    />
                 ))}
             </View>
         )
@@ -169,7 +174,8 @@ function helpTopicForView(
 ): HelpTopicId {
     if (isSearchActive) return 'mail:search'
     if (labelCount > 0) return 'mail:labels'
-    if (folder === null || folder === 'inbox' || folder === 'all-inboxes') return 'mail:reading-threads'
+    if (folder === null || folder === 'inbox' || folder === 'all-inboxes')
+        return 'mail:reading-threads'
     return 'mail:folders'
 }
 
@@ -190,10 +196,10 @@ export default function MailListScreen() {
 
     // mail_folder_counts is a view collection (no realtime). Refetch on
     // folder/mailbox/label change so the sidebar self-heals on every nav.
-    const labelKey = labels.join(',')
+    const _labelKey = labels.join(',')
     useEffect(() => {
         queryClient.invalidateQueries({ queryKey: ['mail_folder_counts'] })
-    }, [folder, mailbox, labelKey])
+    }, [])
 
     const {
         items,
@@ -245,7 +251,11 @@ export default function MailListScreen() {
     }, [])
 
     const selection = useMailSelection(items, folder, labels)
-    const bulkActions = useMailBulkActions(threadStateCollection, selection.selectedItems, selection.clearSelection)
+    const bulkActions = useMailBulkActions(
+        threadStateCollection,
+        selection.selectedItems,
+        selection.clearSelection
+    )
 
     const listRef = useRef<FlashListRef<ThreadListItem>>(null)
     const scrollToFocusedIndex = useCallback((index: number) => {
@@ -264,15 +274,21 @@ export default function MailListScreen() {
 
     const selectedItemLabelIds = useMemo(() => {
         if (selection.selectedItems.length === 0) return new Set<string>()
-        const sets = selection.selectedItems.map((item) => new Set(item.labels.map((l) => l.id)))
+        const sets = selection.selectedItems.map(item => new Set(item.labels.map(l => l.id)))
         const firstIds = Array.from(sets[0])
-        const intersection = new Set<string>(firstIds.filter((id) => sets.every((s) => s.has(id))))
+        const intersection = new Set<string>(firstIds.filter(id => sets.every(s => s.has(id))))
         return intersection
     }, [selection.selectedItems])
 
     const toggleStar = useMutation({
-        mutationFn: mutation(function* ({ stateId, currentStarred }: { stateId: string; currentStarred: boolean }) {
-            yield threadStateCollection.update(stateId, (draft) => {
+        mutationFn: mutation(function* ({
+            stateId,
+            currentStarred,
+        }: {
+            stateId: string
+            currentStarred: boolean
+        }) {
+            yield threadStateCollection.update(stateId, draft => {
                 draft.is_starred = !currentStarred
             })
         }),
@@ -280,7 +296,7 @@ export default function MailListScreen() {
 
     const archiveThread = useMutation({
         mutationFn: mutation(function* ({ stateId, folder }: { stateId: string; folder: string }) {
-            yield threadStateCollection.update(stateId, (draft) => {
+            yield threadStateCollection.update(stateId, draft => {
                 draft.folder = folder === 'archive' ? 'inbox' : 'archive'
             })
         }),
@@ -288,15 +304,21 @@ export default function MailListScreen() {
 
     const trashThread = useMutation({
         mutationFn: mutation(function* ({ stateId, folder }: { stateId: string; folder: string }) {
-            yield threadStateCollection.update(stateId, (draft) => {
+            yield threadStateCollection.update(stateId, draft => {
                 draft.folder = folder === 'trash' ? 'inbox' : 'trash'
             })
         }),
     })
 
     const toggleRead = useMutation({
-        mutationFn: mutation(function* ({ stateId, currentRead }: { stateId: string; currentRead: boolean }) {
-            yield threadStateCollection.update(stateId, (draft) => {
+        mutationFn: mutation(function* ({
+            stateId,
+            currentRead,
+        }: {
+            stateId: string
+            currentRead: boolean
+        }) {
+            yield threadStateCollection.update(stateId, draft => {
                 draft.is_read = !currentRead
             })
         }),
@@ -308,9 +330,14 @@ export default function MailListScreen() {
             if (!draft) return
 
             const htmlBody = draft.body_html
-                ? await fetch(pb.files.getURL({ collectionId: 'mail_messages', id: draft.id }, draft.body_html))
-                      .then((r) => r.text())
-                      .catch((err) => {
+                ? await fetch(
+                      pb.files.getURL(
+                          { collectionId: 'mail_messages', id: draft.id },
+                          draft.body_html
+                      )
+                  )
+                      .then(r => r.text())
+                      .catch(err => {
                           captureException('mail.openDraft.fetchBody', err, { messageId: draft.id })
                           return ''
                       })
@@ -333,19 +360,24 @@ export default function MailListScreen() {
         [draftByThread, threadMap, openDraft]
     )
 
-    const searchItems = useMemo(() => search.results.map(searchResultToThreadListItem), [search.results])
+    const searchItems = useMemo(
+        () => search.results.map(searchResultToThreadListItem),
+        [search.results]
+    )
 
     const activeLabels = useMemo(
         () =>
             labels
-                .map((id) => labelMap.get(id))
+                .map(id => labelMap.get(id))
                 .filter((l): l is { id: string; name: string; color: string } => l != null),
         [labels, labelMap]
     )
 
     const folderKey = folder ?? 'inbox'
     const folderTitle =
-        activeLabels.length > 0 ? activeLabels.map((l) => l.name).join(', ') : prettifyFolderKey(folderKey)
+        activeLabels.length > 0
+            ? activeLabels.map(l => l.name).join(', ')
+            : prettifyFolderKey(folderKey)
 
     const isMobile = breakpoint === 'mobile'
 
@@ -355,7 +387,7 @@ export default function MailListScreen() {
 
     const dismissLabel = useCallback(
         (labelId: string) => {
-            const remaining = labels.filter((id) => id !== labelId)
+            const remaining = labels.filter(id => id !== labelId)
             if (remaining.length === 0) {
                 router.replace(orgHref('mail'))
             } else {
@@ -412,7 +444,7 @@ export default function MailListScreen() {
                     <SwipeableRowProvider>
                         <FlashList
                             data={searchItems}
-                            keyExtractor={(item) => item.threadId}
+                            keyExtractor={item => item.threadId}
                             renderItem={({ item }) => <EmailRow email={item} isMobile={isMobile} />}
                         />
                     </SwipeableRowProvider>
@@ -449,10 +481,14 @@ export default function MailListScreen() {
                     onArchive={() => bulkActions.archiveSelected.mutate()}
                     onSpam={() => bulkActions.spamSelected.mutate()}
                     onTrash={() => bulkActions.trashSelected.mutate()}
-                    onToggleRead={(markAsRead) => bulkActions.toggleReadSelected.mutate({ markAsRead })}
-                    onMove={(folder) => bulkActions.moveSelected.mutate(folder)}
-                    onToggleStar={(star) => bulkActions.toggleStarSelected.mutate({ star })}
-                    onUpdateLabel={(labelId, add) => bulkActions.updateLabelsSelected.mutate({ labelId, add })}
+                    onToggleRead={markAsRead =>
+                        bulkActions.toggleReadSelected.mutate({ markAsRead })
+                    }
+                    onMove={folder => bulkActions.moveSelected.mutate(folder)}
+                    onToggleStar={star => bulkActions.toggleStarSelected.mutate({ star })}
+                    onUpdateLabel={(labelId, add) =>
+                        bulkActions.updateLabelsSelected.mutate({ labelId, add })
+                    }
                     onRefresh={handleRefresh}
                     isRefreshing={isRefreshing}
                     page={page}
@@ -470,14 +506,17 @@ export default function MailListScreen() {
                     <FlashList
                         ref={listRef}
                         data={items}
-                        keyExtractor={(item) => item.stateId}
+                        keyExtractor={item => item.stateId}
                         getItemType={getItemType}
                         onScroll={onScroll}
                         scrollEventThrottle={16}
                         renderItem={renderRow}
                         refreshControl={
                             isMobile ? (
-                                <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+                                <RefreshControl
+                                    refreshing={isRefreshing}
+                                    onRefresh={handleRefresh}
+                                />
                             ) : undefined
                         }
                     />
@@ -515,7 +554,10 @@ const MailListRow = memo(function MailListRow({
     onToggleRead,
     onDraftPress,
 }: MailListRowProps) {
-    const handleToggleSelect = useCallback(() => onToggleSelect(item.stateId), [onToggleSelect, item.stateId])
+    const handleToggleSelect = useCallback(
+        () => onToggleSelect(item.stateId),
+        [onToggleSelect, item.stateId]
+    )
     const handleToggleStar = useCallback(
         () => onToggleStar({ stateId: item.stateId, currentStarred: item.isStarred }),
         [onToggleStar, item.stateId, item.isStarred]
@@ -532,7 +574,10 @@ const MailListRow = memo(function MailListRow({
         () => onToggleRead({ stateId: item.stateId, currentRead: item.isRead }),
         [onToggleRead, item.stateId, item.isRead]
     )
-    const handlePress = useMemo(() => (item.hasDraft ? () => onDraftPress(item) : undefined), [item, onDraftPress])
+    const handlePress = useMemo(
+        () => (item.hasDraft ? () => onDraftPress(item) : undefined),
+        [item, onDraftPress]
+    )
 
     return (
         <EmailRow

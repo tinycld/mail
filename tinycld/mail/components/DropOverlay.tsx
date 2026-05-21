@@ -18,7 +18,9 @@ export function DropOverlay({ isVisible }: DropOverlayProps) {
         >
             <View className="items-center gap-2">
                 <Paperclip size={28} color={accentColor} />
-                <Text className="text-base font-semibold text-accent-foreground">Drop files to attach</Text>
+                <Text className="text-base font-semibold text-accent-foreground">
+                    Drop files to attach
+                </Text>
             </View>
         </View>
     )

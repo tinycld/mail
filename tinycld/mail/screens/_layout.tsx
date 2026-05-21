@@ -26,8 +26,8 @@ export default function MailLayout() {
     const [advancedFilters, setAdvancedFilters] = useState<AdvancedSearchFilters>({})
     const [isFilterOpen, setIsFilterOpen] = useState(false)
     const breakpoint = useBreakpoint()
-    const setDrawerOpen = useWorkspaceStore((s) => s.setDrawerOpen)
-    const composeMode = useComposeStore((s) => s.mode)
+    const setDrawerOpen = useWorkspaceStore(s => s.setDrawerOpen)
+    const composeMode = useComposeStore(s => s.mode)
 
     useEffect(() => {
         return composeEvents.subscribe(() => {

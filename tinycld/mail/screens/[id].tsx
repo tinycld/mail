@@ -40,7 +40,7 @@ function useAutoMarkAsRead(
     const markedRef = useRef<string | null>(null)
     const markAsRead = useMutation({
         mutationFn: mutation(function* (stateId: string) {
-            yield threadStateCollection.update(stateId, (draft) => {
+            yield threadStateCollection.update(stateId, draft => {
                 draft.is_read = true
             })
         }),
@@ -74,7 +74,10 @@ export default function MailDetailScreen() {
     const threadState = threadStates?.[0]
 
     const { data: threads } = useOrgLiveQuery(
-        (query) => query.from({ mail_threads: threadsCollection }).where(({ mail_threads }) => eq(mail_threads.id, id)),
+        query =>
+            query
+                .from({ mail_threads: threadsCollection })
+                .where(({ mail_threads }) => eq(mail_threads.id, id)),
         [id]
     )
     const thread = threads?.[0]
@@ -87,7 +90,7 @@ export default function MailDetailScreen() {
     const hasAccess = !thread || userMailboxIds.has(thread.mailbox)
 
     const { data: messages } = useOrgLiveQuery(
-        (query) =>
+        query =>
             query
                 .from({ mail_messages: messagesCollection })
                 .where(({ mail_messages }) => eq(mail_messages.thread, id))
@@ -105,7 +108,9 @@ export default function MailDetailScreen() {
     if (threadState?.folder && !initialFolderRef.current) {
         initialFolderRef.current = threadState.folder
     }
-    const navigateBack = useNavigateBack(() => orgHref('mail', { folder: initialFolderRef.current ?? 'inbox' }))
+    const navigateBack = useNavigateBack(() =>
+        orgHref('mail', { folder: initialFolderRef.current ?? 'inbox' })
+    )
 
     useShortcutScope('thread')
     const closeShortcut = useMemo<Shortcut>(
@@ -121,8 +126,15 @@ export default function MailDetailScreen() {
     )
     useRegisterShortcut(closeShortcut)
 
-    const { archiveThread, spamThread, trashThread, moveThread, toggleRead, toggleStar, updateLabel } =
-        useThreadActions(threadStateCollection, threadState, navigateBack)
+    const {
+        archiveThread,
+        spamThread,
+        trashThread,
+        moveThread,
+        toggleRead,
+        toggleStar,
+        updateLabel,
+    } = useThreadActions(threadStateCollection, threadState, navigateBack)
 
     const { threadIds } = useThreadListContext()
     const { hasPrevious, hasNext, goToPrevious, goToNext } = useThreadNavigation(threadIds, id)
@@ -142,7 +154,7 @@ export default function MailDetailScreen() {
         // from the keyboard height so the dock rises exactly to the keyboard top.
         const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
         const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-        const showSub = Keyboard.addListener(showEvent, (e) => {
+        const showSub = Keyboard.addListener(showEvent, e => {
             dockRef.current?.measureInWindow((_x, y, _w, h) => {
                 const screenH = Dimensions.get('screen').height
                 const distanceBelowDockBottom = Math.max(0, screenH - (y + h))
@@ -168,8 +180,8 @@ export default function MailDetailScreen() {
         },
         [onScrollShadow, onScrollBottom]
     )
-    const toggledMessages = useThreadExpansionStore((s) => s.toggled)
-    const toggleExpanded = useThreadExpansionStore((s) => s.toggle)
+    const toggledMessages = useThreadExpansionStore(s => s.toggled)
+    const toggleExpanded = useThreadExpansionStore(s => s.toggle)
     useThreadExpansionStore.getState().resetForThread(id)
     useAttachmentStripStore.getState().resetForThread(id)
     useAttachmentPreviewStore.getState().close()
@@ -218,8 +230,8 @@ export default function MailDetailScreen() {
             to: [],
             mailboxId,
             sentToAddresses: [
-                ...(lastMessage.recipients_to ?? []).map((r) => r.email),
-                ...(lastMessage.recipients_cc ?? []).map((r) => r.email),
+                ...(lastMessage.recipients_to ?? []).map(r => r.email),
+                ...(lastMessage.recipients_cc ?? []).map(r => r.email),
             ],
         })
     }
@@ -235,7 +247,7 @@ export default function MailDetailScreen() {
                     onArchive={() => archiveThread.mutate()}
                     onSpam={() => spamThread.mutate()}
                     onTrash={() => trashThread.mutate()}
-                    onMove={(folder) => moveThread.mutate(folder)}
+                    onMove={folder => moveThread.mutate(folder)}
                     onUpdateLabel={(labelId, add) => updateLabel.mutate({ labelId, add })}
                     onToggleRead={() => toggleRead.mutate()}
                     onToggleStar={() => toggleStar.mutate()}
@@ -277,22 +289,24 @@ export default function MailDetailScreen() {
                                         to: [{ name: msg.sender_name, email: msg.sender_email }],
                                         mailboxId,
                                         sentToAddresses: [
-                                            ...(msg.recipients_to ?? []).map((r) => r.email),
-                                            ...(msg.recipients_cc ?? []).map((r) => r.email),
+                                            ...(msg.recipients_to ?? []).map(r => r.email),
+                                            ...(msg.recipients_cc ?? []).map(r => r.email),
                                         ],
                                     })
                                 }
                                 onReplyAll={() => {
                                     const replyAddresses = [
-                                        ...(msg.recipients_to ?? []).map((r) => r.email),
-                                        ...(msg.recipients_cc ?? []).map((r) => r.email),
+                                        ...(msg.recipients_to ?? []).map(r => r.email),
+                                        ...(msg.recipients_cc ?? []).map(r => r.email),
                                     ]
                                     const defaultFrom = pickDefaultFrom({
                                         mode: 'reply',
                                         identities,
                                         replyToAddresses: replyAddresses,
                                     })
-                                    const identity = identities.find((i) => i.mailboxId === defaultFrom.mailboxId)
+                                    const identity = identities.find(
+                                        i => i.mailboxId === defaultFrom.mailboxId
+                                    )
                                     const rawTo = [
                                         { name: msg.sender_name, email: msg.sender_email },
                                         ...(msg.recipients_to ?? []),
@@ -318,8 +332,8 @@ export default function MailDetailScreen() {
                                         to: [],
                                         mailboxId,
                                         sentToAddresses: [
-                                            ...(msg.recipients_to ?? []).map((r) => r.email),
-                                            ...(msg.recipients_cc ?? []).map((r) => r.email),
+                                            ...(msg.recipients_to ?? []).map(r => r.email),
+                                            ...(msg.recipients_cc ?? []).map(r => r.email),
                                         ],
                                     })
                                 }
@@ -332,7 +346,10 @@ export default function MailDetailScreen() {
                                     cidMap={msg.cid_map}
                                 />
                             ) : (
-                                <CollapsedSnippet snippet={msg.snippet} onPress={() => toggleExpanded(msg.id)} />
+                                <CollapsedSnippet
+                                    snippet={msg.snippet}
+                                    onPress={() => toggleExpanded(msg.id)}
+                                />
                             )}
                         </View>
                     )

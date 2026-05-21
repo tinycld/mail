@@ -50,7 +50,9 @@ export function MailboxListRow({ item, isActive = false, onPress }: Props) {
                 className="rounded-lg items-center justify-center"
                 style={{ width: 36, height: 36, backgroundColor: avatarBg }}
             >
-                <Text style={{ color: avatarFg, fontWeight: '700', fontSize: 13 }}>{initials(item)}</Text>
+                <Text style={{ color: avatarFg, fontWeight: '700', fontSize: 13 }}>
+                    {initials(item)}
+                </Text>
             </View>
             <View className="flex-1" style={{ minWidth: 0 }}>
                 <Text className="text-foreground" style={{ fontSize: 14, fontWeight: '600' }}>

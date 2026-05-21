@@ -14,8 +14,8 @@ export const useAttachmentStripStore = create<AttachmentStripState>((set, get) =
     expanded: false,
     expand: () => set({ expanded: true }),
     collapse: () => set({ expanded: false }),
-    toggle: () => set((state) => ({ expanded: !state.expanded })),
-    resetForThread: (threadId) => {
+    toggle: () => set(state => ({ expanded: !state.expanded })),
+    resetForThread: threadId => {
         if (get().threadId === threadId) return
         set({ threadId, expanded: false })
     },

@@ -223,7 +223,7 @@ function BulkActionsToolbar({
                 key: 'labels',
                 icon: Tag,
                 label: 'Labels',
-                children: labels.map((lbl) => {
+                children: labels.map(lbl => {
                     const isActive = selectedItemLabelIds.has(lbl.id)
                     return (
                         <MenuActionItem
@@ -317,7 +317,9 @@ function usePaginationRightItems({
             {
                 type: 'custom',
                 key: 'pagination-text',
-                element: <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>{text}</Text>,
+                element: (
+                    <Text style={{ fontSize: 12, marginRight: 4, color: mutedColor }}>{text}</Text>
+                ),
             },
             {
                 type: 'button',

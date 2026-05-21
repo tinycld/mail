@@ -30,9 +30,13 @@ export function ThreadSubjectHeader({ subject, labels }: ThreadSubjectHeaderProp
 
     return (
         <View className="flex-row items-center gap-2 px-4 py-3 flex-wrap">
-            <Text style={{ fontSize: isMobile ? 18 : 22, fontWeight: '400', color: foregroundColor }}>{subject}</Text>
+            <Text
+                style={{ fontSize: isMobile ? 18 : 22, fontWeight: '400', color: foregroundColor }}
+            >
+                {subject}
+            </Text>
             <View className="flex-row gap-1">
-                {labels.map((label) => (
+                {labels.map(label => (
                     <LabelBadge key={label.id} name={label.name} color={label.color} />
                 ))}
             </View>
@@ -110,7 +114,7 @@ export function MessageHeader({
     const initials = senderName
         .split(' ')
         .filter(Boolean)
-        .map((n) => n[0])
+        .map(n => n[0])
         .join('')
         .toUpperCase()
         .slice(0, 2)
@@ -134,11 +138,15 @@ export function MessageHeader({
                             backgroundColor: accentBgColor,
                         }}
                     >
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: accentFgColor }}>{initials}</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: accentFgColor }}>
+                            {initials}
+                        </Text>
                     </View>
                     <View className="flex-1" style={{ gap: 2 }}>
                         <View className="flex-row items-center gap-1">
-                            <Text style={{ fontSize: 14, fontWeight: '600', color: foregroundColor }}>
+                            <Text
+                                style={{ fontSize: 14, fontWeight: '600', color: foregroundColor }}
+                            >
                                 {senderName}
                             </Text>
                             {isMobile ? null : (
@@ -151,17 +159,27 @@ export function MessageHeader({
                         </View>
                         <Text style={{ fontSize: 12, color: mutedColor }}>to me</Text>
                     </View>
-                    <Text style={{ fontSize: 12, flexShrink: 0, color: mutedColor }}>{dateDisplay}</Text>
+                    <Text style={{ fontSize: 12, flexShrink: 0, color: mutedColor }}>
+                        {dateDisplay}
+                    </Text>
                     {isStarred != null ? (
                         <Tooltip title={isStarred ? 'Remove star' : 'Add star'}>
-                            <Pressable className="rounded-full" style={{ padding: 6 }} onPress={onToggleStar}>
+                            <Pressable
+                                className="rounded-full"
+                                style={{ padding: 6 }}
+                                onPress={onToggleStar}
+                            >
                                 <StarIcon isStarred={!!isStarred} size={18} />
                             </Pressable>
                         </Tooltip>
                     ) : null}
                     <ToolbarIconButton icon={Reply} label="Reply" onPress={onReply} />
                     <Tooltip title={isExpanded ? 'Collapse' : 'Expand'}>
-                        <Pressable className="rounded-full" style={{ padding: 6 }} onPress={onToggleExpand}>
+                        <Pressable
+                            className="rounded-full"
+                            style={{ padding: 6 }}
+                            onPress={onToggleExpand}
+                        >
                             {isExpanded ? (
                                 <ChevronUp size={18} color={mutedColor} />
                             ) : (
@@ -170,9 +188,21 @@ export function MessageHeader({
                         </Pressable>
                     </Tooltip>
                     <ToolbarMenu icon={MoreVertical} label="More options">
-                        <MenuActionItem label="Reply" icon={Reply} onPress={onReply ?? (() => {})} />
-                        <MenuActionItem label="Reply all" icon={ReplyAll} onPress={onReplyAll ?? (() => {})} />
-                        <MenuActionItem label="Forward" icon={Forward} onPress={onForward ?? (() => {})} />
+                        <MenuActionItem
+                            label="Reply"
+                            icon={Reply}
+                            onPress={onReply ?? (() => {})}
+                        />
+                        <MenuActionItem
+                            label="Reply all"
+                            icon={ReplyAll}
+                            onPress={onReplyAll ?? (() => {})}
+                        />
+                        <MenuActionItem
+                            label="Forward"
+                            icon={Forward}
+                            onPress={onForward ?? (() => {})}
+                        />
                     </ToolbarMenu>
                 </View>
             </Pressable>

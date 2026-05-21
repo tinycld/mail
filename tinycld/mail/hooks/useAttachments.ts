@@ -24,7 +24,7 @@ export function useAttachments() {
     const totalSize = attachments.reduce((sum, a) => sum + a.size, 0)
 
     const addFiles = useCallback((files: File[]) => {
-        const incoming = files.map((file) => ({
+        const incoming = files.map(file => ({
             id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
             name: file.name,
             size: file.size,
@@ -65,7 +65,7 @@ export function useAttachments() {
     )
 
     const removeFile = useCallback((id: string) => {
-        setAttachments((prev) => prev.filter((a) => a.id !== id))
+        setAttachments(prev => prev.filter(a => a.id !== id))
     }, [])
 
     const clearAll = useCallback(() => {

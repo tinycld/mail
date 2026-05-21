@@ -25,7 +25,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
     const borderColor = useThemeColor('border')
     const backgroundColor = useThemeColor('background')
     const mailboxId = useDefaultMailbox()
-    const aliasId = useComposeStore((s) => s.aliasId)
+    const aliasId = useComposeStore(s => s.aliasId)
     const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
         placeholder: 'Compose reply',
         autofocus: true,
@@ -33,9 +33,11 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
     const { attachments, addFilesSafely, removeFile, clearAll: clearAttachments } = useAttachments()
 
     const toValue =
-        replyContext.to.map((r) => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
+        replyContext.to.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
         (replyContext.to.length > 0 ? ', ' : '')
-    const subjectValue = replyContext.subject.startsWith('Re:') ? replyContext.subject : `Re: ${replyContext.subject}`
+    const subjectValue = replyContext.subject.startsWith('Re:')
+        ? replyContext.subject
+        : `Re: ${replyContext.subject}`
 
     const {
         control,
@@ -58,7 +60,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
         },
     })
 
-    const onSend = handleSubmit(async (data) => {
+    const onSend = handleSubmit(async data => {
         if (!mailboxId) {
             setError('to', { message: 'No mailbox configured — contact your admin' })
             return
@@ -80,7 +82,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
             html_body: htmlBody,
             text_body: textBody,
             in_reply_to_message_id: replyContext.messageId,
-            attachments: attachments.map((a) => a.file),
+            attachments: attachments.map(a => a.file),
         })
     })
 
@@ -91,8 +93,11 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
 
     const { pickFiles, ActionSheetElement: PickerActionSheet } = usePickFiles()
     const handleAttach = useCallback(async () => {
-        const picked = await pickFiles({ sources: ['photoLibrary', 'camera', 'documents'], multiple: true })
-        if (picked.length > 0) addFilesSafely(picked.map((p) => p.file))
+        const picked = await pickFiles({
+            sources: ['photoLibrary', 'camera', 'documents'],
+            multiple: true,
+        })
+        if (picked.length > 0) addFilesSafely(picked.map(p => p.file))
     }, [pickFiles, addFilesSafely])
 
     return (
@@ -109,7 +114,11 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
                 <View className="p-3" style={{ minHeight: 120, maxHeight: 280 }}>
                     <EditorComponent />
                 </View>
-                <AttachmentRibbon isVisible={attachments.length > 0} attachments={attachments} onRemove={removeFile} />
+                <AttachmentRibbon
+                    isVisible={attachments.length > 0}
+                    attachments={attachments}
+                    onRemove={removeFile}
+                />
                 <ComposeToolbar
                     commands={commands}
                     toolbarState={toolbarState}

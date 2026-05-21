@@ -1,8 +1,8 @@
+import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { Forward, Reply, ReplyAll } from 'lucide-react-native'
 import { lazy, Suspense } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { filterOwnAddresses, pickDefaultFrom } from '../hooks/defaultFromIdentity'
 import { useCompose } from '../hooks/useComposeState'
 import { useOpenReply } from '../hooks/useOpenReply'
@@ -44,7 +44,7 @@ export function InlineReply({
 
     const isInlineActive = mode === 'inline' && replyContext?.threadId === threadId
 
-    const sentToAddresses = [...recipientsTo.map((r) => r.email), ...recipientsCc.map((r) => r.email)]
+    const sentToAddresses = [...recipientsTo.map(r => r.email), ...recipientsCc.map(r => r.email)]
 
     const handleReply = () => {
         openReply({
@@ -63,7 +63,7 @@ export function InlineReply({
             identities,
             replyToAddresses: sentToAddresses,
         })
-        const identity = identities.find((i) => i.mailboxId === defaultFrom.mailboxId)
+        const identity = identities.find(i => i.mailboxId === defaultFrom.mailboxId)
         const rawTo = [{ name: senderName, email: senderEmail }, ...recipientsTo, ...recipientsCc]
         const filteredTo = identity ? filterOwnAddresses({ identity, recipients: rawTo }) : rawTo
         openReply({
@@ -125,7 +125,9 @@ export function InlineReply({
                 onPress={handleReplyAll}
             >
                 <ReplyAll size={16} color={mutedColor} />
-                <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>Reply all</Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}>
+                    Reply all
+                </Text>
             </Pressable>
             <Pressable
                 className="flex-row items-center px-4 py-2 rounded-full border"

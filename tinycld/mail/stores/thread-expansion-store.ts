@@ -14,13 +14,13 @@ interface ThreadExpansionState {
     toggle: (messageId: string) => void
 }
 
-export const useThreadExpansionStore = create<ThreadExpansionState>((set) => ({
+export const useThreadExpansionStore = create<ThreadExpansionState>(set => ({
     toggled: new Set(),
     threadId: null,
-    resetForThread: (threadId) =>
-        set((state) => (state.threadId === threadId ? state : { threadId, toggled: new Set() })),
-    toggle: (messageId) =>
-        set((state) => {
+    resetForThread: threadId =>
+        set(state => (state.threadId === threadId ? state : { threadId, toggled: new Set() })),
+    toggle: messageId =>
+        set(state => {
             const next = new Set(state.toggled)
             if (next.has(messageId)) {
                 next.delete(messageId)

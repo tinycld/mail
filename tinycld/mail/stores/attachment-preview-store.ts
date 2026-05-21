@@ -13,9 +13,9 @@ interface AttachmentPreviewState {
     setActive: (active: ActiveAttachment | null) => void
 }
 
-export const useAttachmentPreviewStore = create<AttachmentPreviewState>((set) => ({
+export const useAttachmentPreviewStore = create<AttachmentPreviewState>(set => ({
     active: null,
     open: (messageId, fileName) => set({ active: { messageId, fileName } }),
     close: () => set({ active: null }),
-    setActive: (active) => set({ active }),
+    setActive: active => set({ active }),
 }))

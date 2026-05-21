@@ -9,8 +9,24 @@ import { useOrgInfo } from '@tinycld/core/lib/use-org-info'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useSettings } from '@tinycld/core/lib/use-settings'
 import { Divider } from '@tinycld/core/ui/divider'
-import { FormErrorSummary, SelectInput, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
-import { CheckCircle, Copy, Globe, Loader2, Plus, RefreshCw, Trash2, XCircle } from 'lucide-react-native'
+import {
+    FormErrorSummary,
+    SelectInput,
+    TextInput,
+    useForm,
+    z,
+    zodResolver,
+} from '@tinycld/core/ui/form'
+import {
+    CheckCircle,
+    Copy,
+    Globe,
+    Loader2,
+    Plus,
+    RefreshCw,
+    Trash2,
+    XCircle,
+} from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb/core'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
@@ -28,7 +44,10 @@ const addDomainSchema = z.object({
     domain: z
         .string()
         .min(1, 'Domain is required')
-        .regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/, 'Enter a valid domain'),
+        .regex(
+            /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/,
+            'Enter a valid domain'
+        ),
 })
 
 export default function ProviderSettings() {
@@ -37,7 +56,7 @@ export default function ProviderSettings() {
     const settings = useSettings('mail', orgId)
     const [settingsCollection] = useStore('settings')
 
-    const settingsMap = new Map(settings.map((s) => [s.key, s]))
+    const settingsMap = new Map(settings.map(s => [s.key, s]))
 
     const {
         control,
@@ -50,8 +69,10 @@ export default function ProviderSettings() {
         resolver: zodResolver(mailSettingsSchema),
         values: {
             provider: (settingsMap.get('provider')?.value as string) ?? 'postmark',
-            postmark_server_token: (settingsMap.get('postmark_server_token')?.value as string) ?? '',
-            postmark_account_token: (settingsMap.get('postmark_account_token')?.value as string) ?? '',
+            postmark_server_token:
+                (settingsMap.get('postmark_server_token')?.value as string) ?? '',
+            postmark_account_token:
+                (settingsMap.get('postmark_account_token')?.value as string) ?? '',
         },
     })
 
@@ -65,7 +86,7 @@ export default function ProviderSettings() {
             for (const entry of entries) {
                 const existing = settingsMap.get(entry.key)
                 if (existing) {
-                    yield settingsCollection.update(existing.id, (draft) => {
+                    yield settingsCollection.update(existing.id, draft => {
                         draft.value = entry.value
                     })
                 } else {
@@ -82,7 +103,7 @@ export default function ProviderSettings() {
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
 
-    const onSubmit = handleSubmit((data) => saveMutation.mutate(data))
+    const onSubmit = handleSubmit(data => saveMutation.mutate(data))
     const canSubmit = !saveMutation.isPending && isDirty
 
     return (
@@ -91,7 +112,10 @@ export default function ProviderSettings() {
                 <View className="gap-2">
                     <Globe size={32} color={primaryColor} />
                     <View className="flex-row items-center gap-2">
-                        <Text className="text-foreground" style={{ fontSize: 20, fontWeight: 'bold' }}>
+                        <Text
+                            className="text-foreground"
+                            style={{ fontSize: 20, fontWeight: 'bold' }}
+                        >
                             Mail Provider
                         </Text>
                         <HelpIcon topic="mail:provider-setup" size={18} />
@@ -104,7 +128,12 @@ export default function ProviderSettings() {
                 <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
 
                 <View className="gap-4">
-                    <SelectInput control={control} name="provider" label="Provider" options={PROVIDER_OPTIONS} />
+                    <SelectInput
+                        control={control}
+                        name="provider"
+                        label="Provider"
+                        options={PROVIDER_OPTIONS}
+                    />
                     <TextInput
                         control={control}
                         name="postmark_server_token"
@@ -160,7 +189,7 @@ function DomainsSection({ orgId }: { orgId: string }) {
             .orderBy(({ mail_domains }) => mail_domains.created, 'asc')
     )
 
-    const domainRows: DomainRow[] = (domains ?? []).map((d) => ({
+    const domainRows: DomainRow[] = (domains ?? []).map(d => ({
         id: d.id,
         domain: d.domain,
         verified: d.verified,
@@ -179,13 +208,13 @@ function DomainsSection({ orgId }: { orgId: string }) {
                 Domains
             </Text>
             <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
-                Add domains your organization can send and receive email on. Click Verify to re-check DNS and provider
-                status.
+                Add domains your organization can send and receive email on. Click Verify to
+                re-check DNS and provider status.
             </Text>
 
             <NoDomainsBanner isVisible={domainRows.length === 0} />
 
-            {domainRows.map((d) => (
+            {domainRows.map(d => (
                 <DomainRowItem key={d.id} domain={d} />
             ))}
 
@@ -247,7 +276,10 @@ function DomainRowItem({ domain }: { domain: DomainRow }) {
                 </View>
 
                 <View className="flex-row gap-2 items-center">
-                    <VerifyButton isPending={verifyMutation.isPending} onPress={() => verifyMutation.mutate()} />
+                    <VerifyButton
+                        isPending={verifyMutation.isPending}
+                        onPress={() => verifyMutation.mutate()}
+                    />
                     <DeleteDomainButton
                         confirming={confirming}
                         onConfirm={() => deleteMutation.mutate()}
@@ -297,7 +329,10 @@ function WebhookURLs({ domainId }: { domainId: string }) {
     if (!urls) {
         return (
             <Pressable onPress={() => fetchUrls.mutate()} disabled={fetchUrls.isPending}>
-                <Text className="text-muted-foreground" style={{ fontSize: 12, textDecorationLine: 'underline' }}>
+                <Text
+                    className="text-muted-foreground"
+                    style={{ fontSize: 12, textDecorationLine: 'underline' }}
+                >
                     {fetchUrls.isPending ? 'Loading...' : 'Show webhook URLs'}
                 </Text>
             </Pressable>
@@ -401,7 +436,13 @@ function VerifyErrorBanner({ message }: { message: string | null }) {
     )
 }
 
-function LastCheckedLabel({ lastCheckedAt, mutedColor }: { lastCheckedAt: string; mutedColor: string }) {
+function LastCheckedLabel({
+    lastCheckedAt,
+    mutedColor,
+}: {
+    lastCheckedAt: string
+    mutedColor: string
+}) {
     if (!lastCheckedAt) return null
     return (
         <Text style={{ fontSize: 10, color: mutedColor, fontStyle: 'italic' }}>
@@ -416,7 +457,10 @@ function buildMXHint(verified: boolean, details: MailDomainVerificationDetails |
     return `expected inbound.postmarkapp.com — found: ${actual}`
 }
 
-function buildPostmarkHint(verified: boolean, details: MailDomainVerificationDetails | null): string {
+function buildPostmarkHint(
+    verified: boolean,
+    details: MailDomainVerificationDetails | null
+): string {
     const pm = details?.postmark
     if (pm?.error) return pm.error
     if (verified) {
@@ -440,7 +484,11 @@ function DomainVerificationPanel({ domain }: { domain: DomainRow }) {
 
     return (
         <View className="gap-1">
-            <CheckRow label="Inbound MX" ok={domain.mx_verified} hint={buildMXHint(domain.mx_verified, details)} />
+            <CheckRow
+                label="Inbound MX"
+                ok={domain.mx_verified}
+                hint={buildMXHint(domain.mx_verified, details)}
+            />
             <CheckRow
                 label="Postmark Inbound Domain"
                 ok={domain.inbound_domain_verified}
@@ -448,12 +496,27 @@ function DomainVerificationPanel({ domain }: { domain: DomainRow }) {
             />
             <CheckRow label="SPF" ok={domain.spf_verified} hint={outboundHint} advisory />
             <CheckRow label="DKIM" ok={domain.dkim_verified} hint={outboundHint} advisory />
-            <CheckRow label="Return-Path" ok={domain.return_path_verified} hint={outboundHint} advisory />
+            <CheckRow
+                label="Return-Path"
+                ok={domain.return_path_verified}
+                hint={outboundHint}
+                advisory
+            />
         </View>
     )
 }
 
-function CheckRow({ label, ok, hint, advisory }: { label: string; ok: boolean; hint: string; advisory?: boolean }) {
+function CheckRow({
+    label,
+    ok,
+    hint,
+    advisory,
+}: {
+    label: string
+    ok: boolean
+    hint: string
+    advisory?: boolean
+}) {
     const mutedColor = useThemeColor('muted-foreground')
     const successColor = useThemeColor('success')
     const dangerColor = useThemeColor('danger')
@@ -564,7 +627,7 @@ function AddDomainForm({ orgId }: { orgId: string }) {
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
 
-    const onSubmit = handleSubmit((data) => addMutation.mutate(data))
+    const onSubmit = handleSubmit(data => addMutation.mutate(data))
     const canSubmit = !addMutation.isPending && isDirty
 
     const addButton = (

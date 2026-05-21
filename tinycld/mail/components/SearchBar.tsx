@@ -37,11 +37,7 @@ export function SearchBar({
         <View className="relative" style={{ zIndex: 100 }}>
             <View className="flex-row items-center h-[44px] rounded-[22px] px-4 gap-2.5 border border-border bg-surface-secondary">
                 {onMenuPress ? (
-                    <Pressable
-                        testID="drawer-toggle"
-                        onPress={onMenuPress}
-                        className="p-0.5"
-                    >
+                    <Pressable testID="drawer-toggle" onPress={onMenuPress} className="p-0.5">
                         <Menu size={20} color={mutedColor} />
                     </Pressable>
                 ) : null}

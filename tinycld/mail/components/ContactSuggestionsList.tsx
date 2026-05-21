@@ -13,13 +13,23 @@ interface ContactSuggestionsListProps {
  * input. The data subscription + runtime package gate live in core's
  * ContactSuggestionsProvider; this component just filters + renders.
  */
-export function ContactSuggestionsList({ activeQuery, committedEmails, onSelect }: ContactSuggestionsListProps) {
+export function ContactSuggestionsList({
+    activeQuery,
+    committedEmails,
+    onSelect,
+}: ContactSuggestionsListProps) {
     return (
         <ContactSuggestionsProvider>
-            {(contacts) => {
+            {contacts => {
                 const suggestions = filterContactSuggestions(contacts, activeQuery, committedEmails)
                 if (suggestions.length === 0) return null
-                return <RecipientSuggestionList suggestions={suggestions} query={activeQuery} onSelect={onSelect} />
+                return (
+                    <RecipientSuggestionList
+                        suggestions={suggestions}
+                        query={activeQuery}
+                        onSelect={onSelect}
+                    />
+                )
             }}
         </ContactSuggestionsProvider>
     )

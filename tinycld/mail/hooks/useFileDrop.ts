@@ -37,7 +37,7 @@ export function useFileDrop({ onFiles, isEnabled }: UseFileDropOptions): {
         () =>
             createFileDropController({
                 onChange: setIsDragging,
-                onFiles: (files) => onFilesRef.current(files),
+                onFiles: files => onFilesRef.current(files),
                 isEnabled: true,
             }),
         []
@@ -64,11 +64,11 @@ export function useFileDrop({ onFiles, isEnabled }: UseFileDropOptions): {
             if (!el) return
             attachDropListeners(el, {
                 onEnter: () => controller.enter(),
-                onOver: (e) => {
+                onOver: e => {
                     if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
                 },
                 onLeave: () => controller.leave(),
-                onDrop: (e) => {
+                onDrop: e => {
                     const files = extractDroppedFiles(e.dataTransfer)
                     if (!isEnabledRef.current) {
                         controller.reset()

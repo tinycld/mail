@@ -98,7 +98,7 @@ export default function MailSidebar(_props: MailSidebarProps) {
         else router.push(orgHref('mail', { label: Array.from(next).join(',') }))
     }
 
-    const labelItems = orgLabels.map((label) => (
+    const labelItems = orgLabels.map(label => (
         <SidebarItem
             key={label.id}
             label={label.name}
@@ -111,7 +111,11 @@ export default function MailSidebar(_props: MailSidebarProps) {
 
     return (
         <SidebarNav>
-            <SidebarActionButton label="Compose" icon={Pencil} onPress={() => composeEvents.emit()} />
+            <SidebarActionButton
+                label="Compose"
+                icon={Pencil}
+                onPress={() => composeEvents.emit()}
+            />
 
             {showUnifiedInbox && (
                 <UnifiedInboxSection
@@ -133,7 +137,7 @@ export default function MailSidebar(_props: MailSidebarProps) {
                 />
             )}
 
-            {shared.map((mb) => (
+            {shared.map(mb => (
                 <MailboxSidebarSection
                     key={mb.id}
                     mailboxId={mb.id}
@@ -172,7 +176,10 @@ export default function MailSidebar(_props: MailSidebarProps) {
                 onPress={() => openHelpPackage('mail')}
             />
 
-            <LabelManagerDialog isVisible={labelManagerOpen} onClose={() => setLabelManagerOpen(false)} />
+            <LabelManagerDialog
+                isVisible={labelManagerOpen}
+                onClose={() => setLabelManagerOpen(false)}
+            />
         </SidebarNav>
     )
 }

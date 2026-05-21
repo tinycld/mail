@@ -22,13 +22,13 @@ interface ThreadListStoreState {
     clearFocus: () => void
 }
 
-export const useThreadListStore = create<ThreadListStoreState>((set) => ({
+export const useThreadListStore = create<ThreadListStoreState>(set => ({
     threadIds: [],
-    setThreadIds: (ids) => set({ threadIds: ids }),
+    setThreadIds: ids => set({ threadIds: ids }),
     focusedIndex: 0,
     hasFocus: false,
-    setFocusedIndex: (next) =>
-        set((state) => ({
+    setFocusedIndex: next =>
+        set(state => ({
             focusedIndex: typeof next === 'function' ? next(state.focusedIndex) : next,
             hasFocus: true,
         })),
