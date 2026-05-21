@@ -1,7 +1,7 @@
 import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import { expect } from '@playwright/test'
 import PocketBase from 'pocketbase'
-import { ORG_SLUG } from '../../../../tests/e2e/helpers'
+import { ORG_SLUG } from '../../app/tests/e2e/helpers'
 
 // Mail tests share a few patterns that are sensitive to two layout choices
 // in the package: (1) screens use FrozenSlideStack so detail/list/folder

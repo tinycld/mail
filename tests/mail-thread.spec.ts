@@ -1,5 +1,5 @@
 import { test } from '@playwright/test'
-import { clickSidebarItem, login, navigateToPackage } from '../../../../tests/e2e/helpers'
+import { clickSidebarItem, login, navigateToPackage } from '../../app/tests/e2e/helpers'
 import {
     deliverInbound,
     expectRowVisible,
