@@ -4,3 +4,5 @@ node_modules/
 pnpm-lock.yaml
 .claude/
 .superpowers/
+# Playwright test output (traces, screenshots, videos).
+test-results/
