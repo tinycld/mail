@@ -31,6 +31,8 @@ export function parseSearchParticipants(raw: string): { name: string; email: str
 
 export function searchResultToThreadListItem(result: MailSearchResult): ThreadListItem {
     const participants = parseSearchParticipants(result.participants)
+    const firstSender = participants[0]
+    const senderEmail = firstSender?.email ?? ''
     return {
         stateId: result.thread_id,
         threadId: result.thread_id,
@@ -38,8 +40,10 @@ export function searchResultToThreadListItem(result: MailSearchResult): ThreadLi
         snippet: stripHtmlTags(result.snippet_highlight) || '',
         latestDate: result.latest_date,
         messageCount: result.message_count,
-        senderName: participants[0]?.name ?? '',
-        senderEmail: participants[0]?.email ?? '',
+        // Fall back to the email when there's no display name (matches
+        // toThreadListItem) so the list sender column is never blank.
+        senderName: firstSender?.name || senderEmail,
+        senderEmail,
         participants,
         isRead: true,
         isStarred: false,

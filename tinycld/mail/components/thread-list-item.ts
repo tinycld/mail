@@ -31,6 +31,8 @@ export function toThreadListItem(
 ): ThreadListItem {
     const t = thread
     const participants = t?.participants ?? []
+    const firstSender = participants[0]
+    const senderEmail = firstSender?.email ?? ''
 
     return {
         stateId: state.id,
@@ -39,8 +41,11 @@ export function toThreadListItem(
         snippet: t?.snippet ?? '',
         latestDate: t?.latest_date ?? state.updated,
         messageCount: t?.message_count ?? 1,
-        senderName: participants[0]?.name ?? '',
-        senderEmail: participants[0]?.email ?? '',
+        // Fall back to the email address when the sender has no display name,
+        // so the list never shows a blank sender column (and avatar initials
+        // derive from something). Detail view keeps name + email separate.
+        senderName: firstSender?.name || senderEmail,
+        senderEmail,
         participants,
         isRead: state.is_read,
         isStarred: state.is_starred,

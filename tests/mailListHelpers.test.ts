@@ -101,6 +101,16 @@ describe('searchResultToThreadListItem', () => {
         expect(item.participants).toEqual([])
     })
 
+    it('falls back to the email when the sender has no display name', () => {
+        const item = searchResultToThreadListItem(
+            buildResult({
+                participants: JSON.stringify([{ name: '', email: 'noreply@tinycld.org' }]),
+            })
+        )
+        expect(item.senderName).toBe('noreply@tinycld.org')
+        expect(item.senderEmail).toBe('noreply@tinycld.org')
+    })
+
     it('falls back to empty snippet when stripping leaves nothing', () => {
         const item = searchResultToThreadListItem(buildResult({ snippet_highlight: '<br/>' }))
         expect(item.snippet).toBe('')
