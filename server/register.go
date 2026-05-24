@@ -349,21 +349,6 @@ func newProviderByName(name, serverToken, accountToken string) Provider {
 	}
 }
 
-// dbgToken renders a token for debug logging: its length and first 8 chars,
-// so logs can confirm *which* token is in play without always dumping the full
-// secret. The full value is logged separately by the DEBUG lines below.
-// TODO(debug): remove dbgToken and all "MAIL DEBUG" logging before committing.
-func dbgToken(tok string) string {
-	if tok == "" {
-		return "<empty>"
-	}
-	prefix := tok
-	if len(prefix) > 8 {
-		prefix = prefix[:8]
-	}
-	return fmt.Sprintf("len=%d prefix=%q", len(tok), prefix)
-}
-
 // providerForOrg reads mail provider settings from the settings table for the
 // given org, falling back to environment variables when no settings are stored.
 func providerForOrg(app core.App, orgID string) Provider {
@@ -373,10 +358,6 @@ func providerForOrg(app core.App, orgID string) Provider {
 	serverToken := settings["postmark_server_token"]
 	accountToken := settings["postmark_account_token"]
 
-	// TODO(debug): remove. Logs the org settings as read from the DB.
-	fmt.Fprintf(os.Stdout, "MAIL DEBUG providerForOrg: orgID=%q settings.provider=%q settings.server_token=[%s] settings.account_token=[%s] (raw server_token=%q)\n",
-		orgID, name, dbgToken(serverToken), dbgToken(accountToken), serverToken)
-
 	// Fall back to env vars when org has no settings
 	if name == "" {
 		name = os.Getenv("MAIL_PROVIDER")
@@ -384,19 +365,12 @@ func providerForOrg(app core.App, orgID string) Provider {
 	if name == "" {
 		name = "postmark"
 	}
-	usedEnvServerToken := false
 	if serverToken == "" {
 		serverToken = os.Getenv("POSTMARK_SERVER_TOKEN")
-		usedEnvServerToken = serverToken != ""
 	}
 	if accountToken == "" {
 		accountToken = os.Getenv("POSTMARK_ACCOUNT_TOKEN")
 	}
-
-	// TODO(debug): remove. Logs the final resolved provider + token, including
-	// whether we fell back to the env var (the usual cause of "wrong server").
-	fmt.Fprintf(os.Stdout, "MAIL DEBUG providerForOrg: resolved name=%q server_token=[%s] usedEnvFallback=%v (raw server_token=%q)\n",
-		name, dbgToken(serverToken), usedEnvServerToken, serverToken)
 
 	return newProviderByName(name, serverToken, accountToken)
 }
@@ -407,8 +381,6 @@ func getOrgSettings(app core.App, appName, orgID string) map[string]string {
 	cacheKey := orgID + ":" + appName
 
 	if cached, ok := settingsCache.Load(cacheKey); ok {
-		// TODO(debug): remove.
-		fmt.Fprintf(os.Stdout, "MAIL DEBUG getOrgSettings: CACHE HIT key=%q value=%v\n", cacheKey, cached)
 		return cached.(map[string]string)
 	}
 
@@ -422,8 +394,6 @@ func getOrgSettings(app core.App, appName, orgID string) map[string]string {
 		0,
 		map[string]any{"app": appName, "org": orgID},
 	)
-	// TODO(debug): remove.
-	fmt.Fprintf(os.Stdout, "MAIL DEBUG getOrgSettings: cache MISS key=%q rows=%d err=%v\n", cacheKey, len(records), err)
 	if err == nil {
 		for _, r := range records {
 			key := r.GetString("key")
@@ -433,29 +403,16 @@ func getOrgSettings(app core.App, appName, orgID string) map[string]string {
 			// map empty, which falls back to env-var provider creds). Marshal
 			// then unmarshal instead so we handle whatever concrete type the
 			// json field decodes to; settings values are JSON strings.
-			rawVal := r.Get("value")
-			raw, marshalErr := json.Marshal(rawVal)
-			// TODO(debug): remove. Shows the concrete Go type of the json
-			// field value and the marshalled bytes — the crux of the decode bug.
-			fmt.Fprintf(os.Stdout, "MAIL DEBUG getOrgSettings: row key=%q value_go_type=%T marshalled=%s marshalErr=%v\n",
-				key, rawVal, string(raw), marshalErr)
+			raw, marshalErr := json.Marshal(r.Get("value"))
 			if marshalErr != nil {
 				continue
 			}
 			var s string
 			if json.Unmarshal(raw, &s) == nil {
 				result[key] = s
-				// TODO(debug): remove.
-				fmt.Fprintf(os.Stdout, "MAIL DEBUG getOrgSettings: decoded key=%q -> %q\n", key, s)
-			} else {
-				// TODO(debug): remove.
-				fmt.Fprintf(os.Stdout, "MAIL DEBUG getOrgSettings: FAILED to unmarshal key=%q raw=%s\n", key, string(raw))
 			}
 		}
 	}
-
-	// TODO(debug): remove.
-	fmt.Fprintf(os.Stdout, "MAIL DEBUG getOrgSettings: final map for key=%q = %v\n", cacheKey, result)
 
 	settingsCache.Store(cacheKey, result)
 	return result

@@ -1,9 +1,6 @@
 package mail
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -20,17 +17,11 @@ func handleVerifyDomain(app *pocketbase.PocketBase, re *core.RequestEvent) error
 	}
 
 	orgID := record.GetString("org")
-	// TODO(debug): remove. Entry point for the whole verify flow.
-	fmt.Fprintf(os.Stdout, "MAIL DEBUG handleVerifyDomain: domainID=%q domain=%q orgID=%q authUser=%q\n",
-		domainID, record.GetString("domain"), orgID, re.Auth.Id)
-
 	if err := verifyOrgAdmin(app, re.Auth.Id, orgID); err != nil {
 		return re.ForbiddenError("only org admins or owners can verify domains", err)
 	}
 
 	if !providerForOrg(app, orgID).Configured() {
-		// TODO(debug): remove.
-		fmt.Fprintf(os.Stdout, "MAIL DEBUG handleVerifyDomain: provider NOT configured for orgID=%q — rejecting\n", orgID)
 		return re.BadRequestError(
 			"configure the mail provider (Postmark server token) in settings before verifying",
 			errProviderNotConfigured,

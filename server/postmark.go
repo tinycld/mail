@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/mail"
-	"os"
 	"time"
 
 	"github.com/jaytaylor/html2text"
@@ -219,22 +218,10 @@ func (p *PostmarkProvider) CheckDomainVerification(ctx context.Context, domain s
 // take the domain as input and scan all account-level servers for a match
 // (requires account-token auth via GetServers).
 func (p *PostmarkProvider) CheckInboundDomain(ctx context.Context) (*InboundVerification, error) {
-	// TODO(debug): remove. Logs the exact server token this provider will send
-	// to Postmark — this is the definitive "which token are we using" line.
-	fmt.Fprintf(os.Stdout, "MAIL DEBUG CheckInboundDomain: calling Postmark GetCurrentServer with server_token=%q\n", p.serverToken)
-
 	server, err := p.sender.Client().GetCurrentServer(ctx)
 	if err != nil {
-		// TODO(debug): remove.
-		fmt.Fprintf(os.Stdout, "MAIL DEBUG CheckInboundDomain: GetCurrentServer ERROR: %v\n", err)
 		return nil, fmt.Errorf("postmark get current server failed: %w", err)
 	}
-
-	// TODO(debug): remove. Dumps the relevant fields Postmark returned for the
-	// server this token authenticates as.
-	fmt.Fprintf(os.Stdout, "MAIL DEBUG CheckInboundDomain: Postmark replied server.ID=%d server.Name=%q server.InboundDomain=%q server.InboundAddress=%q\n",
-		server.ID, server.Name, server.InboundDomain, server.InboundAddress)
-
 	return &InboundVerification{
 		ServerInboundDomain: server.InboundDomain,
 		InboundAddress:      server.InboundAddress,

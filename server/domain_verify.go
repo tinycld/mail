@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -89,30 +88,14 @@ func checkMX(ctx context.Context, domain string) mxCheckResult {
 // Postmark side of inbound forwarding is wired up for this domain.
 func checkPostmarkServer(ctx context.Context, provider Provider, domain string) postmarkCheckResult {
 	result := postmarkCheckResult{ExpectedDomain: domain}
-	// TODO(debug): remove. Confirms the provider type + whether it's configured.
-	fmt.Fprintf(os.Stdout, "MAIL DEBUG checkPostmarkServer: domain=%q (bytes=%x len=%d) provider_type=%T configured=%v\n",
-		domain, []byte(domain), len(domain), provider, provider.Configured())
-
 	info, err := provider.CheckInboundDomain(ctx)
 	if err != nil {
-		// TODO(debug): remove.
-		fmt.Fprintf(os.Stdout, "MAIL DEBUG checkPostmarkServer: CheckInboundDomain ERROR: %v\n", err)
 		result.Error = err.Error()
 		return result
 	}
 	result.ServerDomain = info.ServerInboundDomain
 	result.InboundAddress = info.InboundAddress
 	result.OK = strings.EqualFold(info.ServerInboundDomain, domain)
-
-	// TODO(debug): remove. Byte-level dump of both sides + the comparison
-	// verdict — catches trailing spaces / dots / invisible unicode that make
-	// the two look identical in the UI while EqualFold returns false.
-	fmt.Fprintf(os.Stdout, "MAIL DEBUG checkPostmarkServer: postmark.InboundDomain=%q (bytes=%x len=%d) inbound_address=%q | expected_domain=%q (bytes=%x len=%d) | EqualFold=%v\n",
-		info.ServerInboundDomain, []byte(info.ServerInboundDomain), len(info.ServerInboundDomain),
-		info.InboundAddress,
-		domain, []byte(domain), len(domain),
-		result.OK)
-
 	return result
 }
 
