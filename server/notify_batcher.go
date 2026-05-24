@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -114,8 +115,15 @@ func getMailNotifyMode(app core.App, userID string) string {
 	if err != nil || len(records) == 0 {
 		return "batched"
 	}
-	mode, ok := records[0].Get("value").(string)
-	if !ok || mode == "" {
+	// user_preferences.value is a `json` field, so Get returns a
+	// types.JSONRaw, not a string — assert on the concrete type and it always
+	// misses. Marshal/unmarshal the JSON string instead.
+	raw, err := json.Marshal(records[0].Get("value"))
+	if err != nil {
+		return "batched"
+	}
+	var mode string
+	if json.Unmarshal(raw, &mode) != nil || mode == "" {
 		return "batched"
 	}
 	return mode

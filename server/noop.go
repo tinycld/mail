@@ -11,6 +11,8 @@ var errNoProvider = errors.New("no mail provider configured — set MAIL_PROVIDE
 // Used when no provider is configured so the server still boots.
 type NoopProvider struct{}
 
+func (n *NoopProvider) Configured() bool { return false }
+
 func (n *NoopProvider) Send(_ context.Context, _ *SendRequest) (*SendResult, error) {
 	return nil, errNoProvider
 }

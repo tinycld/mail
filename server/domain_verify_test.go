@@ -85,6 +85,7 @@ type fakeProvider struct {
 	outboundErr      error
 }
 
+func (f *fakeProvider) Configured() bool { return true }
 func (f *fakeProvider) Send(context.Context, *SendRequest) (*SendResult, error) {
 	return nil, errors.New("not implemented")
 }

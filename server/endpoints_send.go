@@ -102,6 +102,16 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		return re.ForbiddenError("Not a member of this mailbox", err)
 	}
 
+	// Reject before doing any send work if the org's provider has no
+	// credentials — otherwise provider.Send fails deep in the API call with an
+	// opaque error after we've already built the message.
+	if !provider.Configured() {
+		return re.BadRequestError(
+			"configure the mail provider (Postmark server token) in settings before sending",
+			errProviderNotConfigured,
+		)
+	}
+
 	var alias *core.Record
 	if req.AliasID != "" {
 		alias, err = app.FindRecordById("mail_mailbox_aliases", req.AliasID)

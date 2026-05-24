@@ -86,6 +86,7 @@ type stubProvider struct {
 	parse func(body []byte) (*InboundMessage, error)
 }
 
+func (s *stubProvider) Configured() bool { return true }
 func (s *stubProvider) Send(_ context.Context, _ *SendRequest) (*SendResult, error) {
 	return nil, nil
 }

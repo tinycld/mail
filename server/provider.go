@@ -17,6 +17,13 @@ type SendResult = mailer.SendResult
 // Send is delegated to the shared mailer package. The remaining methods
 // are mail-package-specific (inbound parsing, bounces, domain management).
 type Provider interface {
+	// Configured reports whether the provider has the credentials it needs to
+	// reach the provider API (e.g. a Postmark server token). Inbound webhook
+	// parsing works without credentials, so an unconfigured provider is still
+	// useful for ParseInbound/ParseBounce — but Send and the domain/inbound
+	// checks will fail. Callers on those paths should reject early when this
+	// returns false rather than surfacing an opaque API error.
+	Configured() bool
 	Send(ctx context.Context, req *SendRequest) (*SendResult, error)
 	ParseInbound(body []byte) (*InboundMessage, error)
 	ParseBounce(body []byte) (*BounceEvent, error)
