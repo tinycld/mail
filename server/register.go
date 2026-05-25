@@ -19,6 +19,16 @@ import (
 // Invalidated by PocketBase record hooks on the settings collection.
 var settingsCache sync.Map // map[string]map[string]string  (orgID → {key: value})
 
+// appIsLive reports whether the app still has an open database connection.
+// The mail thumbnail + notification workers run in background goroutines that
+// can outlive the app instance — e.g. the test harness resets the dev DB while
+// a job is in flight. Once the app is torn down, ConcurrentDB() is nil and any
+// record query (PocketBase v0.38 RecordQuery) panics on the nil DB instead of
+// returning an error. Bail out instead of touching the DB in that window.
+func appIsLive(app *pocketbase.PocketBase) bool {
+	return app != nil && app.ConcurrentDB() != nil
+}
+
 func Register(app *pocketbase.PocketBase) {
 	// Audit logging for mail collections
 	audit.RegisterCollection(app, "mail_domains", &audit.CollectionConfig{
@@ -469,6 +479,10 @@ func requireAuth(re *core.RequestEvent) error {
 
 // bufferMailNotification queues a mail notification for batched delivery.
 func bufferMailNotification(app *pocketbase.PocketBase, msgRecord *core.Record) {
+	if !appIsLive(app) {
+		return
+	}
+
 	// Skip outbound messages (sent by the user themselves)
 	direction := msgRecord.GetString("direction")
 	if direction == "outbound" || direction == "sent" {

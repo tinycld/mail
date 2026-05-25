@@ -52,6 +52,10 @@ func generateAttachmentThumbnails(app *pocketbase.PocketBase, record *core.Recor
 		}
 	}()
 
+	if !appIsLive(app) {
+		return
+	}
+
 	attachments := record.GetStringSlice("attachments")
 	if len(attachments) == 0 {
 		return
@@ -136,6 +140,12 @@ func generateAttachmentThumbnails(app *pocketbase.PocketBase, record *core.Recor
 
 	fresh.Set("attachment_thumbnails", mergedThumbnails)
 	fresh.Set("attachment_thumbnail_map", string(thumbMapBytes))
+
+	// Thumbnail generation above is slow; re-check the app/DB is still live
+	// before the write, as the goroutine can outlive an app/DB reset.
+	if !appIsLive(app) {
+		return
+	}
 
 	if err := app.Save(fresh); err != nil {
 		app.Logger().Warn("Mail thumbnail: save failed", "id", record.Id, "error", err)
