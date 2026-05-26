@@ -118,15 +118,15 @@ mail_mailbox_members
 mail_mailbox_aliases
   mailbox, address (local part)
 mail_threads
-  mailbox, subject, last_message_at, message_count, has_attachments
+  mailbox, subject, latest_date, message_count, has_attachments
 mail_messages
-  thread, sender_*, recipients_*, subject, html_body, plain_body,
+  thread, sender_*, recipients_*, subject, body_html (file),
   attachments (file list), attachment_thumbnails (file list),
   cid_map (json), delivery_status, message_id, in_reply_to, references,
   total_size, alias (relation, nullable)
 mail_thread_state
   thread, user_org, folder ('inbox'|'sent'|'drafts'|'trash'|'spam'|'archive'),
-  read, starred
+  is_read, is_starred
 mail_imap_mailbox_state
   mailbox, uid_validity, uid_next   (one row per mailbox; UNIQUE(mailbox))
 fts_mail_threads
