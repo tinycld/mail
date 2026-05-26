@@ -17,7 +17,6 @@ import (
 // row with role='guest' in the owner's org. Several mail-infra rules granted
 // access to ANY org member regardless of role:
 //   - mail_domains   list/view  (read leak: guest enumerates mail domains)
-//   - mail_labels    all CRUD   (read + write leak)
 //   - mail_mailboxes create     (write leak: guest creates a mailbox)
 //   - mail_mailbox_aliases list/view (read leak: guest enumerates aliases)
 //
@@ -37,8 +36,6 @@ import (
 // Rule strings mirror the 1713000020 migration verbatim.
 const (
 	mailDomainsGuestReadRule = `org.user_org_via_org.user ?= @request.auth.id && ` +
-		`org.user_org_via_org.role ?!= "guest"`
-	mailLabelsGuestRule = `org.user_org_via_org.user ?= @request.auth.id && ` +
 		`org.user_org_via_org.role ?!= "guest"`
 	mailMailboxesGuestCreateRule = `domain.org.user_org_via_org.user ?= @request.auth.id && ` +
 		`domain.org.user_org_via_org.role ?!= "guest"`
@@ -130,18 +127,6 @@ func setupMailGuestApp(t *testing.T) *mailGuestEnv {
 	})
 	aliases.Fields.Add(&core.TextField{Name: "address", Required: true})
 	if err := app.Save(aliases); err != nil {
-		t.Fatal(err)
-	}
-
-	labels := core.NewBaseCollection("mail_labels")
-	labels.Id = "pbc_mail_labels_01"
-	labels.Fields.Add(&core.RelationField{
-		Name: "org", Required: true, CollectionId: orgs.Id,
-		CascadeDelete: true, MaxSelect: 1,
-	})
-	labels.Fields.Add(&core.TextField{Name: "name", Required: true})
-	labels.Fields.Add(&core.TextField{Name: "color"})
-	if err := app.Save(labels); err != nil {
 		t.Fatal(err)
 	}
 
@@ -274,53 +259,6 @@ func TestMailGuestRLS_Domains_MemberCanRead(t *testing.T) {
 		[]string{`"totalItems":1`, "acme.test"}, nil)
 }
 
-// ----- mail_labels read + create -----
-
-func TestMailGuestRLS_Labels_GuestCannotRead(t *testing.T) {
-	env := setupMailGuestApp(t)
-	mailSetAllCRUD(t, env.app, "mail_labels", mailLabelsGuestRule)
-	labelsCol, _ := env.app.FindCollectionByNameOrId("mail_labels")
-	lbl := core.NewRecord(labelsCol)
-	lbl.Set("org", env.org.Id)
-	lbl.Set("name", "Receipts")
-	if err := env.app.Save(lbl); err != nil {
-		t.Fatal(err)
-	}
-	mailRunList(t, env.app, "mail_labels", env.guestToken,
-		[]string{`"totalItems":0`}, []string{"Receipts"})
-}
-
-func TestMailGuestRLS_Labels_MemberCanRead(t *testing.T) {
-	env := setupMailGuestApp(t)
-	mailSetAllCRUD(t, env.app, "mail_labels", mailLabelsGuestRule)
-	labelsCol, _ := env.app.FindCollectionByNameOrId("mail_labels")
-	lbl := core.NewRecord(labelsCol)
-	lbl.Set("org", env.org.Id)
-	lbl.Set("name", "Receipts")
-	if err := env.app.Save(lbl); err != nil {
-		t.Fatal(err)
-	}
-	mailRunList(t, env.app, "mail_labels", env.memberToken,
-		[]string{`"totalItems":1`, "Receipts"}, nil)
-}
-
-func TestMailGuestRLS_Labels_GuestCannotCreate(t *testing.T) {
-	env := setupMailGuestApp(t)
-	mailSetAllCRUD(t, env.app, "mail_labels", mailLabelsGuestRule)
-
-	scenario := &tests.ApiScenario{
-		Method:                http.MethodPost,
-		URL:                   "/api/collections/mail_labels/records",
-		Body:                  strings.NewReader(`{"org":"` + env.org.Id + `","name":"X"}`),
-		Headers:               map[string]string{"Authorization": env.guestToken, "Content-Type": "application/json"},
-		ExpectedStatus:        http.StatusBadRequest,
-		ExpectedContent:       []string{`"message"`},
-		TestAppFactory:        func(_ testing.TB) *tests.TestApp { return env.app },
-		DisableTestAppCleanup: true,
-	}
-	scenario.Test(t)
-}
-
 // ----- mail_mailboxes create -----
 
 func TestMailGuestRLS_Mailboxes_GuestCannotCreate(t *testing.T) {
@@ -387,18 +325,3 @@ func TestMailGuestRLS_Aliases_MemberCanRead(t *testing.T) {
 		[]string{`"totalItems":1`, "team-alias"}, nil)
 }
 
-func mailSetAllCRUD(t *testing.T, app core.App, name, rule string) {
-	t.Helper()
-	col, err := app.FindCollectionByNameOrId(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	col.ListRule = &rule
-	col.ViewRule = &rule
-	col.CreateRule = &rule
-	col.UpdateRule = &rule
-	col.DeleteRule = &rule
-	if err := app.Save(col); err != nil {
-		t.Fatalf("set all-CRUD on %s: %v", name, err)
-	}
-}

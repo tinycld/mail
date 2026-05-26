@@ -5,9 +5,13 @@
 // role='guest' in the owner's org. Several mail-infra rules granted access to
 // ANY org member regardless of role:
 //   - mail_domains          list/view  (read leak: guest enumerates domains)
-//   - mail_labels           all CRUD   (read + write leak)
 //   - mail_mailboxes        create     (write leak: guest creates a mailbox)
 //   - mail_mailbox_aliases  list/view  (read leak: guest enumerates aliases)
+//
+// NOTE: an earlier draft of this migration also tightened `mail_labels`, but
+// that collection was removed by migration 1713000010_unify_labels.js (which
+// folded mail labels into the core `labels` collection). The core `labels`
+// rules ARE separately tightened by core migration 1870000000.
 //
 // Each tightened rule pins the role check (`role ?!= "guest"`) to the SAME
 // relation-path prefix as the user check, so PocketBase applies both to the
@@ -47,15 +51,6 @@ migrate(
         domains.viewRule = orgScopedRule
         app.save(domains)
 
-        // mail_labels: tighten all five (was org-member for everything).
-        const labels = app.findCollectionByNameOrId('mail_labels')
-        labels.listRule = orgScopedRule
-        labels.viewRule = orgScopedRule
-        labels.createRule = orgScopedRule
-        labels.updateRule = orgScopedRule
-        labels.deleteRule = orgScopedRule
-        app.save(labels)
-
         // mail_mailboxes: tighten CREATE only (read is mailbox-member-gated;
         // update/delete are owner-gated).
         const mailboxesCreateRule =
@@ -84,15 +79,6 @@ migrate(
         domains.listRule = orgMemberRule
         domains.viewRule = orgMemberRule
         app.save(domains)
-
-        // mail_labels (orgMemberRule from 1713000000)
-        const labels = app.findCollectionByNameOrId('mail_labels')
-        labels.listRule = orgMemberRule
-        labels.viewRule = orgMemberRule
-        labels.createRule = orgMemberRule
-        labels.updateRule = orgMemberRule
-        labels.deleteRule = orgMemberRule
-        app.save(labels)
 
         // mail_mailboxes create (from 1713000000)
         const mailboxes = app.findCollectionByNameOrId('mail_mailboxes')
