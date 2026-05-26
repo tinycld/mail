@@ -42,15 +42,30 @@ const (
 	mailAliasesGuestReadRule = `@request.auth.id != "" && ` +
 		`mailbox.domain.org.user_org_via_org.user ?= @request.auth.id && ` +
 		`mailbox.domain.org.user_org_via_org.role ?!= "guest"`
+
+	// Mirrors 1830000003: bootstrap branch pins role ?!= "guest" on the SAME
+	// relation-path prefix as the user check so PB joins both onto the same
+	// user_org row.
+	mailMembersOwnerCanAdd = `mailbox.mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id && ` +
+		`mailbox.mail_mailbox_members_via_mailbox.role ?= "owner" && ` +
+		`user_org.org = mailbox.domain.org`
+	mailMembersBootstrapGuestRule = `user_org.user = @request.auth.id && ` +
+		`role = "owner" && ` +
+		`mailbox.mail_mailbox_members_via_mailbox.id = "" && ` +
+		`mailbox.domain.org.user_org_via_org.user ?= @request.auth.id && ` +
+		`mailbox.domain.org.user_org_via_org.role ?!= "guest"`
+	mailMembersGuestCreateRule = `(` + mailMembersOwnerCanAdd + `) || (` + mailMembersBootstrapGuestRule + `)`
 )
 
 type mailGuestEnv struct {
-	app         *tests.TestApp
-	org         *core.Record
-	domain      *core.Record
-	mailbox     *core.Record
-	memberToken string
-	guestToken  string
+	app             *tests.TestApp
+	org             *core.Record
+	domain          *core.Record
+	mailbox         *core.Record
+	memberUserOrg   *core.Record
+	guestUserOrg    *core.Record
+	memberToken     string
+	guestToken      string
 }
 
 func setupMailGuestApp(t *testing.T) *mailGuestEnv {
@@ -130,6 +145,24 @@ func setupMailGuestApp(t *testing.T) *mailGuestEnv {
 		t.Fatal(err)
 	}
 
+	members := core.NewBaseCollection("mail_mailbox_members")
+	members.Id = "pbc_mail_mb_members_01"
+	members.Fields.Add(&core.RelationField{
+		Name: "mailbox", Required: true, CollectionId: mailboxes.Id,
+		CascadeDelete: true, MaxSelect: 1,
+	})
+	members.Fields.Add(&core.RelationField{
+		Name: "user_org", Required: true, CollectionId: userOrg.Id,
+		CascadeDelete: true, MaxSelect: 1,
+	})
+	members.Fields.Add(&core.SelectField{
+		Name: "role", Required: true, MaxSelect: 1,
+		Values: []string{"owner", "member"},
+	})
+	if err := app.Save(members); err != nil {
+		t.Fatal(err)
+	}
+
 	org := core.NewRecord(orgs)
 	org.Set("name", "Acme")
 	org.Set("slug", "acme")
@@ -139,8 +172,8 @@ func setupMailGuestApp(t *testing.T) *mailGuestEnv {
 
 	member := mailGuestUser(t, app, "member@test.local")
 	guest := mailGuestUser(t, app, "guest@test.local")
-	mailGuestMembership(t, app, member, org, "member")
-	mailGuestMembership(t, app, guest, org, "guest")
+	memberUserOrg := mailGuestMembership(t, app, member, org, "member")
+	guestUserOrg := mailGuestMembership(t, app, guest, org, "guest")
 
 	domain := core.NewRecord(domains)
 	domain.Set("org", org.Id)
@@ -168,12 +201,14 @@ func setupMailGuestApp(t *testing.T) *mailGuestEnv {
 	}
 
 	return &mailGuestEnv{
-		app:         app,
-		org:         org,
-		domain:      domain,
-		mailbox:     mailbox,
-		memberToken: memberToken,
-		guestToken:  guestToken,
+		app:           app,
+		org:           org,
+		domain:        domain,
+		mailbox:       mailbox,
+		memberUserOrg: memberUserOrg,
+		guestUserOrg:  guestUserOrg,
+		memberToken:   memberToken,
+		guestToken:    guestToken,
 	}
 }
 
@@ -191,7 +226,7 @@ func mailGuestUser(t *testing.T, app core.App, email string) *core.Record {
 	return r
 }
 
-func mailGuestMembership(t *testing.T, app core.App, user, org *core.Record, role string) {
+func mailGuestMembership(t *testing.T, app core.App, user, org *core.Record, role string) *core.Record {
 	t.Helper()
 	col, _ := app.FindCollectionByNameOrId("user_org")
 	r := core.NewRecord(col)
@@ -201,6 +236,7 @@ func mailGuestMembership(t *testing.T, app core.App, user, org *core.Record, rol
 	if err := app.Save(r); err != nil {
 		t.Fatal(err)
 	}
+	return r
 }
 
 func mailSetListView(t *testing.T, app core.App, name, rule string) {
@@ -325,3 +361,62 @@ func TestMailGuestRLS_Aliases_MemberCanRead(t *testing.T) {
 		[]string{`"totalItems":1`, "team-alias"}, nil)
 }
 
+// ----- mail_mailbox_members bootstrap-first-owner (1830000003) -----
+//
+// The bootstrap branch of the createRule lets an org member self-insert as
+// the first owner of a *memberless* mailbox. Migration 1830000003 pins
+// `mailbox.domain.org.user_org_via_org.role ?!= "guest"` to the SAME
+// relation-path prefix as the existing user check so PB joins them on the
+// same user_org row — the CALLER's own membership must be non-guest. Guests
+// today are blocked transitively (they cannot create a mailbox after
+// 1830000002, and pre-existing mailboxes already have owners), but the
+// defensive pin closes the gap if a mailbox ever becomes memberless.
+
+func TestMailGuestRLS_MailboxMembers_GuestCannotBootstrapOwner(t *testing.T) {
+	env := setupMailGuestApp(t)
+	mailSetCreate(t, env.app, "mail_mailbox_members", mailMembersGuestCreateRule)
+
+	// The env.mailbox has no members yet — the bootstrap branch would
+	// match on `mail_mailbox_members_via_mailbox.id = ""`. Without the
+	// role pin, the guest's user_org row would satisfy the user check.
+	// With the pin, PB sees role='guest' on the same joined row and denies.
+	body := `{"mailbox":"` + env.mailbox.Id +
+		`","user_org":"` + env.guestUserOrg.Id +
+		`","role":"owner"}`
+
+	scenario := &tests.ApiScenario{
+		Method:                http.MethodPost,
+		URL:                   "/api/collections/mail_mailbox_members/records",
+		Body:                  strings.NewReader(body),
+		Headers:               map[string]string{"Authorization": env.guestToken, "Content-Type": "application/json"},
+		ExpectedStatus:        http.StatusBadRequest,
+		ExpectedContent:       []string{`"message"`},
+		TestAppFactory:        func(_ testing.TB) *tests.TestApp { return env.app },
+		DisableTestAppCleanup: true,
+	}
+	scenario.Test(t)
+}
+
+func TestMailGuestRLS_MailboxMembers_MemberCanBootstrapOwner(t *testing.T) {
+	env := setupMailGuestApp(t)
+	mailSetCreate(t, env.app, "mail_mailbox_members", mailMembersGuestCreateRule)
+
+	// Positive control: a non-guest org member must still be allowed to
+	// bootstrap-own a memberless mailbox. This is the existing-good-path
+	// the pin must not regress.
+	body := `{"mailbox":"` + env.mailbox.Id +
+		`","user_org":"` + env.memberUserOrg.Id +
+		`","role":"owner"}`
+
+	scenario := &tests.ApiScenario{
+		Method:                http.MethodPost,
+		URL:                   "/api/collections/mail_mailbox_members/records",
+		Body:                  strings.NewReader(body),
+		Headers:               map[string]string{"Authorization": env.memberToken, "Content-Type": "application/json"},
+		ExpectedStatus:        http.StatusOK,
+		ExpectedContent:       []string{`"role":"owner"`, `"mailbox":"` + env.mailbox.Id + `"`},
+		TestAppFactory:        func(_ testing.TB) *tests.TestApp { return env.app },
+		DisableTestAppCleanup: true,
+	}
+	scenario.Test(t)
+}

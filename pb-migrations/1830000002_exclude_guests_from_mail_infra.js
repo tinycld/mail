@@ -34,7 +34,7 @@
 // mailbox (tightened above) and every existing mailbox already has an owner
 // (so `...mail_mailbox_members_via_mailbox.id = ""` is false). Tightening it
 // cleanly requires editing the compound rule mirrored across
-// 1713000000 (phase-2) and 1713000017; left for a focused follow-up.
+// 1713000000 (phase-2) and 1713000017; addressed in migration 1830000003.
 //
 // The down-migration restores the EXACT prior rule strings (mail_domains from
 // 1713000011; mail_labels + mail_mailboxes.create from 1713000000 phase-2;
