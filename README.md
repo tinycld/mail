@@ -126,7 +126,8 @@ mail_messages
   total_size, alias (relation, nullable)
 mail_thread_state
   thread, user_org, folder ('inbox'|'sent'|'drafts'|'trash'|'spam'|'archive'),
-  is_read, is_starred
+  is_read, is_starred, labels (relation to mail_labels, up to 20),
+  snoozed_until (date, nullable)
 mail_imap_mailbox_state
   mailbox, uid_validity, uid_next   (one row per mailbox; UNIQUE(mailbox))
 fts_mail_threads
