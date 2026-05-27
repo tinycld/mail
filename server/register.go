@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
@@ -102,8 +104,30 @@ func Register(app *pocketbase.PocketBase) {
 		ExtractLabel: audit.LabelFromField("folder"),
 	})
 
-	// Env-based provider used for unauthenticated webhooks (no org context)
-	webhookProvider := newProviderFromEnv()
+	// Per-secret webhook provider resolver. We can't pre-bake one provider for
+	// all webhooks because two orgs in the same install may pick different
+	// providers (Postmark vs SMTP) — the inbound/bounce endpoints are
+	// unauthenticated and the only identifier on the request is the
+	// per-domain webhook secret in the URL. Resolve the secret → domain → org
+	// → provider on each call so each webhook lands on the right adapter.
+	resolveWebhookProvider := func(secret string) Provider {
+		records, err := app.FindRecordsByFilter(
+			"mail_domains",
+			"webhook_secret = {:secret}",
+			"",
+			1,
+			0,
+			map[string]any{"secret": secret},
+		)
+		if err != nil || len(records) == 0 {
+			return &NoopProvider{}
+		}
+		orgID := records[0].GetString("org")
+		if orgID == "" {
+			return newProviderFromEnv()
+		}
+		return providerForOrg(app, orgID)
+	}
 
 	// Invalidate settings cache when settings records change. getOrgSettings
 	// caches under "orgID:appName" (see cacheKey there); delete the same
@@ -114,6 +138,11 @@ func Register(app *pocketbase.PocketBase) {
 		appName := e.Record.GetString("app")
 		if orgID != "" && appName != "" {
 			settingsCache.Delete(orgID + ":" + appName)
+		}
+		// Trigger an IMAP-fetcher reconcile when mail settings change —
+		// the operator may have toggled provider or inbound mode.
+		if appName == "mail" && globalIMAPManager != nil {
+			globalIMAPManager.onSettingsChanged()
 		}
 		return e.Next()
 	}
@@ -261,6 +290,19 @@ func Register(app *pocketbase.PocketBase) {
 			})
 		}
 
+		// Start inbound SMTP listener (no-op unless MAIL_INBOUND_SMTP_ENABLED=true).
+		// This is the public MX target for the self-hosted SMTP provider in
+		// "smtp" inbound mode — distinct from the submission server above.
+		inboundShutdown, inboundErr := StartSMTPInboundServer(app, e.CertManager)
+		if inboundErr != nil {
+			app.Logger().Error("Failed to start inbound SMTP server", "error", inboundErr)
+		} else {
+			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
+				inboundShutdown()
+				return te.Next()
+			})
+		}
+
 		// Send endpoint (requires auth, resolves provider from org settings)
 		e.Router.POST("/api/mail/send", func(re *core.RequestEvent) error {
 			return handleSend(app, re)
@@ -278,6 +320,15 @@ func Register(app *pocketbase.PocketBase) {
 		})
 		go startDomainReverifyLoop(reverifyCtx, app)
 
+		// IMAP fetcher manager — runs one polling worker per org with the
+		// self-hosted SMTP provider in "imap" inbound mode. Reconciles on
+		// every mail settings record change via globalIMAPManager.
+		imapFetcherShutdown := startIMAPFetchers(app)
+		app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
+			imapFetcherShutdown()
+			return te.Next()
+		})
+
 		// Draft endpoint (requires auth, saves without sending)
 		e.Router.POST("/api/mail/draft", func(re *core.RequestEvent) error {
 			return handleDraft(app, re)
@@ -294,7 +345,7 @@ func Register(app *pocketbase.PocketBase) {
 			if secret == "" || !isValidDomainWebhookSecret(app, secret) {
 				return re.UnauthorizedError("Invalid inbound token", nil)
 			}
-			return handleInbound(app, webhookProvider, re, secret)
+			return handleInbound(app, resolveWebhookProvider(secret), re, secret)
 		})
 
 		// Bounce webhook (unauthenticated, secured via per-domain secret)
@@ -303,7 +354,7 @@ func Register(app *pocketbase.PocketBase) {
 			if secret == "" || !isValidDomainWebhookSecret(app, secret) {
 				return re.ForbiddenError("Invalid token", nil)
 			}
-			return handleBounce(app, webhookProvider, re, secret)
+			return handleBounce(app, resolveWebhookProvider(secret), re, secret)
 		})
 
 		// Webhook URLs endpoint (requires auth, returns URLs for a domain)
@@ -339,10 +390,10 @@ func newProviderFromEnv() Provider {
 	if name == "" {
 		name = "postmark"
 	}
-	return newProviderByName(name, os.Getenv("POSTMARK_SERVER_TOKEN"), os.Getenv("POSTMARK_ACCOUNT_TOKEN"))
+	return newProviderByName(name, os.Getenv("POSTMARK_SERVER_TOKEN"), os.Getenv("POSTMARK_ACCOUNT_TOKEN"), smtpConfigFromEnv())
 }
 
-func newProviderByName(name, serverToken, accountToken string) Provider {
+func newProviderByName(name, serverToken, accountToken string, smtpCfg SMTPConfig) Provider {
 	switch name {
 	case "postmark":
 		// Return a PostmarkProvider even without a server token: ParseInbound
@@ -354,6 +405,8 @@ func newProviderByName(name, serverToken, accountToken string) Provider {
 		// early, so a missing token surfaces a clear "not configured" error
 		// instead of an opaque API failure.
 		return NewPostmarkProvider(serverToken, accountToken)
+	case "smtp":
+		return NewSMTPProvider(smtpCfg)
 	default:
 		return &NoopProvider{}
 	}
@@ -382,7 +435,74 @@ func providerForOrg(app core.App, orgID string) Provider {
 		accountToken = os.Getenv("POSTMARK_ACCOUNT_TOKEN")
 	}
 
-	return newProviderByName(name, serverToken, accountToken)
+	smtpCfg := smtpConfigFromSettings(settings)
+
+	return newProviderByName(name, serverToken, accountToken, smtpCfg)
+}
+
+// smtpConfigFromEnv reads SMTPConfig from environment variables. Used by
+// newProviderFromEnv (the env-only fallback) and as a baseline when an org's
+// settings table doesn't override a particular field.
+func smtpConfigFromEnv() SMTPConfig {
+	port, _ := strconv.Atoi(os.Getenv("SMTP_IMAP_PORT"))
+	poll, _ := strconv.Atoi(os.Getenv("SMTP_IMAP_POLL_INTERVAL_SECONDS"))
+	cfg := SMTPConfig{
+		PublicHostname:   os.Getenv("SMTP_PUBLIC_HOSTNAME"),
+		InboundMode:      os.Getenv("SMTP_INBOUND_MODE"),
+		IMAPHost:         os.Getenv("SMTP_IMAP_HOST"),
+		IMAPPort:         port,
+		IMAPUsername:     os.Getenv("SMTP_IMAP_USERNAME"),
+		IMAPPassword:     os.Getenv("SMTP_IMAP_PASSWORD"),
+		IMAPUseTLS:       os.Getenv("SMTP_IMAP_USE_TLS") != "false",
+		IMAPMailbox:      os.Getenv("SMTP_IMAP_MAILBOX"),
+		IMAPPollInterval: time.Duration(poll) * time.Second,
+		DKIMSelector:     os.Getenv("SMTP_DKIM_SELECTOR"),
+	}
+	return cfg
+}
+
+// smtpConfigFromSettings builds an SMTPConfig from per-org settings, falling
+// back to env-var defaults for any unset field. Numeric fields with parse
+// errors are treated as unset (the constructor's applyDefaults handles them).
+func smtpConfigFromSettings(settings map[string]string) SMTPConfig {
+	cfg := smtpConfigFromEnv()
+
+	if v := settings["smtp_public_hostname"]; v != "" {
+		cfg.PublicHostname = v
+	}
+	if v := settings["smtp_inbound_mode"]; v != "" {
+		cfg.InboundMode = v
+	}
+	if v := settings["smtp_imap_host"]; v != "" {
+		cfg.IMAPHost = v
+	}
+	if v := settings["smtp_imap_port"]; v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			cfg.IMAPPort = port
+		}
+	}
+	if v := settings["smtp_imap_username"]; v != "" {
+		cfg.IMAPUsername = v
+	}
+	if v := settings["smtp_imap_password"]; v != "" {
+		cfg.IMAPPassword = v
+	}
+	if v := settings["smtp_imap_use_tls"]; v != "" {
+		cfg.IMAPUseTLS = v != "false"
+	}
+	if v := settings["smtp_imap_mailbox"]; v != "" {
+		cfg.IMAPMailbox = v
+	}
+	if v := settings["smtp_imap_poll_interval_seconds"]; v != "" {
+		if poll, err := strconv.Atoi(v); err == nil {
+			cfg.IMAPPollInterval = time.Duration(poll) * time.Second
+		}
+	}
+	if v := settings["smtp_dkim_selector"]; v != "" {
+		cfg.DKIMSelector = v
+	}
+
+	return cfg
 }
 
 // getOrgSettings returns all settings for an app+org as a key→value map.

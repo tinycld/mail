@@ -107,7 +107,7 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	// opaque error after we've already built the message.
 	if !provider.Configured() {
 		return re.BadRequestError(
-			"configure the mail provider (Postmark server token) in settings before sending",
+			"configure the mail provider in settings before sending",
 			errProviderNotConfigured,
 		)
 	}
@@ -187,6 +187,8 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		})
 	}
 
+	deliveryStatus, bounceReason := deliveryStatusForResult(result, len(req.To)+len(req.Cc)+len(req.Bcc))
+
 	msg := &storedMessage{
 		MessageID:      result.MessageID,
 		InReplyTo:      inReplyToHeader,
@@ -199,7 +201,8 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		Subject:        req.Subject,
 		HTMLBody:       req.HTMLBody,
 		TextBody:       req.TextBody,
-		DeliveryStatus: "sent",
+		DeliveryStatus: deliveryStatus,
+		BounceReason:   bounceReason,
 		Attachments:    storedAttachments,
 	}
 
@@ -221,6 +224,28 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		"message_id": record.Id,
 		"thread_id":  thread.Id,
 	})
+}
+
+// deliveryStatusForResult inspects the provider's send outcome and decides
+// what to persist on the stored message. Providers that don't surface
+// synchronous bounces (Postmark) always return an empty FailedRecipients
+// slice → status "sent" and empty reason. The SMTP provider may return
+// per-recipient permanent failures inline; we surface them as bounce_reason
+// regardless, but only mark the whole message "bounced" when every recipient
+// failed (a partial failure still means the message reached someone).
+func deliveryStatusForResult(result *SendResult, totalRecipients int) (status string, reason string) {
+	if result == nil || len(result.FailedRecipients) == 0 {
+		return "sent", ""
+	}
+	var parts []string
+	for _, f := range result.FailedRecipients {
+		parts = append(parts, f.Email+": "+f.Reason)
+	}
+	reason = strings.Join(parts, "; ")
+	if totalRecipients > 0 && len(result.FailedRecipients) >= totalRecipients {
+		return "bounced", reason
+	}
+	return "sent", reason
 }
 
 // parseFileAttachments reads uploaded files from a multipart form and returns

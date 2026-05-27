@@ -23,7 +23,7 @@ func handleVerifyDomain(app *pocketbase.PocketBase, re *core.RequestEvent) error
 
 	if !providerForOrg(app, orgID).Configured() {
 		return re.BadRequestError(
-			"configure the mail provider (Postmark server token) in settings before verifying",
+			"configure the mail provider in settings before verifying",
 			errProviderNotConfigured,
 		)
 	}

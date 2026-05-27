@@ -168,6 +168,15 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 		deliveryStatus = "sending"
 	}
 	record.Set("delivery_status", deliveryStatus)
+	if msg.BounceReason != "" {
+		// Cap at 500 chars to match the bounce_reason field's schema limit
+		// (enforced in endpoints_bounce.go for webhook-driven bounces).
+		reason := msg.BounceReason
+		if len([]rune(reason)) > 500 {
+			reason = string([]rune(reason)[:500])
+		}
+		record.Set("bounce_reason", reason)
+	}
 
 	if msg.HTMLBody != "" {
 		sanitized := sanitizeEmailHTML(msg.HTMLBody)
@@ -265,6 +274,7 @@ type storedMessage struct {
 	StrippedReply  string
 	Attachments    []InboundAttachment
 	DeliveryStatus string // "sending", "sent", "delivered", "bounced", "spam_complaint", "draft"
+	BounceReason   string // only populated when DeliveryStatus == "bounced"
 }
 
 // updateThreadMetadata updates the thread's snippet, latest_date, message_count, and participants.
