@@ -360,6 +360,8 @@ func (s *smtpSession) Data(r io.Reader) error {
 		return nil
 	}
 
+	deliveryStatus, bounceReason := deliveryStatusForResult(result, len(msg.To)+len(msg.Cc)+len(s.recipients))
+
 	storedMsg := &storedMessage{
 		MessageID:      result.MessageID,
 		InReplyTo:      inReplyToHeader,
@@ -371,7 +373,8 @@ func (s *smtpSession) Data(r io.Reader) error {
 		Subject:        msg.Subject,
 		HTMLBody:       msg.HTMLBody,
 		TextBody:       msg.TextBody,
-		DeliveryStatus: "sent",
+		DeliveryStatus: deliveryStatus,
+		BounceReason:   bounceReason,
 		Attachments:    msg.Attachments,
 		Alias:          aliasIDFromSession(s),
 	}

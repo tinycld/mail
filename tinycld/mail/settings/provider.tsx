@@ -10,9 +10,12 @@ import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useSettings } from '@tinycld/core/lib/use-settings'
 import { Divider } from '@tinycld/core/ui/divider'
 import {
+    type Control,
     FormErrorSummary,
+    NumberInput,
     SelectInput,
     TextInput,
+    Toggle,
     useForm,
     z,
     zodResolver,
@@ -29,16 +32,38 @@ import {
 } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb/core'
 import { useState } from 'react'
+import { useWatch } from 'react-hook-form'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import type { MailDomainVerificationDetails } from '../types'
 
-const PROVIDER_OPTIONS = [{ label: 'Postmark', value: 'postmark' }]
+const PROVIDER_OPTIONS = [
+    { label: 'Postmark', value: 'postmark' },
+    { label: 'Self-hosted SMTP', value: 'smtp' },
+]
+
+const SMTP_INBOUND_MODE_OPTIONS = [
+    { label: 'None (outbound only)', value: '' },
+    { label: 'Built-in SMTP listener (we are the MX)', value: 'smtp' },
+    { label: 'Poll IMAP mailbox', value: 'imap' },
+]
 
 const mailSettingsSchema = z.object({
-    provider: z.string().min(1, 'Provider is required'),
+    provider: z.enum(['postmark', 'smtp']),
     postmark_server_token: z.string(),
     postmark_account_token: z.string(),
+    smtp_public_hostname: z.string(),
+    smtp_inbound_mode: z.enum(['', 'smtp', 'imap']),
+    smtp_imap_host: z.string(),
+    smtp_imap_port: z.number().int().min(0).max(65535),
+    smtp_imap_username: z.string(),
+    smtp_imap_password: z.string(),
+    smtp_imap_use_tls: z.boolean(),
+    smtp_imap_mailbox: z.string(),
+    smtp_imap_poll_interval_seconds: z.number().int().min(0),
+    smtp_dkim_selector: z.string(),
 })
+
+type MailSettingsForm = z.infer<typeof mailSettingsSchema>
 
 const addDomainSchema = z.object({
     domain: z
@@ -49,6 +74,56 @@ const addDomainSchema = z.object({
             'Enter a valid domain'
         ),
 })
+
+const PERSISTED_KEYS: (keyof MailSettingsForm)[] = [
+    'provider',
+    'postmark_server_token',
+    'postmark_account_token',
+    'smtp_public_hostname',
+    'smtp_inbound_mode',
+    'smtp_imap_host',
+    'smtp_imap_port',
+    'smtp_imap_username',
+    'smtp_imap_password',
+    'smtp_imap_use_tls',
+    'smtp_imap_mailbox',
+    'smtp_imap_poll_interval_seconds',
+    'smtp_dkim_selector',
+]
+
+function readStringSetting(
+    settingsMap: Map<string, { value: unknown }>,
+    key: string,
+    fallback: string
+): string {
+    const raw = settingsMap.get(key)?.value
+    return typeof raw === 'string' ? raw : fallback
+}
+
+function readNumberSetting(
+    settingsMap: Map<string, { value: unknown }>,
+    key: string,
+    fallback: number
+): number {
+    const raw = settingsMap.get(key)?.value
+    if (typeof raw === 'number') return raw
+    if (typeof raw === 'string' && raw !== '') {
+        const parsed = Number(raw)
+        return Number.isFinite(parsed) ? parsed : fallback
+    }
+    return fallback
+}
+
+function readBooleanSetting(
+    settingsMap: Map<string, { value: unknown }>,
+    key: string,
+    fallback: boolean
+): boolean {
+    const raw = settingsMap.get(key)?.value
+    if (typeof raw === 'boolean') return raw
+    if (typeof raw === 'string') return raw !== 'false'
+    return fallback
+}
 
 export default function ProviderSettings() {
     const primaryColor = useThemeColor('primary')
@@ -64,37 +139,51 @@ export default function ProviderSettings() {
         setError,
         getValues,
         formState: { errors, isSubmitted, isDirty },
-    } = useForm({
+    } = useForm<MailSettingsForm>({
         mode: 'onChange',
         resolver: zodResolver(mailSettingsSchema),
         values: {
-            provider: (settingsMap.get('provider')?.value as string) ?? 'postmark',
-            postmark_server_token:
-                (settingsMap.get('postmark_server_token')?.value as string) ?? '',
-            postmark_account_token:
-                (settingsMap.get('postmark_account_token')?.value as string) ?? '',
+            provider: readStringSetting(settingsMap, 'provider', 'postmark') as 'postmark' | 'smtp',
+            postmark_server_token: readStringSetting(settingsMap, 'postmark_server_token', ''),
+            postmark_account_token: readStringSetting(settingsMap, 'postmark_account_token', ''),
+            smtp_public_hostname: readStringSetting(settingsMap, 'smtp_public_hostname', ''),
+            smtp_inbound_mode: readStringSetting(settingsMap, 'smtp_inbound_mode', '') as
+                | ''
+                | 'smtp'
+                | 'imap',
+            smtp_imap_host: readStringSetting(settingsMap, 'smtp_imap_host', ''),
+            smtp_imap_port: readNumberSetting(settingsMap, 'smtp_imap_port', 0),
+            smtp_imap_username: readStringSetting(settingsMap, 'smtp_imap_username', ''),
+            smtp_imap_password: readStringSetting(settingsMap, 'smtp_imap_password', ''),
+            smtp_imap_use_tls: readBooleanSetting(settingsMap, 'smtp_imap_use_tls', true),
+            smtp_imap_mailbox: readStringSetting(settingsMap, 'smtp_imap_mailbox', 'INBOX'),
+            smtp_imap_poll_interval_seconds: readNumberSetting(
+                settingsMap,
+                'smtp_imap_poll_interval_seconds',
+                60
+            ),
+            smtp_dkim_selector: readStringSetting(settingsMap, 'smtp_dkim_selector', 'tinycld'),
         },
     })
 
+    const watchedProvider = useWatch({ control, name: 'provider' })
+
     const saveMutation = useMutation({
-        mutationFn: mutation(function* (data: z.infer<typeof mailSettingsSchema>) {
-            const entries = [
-                { key: 'provider', value: data.provider },
-                { key: 'postmark_server_token', value: data.postmark_server_token },
-                { key: 'postmark_account_token', value: data.postmark_account_token },
-            ]
-            for (const entry of entries) {
-                const existing = settingsMap.get(entry.key)
+        mutationFn: mutation(function* (data: MailSettingsForm) {
+            for (const key of PERSISTED_KEYS) {
+                const value = data[key]
+                const serialized = typeof value === 'boolean' ? String(value) : value
+                const existing = settingsMap.get(key)
                 if (existing) {
                     yield settingsCollection.update(existing.id, draft => {
-                        draft.value = entry.value
+                        draft.value = serialized
                     })
                 } else {
                     yield settingsCollection.insert({
                         id: newRecordId(),
                         app: 'mail',
-                        key: entry.key,
-                        value: entry.value,
+                        key,
+                        value: serialized,
                         org: orgId,
                     })
                 }
@@ -109,21 +198,7 @@ export default function ProviderSettings() {
     return (
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="bg-background">
             <View className="flex-1 gap-5 p-5" style={{ maxWidth: 600 }}>
-                <View className="gap-2">
-                    <Globe size={32} color={primaryColor} />
-                    <View className="flex-row items-center gap-2">
-                        <Text
-                            className="text-foreground"
-                            style={{ fontSize: 20, fontWeight: 'bold' }}
-                        >
-                            Mail Provider
-                        </Text>
-                        <HelpIcon topic="mail:provider-setup" size={18} />
-                    </View>
-                    <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
-                        Configure the email provider and domains for your organization.
-                    </Text>
-                </View>
+                <ProviderHeader primaryColor={primaryColor} />
 
                 <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
 
@@ -134,35 +209,171 @@ export default function ProviderSettings() {
                         label="Provider"
                         options={PROVIDER_OPTIONS}
                     />
-                    <TextInput
-                        control={control}
-                        name="postmark_server_token"
-                        label="Postmark Server Token"
-                        secureTextEntry
-                    />
-                    <TextInput
-                        control={control}
-                        name="postmark_account_token"
-                        label="Postmark Account Token"
-                        secureTextEntry
-                    />
+                    <ProviderFields provider={watchedProvider} control={control} />
                 </View>
 
-                <Pressable
-                    onPress={onSubmit}
+                <SaveButton
                     disabled={!canSubmit}
-                    className={`items-center justify-center rounded-lg h-11 bg-primary ${canSubmit ? 'opacity-100' : 'opacity-50'}`}
-                >
-                    <Text className="text-primary-foreground" style={{ fontWeight: '600' }}>
-                        {saveMutation.isPending ? 'Saving...' : 'Save'}
-                    </Text>
-                </Pressable>
+                    pending={saveMutation.isPending}
+                    onPress={onSubmit}
+                />
 
                 <Divider />
 
-                <DomainsSection orgId={orgId} />
+                <DomainsSection orgId={orgId} provider={watchedProvider} />
             </View>
         </ScrollView>
+    )
+}
+
+function ProviderHeader({ primaryColor }: { primaryColor: string }) {
+    return (
+        <View className="gap-2">
+            <Globe size={32} color={primaryColor} />
+            <View className="flex-row items-center gap-2">
+                <Text className="text-foreground" style={{ fontSize: 20, fontWeight: 'bold' }}>
+                    Mail Provider
+                </Text>
+                <HelpIcon topic="mail:provider-setup" size={18} />
+            </View>
+            <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
+                Configure the email provider and domains for your organization.
+            </Text>
+        </View>
+    )
+}
+
+function SaveButton({
+    disabled,
+    pending,
+    onPress,
+}: {
+    disabled: boolean
+    pending: boolean
+    onPress: () => void
+}) {
+    return (
+        <Pressable
+            onPress={onPress}
+            disabled={disabled}
+            className={`items-center justify-center rounded-lg h-11 bg-primary ${disabled ? 'opacity-50' : 'opacity-100'}`}
+        >
+            <Text className="text-primary-foreground" style={{ fontWeight: '600' }}>
+                {pending ? 'Saving...' : 'Save'}
+            </Text>
+        </Pressable>
+    )
+}
+
+function ProviderFields({
+    provider,
+    control,
+}: {
+    provider: 'postmark' | 'smtp'
+    control: Control<MailSettingsForm, unknown, MailSettingsForm>
+}) {
+    if (provider === 'smtp') return <SmtpFields control={control} />
+    return <PostmarkFields control={control} />
+}
+
+function PostmarkFields({
+    control,
+}: {
+    control: Control<MailSettingsForm, unknown, MailSettingsForm>
+}) {
+    return (
+        <>
+            <TextInput
+                control={control}
+                name="postmark_server_token"
+                label="Postmark Server Token"
+                secureTextEntry
+            />
+            <TextInput
+                control={control}
+                name="postmark_account_token"
+                label="Postmark Account Token"
+                secureTextEntry
+            />
+        </>
+    )
+}
+
+function SmtpFields({
+    control,
+}: {
+    control: Control<MailSettingsForm, unknown, MailSettingsForm>
+}) {
+    const inboundMode = useWatch({ control, name: 'smtp_inbound_mode' })
+    return (
+        <>
+            <TextInput
+                control={control}
+                name="smtp_public_hostname"
+                label="Public hostname"
+                placeholder="mx.example.com"
+            />
+            <TextInput
+                control={control}
+                name="smtp_dkim_selector"
+                label="DKIM selector"
+                placeholder="tinycld"
+            />
+            <SelectInput
+                control={control}
+                name="smtp_inbound_mode"
+                label="Inbound mode"
+                options={SMTP_INBOUND_MODE_OPTIONS}
+            />
+            <ImapFieldsBlock isVisible={inboundMode === 'imap'} control={control} />
+        </>
+    )
+}
+
+function ImapFieldsBlock({
+    isVisible,
+    control,
+}: {
+    isVisible: boolean
+    control: Control<MailSettingsForm, unknown, MailSettingsForm>
+}) {
+    if (!isVisible) return null
+    return (
+        <View className="gap-3 p-3 rounded-md border border-border">
+            <Text className="text-foreground" style={{ fontWeight: '600' }}>
+                IMAP fetcher
+            </Text>
+            <TextInput
+                control={control}
+                name="smtp_imap_host"
+                label="IMAP host"
+                placeholder="imap.example.com"
+            />
+            <NumberInput
+                control={control}
+                name="smtp_imap_port"
+                label="IMAP port (0 = default by TLS)"
+            />
+            <TextInput control={control} name="smtp_imap_username" label="Username" />
+            <TextInput
+                control={control}
+                name="smtp_imap_password"
+                label="Password"
+                secureTextEntry
+            />
+            <TextInput
+                control={control}
+                name="smtp_imap_mailbox"
+                label="Mailbox"
+                placeholder="INBOX"
+            />
+            <NumberInput
+                control={control}
+                name="smtp_imap_poll_interval_seconds"
+                label="Poll interval (seconds)"
+            />
+            <Toggle control={control} name="smtp_imap_use_tls" label="Use TLS" />
+        </View>
     )
 }
 
@@ -179,7 +390,7 @@ interface DomainRow {
     verification_details: MailDomainVerificationDetails | null
 }
 
-function DomainsSection({ orgId }: { orgId: string }) {
+function DomainsSection({ orgId, provider }: { orgId: string; provider: 'postmark' | 'smtp' }) {
     const [domainsCollection] = useStore('mail_domains')
 
     const { data: domains } = useOrgLiveQuery((query, { orgId }) =>
@@ -215,7 +426,7 @@ function DomainsSection({ orgId }: { orgId: string }) {
             <NoDomainsBanner isVisible={domainRows.length === 0} />
 
             {domainRows.map(d => (
-                <DomainRowItem key={d.id} domain={d} />
+                <DomainRowItem key={d.id} domain={d} provider={provider} />
             ))}
 
             <AddDomainForm orgId={orgId} />
@@ -232,7 +443,7 @@ function NoDomainsBanner({ isVisible }: { isVisible: boolean }) {
     )
 }
 
-function DomainRowItem({ domain }: { domain: DomainRow }) {
+function DomainRowItem({ domain, provider }: { domain: DomainRow; provider: 'postmark' | 'smtp' }) {
     const mutedColor = useThemeColor('muted-foreground')
     const successColor = useThemeColor('success')
     const dangerColor = useThemeColor('danger')
@@ -246,9 +457,6 @@ function DomainRowItem({ domain }: { domain: DomainRow }) {
         onSuccess: () => setConfirming(false),
     })
 
-    // Plain HTTP mutation rather than ~/lib/mutations because verify calls a
-    // custom endpoint, not a pbtsdb collection. The row refreshes automatically
-    // via useOrgLiveQuery after the server saves the updated record.
     const verifyMutation = useReactQueryMutation({
         mutationFn: async () => {
             await pb.send(`/api/mail/domains/${domain.id}/verify`, { method: 'POST' })
@@ -289,15 +497,26 @@ function DomainRowItem({ domain }: { domain: DomainRow }) {
                 </View>
             </View>
 
-            <DomainVerificationPanel domain={domain} />
+            <DomainVerificationPanel domain={domain} provider={provider} />
 
-            <WebhookURLs domainId={domain.id} />
+            <PostmarkWebhookURLsBlock isVisible={provider === 'postmark'} domainId={domain.id} />
 
             <VerifyErrorBanner message={verifyErrorMessage} />
 
             <LastCheckedLabel lastCheckedAt={domain.last_checked_at} mutedColor={mutedColor} />
         </View>
     )
+}
+
+function PostmarkWebhookURLsBlock({
+    isVisible,
+    domainId,
+}: {
+    isVisible: boolean
+    domainId: string
+}) {
+    if (!isVisible) return null
+    return <WebhookURLs domainId={domainId} />
 }
 
 function WebhookURLs({ domainId }: { domainId: string }) {
@@ -451,25 +670,44 @@ function LastCheckedLabel({
     )
 }
 
-function buildMXHint(verified: boolean, details: MailDomainVerificationDetails | null): string {
-    if (verified) return 'MX points to inbound.postmarkapp.com'
+function buildMXHint(
+    verified: boolean,
+    details: MailDomainVerificationDetails | null,
+    provider: 'postmark' | 'smtp'
+): string {
+    const expected =
+        details?.mx?.expected ||
+        (provider === 'smtp' ? 'your TinyCld host' : 'inbound.postmarkapp.com')
+    if (!expected) {
+        return 'no MX required (using IMAP fetch)'
+    }
+    if (verified) return `MX points to ${expected}`
     const actual = details?.mx?.actual?.join(', ') || details?.mx?.error || 'no MX records'
-    return `expected inbound.postmarkapp.com — found: ${actual}`
+    return `expected ${expected} — found: ${actual}`
 }
 
-function buildPostmarkHint(
+function buildProviderHint(
     verified: boolean,
-    details: MailDomainVerificationDetails | null
+    details: MailDomainVerificationDetails | null,
+    provider: 'postmark' | 'smtp'
 ): string {
-    const pm = details?.postmark
-    if (pm?.error) return pm.error
+    const p = details?.provider
+    if (p?.error) return p.error
+    if (provider === 'smtp') {
+        if (verified) {
+            return p?.server_domain
+                ? `Public hostname: ${p.server_domain}`
+                : 'Public hostname configured'
+        }
+        return 'Set the SMTP provider public hostname in settings'
+    }
     if (verified) {
-        return pm?.server_domain
-            ? `Postmark server InboundDomain: ${pm.server_domain}`
+        return p?.server_domain
+            ? `Postmark server InboundDomain: ${p.server_domain}`
             : 'Postmark server InboundDomain matches this domain'
     }
-    if (pm?.server_domain) {
-        return `Postmark server InboundDomain is "${pm.server_domain}" — set it to this domain`
+    if (p?.server_domain) {
+        return `Postmark server InboundDomain is "${p.server_domain}" — set it to this domain`
     }
     return 'Set this domain as the server InboundDomain in Postmark'
 }
@@ -478,21 +716,28 @@ function buildOutboundHint(details: MailDomainVerificationDetails | null): strin
     return details?.outbound?.error || 'outbound sending'
 }
 
-function DomainVerificationPanel({ domain }: { domain: DomainRow }) {
+function DomainVerificationPanel({
+    domain,
+    provider,
+}: {
+    domain: DomainRow
+    provider: 'postmark' | 'smtp'
+}) {
     const details = domain.verification_details
     const outboundHint = buildOutboundHint(details)
+    const providerLabel = provider === 'smtp' ? 'SMTP Hostname' : 'Postmark Inbound Domain'
 
     return (
         <View className="gap-1">
             <CheckRow
                 label="Inbound MX"
                 ok={domain.mx_verified}
-                hint={buildMXHint(domain.mx_verified, details)}
+                hint={buildMXHint(domain.mx_verified, details, provider)}
             />
             <CheckRow
-                label="Postmark Inbound Domain"
+                label={providerLabel}
                 ok={domain.inbound_domain_verified}
-                hint={buildPostmarkHint(domain.inbound_domain_verified, details)}
+                hint={buildProviderHint(domain.inbound_domain_verified, details, provider)}
             />
             <CheckRow label="SPF" ok={domain.spf_verified} hint={outboundHint} advisory />
             <CheckRow label="DKIM" ok={domain.dkim_verified} hint={outboundHint} advisory />
