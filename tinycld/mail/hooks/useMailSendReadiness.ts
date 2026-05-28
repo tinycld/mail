@@ -35,7 +35,14 @@ export function useMailSendReadiness(): MailSendReadiness {
         [mailboxId]
     )
 
-    const domainId = mailboxes?.[0]?.domain ?? null
+    // Identity-based resolution: `mailboxes` from a prior render's filter may
+    // still be in the result set while the query catches up to the new
+    // `mailboxId`. Picking by id (rather than [0]) means a stale row from a
+    // previous filter doesn't masquerade as the current mailbox. While the
+    // requested mailbox isn't in the result yet, `mailbox` is null AND the
+    // mailboxesLoading flag below treats it as loading (no false "no-domain").
+    const mailbox = mailboxes?.find(m => m.id === mailboxId) ?? null
+    const domainId = mailbox?.domain ?? null
 
     const { data: domains } = useOrgLiveQuery(
         query =>
@@ -45,14 +52,17 @@ export function useMailSendReadiness(): MailSendReadiness {
         [domainId]
     )
 
-    const domain = domains?.[0] ?? null
+    const domain = domains?.find(d => d.id === domainId) ?? null
 
-    // Suppress blockers while any dependent query is still loading. Without
-    // this, the user gets toasted on transient load order (e.g. members
-    // resolved but mailboxes not yet) for problems that don't actually exist.
+    // Suppress blockers while any dependent query is still loading OR catching
+    // up to its current filter. "Loading" now means: the query hasn't returned
+    // yet (data === undefined), OR the requested row isn't in the result yet
+    // (data returned but doesn't contain the id we asked for — i.e. a stale
+    // prior filter's result). Without the second condition, an FK that hasn't
+    // resolved looks like a legitimate "no FK set" and trips a false blocker.
     const membersLoading = members === undefined
-    const mailboxesLoading = mailboxId !== null && mailboxes === undefined
-    const domainsLoading = domainId !== null && domains === undefined
+    const mailboxesLoading = mailboxId !== null && (mailboxes === undefined || mailbox === null)
+    const domainsLoading = domainId !== null && (domains === undefined || domain === null)
     const isSuppressed = membersLoading || mailboxesLoading || domainsLoading
 
     const lastSuppressionRef = useRef<string>('')
@@ -61,8 +71,6 @@ export function useMailSendReadiness(): MailSendReadiness {
             lastSuppressionRef.current = ''
             return
         }
-        // Log each distinct suppression state once so we can see in prod how
-        // often the toast would have fired on a transient load state.
         const which: ('members' | 'mailboxes' | 'domains')[] = []
         if (membersLoading) which.push('members')
         if (mailboxesLoading) which.push('mailboxes')
@@ -76,9 +84,23 @@ export function useMailSendReadiness(): MailSendReadiness {
             domainId,
             membersResolved: members !== undefined,
             mailboxesResolved: mailboxes !== undefined,
+            mailboxRowMatched: mailbox !== null,
             domainsResolved: domains !== undefined,
+            domainRowMatched: domain !== null,
         })
-    }, [isSuppressed, membersLoading, mailboxesLoading, domainsLoading, mailboxId, domainId, members, mailboxes, domains])
+    }, [
+        isSuppressed,
+        membersLoading,
+        mailboxesLoading,
+        domainsLoading,
+        mailboxId,
+        domainId,
+        members,
+        mailboxes,
+        domains,
+        mailbox,
+        domain,
+    ])
 
     if (isSuppressed) {
         return { mailboxId, blocker: null, message: null }
