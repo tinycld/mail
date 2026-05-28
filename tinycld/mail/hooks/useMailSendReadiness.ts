@@ -1,6 +1,10 @@
 import { eq } from '@tanstack/db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
+import { captureMessageToSentry } from '@tinycld/core/lib/sentry'
+import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
+import { useOrgInfo } from '@tinycld/core/lib/use-org-info'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
+import { useEffect, useRef } from 'react'
 
 export type MailSendBlocker = 'no-mailbox' | 'no-domain' | 'domain-unverified'
 
@@ -16,6 +20,9 @@ export function useMailSendReadiness(): MailSendReadiness {
         'mail_mailboxes',
         'mail_domains'
     )
+
+    const { orgId, orgSlug } = useOrgInfo()
+    const { userOrgId } = useCurrentRole()
 
     const { data: members } = useOrgLiveQuery((query, { userOrgId }) =>
         query
@@ -44,6 +51,30 @@ export function useMailSendReadiness(): MailSendReadiness {
     )
 
     const domain = domains?.[0] ?? null
+
+    const lastSnapshotRef = useRef<string>('')
+    useEffect(() => {
+        const snapshot = JSON.stringify({
+            orgId,
+            orgSlug,
+            userOrgId,
+            membersLen: members?.length ?? null,
+            mailboxId,
+            domainId,
+            domainVerified: domain?.verified ?? null,
+        })
+        if (snapshot === lastSnapshotRef.current) return
+        lastSnapshotRef.current = snapshot
+        captureMessageToSentry('mail-send-readiness', 'state-change', {
+            orgId,
+            orgSlug,
+            userOrgId,
+            membersLen: members?.length ?? null,
+            mailboxId,
+            domainId,
+            domainVerified: domain?.verified ?? null,
+        })
+    }, [orgId, orgSlug, userOrgId, members, mailboxId, domainId, domain])
 
     if (!mailboxId) {
         return {
