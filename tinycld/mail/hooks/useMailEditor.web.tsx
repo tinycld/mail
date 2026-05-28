@@ -31,58 +31,76 @@ export function useMailEditor(options: UseMailEditorOptions = {}): EditorResult 
     })
 
     const editor: EditorHandle = useMemo(
-        () => ({
-            getHTML: () => Promise.resolve(tiptapEditor?.getHTML() ?? ''),
-            getText: () => Promise.resolve(tiptapEditor?.getText() ?? ''),
-            setContent: (html: string) => tiptapEditor?.commands.setContent(html),
-            focus: (position?: 'start' | 'end') => {
-                if (position === 'start') {
-                    tiptapEditor?.chain().focus('start').run()
-                } else {
-                    tiptapEditor?.chain().focus('end').run()
-                }
-            },
-            clear: () => tiptapEditor?.commands.clearContent(),
-            getSelection: () => {
-                const selection = tiptapEditor?.state.selection
-                if (!selection) return Promise.resolve(null)
-                return Promise.resolve({ from: selection.from, to: selection.to })
-            },
-        }),
+        () => {
+            // tiptap nulls commandManager on destroy, and useEditor can briefly
+            // hand back a destroyed instance during remount. Touching `.commands`
+            // / `.chain()` in that window throws "Cannot read properties of null
+            // (reading 'commands')". Gate every imperative call on a live editor.
+            const isLive = () => !!tiptapEditor && !tiptapEditor.isDestroyed
+            return {
+                getHTML: () => Promise.resolve(isLive() ? (tiptapEditor?.getHTML() ?? '') : ''),
+                getText: () => Promise.resolve(isLive() ? (tiptapEditor?.getText() ?? '') : ''),
+                setContent: (html: string) => {
+                    if (!isLive()) return
+                    tiptapEditor?.commands.setContent(html)
+                },
+                focus: (position?: 'start' | 'end') => {
+                    if (!isLive()) return
+                    if (position === 'start') {
+                        tiptapEditor?.chain().focus('start').run()
+                    } else {
+                        tiptapEditor?.chain().focus('end').run()
+                    }
+                },
+                clear: () => {
+                    if (!isLive()) return
+                    tiptapEditor?.commands.clearContent()
+                },
+                getSelection: () => {
+                    if (!isLive()) return Promise.resolve(null)
+                    const selection = tiptapEditor?.state.selection
+                    if (!selection) return Promise.resolve(null)
+                    return Promise.resolve({ from: selection.from, to: selection.to })
+                },
+            }
+        },
         [tiptapEditor]
     )
 
     const commands: EditorCommands = useMemo(
-        () => ({
-            toggleBold: () => tiptapEditor?.chain().focus().toggleBold().run(),
-            toggleItalic: () => tiptapEditor?.chain().focus().toggleItalic().run(),
-            toggleUnderline: () => tiptapEditor?.chain().focus().toggleUnderline().run(),
-            toggleBulletList: () => tiptapEditor?.chain().focus().toggleBulletList().run(),
-            toggleOrderedList: () => tiptapEditor?.chain().focus().toggleOrderedList().run(),
-            toggleBlockquote: () => tiptapEditor?.chain().focus().toggleBlockquote().run(),
-            toggleHeading: (level: number) =>
-                tiptapEditor
-                    ?.chain()
-                    .focus()
-                    .toggleHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 })
-                    .run(),
-            setLink: (url: string) => tiptapEditor?.chain().focus().setLink({ href: url }).run(),
-            removeLink: () => tiptapEditor?.chain().focus().unsetLink().run(),
-            undo: () => tiptapEditor?.chain().focus().undo().run(),
-            redo: () => tiptapEditor?.chain().focus().redo().run(),
-        }),
+        () => {
+            const chain = () =>
+                tiptapEditor && !tiptapEditor.isDestroyed ? tiptapEditor.chain().focus() : null
+            return {
+                toggleBold: () => chain()?.toggleBold().run(),
+                toggleItalic: () => chain()?.toggleItalic().run(),
+                toggleUnderline: () => chain()?.toggleUnderline().run(),
+                toggleBulletList: () => chain()?.toggleBulletList().run(),
+                toggleOrderedList: () => chain()?.toggleOrderedList().run(),
+                toggleBlockquote: () => chain()?.toggleBlockquote().run(),
+                toggleHeading: (level: number) =>
+                    chain()
+                        ?.toggleHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 })
+                        .run(),
+                setLink: (url: string) => chain()?.setLink({ href: url }).run(),
+                removeLink: () => chain()?.unsetLink().run(),
+                undo: () => chain()?.undo().run(),
+                redo: () => chain()?.redo().run(),
+            }
+        },
         [tiptapEditor]
     )
 
+    const live = tiptapEditor && !tiptapEditor.isDestroyed ? tiptapEditor : null
     const toolbarState: EditorToolbarState = {
-        isBoldActive: tiptapEditor?.isActive('bold') ?? false,
-        isItalicActive: tiptapEditor?.isActive('italic') ?? false,
-        isUnderlineActive: tiptapEditor?.isActive('underline') ?? false,
-        isBulletListActive: tiptapEditor?.isActive('bulletList') ?? false,
-        isOrderedListActive: tiptapEditor?.isActive('orderedList') ?? false,
-        isBlockquoteActive: tiptapEditor?.isActive('blockquote') ?? false,
-        isLinkActive: tiptapEditor?.isActive('link') ?? false,
-        currentLink: (tiptapEditor?.getAttributes('link')?.href as string) ?? null,
+        isBoldActive: live?.isActive('bold') ?? false,
+        isItalicActive: live?.isActive('italic') ?? false,
+        isUnderlineActive: live?.isActive('underline') ?? false,
+        isBulletListActive: live?.isActive('bulletList') ?? false,
+        isOrderedListActive: live?.isActive('orderedList') ?? false,
+        isBlockquoteActive: live?.isActive('blockquote') ?? false,
+        isLinkActive: live?.isActive('link') ?? false,
+        currentLink: (live?.getAttributes('link')?.href as string) ?? null,
     }
 
     const EditorComponent = useMemo(
