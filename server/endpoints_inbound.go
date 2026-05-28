@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
 )
@@ -18,6 +19,16 @@ type routingResult struct {
 	storedCount     int
 	unknownAddrs    []string
 	storageFailures []error
+}
+
+// secretPrefix returns the first 8 chars of the webhook secret for log
+// correlation. Logging the prefix is enough to identify which mail_domains
+// row a request matched without leaking the full secret to log readers.
+func secretPrefix(secret string) string {
+	if len(secret) <= 8 {
+		return secret
+	}
+	return secret[:8] + "…"
 }
 
 func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secret string) error {
@@ -98,10 +109,45 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 	}
 
 	// Nothing stored, but we had at least one syntactically-valid recipient
-	// that didn't resolve to a mailbox → 403 (bounce).
+	// that didn't resolve to a mailbox → 403 (bounce). This also fires for
+	// Postmark's "Check" probe in the dashboard (synthetic recipient address
+	// that doesn't match any real mailbox), so emit a structured log line
+	// AND a Sentry breadcrumb so operators can tell a misconfigured-route
+	// from a real-but-undeliverable inbound when triaging.
 	if result.storedCount == 0 && len(result.unknownAddrs) > 0 {
+		unknowns := strings.Join(result.unknownAddrs, ", ")
+		fromEmail := ""
+		if msg != nil {
+			fromEmail = msg.From.Email
+		}
+		messageID := ""
+		if msg != nil {
+			messageID = msg.MessageID
+		}
+		app.Logger().Warn("inbound: 403 no mailbox for recipient(s)",
+			"unknownRecipients", unknowns,
+			"unknownCount", len(result.unknownAddrs),
+			"from", fromEmail,
+			"messageID", messageID,
+			"webhookSecretPrefix", secretPrefix(secret),
+		)
+		hub := sentry.CurrentHub().Clone()
+		hub.WithScope(func(scope *sentry.Scope) {
+			scope.SetLevel(sentry.LevelWarning)
+			scope.SetTag("mail.inbound", "no-mailbox-403")
+			scope.SetContext("inbound", map[string]any{
+				"unknownRecipients":   result.unknownAddrs,
+				"unknownCount":        len(result.unknownAddrs),
+				"from":                fromEmail,
+				"messageID":           messageID,
+				"webhookSecretPrefix": secretPrefix(secret),
+			})
+			hub.CaptureMessage(fmt.Sprintf(
+				"mail inbound returned 403: no mailbox for %d recipient(s)",
+				len(result.unknownAddrs)))
+		})
 		return re.ForbiddenError(
-			fmt.Sprintf("No mailbox for recipient(s): %s", strings.Join(result.unknownAddrs, ", ")),
+			fmt.Sprintf("No mailbox for recipient(s): %s", unknowns),
 			nil,
 		)
 	}
