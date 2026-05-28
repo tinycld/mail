@@ -43,44 +43,31 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const aliasId = useComposeStore(s => s.aliasId)
     const draftIdRef = useRef<string | null>(null)
     const toastedBlockerRef = useRef<string | null>(null)
-    const traceIdRef = useRef<string>('')
-    if (!traceIdRef.current) {
-        traceIdRef.current = `cw-${Math.random().toString(36).slice(2, 8)}`
-    }
     const [headerTitle, setHeaderTitle] = useState('')
     const { attachments, addFilesSafely, removeFile, clearAll: clearAttachments } = useAttachments()
-
     useEffect(() => {
-        captureMessageToSentry('compose-window', 'mount', { traceId: traceIdRef.current })
-        return () => {
-            captureMessageToSentry('compose-window', 'unmount', { traceId: traceIdRef.current })
-        }
-    }, [])
-
-    useEffect(() => {
-        captureMessageToSentry('compose-window', 'readiness-effect', {
-            traceId: traceIdRef.current,
-            isVisible,
-            blocker: readiness.blocker,
-            mailboxId: readiness.mailboxId,
-            toastedBlocker: toastedBlockerRef.current,
-        })
         if (!isVisible) {
             toastedBlockerRef.current = null
             return
         }
         if (!readiness.blocker || !readiness.message) return
-        if (toastedBlockerRef.current === readiness.blocker) return
+        if (toastedBlockerRef.current === readiness.blocker) {
+            // Log suppression so we can see how often the dedupe fires in prod.
+            // If this fires a lot it means readiness keeps re-flapping into the
+            // same blocker; that's worth investigating regardless of the dedupe
+            // doing its job.
+            captureMessageToSentry('compose-window', 'duplicate-blocker-suppressed', {
+                blocker: readiness.blocker,
+                mailboxId: readiness.mailboxId,
+                isVisible,
+            })
+            return
+        }
         toastedBlockerRef.current = readiness.blocker
         const event =
             readiness.blocker === 'domain-unverified'
                 ? 'mail.send_blocked_warn'
                 : 'mail.send_blocked_error'
-        captureMessageToSentry('compose-window', 'emit-blocker-toast', {
-            traceId: traceIdRef.current,
-            blocker: readiness.blocker,
-            event,
-        })
         notify.emit({
             event,
             title: "Can't send mail",

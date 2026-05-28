@@ -1,8 +1,6 @@
 import { eq } from '@tanstack/db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { captureMessageToSentry } from '@tinycld/core/lib/sentry'
-import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
-import { useOrgInfo } from '@tinycld/core/lib/use-org-info'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useEffect, useRef } from 'react'
 
@@ -20,9 +18,6 @@ export function useMailSendReadiness(): MailSendReadiness {
         'mail_mailboxes',
         'mail_domains'
     )
-
-    const { orgId, orgSlug } = useOrgInfo()
-    const { userOrgId } = useCurrentRole()
 
     const { data: members } = useOrgLiveQuery((query, { userOrgId }) =>
         query
@@ -52,29 +47,42 @@ export function useMailSendReadiness(): MailSendReadiness {
 
     const domain = domains?.[0] ?? null
 
-    const lastSnapshotRef = useRef<string>('')
+    // Suppress blockers while any dependent query is still loading. Without
+    // this, the user gets toasted on transient load order (e.g. members
+    // resolved but mailboxes not yet) for problems that don't actually exist.
+    const membersLoading = members === undefined
+    const mailboxesLoading = mailboxId !== null && mailboxes === undefined
+    const domainsLoading = domainId !== null && domains === undefined
+    const isSuppressed = membersLoading || mailboxesLoading || domainsLoading
+
+    const lastSuppressionRef = useRef<string>('')
     useEffect(() => {
-        const snapshot = JSON.stringify({
-            orgId,
-            orgSlug,
-            userOrgId,
-            membersLen: members?.length ?? null,
+        if (!isSuppressed) {
+            lastSuppressionRef.current = ''
+            return
+        }
+        // Log each distinct suppression state once so we can see in prod how
+        // often the toast would have fired on a transient load state.
+        const which: ('members' | 'mailboxes' | 'domains')[] = []
+        if (membersLoading) which.push('members')
+        if (mailboxesLoading) which.push('mailboxes')
+        if (domainsLoading) which.push('domains')
+        const key = which.join(',')
+        if (key === lastSuppressionRef.current) return
+        lastSuppressionRef.current = key
+        captureMessageToSentry('mail-send-readiness', 'blocker-suppressed-loading', {
+            loading: which,
             mailboxId,
             domainId,
-            domainVerified: domain?.verified ?? null,
+            membersResolved: members !== undefined,
+            mailboxesResolved: mailboxes !== undefined,
+            domainsResolved: domains !== undefined,
         })
-        if (snapshot === lastSnapshotRef.current) return
-        lastSnapshotRef.current = snapshot
-        captureMessageToSentry('mail-send-readiness', 'state-change', {
-            orgId,
-            orgSlug,
-            userOrgId,
-            membersLen: members?.length ?? null,
-            mailboxId,
-            domainId,
-            domainVerified: domain?.verified ?? null,
-        })
-    }, [orgId, orgSlug, userOrgId, members, mailboxId, domainId, domain])
+    }, [isSuppressed, membersLoading, mailboxesLoading, domainsLoading, mailboxId, domainId, members, mailboxes, domains])
+
+    if (isSuppressed) {
+        return { mailboxId, blocker: null, message: null }
+    }
 
     if (!mailboxId) {
         return {
