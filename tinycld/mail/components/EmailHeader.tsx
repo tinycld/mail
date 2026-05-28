@@ -81,12 +81,42 @@ interface MessageHeaderProps {
     isStarred?: boolean
     deliveryStatus?: string
     bounceReason?: string
+    /** All To/Cc recipients of this message; used to render "to ..." line. */
+    recipients?: { name: string; email: string }[]
+    /** Lower-cased addresses that count as the current user. */
+    ownAddresses?: Set<string>
     isExpanded: boolean
     onToggleExpand: () => void
     onReply?: () => void
     onReplyAll?: () => void
     onForward?: () => void
     onToggleStar?: () => void
+}
+
+/**
+ * Render the "to ..." line for a message. Replaces any recipient whose email
+ * is in `ownAddresses` with the literal "me", preserving order so a thread
+ * that addressed the user plus two coworkers reads "to me, Jane, Sam" rather
+ * than "to me" (the prior misleading behavior, which was hardcoded regardless
+ * of the actual recipients — wrong on every outbound message).
+ */
+function formatRecipientLine(
+    recipients: { name: string; email: string }[],
+    ownAddresses: Set<string>
+): string {
+    if (recipients.length === 0) return ''
+    const parts = recipients.map(r => {
+        if (ownAddresses.has(r.email.toLowerCase())) return 'me'
+        return r.name?.trim() || r.email
+    })
+    // Collapse adjacent "me" entries (e.g. primary + alias both addressed)
+    // so we don't say "to me, me, Jane".
+    const deduped: string[] = []
+    for (const p of parts) {
+        if (p === 'me' && deduped[deduped.length - 1] === 'me') continue
+        deduped.push(p)
+    }
+    return `to ${deduped.join(', ')}`
 }
 
 export function MessageHeader({
@@ -96,6 +126,8 @@ export function MessageHeader({
     isStarred,
     deliveryStatus,
     bounceReason,
+    recipients,
+    ownAddresses,
     isExpanded,
     onToggleExpand,
     onReply,
@@ -120,6 +152,7 @@ export function MessageHeader({
         .slice(0, 2)
 
     const dateDisplay = formatRelativeDate(date)
+    const recipientLine = formatRecipientLine(recipients ?? [], ownAddresses ?? new Set())
 
     return (
         <View style={{ gap: 0 }}>
@@ -157,7 +190,7 @@ export function MessageHeader({
                                 </Text>
                             )}
                         </View>
-                        <Text style={{ fontSize: 12, color: mutedColor }}>to me</Text>
+                        <Text style={{ fontSize: 12, color: mutedColor }}>{recipientLine}</Text>
                     </View>
                     <Text style={{ fontSize: 12, flexShrink: 0, color: mutedColor }}>
                         {dateDisplay}

@@ -88,6 +88,14 @@ export default function MailDetailScreen() {
     if (personal) userMailboxIds.add(personal.id)
     for (const mb of shared) userMailboxIds.add(mb.id)
     const hasAccess = !thread || userMailboxIds.has(thread.mailbox)
+    // Lower-cased addresses that should render as "me" in the per-message
+    // header's "to ..." line: every primary + every alias of every identity
+    // the user can send as.
+    const ownAddresses = new Set<string>()
+    for (const id of identities) {
+        ownAddresses.add(id.primaryAddress.toLowerCase())
+        for (const a of id.aliases) ownAddresses.add(a.address.toLowerCase())
+    }
 
     const { data: messages } = useOrgLiveQuery(
         query =>
@@ -278,6 +286,11 @@ export default function MailDetailScreen() {
                                 isStarred={threadState?.is_starred}
                                 deliveryStatus={msg.delivery_status}
                                 bounceReason={msg.bounce_reason}
+                                recipients={[
+                                    ...(msg.recipients_to ?? []),
+                                    ...(msg.recipients_cc ?? []),
+                                ]}
+                                ownAddresses={ownAddresses}
                                 isExpanded={expanded}
                                 onToggleExpand={() => toggleExpanded(msg.id)}
                                 onToggleStar={() => toggleStar.mutate()}
