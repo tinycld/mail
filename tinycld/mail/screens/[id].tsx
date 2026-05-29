@@ -4,6 +4,7 @@ import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { type Shortcut, useRegisterShortcut, useShortcutScope } from '@tinycld/core/lib/shortcuts'
+import { useDocumentTitle } from '@tinycld/core/lib/use-document-title'
 import { useNavigateBack } from '@tinycld/core/lib/use-navigate-back'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
@@ -105,6 +106,8 @@ export default function MailDetailScreen() {
                 .orderBy(({ mail_messages }) => mail_messages.date, 'asc'),
         [id]
     )
+
+    useDocumentTitle(messages?.[0]?.subject ?? 'Mail')
 
     const { labels: allLabels } = useLabels()
     const { labels, labelIds: threadLabelIds } = useThreadLabels(threadState?.id ?? '')

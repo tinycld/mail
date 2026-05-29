@@ -10,6 +10,7 @@ import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { pb, queryClient } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
+import { useDocumentTitle } from '@tinycld/core/lib/use-document-title'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Archive, Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
@@ -378,6 +379,8 @@ export default function MailListScreen() {
         activeLabels.length > 0
             ? activeLabels.map(l => l.name).join(', ')
             : prettifyFolderKey(folderKey)
+
+    useDocumentTitle(search.isActive ? 'Mail — Search' : `Mail — ${folderTitle}`)
 
     const isMobile = breakpoint === 'mobile'
 
