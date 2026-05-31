@@ -5,8 +5,9 @@ import { deliverInbound, openThread, uniqueSubject } from './helpers'
 test.describe('Mail — Labels', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
-        await navigateToPackage(page, 'mail')
-        await expect(page.getByText('Compose').first()).toBeVisible({ timeout: 15_000 })
+        await navigateToPackage(page, 'mail', {
+            waitFor: page.getByTestId('package-sidebar-mounted'),
+        })
     })
 
     test('filter by label in sidebar navigates to label-scoped URL', async ({ page }) => {

@@ -5,7 +5,9 @@ import { deliverInbound, emailRow, expectRowVisible, openThread, uniqueSubject }
 test.describe('Mail — Unified inbox', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
-        await navigateToPackage(page, 'mail')
+        await navigateToPackage(page, 'mail', {
+            waitFor: page.getByTestId('package-sidebar-mounted'),
+        })
     })
 
     test('All Inboxes lists threads from both personal and shared mailboxes', async ({
@@ -17,6 +19,13 @@ test.describe('Mail — Unified inbox', () => {
         await deliverInbound(request, { subject: personalSubject, to: 'user@tinycld.org' })
         await deliverInbound(request, { subject: sharedSubject, to: 'support@tinycld.org' })
         await page.reload()
+        // Reload tears the sidebar's lazy chunk back to a Suspense
+        // skeleton; wait for the chunk to remount before reaching for
+        // the sidebar entry.
+        await page.getByTestId('package-sidebar-mounted').waitFor({
+            state: 'visible',
+            timeout: 30_000,
+        })
 
         await clickSidebarItem(page, 'All Inboxes')
         await expect(page).toHaveURL(/folder=all-inboxes/)
@@ -42,6 +51,13 @@ test.describe('Mail — Unified inbox', () => {
         const subject = uniqueSubject('UnifiedBack')
         await deliverInbound(request, { subject, to: 'support@tinycld.org' })
         await page.reload()
+        // Reload tears the sidebar's lazy chunk back to a Suspense
+        // skeleton; wait for the chunk to remount before reaching for
+        // the sidebar entry.
+        await page.getByTestId('package-sidebar-mounted').waitFor({
+            state: 'visible',
+            timeout: 30_000,
+        })
 
         await clickSidebarItem(page, 'All Inboxes')
         await expect(page).toHaveURL(/folder=all-inboxes/)

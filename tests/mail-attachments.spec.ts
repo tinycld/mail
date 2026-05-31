@@ -117,7 +117,9 @@ test.describe('Mail — Attachments', () => {
         )
 
         await login(page)
-        await navigateToPackage(page, 'mail')
+        await navigateToPackage(page, 'mail', {
+            waitFor: page.getByTestId('package-sidebar-mounted'),
+        })
 
         await expect(emailRow(page, subject)).toBeVisible({ timeout: 10_000 })
         await openThread(page, subject)

@@ -5,7 +5,9 @@ import { deliverInbound, emailRow, expectRowVisible, uniqueSubject } from './hel
 test.describe('Mail — Inbox', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
-        await navigateToPackage(page, 'mail')
+        await navigateToPackage(page, 'mail', {
+            waitFor: page.getByTestId('package-sidebar-mounted'),
+        })
     })
 
     test('inbox shows unread badge in sidebar', async ({ page }) => {
