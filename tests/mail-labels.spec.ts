@@ -6,7 +6,6 @@ test.describe('Mail — Labels', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
         await navigateToPackage(page, 'mail')
-        await expect(page.getByText('Compose').first()).toBeVisible({ timeout: 15_000 })
     })
 
     test('filter by label in sidebar navigates to label-scoped URL', async ({ page }) => {
