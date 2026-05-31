@@ -12,7 +12,9 @@ import {
 test.describe('Mail — Thread Detail', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
-        await navigateToPackage(page, 'mail')
+        await navigateToPackage(page, 'mail', {
+            waitFor: page.getByTestId('package-sidebar-mounted'),
+        })
         // The seed creates a shared "Support" mailbox in addition to the
         // personal one, so the default landing page is "All Inboxes". These
         // tests reason about a thread's *folder* (inbox vs. archive vs.

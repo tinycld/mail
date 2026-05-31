@@ -9,7 +9,9 @@ import { clickSidebarItem, login, navigateToPackage } from '../../app/tests/e2e/
 test.describe('Mail — Navigation', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
-        await navigateToPackage(page, 'mail')
+        await navigateToPackage(page, 'mail', {
+            waitFor: page.getByTestId('package-sidebar-mounted'),
+        })
     })
 
     test('navigate to Sent', async ({ page }) => {

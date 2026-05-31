@@ -47,7 +47,9 @@ test.describe('Mail — IMAP Integration', () => {
         })
 
         await login(page)
-        await navigateToPackage(page, 'mail')
+        await navigateToPackage(page, 'mail', {
+            waitFor: page.getByTestId('package-sidebar-mounted'),
+        })
         // Anchor on the row testID + visible filter so we don't match
         // the same subject text in a frozen detail screen mounted by an
         // earlier mail test, and so a virtualized off-screen row still
@@ -199,7 +201,9 @@ test.describe('Mail — IMAP Integration', () => {
         })
 
         await login(page)
-        await navigateToPackage(page, 'mail')
+        await navigateToPackage(page, 'mail', {
+            waitFor: page.getByTestId('package-sidebar-mounted'),
+        })
         const row = page
             .locator('[data-testid="email-row"]:visible')
             .filter({ hasText: subject })

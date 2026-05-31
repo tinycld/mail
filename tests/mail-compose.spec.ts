@@ -4,7 +4,9 @@ import { login, navigateToPackage } from '../../app/tests/e2e/helpers'
 test.describe('Mail — Compose', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
-        await navigateToPackage(page, 'mail')
+        await navigateToPackage(page, 'mail', {
+            waitFor: page.getByTestId('package-sidebar-mounted'),
+        })
     })
 
     test('open compose from sidebar', async ({ page }) => {

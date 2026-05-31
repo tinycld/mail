@@ -5,7 +5,9 @@ import { deliverInbound, emailRow, expectRowVisible, openThread, uniqueSubject }
 test.describe('Mail — Unified inbox', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
-        await navigateToPackage(page, 'mail')
+        await navigateToPackage(page, 'mail', {
+            waitFor: page.getByTestId('package-sidebar-mounted'),
+        })
     })
 
     test('All Inboxes lists threads from both personal and shared mailboxes', async ({
