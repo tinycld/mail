@@ -93,7 +93,11 @@ export function threadDetail(page: Page): Locator {
 // Navigate to the *personal* mailbox's Inbox folder, bypassing the All
 // Inboxes default view. The seed creates a shared "Support" mailbox
 // alongside the personal one.
+//
+// Gates on package-sidebar-mounted first so callers after page.reload()
+// (which throws away the sidebar) don't race the lazy chunk reload.
 export async function navigateToPersonalInbox(page: Page) {
+    await page.getByTestId('package-sidebar-mounted').waitFor({ state: 'visible', timeout: 15_000 })
     await page.getByText('Inbox', { exact: true }).first().click()
     await page.waitForURL(url => /folder=inbox/.test(url.search), { timeout: 5_000 })
     await expect(page.locator('[data-testid="email-row"]:visible').first()).toBeVisible({
