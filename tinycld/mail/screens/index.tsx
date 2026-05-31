@@ -1,4 +1,5 @@
 import { FlashList, type FlashListRef } from '@shopify/flash-list'
+import { DocumentTitle } from '@tinycld/core/components/DocumentTitle'
 import { LoadingState } from '@tinycld/core/components/LoadingState'
 import { ScreenHeader } from '@tinycld/core/components/ScreenHeader'
 import { SwipeableRowProvider } from '@tinycld/core/components/SwipeableRow'
@@ -10,7 +11,6 @@ import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { pb, queryClient } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
-import { useDocumentTitle } from '@tinycld/core/lib/use-document-title'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Archive, Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
@@ -380,8 +380,7 @@ export default function MailListScreen() {
             ? activeLabels.map(l => l.name).join(', ')
             : prettifyFolderKey(folderKey)
 
-    useDocumentTitle(search.isActive ? 'Mail — Search' : `Mail — ${folderTitle}`)
-
+    const tabLeaf = search.isActive ? 'Search' : folderTitle
     const isMobile = breakpoint === 'mobile'
 
     const isNonDefaultView =
@@ -463,6 +462,7 @@ export default function MailListScreen() {
 
     return (
         <View className="flex-1">
+            <DocumentTitle pkg="Mail" title={tabLeaf} />
             <ActiveViewBanner
                 isVisible={showActiveViewBanner}
                 folder={folder}
