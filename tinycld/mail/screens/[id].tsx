@@ -1,10 +1,10 @@
 import { and, eq } from '@tanstack/db'
+import { DocumentTitle } from '@tinycld/core/components/DocumentTitle'
 import { ScreenHeader } from '@tinycld/core/components/ScreenHeader'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { type Shortcut, useRegisterShortcut, useShortcutScope } from '@tinycld/core/lib/shortcuts'
-import { useDocumentTitle } from '@tinycld/core/lib/use-document-title'
 import { useNavigateBack } from '@tinycld/core/lib/use-navigate-back'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
@@ -107,7 +107,7 @@ export default function MailDetailScreen() {
         [id]
     )
 
-    useDocumentTitle(messages?.[0]?.subject ?? 'Mail')
+    const tabLeaf = messages?.[0]?.subject
 
     const { labels: allLabels } = useLabels()
     const { labels, labelIds: threadLabelIds } = useThreadLabels(threadState?.id ?? '')
@@ -249,6 +249,7 @@ export default function MailDetailScreen() {
 
     return (
         <View className="flex-1 bg-background" testID="mail-thread-detail">
+            <DocumentTitle pkg="Mail" title={tabLeaf} />
             <ScreenHeader isScrolled={isScrolled}>
                 <EmailDetailToolbar
                     threadState={threadState}
