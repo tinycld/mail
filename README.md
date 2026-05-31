@@ -376,6 +376,14 @@ npm run test:go                  # go test on this package's server/
 ## Package anatomy
 
 - `manifest.ts` — single source of truth for capabilities (routes, nav, sidebar, settings panels, collections, migrations, server module, help)
+
+### Sidebar slot
+
+Mail exposes one sidebar slot for other packages to extend:
+
+- `sidebar.after-labels` — rendered below the Labels group, above the Help link.
+
+Other packages can target this slot via `sidebarContributions` in their manifest. See [Sidebar slots](https://tinycld.org/docs/anatomy/sidebar-slots) for the full contract.
 - `package.json` — name, exports map, peer deps
 - `tsconfig.json` — typecheck config (lint config lives in the app shell's `biome.json`)
 - `pb-migrations/` — PocketBase migrations (symlinked into the app shell's server on `packages:generate`)

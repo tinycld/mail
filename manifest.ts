@@ -6,6 +6,7 @@ const manifest = {
     routes: { directory: 'screens' },
     nav: { label: 'Mail', icon: 'mail', order: 5, shortcut: 'm' },
     sidebar: { component: 'sidebar' },
+    slots: ['sidebar.after-labels'],
     settings: [
         { slug: 'provider', label: 'Provider', component: 'settings/provider' },
         { slug: 'mailboxes', label: 'Mailboxes', component: 'settings/mailboxes' },

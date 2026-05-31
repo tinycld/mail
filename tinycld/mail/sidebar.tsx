@@ -5,6 +5,7 @@ import {
     SidebarHeading,
     SidebarItem,
     SidebarNav,
+    SidebarSlot,
 } from '@tinycld/core/components/sidebar-primitives'
 import { openHelpPackage } from '@tinycld/core/lib/help/open-help'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
@@ -168,6 +169,8 @@ export default function MailSidebar(_props: MailSidebarProps) {
             {labelItems}
 
             <SidebarDivider />
+
+            <SidebarSlot target="mail" slot="sidebar.after-labels" />
 
             <SidebarItem
                 label="Help"
