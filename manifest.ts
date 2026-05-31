@@ -15,6 +15,7 @@ const manifest = {
     help: { directory: 'help' },
     seed: { script: 'seed' },
     server: { package: 'server', module: 'tinycld.org/packages/mail' },
+    repository: { url: 'https://github.com/tinycld/mail' },
 }
 
 export default manifest
