@@ -21,7 +21,14 @@ test.describe('Mail — Navigation', () => {
         // inbox-row focus behavior; app-shell keyboard tests live in
         // app/tests/e2e/keyboard-shortcuts.spec.ts.
         await page.mouse.click(10, 10)
-        await page.waitForSelector('[data-testid="email-row"]', { timeout: 10_000 })
+        // Inbox rows hydrate from a live query; on CI under load that
+        // first paint can exceed 10s. FlashList renders some rows off-
+        // screen — the `:visible` filter waits for one that actually
+        // got positioned in the viewport.
+        await page
+            .locator('[data-testid="email-row"]:visible')
+            .first()
+            .waitFor({ state: 'visible', timeout: 30_000 })
 
         await page.keyboard.press('j')
         await page.keyboard.press('j')

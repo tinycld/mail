@@ -97,7 +97,10 @@ export function threadDetail(page: Page): Locator {
 // Gates on package-sidebar-mounted first so callers after page.reload()
 // (which throws away the sidebar) don't race the lazy chunk reload.
 export async function navigateToPersonalInbox(page: Page) {
-    await page.getByTestId('package-sidebar-mounted').waitFor({ state: 'visible', timeout: 30_000 })
+    // Page.reload() re-mounts the sidebar's Suspense skeleton; the
+    // lazy chunk hits Metro's HMR pipeline rather than the warm import
+    // cache, which can take 30-60s on CI. Generous timeout.
+    await page.getByTestId('package-sidebar-mounted').waitFor({ state: 'visible', timeout: 60_000 })
     await page.getByText('Inbox', { exact: true }).first().click()
     await page.waitForURL(url => /folder=inbox/.test(url.search), { timeout: 5_000 })
     await expect(page.locator('[data-testid="email-row"]:visible').first()).toBeVisible({
