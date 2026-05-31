@@ -7,7 +7,7 @@ export interface MailDomainVerificationDetails {
         actual?: string[]
         error?: string
     }
-    postmark?: {
+    provider?: {
         ok: boolean
         expected_domain?: string
         server_domain?: string
@@ -20,6 +20,8 @@ export interface MailDomainVerificationDetails {
         return_path: boolean
         error?: string
     }
+    provider_configured?: boolean
+    provider_name?: 'postmark' | 'smtp' | 'none'
 }
 
 export interface MailDomains {

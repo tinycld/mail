@@ -12,6 +12,7 @@ type Attachment = mailer.Attachment
 type Header = mailer.Header
 type SendRequest = mailer.SendRequest
 type SendResult = mailer.SendResult
+type RecipientFailure = mailer.RecipientFailure
 
 // Provider defines the pluggable email provider interface.
 // Send is delegated to the shared mailer package. The remaining methods

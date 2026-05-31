@@ -11,6 +11,8 @@ SMTP submission lets your desktop or phone mail client *send* through TinyCld â€
 
 This is **not** the same as the SMTP your mail provider uses to deliver mail across the internet. This is the *submission* endpoint â€” you authenticate as a TinyCld user, TinyCld validates the sender address is one you have access to, and then forwards the message through your configured provider with all the right SPF / DKIM signing.
 
+> **Note**: this page is about connecting *your client* to TinyCld over SMTP. It is unrelated to the **self-hosted SMTP provider** option in [Provider setup](help://mail:provider-setup), which controls how TinyCld delivers and receives mail on the wire.
+
 ## Connection settings
 
 | Setting | Value |

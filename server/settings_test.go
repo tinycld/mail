@@ -113,14 +113,17 @@ func TestProviderForOrg_NoToken_NotConfigured(t *testing.T) {
 // without a token, but it must report Configured() == false so credentialed
 // paths gate on it.
 func TestNewProviderByName_PostmarkConfiguredReflectsToken(t *testing.T) {
-	if got := newProviderByName("postmark", "", "").Configured(); got {
+	if got := newProviderByName("postmark", "", "", SMTPConfig{}).Configured(); got {
 		t.Error("postmark provider with empty token: Configured() = true, want false")
 	}
-	if got := newProviderByName("postmark", "tok", "").Configured(); !got {
+	if got := newProviderByName("postmark", "tok", "", SMTPConfig{}).Configured(); !got {
 		t.Error("postmark provider with token: Configured() = false, want true")
 	}
-	if got := newProviderByName("unknown", "tok", "").Configured(); got {
+	if got := newProviderByName("unknown", "tok", "", SMTPConfig{}).Configured(); got {
 		t.Error("noop provider: Configured() = true, want false")
+	}
+	if got := newProviderByName("smtp", "", "", SMTPConfig{}).Configured(); !got {
+		t.Error("smtp provider: Configured() = false, want true (smtp needs no credentials)")
 	}
 }
 
