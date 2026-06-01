@@ -1,7 +1,7 @@
 import { usePickFiles } from '@tinycld/core/file-viewer/use-pick-files'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useForm, zodResolver } from '@tinycld/core/ui/form'
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { View } from 'react-native'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
@@ -28,9 +28,17 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
     const aliasId = useComposeStore(s => s.aliasId)
     const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
         placeholder: 'Compose reply',
-        autofocus: true,
     })
     const { attachments, addFilesSafely, removeFile, clearAll: clearAttachments } = useAttachments()
+
+    // Forward starts with an empty To, so focus the recipient field; reply /
+    // reply-all pre-fill To, so focus the body instead — the user wants to type
+    // the message, not edit recipients.
+    const toIsEmpty = replyContext.to.length === 0
+
+    useEffect(() => {
+        if (!toIsEmpty) editor.focus('start')
+    }, [editor, toIsEmpty])
 
     const toValue =
         replyContext.to.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
@@ -110,7 +118,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
             }}
         >
             <View ref={dropRef} className="flex-1">
-                <ComposeFields control={control} errors={errors} />
+                <ComposeFields control={control} errors={errors} autoFocusTo={toIsEmpty} />
                 <View className="p-3" style={{ minHeight: 120, maxHeight: 280 }}>
                     <EditorComponent />
                 </View>

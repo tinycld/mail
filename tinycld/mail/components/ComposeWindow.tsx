@@ -97,6 +97,12 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
     const onSubjectBlur = useCallback(() => setHeaderTitle(getValues('subject')), [getValues])
 
+    // Focus the To field only when it starts empty: a fresh compose or a
+    // forward (replyContext with no recipients). Reply / reply-all pre-fill To,
+    // so the body editor should take focus instead — see the replyContext
+    // branch below, which focuses the editor.
+    const autoFocusTo = replyContext ? replyContext.to.length === 0 : !draftContext
+
     useEffect(() => {
         if (!isVisible) return
         let cleanup: (() => void) | undefined
@@ -273,7 +279,12 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             />
             <View ref={dropRef} className={isMinimized ? 'hidden' : 'flex-1'}>
                 <ComposeFromRow />
-                <ComposeFields control={control} errors={errors} onSubjectBlur={onSubjectBlur} />
+                <ComposeFields
+                    control={control}
+                    errors={errors}
+                    onSubjectBlur={onSubjectBlur}
+                    autoFocusTo={autoFocusTo}
+                />
                 <View className="px-3 pt-2">
                     <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
                 </View>

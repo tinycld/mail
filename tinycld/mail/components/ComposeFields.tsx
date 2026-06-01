@@ -10,6 +10,11 @@ interface ComposeFieldsProps {
     control: Control<ComposeFormData>
     errors: FieldErrors<ComposeFormData>
     onSubjectBlur?: () => void
+    // Whether the To field grabs focus on mount. False when To is pre-filled
+    // (reply / reply-all) so the body editor gets focus instead — the user
+    // almost always wants to type the reply, not edit recipients. True for a
+    // fresh compose or a forward, where the next action is choosing a recipient.
+    autoFocusTo?: boolean
 }
 
 function ComposeFieldInput({
@@ -39,7 +44,12 @@ function ComposeFieldInput({
     )
 }
 
-export function ComposeFields({ control, errors, onSubjectBlur }: ComposeFieldsProps) {
+export function ComposeFields({
+    control,
+    errors,
+    onSubjectBlur,
+    autoFocusTo = true,
+}: ComposeFieldsProps) {
     const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
     const dangerColor = useThemeColor('danger')
@@ -58,7 +68,7 @@ export function ComposeFields({ control, errors, onSubjectBlur }: ComposeFieldsP
                 }}
             >
                 <Text style={{ fontSize: 13, width: 56, color: mutedColor }}>To</Text>
-                <RecipientField control={control} name="to" autoFocus />
+                <RecipientField control={control} name="to" autoFocus={autoFocusTo} />
                 {!showCc || !showBcc ? (
                     <View className="flex-row gap-2 ml-2">
                         {showCc ? null : (
