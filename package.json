@@ -25,11 +25,23 @@
         "@tinycld/package-scripts": "*"
     },
     "peerDependencies": {
-        "react": ">=19",
-        "react-native": ">=0.83",
-        "expo-router": ">=55.0.0",
-        "pbtsdb": ">=0.5",
+        "@10play/tentap-editor": "^1.0.1",
+        "@hookform/resolvers": "^5.2.2",
+        "@shopify/flash-list": "2.0.2",
+        "@tanstack/db": ">=0.6",
         "@tanstack/react-db": ">=0.1",
-        "@tanstack/db": ">=0.6"
+        "@tanstack/react-query": "^5.96.0",
+        "@tiptap/extension-placeholder": "^3.22.3",
+        "@tiptap/react": "^3.22.3",
+        "@tiptap/starter-kit": "^3.22.3",
+        "expo-router": ">=55.0.0",
+        "lucide-react-native": "^1.7.0",
+        "pbtsdb": ">=0.5",
+        "pocketbase": "^0.26.8",
+        "react": ">=19",
+        "react-hook-form": "^7.72.0",
+        "react-native": ">=0.83",
+        "react-native-webview": "13.16.0",
+        "zod": "^4.3.6"
     }
 }

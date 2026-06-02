@@ -345,16 +345,16 @@ git clone git@github.com:tinycld/mail.git
 
 # Install deps in the app shell
 cd tinycld
-npm install
+pnpm install
 
 # Link this package into the app shell
-npm run packages:link ../mail
+pnpm run packages:link ../mail
 
 # Run the full stack (Expo + PocketBase + IMAP + SMTP servers)
-npm run dev
+pnpm run dev
 ```
 
-By default `npm run dev` binds IMAP to `:1143` and SMTP to `:1587` (dev mode plain-text listeners). Set `IMAP_ENABLED=false` / `SMTP_ENABLED=false` to disable.
+By default `pnpm run dev` binds IMAP to `:1143` and SMTP to `:1587` (dev mode plain-text listeners). Set `IMAP_ENABLED=false` / `SMTP_ENABLED=false` to disable.
 
 ## Standalone checks
 
@@ -362,11 +362,11 @@ Lint and typecheck both run from the app shell — biome and TypeScript live the
 
 ```sh
 cd ../tinycld
-npm run packages:link ../mail    # only needed once per checkout
-npm run lint                     # scans this package via the app's biome rules
-npm run typecheck                # full app-shell tsc
-npm run test:unit                # vitest, including this package's tests/
-npm run test:go                  # go test on this package's server/
+pnpm run packages:link ../mail    # only needed once per checkout
+pnpm run lint                     # scans this package via the app's biome rules
+pnpm run typecheck                # full app-shell tsc
+pnpm run test:unit                # vitest, including this package's tests/
+pnpm run test:go                  # go test on this package's server/
 ```
 
 ## CI
