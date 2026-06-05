@@ -22,10 +22,6 @@ const schema = z.object({
     to: z.string(),
     subject: z.string(),
     hasWords: z.string(),
-    doesntHave: z.string(),
-    sizeOp: z.enum(['greater_than', 'less_than']),
-    sizeValue: z.string(),
-    sizeUnit: z.enum(['MB', 'KB', 'bytes']),
     dateWithin: z.enum(['', '1d', '3d', '1w', '2w', '1m', '2m', '6m', '1y']),
     dateAnchor: z.string(),
     folder: z.enum(['all', 'inbox', 'sent', 'drafts', 'trash', 'spam', 'starred']),
@@ -40,10 +36,6 @@ function makeDefaultValues(): FormValues {
         to: '',
         subject: '',
         hasWords: '',
-        doesntHave: '',
-        sizeOp: 'greater_than',
-        sizeValue: '',
-        sizeUnit: 'MB',
         dateWithin: '',
         dateAnchor: new Date().toISOString().split('T')[0],
         folder: 'all',
@@ -53,14 +45,9 @@ function makeDefaultValues(): FormValues {
 
 function formDataToFilters(data: FormValues): AdvancedSearchFilters {
     const filters: AdvancedSearchFilters = {}
-    const textFields = ['from', 'to', 'subject', 'hasWords', 'doesntHave'] as const
+    const textFields = ['from', 'to', 'subject', 'hasWords'] as const
     for (const key of textFields) {
         if (data[key]) filters[key] = data[key]
-    }
-    if (data.sizeValue) {
-        filters.sizeOp = data.sizeOp
-        filters.sizeValue = data.sizeValue
-        filters.sizeUnit = data.sizeUnit
     }
     if (data.dateWithin) {
         filters.dateWithin = data.dateWithin
@@ -140,6 +127,10 @@ export function AdvancedSearchDropdown({
                         borderRadius: 12,
                         borderWidth: 1,
                         maxHeight: 480,
+                        // Clip children to the rounded border on narrow (iOS)
+                        // screens so picker rows/menus don't bleed past the
+                        // right edge.
+                        overflow: 'hidden',
                         backgroundColor,
                         borderColor,
                     },
@@ -177,52 +168,13 @@ export function AdvancedSearchDropdown({
                             placeholder=""
                         />
                     </FieldRow>
-                    <FieldRow label="Has the words" labelColor={mutedColor}>
+                    <FieldRow label="Body" labelColor={mutedColor}>
                         <FormInput
                             control={control}
                             name="hasWords"
                             style={inputStyle}
                             placeholder=""
                         />
-                    </FieldRow>
-                    <FieldRow label="Doesn't have" labelColor={mutedColor}>
-                        <FormInput
-                            control={control}
-                            name="doesntHave"
-                            style={inputStyle}
-                            placeholder=""
-                        />
-                    </FieldRow>
-                    <FieldRow label="Size" labelColor={mutedColor}>
-                        <View className="flex-row items-center gap-2">
-                            <PickerButton
-                                control={control}
-                                name="sizeOp"
-                                options={SIZE_OP_OPTIONS}
-                                foregroundColor={foregroundColor}
-                                mutedColor={mutedColor}
-                                borderColor={borderColor}
-                                backgroundColor={backgroundColor}
-                                focusBgColor={focusBgColor}
-                            />
-                            <FormInput
-                                control={control}
-                                name="sizeValue"
-                                style={[...inputStyle, styles.numberInput]}
-                                placeholder=""
-                                keyboardType="numeric"
-                            />
-                            <PickerButton
-                                control={control}
-                                name="sizeUnit"
-                                options={SIZE_UNIT_OPTIONS}
-                                foregroundColor={foregroundColor}
-                                mutedColor={mutedColor}
-                                borderColor={borderColor}
-                                backgroundColor={backgroundColor}
-                                focusBgColor={focusBgColor}
-                            />
-                        </View>
                     </FieldRow>
                     <FieldRow label="Date within" labelColor={mutedColor}>
                         <View className="flex-row items-center gap-2">
@@ -281,6 +233,7 @@ export function AdvancedSearchDropdown({
                         <Text style={{ fontSize: 14, color: mutedColor }}>Clear</Text>
                     </Pressable>
                     <Pressable
+                        testID="advanced-search-submit"
                         onPress={onSubmit}
                         className="flex-row items-center py-2 rounded-full"
                         style={{
@@ -311,10 +264,12 @@ function FieldRow({
 }) {
     return (
         <View className="flex-row items-center mb-3" style={{ minHeight: 36 }}>
-            <Text style={{ width: 110, fontSize: 13, flexShrink: 0, color: labelColor }}>
+            <Text style={{ width: 96, fontSize: 13, flexShrink: 0, color: labelColor }}>
                 {label}
             </Text>
-            <View className="flex-1">{children}</View>
+            <View className="flex-1" style={{ minWidth: 0 }}>
+                {children}
+            </View>
         </View>
     )
 }
@@ -336,6 +291,7 @@ function FormInput({
 
     return (
         <PlainInput
+            testID={`advanced-search-input-${name}`}
             style={style}
             value={String(field.value ?? '')}
             onChangeText={field.onChange}
@@ -349,17 +305,6 @@ interface PickerOption {
     label: string
     value: string
 }
-
-const SIZE_OP_OPTIONS: PickerOption[] = [
-    { label: 'greater than', value: 'greater_than' },
-    { label: 'less than', value: 'less_than' },
-]
-
-const SIZE_UNIT_OPTIONS: PickerOption[] = [
-    { label: 'MB', value: 'MB' },
-    { label: 'KB', value: 'KB' },
-    { label: 'bytes', value: 'bytes' },
-]
 
 const DATE_WITHIN_OPTIONS: PickerOption[] = [
     { label: 'any time', value: '' },
@@ -474,6 +419,7 @@ function PickerMenu({
                     left: 0,
                     zIndex: 201,
                     minWidth: 140,
+                    maxWidth: 200,
                     marginTop: 2,
                     backgroundColor,
                     borderColor,
@@ -513,9 +459,6 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         paddingVertical: 4,
         paddingHorizontal: 2,
-    },
-    numberInput: {
-        maxWidth: 80,
     },
     pickerOverlay: {
         position: 'absolute',

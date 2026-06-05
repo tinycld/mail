@@ -70,9 +70,6 @@ type advancedFilters struct {
 	to            string
 	subject       string
 	hasWords      string
-	notWords      string
-	sizeOp        string // "gt" or "lt"
-	sizeBytes     int64
 	dateAfter     string
 	dateBefore    string
 	folder        string
@@ -82,11 +79,11 @@ type advancedFilters struct {
 func (f *advancedFilters) hasStructuredFilters() bool {
 	return f.from != "" || f.to != "" || f.subject != "" ||
 		f.dateAfter != "" || f.dateBefore != "" ||
-		f.hasAttachment || f.sizeBytes > 0 || f.folder != ""
+		f.hasAttachment || f.folder != ""
 }
 
 func (f *advancedFilters) hasAnyFilter() bool {
-	return f.hasStructuredFilters() || f.hasWords != "" || f.notWords != ""
+	return f.hasStructuredFilters() || f.hasWords != ""
 }
 
 func parseAdvancedFilters(r *http.Request) advancedFilters {
@@ -96,11 +93,6 @@ func parseAdvancedFilters(r *http.Request) advancedFilters {
 	f.to = strings.TrimSpace(query.Get("to"))
 	f.subject = strings.TrimSpace(query.Get("subject"))
 	f.hasWords = strings.TrimSpace(query.Get("has_words"))
-	f.notWords = strings.TrimSpace(query.Get("not_words"))
-	f.sizeOp = strings.TrimSpace(query.Get("size_op"))
-	if sb, err := strconv.ParseInt(query.Get("size_bytes"), 10, 64); err == nil && sb > 0 {
-		f.sizeBytes = sb
-	}
 	f.dateAfter = strings.TrimSpace(query.Get("date_after"))
 	f.dateBefore = strings.TrimSpace(query.Get("date_before"))
 	f.folder = strings.TrimSpace(query.Get("folder"))
@@ -134,14 +126,6 @@ func buildMessageWhere(f *advancedFilters, params map[string]any) string {
 	}
 	if f.hasAttachment {
 		clauses = append(clauses, "m.has_attachments = 1")
-	}
-	if f.sizeBytes > 0 && (f.sizeOp == "gt" || f.sizeOp == "lt") {
-		params["sizeBytes"] = f.sizeBytes
-		if f.sizeOp == "gt" {
-			clauses = append(clauses, "m.total_size > {:sizeBytes}")
-		} else {
-			clauses = append(clauses, "m.total_size < {:sizeBytes}")
-		}
 	}
 
 	if len(clauses) == 0 {
@@ -191,7 +175,11 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	emptyResponse := searchResponse{Items: []searchResultItem{}, Total: 0}
 
 	filters := parseAdvancedFilters(re.Request)
-	hasFTSTerms := len(q) >= 2
+	// FTS terms come from the main query OR the Body (hasWords) field. Without
+	// counting hasWords here, a body-only search (empty main box, Body filled)
+	// would skip the FTS path and fall through to a structured query that
+	// ignores hasWords — returning every thread instead of the body matches.
+	hasFTSTerms := len(q) >= 2 || filters.hasWords != ""
 	hasFilters := filters.hasAnyFilter()
 
 	if !hasFTSTerms && !hasFilters {
@@ -226,16 +214,29 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		return handleStructuredSearch(app, re, inClause, messageWhere, folderJoin, params, limit, offset, emptyResponse)
 	}
 
-	// FTS path (possibly with additional structured filters)
-	ftsQuery := buildAdvancedFTSQuery(q, filters.hasWords, filters.notWords)
-	if ftsQuery == "" {
+	// FTS path (possibly with additional structured filters). The two FTS
+	// indexes have different columns: fts_mail_threads has no body_text column,
+	// so the Body (hasWords) terms only go to the messages query. A body-only
+	// search therefore has an empty thread query — we drop that UNION arm rather
+	// than run an invalid empty MATCH.
+	ftsThreads := buildThreadFTSQuery(q)
+	ftsMessages := buildMessageFTSQuery(q, filters.hasWords)
+	if ftsThreads == "" && ftsMessages == "" {
 		if !filters.hasStructuredFilters() {
 			return re.JSON(http.StatusOK, emptyResponse)
 		}
 		return handleStructuredSearch(app, re, inClause, messageWhere, folderJoin, params, limit, offset, emptyResponse)
 	}
 
-	params["ftsQuery"] = ftsQuery
+	// Only bind a param when its UNION arm is actually present in the SQL — dbx
+	// rejects named params that don't appear in the query (which is exactly the
+	// body-only case, where the thread arm is dropped).
+	if ftsThreads != "" {
+		params["ftsThreads"] = ftsThreads
+	}
+	if ftsMessages != "" {
+		params["ftsMessages"] = ftsMessages
+	}
 
 	// When message-level filters are active, use EXISTS to avoid row multiplication
 	msgExistsClause := ""
@@ -257,7 +258,7 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 			fts_mail_threads.rank
 		FROM fts_mail_threads
 		JOIN mail_threads t ON t.id = fts_mail_threads.record_id` + folderJoin + `
-		WHERE fts_mail_threads MATCH {:ftsQuery}
+		WHERE fts_mail_threads MATCH {:ftsThreads}
 		AND t.mailbox IN ` + inClause + msgExistsClause
 
 	messageQuery := `
@@ -275,8 +276,10 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		FROM fts_mail_messages
 		JOIN mail_messages m ON m.id = fts_mail_messages.record_id
 		JOIN mail_threads t ON t.id = m.thread` + folderJoin + `
-		WHERE fts_mail_messages MATCH {:ftsQuery}
+		WHERE fts_mail_messages MATCH {:ftsMessages}
 		AND t.mailbox IN ` + inClause + messageWhere
+
+	unionBody := ftsUnion(ftsThreads != "", threadQuery, ftsMessages != "", messageQuery)
 
 	combinedQuery := `
 		SELECT thread_id, MAX(subject) as subject,
@@ -288,9 +291,7 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 			   MAX(mailbox_id) as mailbox_id,
 			   MAX(has_attachments) as has_attachments
 		FROM (
-			` + threadQuery + `
-			UNION ALL
-			` + messageQuery + `
+			` + unionBody + `
 		)
 		GROUP BY thread_id
 		ORDER BY MIN(rank)
@@ -307,30 +308,47 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	items := mapResults(results)
 	total := len(items)
 	if len(items) >= limit {
-		countQuery := `
-			SELECT COUNT(DISTINCT thread_id) as total FROM (
+		countThreadArm := `
 				SELECT t.id as thread_id
 				FROM fts_mail_threads
 				JOIN mail_threads t ON t.id = fts_mail_threads.record_id` + folderJoin + `
-				WHERE fts_mail_threads MATCH {:ftsQuery}
-				AND t.mailbox IN ` + inClause + msgExistsClause + `
-				UNION
+				WHERE fts_mail_threads MATCH {:ftsThreads}
+				AND t.mailbox IN ` + inClause + msgExistsClause
+		countMessageArm := `
 				SELECT t.id as thread_id
 				FROM fts_mail_messages
 				JOIN mail_messages m ON m.id = fts_mail_messages.record_id
 				JOIN mail_threads t ON t.id = m.thread` + folderJoin + `
-				WHERE fts_mail_messages MATCH {:ftsQuery}
-				AND t.mailbox IN ` + inClause + messageWhere + `
+				WHERE fts_mail_messages MATCH {:ftsMessages}
+				AND t.mailbox IN ` + inClause + messageWhere
+		var countArms []string
+		if ftsThreads != "" {
+			countArms = append(countArms, countThreadArm)
+		}
+		if ftsMessages != "" {
+			countArms = append(countArms, countMessageArm)
+		}
+		countQuery := `
+			SELECT COUNT(DISTINCT thread_id) as total FROM (
+				` + strings.Join(countArms, "\n\t\t\t\tUNION\n\t\t\t\t") + `
 			)
 		`
 		var countResult struct {
 			Total int `db:"total"`
 		}
-		countParams := map[string]any{"ftsQuery": ftsQuery}
+		countParams := map[string]any{}
+		// Bind only the arms present in the count SQL (same dbx constraint as
+		// the main query).
+		if ftsThreads != "" {
+			countParams["ftsThreads"] = ftsThreads
+		}
+		if ftsMessages != "" {
+			countParams["ftsMessages"] = ftsMessages
+		}
 		maps.Copy(countParams, mailboxParams)
 		// Copy filter params needed for WHERE clauses
 		for k, v := range params {
-			if k != "limit" && k != "offset" && k != "ftsQuery" {
+			if k != "limit" && k != "offset" && k != "ftsThreads" && k != "ftsMessages" {
 				countParams[k] = v
 			}
 		}

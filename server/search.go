@@ -21,9 +21,48 @@ var recentlyIndexed sync.Map
 // fts5SpecialChars matches characters that have special meaning in FTS5 queries.
 var fts5SpecialChars = regexp.MustCompile(`[":*^{}()\[\]~\-]`)
 
-// buildAdvancedFTSQuery builds an FTS5 query from the main query, hasWords, and notWords.
-// hasWords terms are filtered to the body_text column; notWords are appended as NOT clauses.
-func buildAdvancedFTSQuery(q, hasWords, notWords string) string {
+// ftsNoMatchArm is a never-matching placeholder arm (10 columns, matching the
+// thread/message SELECT shape). It exists for a subtle SQLite/FTS5 reason: the
+// snippet()/highlight() auxiliary functions error with "unable to use function
+// snippet in the requested context" when an FTS subquery is the SOLE input to an
+// outer aggregate/GROUP BY. A real UNION ALL forces the FTS rows to materialize
+// first, which legalizes those functions. So when only one real arm is present
+// (e.g. a body-only search, which has no thread arm) we still need a second arm
+// to keep the query a UNION ALL — this no-op arm provides it without adding rows.
+const ftsNoMatchArm = `SELECT '' as thread_id, '' as subject, '' as subject_highlight,
+		'' as snippet_highlight, '' as latest_date, '' as participants,
+		0 as message_count, '' as mailbox_id, 0 as has_attachments, 0.0 as rank
+		WHERE 0`
+
+// ftsUnion joins the thread and message subqueries with UNION ALL, including
+// only the arms whose FTS query is non-empty, plus the never-matching placeholder
+// arm (see ftsNoMatchArm). The caller guards against both real arms being empty,
+// so the result always has at least one real arm + the placeholder.
+func ftsUnion(includeThreads bool, threadQuery string, includeMessages bool, messageQuery string) string {
+	var arms []string
+	if includeThreads {
+		arms = append(arms, threadQuery)
+	}
+	if includeMessages {
+		arms = append(arms, messageQuery)
+	}
+	arms = append(arms, ftsNoMatchArm)
+	return strings.Join(arms, "\n\t\t\tUNION ALL\n\t\t\t")
+}
+
+// buildThreadFTSQuery builds the FTS5 query for the fts_mail_threads index,
+// which has subject/snippet/participants columns but NO body_text column. Only
+// the sanitized main query applies here — the Body (hasWords) field is scoped to
+// body_text, a column this index doesn't have, so it must be excluded or FTS5
+// errors on the whole UNION.
+func buildThreadFTSQuery(q string) string {
+	return sanitizeFTSQuery(q)
+}
+
+// buildMessageFTSQuery builds the FTS5 query for the fts_mail_messages index,
+// which DOES have a body_text column. The main query terms match any column;
+// the Body (hasWords) terms are scoped to body_text.
+func buildMessageFTSQuery(q, hasWords string) string {
 	base := sanitizeFTSQuery(q)
 
 	if hw := strings.TrimSpace(hasWords); hw != "" {
@@ -32,19 +71,6 @@ func buildAdvancedFTSQuery(q, hasWords, notWords string) string {
 		for _, term := range terms {
 			term = strings.ReplaceAll(term, `"`, `""`)
 			base += ` body_text : "` + term + `"*`
-		}
-	}
-
-	if nw := strings.TrimSpace(notWords); nw != "" {
-		cleaned := fts5SpecialChars.ReplaceAllString(nw, " ")
-		terms := strings.Fields(cleaned)
-		// FTS5 requires at least one positive term; NOT-only queries error.
-		// If no positive terms exist, skip NOT terms (caller falls back to SQL-only).
-		if strings.TrimSpace(base) != "" {
-			for _, term := range terms {
-				term = strings.ReplaceAll(term, `"`, `""`)
-				base += ` NOT "` + term + `"`
-			}
 		}
 	}
 
