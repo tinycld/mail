@@ -50,7 +50,11 @@ export function SearchBar({
                     value={value}
                     onChangeText={onChangeText}
                 />
-                <Pressable className="p-1" onPress={() => onFilterOpenChange(!isFilterOpen)}>
+                <Pressable
+                    testID="advanced-search-toggle"
+                    className="p-1"
+                    onPress={() => onFilterOpenChange(!isFilterOpen)}
+                >
                     <SlidersHorizontal size={18} color={filterIconColor} />
                 </Pressable>
             </View>

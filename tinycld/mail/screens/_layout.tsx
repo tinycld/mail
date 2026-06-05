@@ -57,7 +57,11 @@ export default function MailLayout() {
     return (
         <SearchContext.Provider value={searchValue}>
             <View className="flex-1 bg-background">
-                <View className="px-4 py-2">
+                {/* Elevate the search bar's stacking context above the thread
+                    list below it, so the advanced-search dropdown (absolutely
+                    positioned, overflowing this row) paints over the list
+                    instead of being covered by it. */}
+                <View className="px-4 py-2" style={{ zIndex: 10 }}>
                     <SearchBar
                         value={searchQuery}
                         onChangeText={setSearchQuery}

@@ -30,28 +30,12 @@ interface UseMailSearchReturn {
 const DEBOUNCE_MS = 300
 const MIN_QUERY_LENGTH = 2
 
-const SIZE_MULTIPLIERS: Record<string, number> = {
-    bytes: 1,
-    KB: 1024,
-    MB: 1024 * 1024,
-}
-
 const SIMPLE_FILTER_MAP: [keyof AdvancedSearchFilters, string][] = [
     ['from', 'from'],
     ['to', 'to'],
     ['subject', 'subject'],
     ['hasWords', 'has_words'],
-    ['doesntHave', 'not_words'],
 ]
-
-function addSizeParams(filters: AdvancedSearchFilters, params: Record<string, string>) {
-    if (!filters.sizeValue || !filters.sizeOp) return
-    const numericSize = Number.parseFloat(filters.sizeValue)
-    if (numericSize <= 0) return
-    const unit = filters.sizeUnit ?? 'bytes'
-    params.size_op = filters.sizeOp === 'greater_than' ? 'gt' : 'lt'
-    params.size_bytes = String(Math.round(numericSize * (SIZE_MULTIPLIERS[unit] ?? 1)))
-}
 
 function addDateParams(filters: AdvancedSearchFilters, params: Record<string, string>) {
     if (!filters.dateWithin || !filters.dateAnchor) return
@@ -69,7 +53,6 @@ function filtersToQueryParams(filters: AdvancedSearchFilters): Record<string, st
         const val = filters[filterKey]
         if (val && typeof val === 'string') params[paramKey] = val
     }
-    addSizeParams(filters, params)
     addDateParams(filters, params)
     if (filters.folder && filters.folder !== 'all') params.folder = filters.folder
     if (filters.hasAttachment) params.has_attachment = 'true'
