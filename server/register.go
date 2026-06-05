@@ -268,10 +268,20 @@ func Register(app *pocketbase.PocketBase) {
 	})
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
+		// In production a failed mail listener is a deploy-breaking
+		// misconfiguration (missing/unreadable cert, lost privileged-port
+		// capability, port already bound): abort the boot so it's loud rather
+		// than coming up healthy on HTTP with mail silently absent. In dev we
+		// log and continue, so a missing local cert doesn't block the app.
+		failLoud := !app.IsDev()
+
 		// Start IMAP server
 		imapShutdown, err := StartIMAPServer(app, e.CertManager)
 		if err != nil {
 			app.Logger().Error("Failed to start IMAP server", "error", err)
+			if failLoud {
+				return fmt.Errorf("aborting startup: IMAP server failed to start: %w", err)
+			}
 		} else {
 			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
 				imapShutdown()
@@ -283,6 +293,9 @@ func Register(app *pocketbase.PocketBase) {
 		smtpShutdown, smtpErr := StartSMTPServer(app, e.CertManager)
 		if smtpErr != nil {
 			app.Logger().Error("Failed to start SMTP server", "error", smtpErr)
+			if failLoud {
+				return fmt.Errorf("aborting startup: SMTP server failed to start: %w", smtpErr)
+			}
 		} else {
 			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
 				smtpShutdown()
@@ -296,6 +309,9 @@ func Register(app *pocketbase.PocketBase) {
 		inboundShutdown, inboundErr := StartSMTPInboundServer(app, e.CertManager)
 		if inboundErr != nil {
 			app.Logger().Error("Failed to start inbound SMTP server", "error", inboundErr)
+			if failLoud {
+				return fmt.Errorf("aborting startup: inbound SMTP server failed to start: %w", inboundErr)
+			}
 		} else {
 			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
 				inboundShutdown()

@@ -35,6 +35,21 @@ func StartIMAPServer(app *pocketbase.PocketBase, certManager *autocert.Manager) 
 		return startIMAPTLSOnly(app, tlsConfig)
 	}
 
+	// Production but no TLS source: refuse to silently fall through to the dev
+	// branch (which would bind plain :1143 instead of :993). That fallthrough is
+	// the classic "mail port isn't listening" deploy footgun — the container
+	// comes up healthy on HTTP while IMAPS is silently absent. Fail loudly so
+	// the misconfiguration surfaces at deploy time. To intentionally run without
+	// IMAP in production, set IMAP_ENABLED=false.
+	if !app.IsDev() {
+		return nil, fmt.Errorf(
+			"IMAPS (:993) cannot start: no TLS configured in production. " +
+				"Set IMAP_TLS_CERT and IMAP_TLS_KEY to readable cert/key files, " +
+				"or enable autocert (AUTOCERT_ENABLED=true + PRIMARY_DOMAIN), " +
+				"or set IMAP_ENABLED=false to run without IMAP",
+		)
+	}
+
 	// Dev mode: plain listener with optional STARTTLS + optional implicit TLS
 	return startIMAPDev(app, tlsConfig)
 }

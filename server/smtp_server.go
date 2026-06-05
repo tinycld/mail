@@ -35,6 +35,23 @@ func StartSMTPServer(app *pocketbase.PocketBase, certManager *autocert.Manager) 
 		return startSMTPTLSOnly(app, tlsConfig)
 	}
 
+	// Production but no TLS source: refuse to silently fall through to the dev
+	// branch (which would bind plain :1587 instead of :465). See StartIMAPServer
+	// for the rationale — a healthy-looking container with no SMTPS listener is
+	// the exact failure we're guarding against. To intentionally run without
+	// SMTP submission in production, set SMTP_ENABLED=false. (SMTP falls back to
+	// the IMAP_TLS_* pair, so a missing SMTP cert is fine as long as IMAP's is
+	// set.)
+	if !app.IsDev() {
+		return nil, fmt.Errorf(
+			"SMTPS (:465) cannot start: no TLS configured in production. " +
+				"Set SMTP_TLS_CERT/SMTP_TLS_KEY (or IMAP_TLS_CERT/IMAP_TLS_KEY) " +
+				"to readable cert/key files, or enable autocert " +
+				"(AUTOCERT_ENABLED=true + PRIMARY_DOMAIN), " +
+				"or set SMTP_ENABLED=false to run without SMTP submission",
+		)
+	}
+
 	// Dev mode: plain listener with optional STARTTLS + optional implicit TLS
 	return startSMTPDev(app, tlsConfig)
 }
