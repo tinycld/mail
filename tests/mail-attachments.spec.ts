@@ -2,7 +2,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
 import PocketBase from 'pocketbase'
-import { login, navigateToPackage } from '../../app/tests/e2e/helpers'
+import { login, navigateToPackage } from '../../tinycld/tests/e2e/helpers'
 import { emailRow, openThread } from './helpers'
 
 // PB sits behind the dev.ts proxy on the test Expo port. /api/* routes

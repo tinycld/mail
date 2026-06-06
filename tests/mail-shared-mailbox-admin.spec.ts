@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import PocketBase from 'pocketbase'
-import { ORG_SLUG } from '../../app/tests/e2e/helpers'
+import { ORG_SLUG } from '../../tinycld/tests/e2e/helpers'
 
 // PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
 // through to PB transparently — see scripts/dev.ts::isPbPath.

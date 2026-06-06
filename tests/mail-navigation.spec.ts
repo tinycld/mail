@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { clickSidebarItem, login, navigateToPackage, ORG_SLUG } from '../../app/tests/e2e/helpers'
+import {
+    clickSidebarItem,
+    login,
+    navigateToPackage,
+    ORG_SLUG,
+} from '../../tinycld/tests/e2e/helpers'
 
 // These tests assert that each folder route mounts successfully — i.e.
 // clicking the sidebar entry navigates to the right URL. Asserting on
