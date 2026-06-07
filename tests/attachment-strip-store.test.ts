@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useAttachmentStripStore } from '../tinycld/mail/stores/attachment-strip-store'
+import { useAttachmentStripStore } from '~/tinycld/mail/stores/attachment-strip-store'
 
 function reset() {
     useAttachmentStripStore.setState({ threadId: null, expanded: false })

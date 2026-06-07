@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useAttachmentPreviewStore } from '../tinycld/mail/stores/attachment-preview-store'
+import { useAttachmentPreviewStore } from '~/tinycld/mail/stores/attachment-preview-store'
 
 function reset() {
     useAttachmentPreviewStore.setState({ active: null })

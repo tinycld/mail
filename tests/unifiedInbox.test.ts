@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { computeMailboxFolderCounts } from '../tinycld/mail/hooks/computeMailboxFolderCounts'
-import { getMailboxLabel } from '../tinycld/mail/hooks/useMailboxes'
-import type { MailMailboxes, MailThreadState, MailThreads } from '../tinycld/mail/types'
+import { computeMailboxFolderCounts } from '~/tinycld/mail/hooks/computeMailboxFolderCounts'
+import { getMailboxLabel } from '~/tinycld/mail/hooks/useMailboxes'
+import type { MailMailboxes, MailThreadState, MailThreads } from '~/tinycld/mail/types'
 
 function thread(id: string, mailbox: string): MailThreads {
     return {

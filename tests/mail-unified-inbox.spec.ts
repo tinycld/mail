@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { clickSidebarItem, login, navigateToPackage } from '../../tinycld/tests/e2e/helpers'
+import { clickSidebarItem, login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 import { deliverInbound, emailRow, expectRowVisible, openThread, uniqueSubject } from './helpers'
 
 test.describe('Mail — Unified inbox', () => {

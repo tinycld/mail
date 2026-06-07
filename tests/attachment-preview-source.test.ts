@@ -3,7 +3,7 @@ import {
     attachmentToSource,
     cleanFilename,
     mimeFromFilename,
-} from '../tinycld/mail/components/attachment-preview-source'
+} from '~/tinycld/mail/components/attachment-preview-source'
 
 describe('cleanFilename', () => {
     it('strips a 10-char random suffix from the basename', () => {

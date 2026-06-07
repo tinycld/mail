@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { handleNewComposeIntent } from '../tinycld/mail/hooks/composeEvents'
-import type { ComposeMode } from '../tinycld/mail/hooks/useComposeState'
+import { handleNewComposeIntent } from '~/tinycld/mail/hooks/composeEvents'
+import type { ComposeMode } from '~/tinycld/mail/hooks/useComposeState'
 
 function makeState(mode: ComposeMode) {
     return {

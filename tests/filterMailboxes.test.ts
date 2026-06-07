@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-    filterAndGroupMailboxes,
-    type MailboxListItem,
-} from '../tinycld/mail/hooks/filterMailboxes'
+import { filterAndGroupMailboxes, type MailboxListItem } from '~/tinycld/mail/hooks/filterMailboxes'
 
 function item(overrides: Partial<MailboxListItem> = {}): MailboxListItem {
     return {

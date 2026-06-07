@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login, navigateToPackage } from '../../tinycld/tests/e2e/helpers'
+import { login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 import { deliverInbound, emailRow, expectRowVisible, uniqueSubject } from './helpers'
 
 test.describe('Mail — Inbox', () => {

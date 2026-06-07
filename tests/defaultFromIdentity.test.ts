@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { filterOwnAddresses, pickDefaultFrom } from '../tinycld/mail/hooks/defaultFromIdentity'
-import type { SendableIdentity } from '../tinycld/mail/hooks/flattenSendableIdentities'
+import { filterOwnAddresses, pickDefaultFrom } from '~/tinycld/mail/hooks/defaultFromIdentity'
+import type { SendableIdentity } from '~/tinycld/mail/hooks/flattenSendableIdentities'
 
 const personal: SendableIdentity = {
     mailboxId: 'mb1',

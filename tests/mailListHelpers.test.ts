@@ -4,7 +4,7 @@ import {
     prettifyFolderKey,
     searchResultToThreadListItem,
     stripHtmlTags,
-} from '../tinycld/mail/hooks/mailListHelpers'
+} from '~/tinycld/mail/hooks/mailListHelpers'
 
 vi.mock('@tinycld/core/lib/errors', () => ({
     captureException: vi.fn(),

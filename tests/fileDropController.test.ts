@@ -3,7 +3,7 @@ import {
     createFileDropController,
     type DataTransferLike,
     extractDroppedFiles,
-} from '../tinycld/mail/hooks/fileDropController'
+} from '~/tinycld/mail/hooks/fileDropController'
 
 function makeFile(name: string, size = 10): File {
     return new File([new Uint8Array(size)], name)
