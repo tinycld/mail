@@ -19,11 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # This PR's code, checked out into its member slot. The workspace root is
-      # NOT a committed repo (post app+core merge) — bootstrap assembles it from
-      # scratch around this checkout. bootstrap --assemble-only clones the merged
-      # `tinycld` member (app shell + nested core + package-scripts) plus this
-      # PACKAGE; it skips PACKAGE's slot since it already exists, so we test THIS
-      # PR's code. A sibling only needs tinycld + itself to typecheck + unit-test.
+      # not a committed repo — bootstrap assembles it from scratch around this
+      # checkout. `--assemble-only` clones the `tinycld` member (app shell + core
+      # + package-scripts) plus this PACKAGE, skipping PACKAGE's slot since it's
+      # already present, so CI tests this PR's code. A sibling needs only tinycld
+      # + itself to typecheck + unit-test.
       - uses: actions/checkout@v5
         with:
           path: ws/${{ env.PACKAGE }}
@@ -68,7 +68,7 @@ jobs:
       # Installs watchman so Metro's file watcher doesn't fall back to
       # polling — see tinycld/app#21 for the trace evidence and the
       # blank-page-after-reload flake it fixed. The composite action lives in
-      # the merged tinycld repo, assembled at ws/tinycld.
+      # the tinycld member, assembled at ws/tinycld.
       - name: Configure test env
         uses: ./ws/tinycld/.github/actions/configure-test-env
       - name: Install Playwright browsers
