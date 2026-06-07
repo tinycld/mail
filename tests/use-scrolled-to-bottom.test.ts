@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isScrolledToBottom } from '../tinycld/mail/hooks/useScrolledToBottom'
+import { isScrolledToBottom } from '~/tinycld/mail/hooks/useScrolledToBottom'
 
 describe('isScrolledToBottom', () => {
     it('returns false when content extends well beyond viewport', () => {

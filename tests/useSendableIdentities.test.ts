@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { flattenSendableIdentities } from '../tinycld/mail/hooks/flattenSendableIdentities'
-import type { MailDomains, MailMailboxAliases, MailMailboxes } from '../tinycld/mail/types'
+import { flattenSendableIdentities } from '~/tinycld/mail/hooks/flattenSendableIdentities'
+import type { MailDomains, MailMailboxAliases, MailMailboxes } from '~/tinycld/mail/types'
 
 function mb(overrides: Partial<MailMailboxes>): MailMailboxes {
     return {

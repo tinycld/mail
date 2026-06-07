@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { splitMailboxes } from '../tinycld/mail/hooks/splitMailboxes'
-import type { MailMailboxes } from '../tinycld/mail/types'
+import { splitMailboxes } from '~/tinycld/mail/hooks/splitMailboxes'
+import type { MailMailboxes } from '~/tinycld/mail/types'
 
 function makeMailbox(overrides: Partial<MailMailboxes>): MailMailboxes {
     return {

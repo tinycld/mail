@@ -1,13 +1,11 @@
 {
-    "extends": "../app/tsconfig.package-base.json",
+    "extends": "@tinycld/core/tsconfig.package-base.json",
     "compilerOptions": {
         "baseUrl": ".",
         "paths": {
-            "~/tinycld/mail/*": ["./tinycld/mail/*"],
-            "@tinycld/core/*": ["../core/*"],
-            "@tinycld/app-generated/*": ["../app/lib/generated/*"]
+            "~/tinycld/mail/*": ["./tinycld/mail/*"]
         }
     },
-    "include": ["tinycld/**/*.ts", "tinycld/**/*.tsx", "../app/uniwind-types.d.ts"],
+    "include": ["tinycld/**/*.ts", "tinycld/**/*.tsx"],
     "exclude": ["node_modules", "server", "pb-migrations", "tests/**/*.spec.ts"]
 }

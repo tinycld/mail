@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { mergeSharedFolderStates } from '../tinycld/mail/hooks/mergeSharedFolderStates'
-import type { MailThreadState } from '../tinycld/mail/types'
+import { mergeSharedFolderStates } from '~/tinycld/mail/hooks/mergeSharedFolderStates'
+import type { MailThreadState } from '~/tinycld/mail/types'
 
 function st(overrides: Partial<MailThreadState>): MailThreadState {
     return {

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login, navigateToPackage } from '../../app/tests/e2e/helpers'
+import { login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 import {
     appendMessage,
     deleteMessage,
@@ -9,7 +9,7 @@ import {
     listMessages,
     moveMessage,
     withImapClient,
-} from '../../app/tests/e2e/imap-helpers'
+} from '@tinycld/core/e2e-imap-helpers'
 
 test.describe('Mail — IMAP Integration', () => {
     test('lists mailboxes and reads appended messages via IMAP', async () => {

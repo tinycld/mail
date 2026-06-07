@@ -32,9 +32,10 @@ import { useThreadExpansionStore } from '../stores/thread-expansion-store'
 import { useThreadListContext } from '../stores/thread-list-store'
 import type { MailMessages } from '../types'
 
+type ThreadStateCollection = ReturnType<typeof useStore<['mail_thread_state']>>[0]
+
 function useAutoMarkAsRead(
-    // biome-ignore lint/suspicious/noExplicitAny: pbtsdb collection type is deeply generic
-    threadStateCollection: any,
+    threadStateCollection: ThreadStateCollection,
     threadState: { id: string; is_read: boolean } | undefined,
     threadId: string
 ) {
@@ -279,7 +280,7 @@ export default function MailDetailScreen() {
                 scrollEventThrottle={16}
             >
                 <ThreadSubjectHeader subject={subject} labels={labels} />
-                {messageList.map((msg, index) => {
+                {messageList.map((msg: MailMessages, index) => {
                     const expanded = isMessageExpanded(msg, index)
                     return (
                         <View key={msg.id}>

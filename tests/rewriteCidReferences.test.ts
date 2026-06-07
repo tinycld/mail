@@ -9,7 +9,7 @@ vi.mock('@tinycld/core/lib/pocketbase', () => ({
     },
 }))
 
-const { rewriteCidReferences } = await import('../tinycld/mail/components/rewrite-cid-references')
+const { rewriteCidReferences } = await import('~/tinycld/mail/components/rewrite-cid-references')
 
 const COLL = 'mail_messages'
 const REC = 'rec1'
