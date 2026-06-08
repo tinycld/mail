@@ -124,4 +124,50 @@ describe('searchResultToThreadListItem', () => {
             searchResultToThreadListItem(buildResult({ has_attachments: false })).hasAttachments
         ).toBe(false)
     })
+
+    it('uses the resolved thread_state id (not thread_id) so row actions hit the real record', () => {
+        // The whole point of the search-archive fix: when a state row is
+        // resolved, stateId must be the STATE id, not the thread id — otherwise
+        // archive/star/trash target a non-existent record and silently no-op.
+        const state = {
+            id: 'state_abc',
+            thread: 't1',
+            is_read: false,
+            is_starred: true,
+            folder: 'archive',
+            // biome-ignore lint/suspicious/noExplicitAny: test stub of a MailThreadState; only the read fields matter
+        } as any
+        const item = searchResultToThreadListItem(buildResult(), state)
+        expect(item.stateId).toBe('state_abc')
+        expect(item.threadId).toBe('t1')
+    })
+
+    it('reflects the real read / starred / folder flags from the resolved state', () => {
+        const state = {
+            id: 'state_abc',
+            thread: 't1',
+            is_read: false,
+            is_starred: true,
+            folder: 'archive',
+            // biome-ignore lint/suspicious/noExplicitAny: test stub of a MailThreadState
+        } as any
+        const item = searchResultToThreadListItem(buildResult(), state)
+        expect(item.isRead).toBe(false)
+        expect(item.isStarred).toBe(true)
+        expect(item.folder).toBe('archive')
+    })
+
+    it('passes resolved labels through to the row', () => {
+        const state = {
+            id: 'state_abc',
+            thread: 't1',
+            is_read: true,
+            is_starred: false,
+            folder: 'inbox',
+            // biome-ignore lint/suspicious/noExplicitAny: test stub of a MailThreadState
+        } as any
+        const labels = [{ id: 'l1', name: 'Work', color: '#3b82f6' }]
+        const item = searchResultToThreadListItem(buildResult(), state, labels)
+        expect(item.labels).toEqual(labels)
+    })
 })

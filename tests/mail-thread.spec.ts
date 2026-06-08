@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { clickSidebarItem, login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 import {
     deliverInbound,
+    emailRow,
     expectRowVisible,
     navigateToPersonalInbox,
     openThread,
@@ -32,6 +33,12 @@ test.describe('Mail — Thread Detail', () => {
         await threadDetail(page).getByLabel('Archive').click()
         await page.waitForURL(url => !url.pathname.includes('/mail/'), { timeout: 10_000 })
 
+        // Back on the inbox after navigateBack: the archived thread must be gone
+        // without a manual refresh. This guards the page-query invalidation —
+        // archiving only changes mail_thread_state.folder, which the one-shot
+        // mail_threads page query won't refetch on its own.
+        await expect(emailRow(page, subject)).toHaveCount(0, { timeout: 10_000 })
+
         await clickSidebarItem(page, 'Archive')
         await expectRowVisible(page, subject)
     })
@@ -45,6 +52,8 @@ test.describe('Mail — Thread Detail', () => {
         await openThread(page, subject)
         await threadDetail(page).getByLabel('Delete').click()
         await page.waitForURL(url => !url.pathname.includes('/mail/'), { timeout: 10_000 })
+
+        await expect(emailRow(page, subject)).toHaveCount(0, { timeout: 10_000 })
 
         await clickSidebarItem(page, 'Trash')
         await expectRowVisible(page, subject)

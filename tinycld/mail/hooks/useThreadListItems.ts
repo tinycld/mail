@@ -1,6 +1,6 @@
 import { and, eq } from '@tanstack/db'
 import { useQuery } from '@tanstack/react-query'
-import { pb, useStore } from '@tinycld/core/lib/pocketbase'
+import { pb, queryClient, useStore } from '@tinycld/core/lib/pocketbase'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useEffect, useMemo, useRef } from 'react'
 import type { ThreadListItem } from '../components/thread-list-item'
@@ -281,6 +281,22 @@ export function useThreadListItems(
         mailboxLabelMap,
         filter.labels,
     ])
+
+    // The paginated mail_threads page query is a one-shot React Query, not a
+    // live query. Archiving / trashing / moving a thread mutates
+    // mail_thread_state.folder — which the page query filters on via the
+    // back-relation — but PocketBase emits realtime events per collection, so a
+    // thread_state change fires NO mail_threads event and the cached page keeps
+    // showing the now-moved thread (the archived email never leaves the inbox).
+    // Subscribe to local thread_state changes (fired on optimistic writes and
+    // incoming realtime) and invalidate the page query so it refetches and the
+    // row drops out of the current folder. Mirrors useMailboxFolderCounts.
+    useEffect(() => {
+        const sub = threadStateCollection.subscribeChanges(() => {
+            queryClient.invalidateQueries({ queryKey: ['mail_threads_page'] })
+        })
+        return () => sub.unsubscribe()
+    }, [threadStateCollection])
 
     // First-load gate: page query + always-needed support queries.
     const isLoading = pageLoading || threadStatesLoading || assignmentsLoading

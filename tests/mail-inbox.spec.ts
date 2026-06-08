@@ -1,6 +1,12 @@
 import { expect, test } from '@playwright/test'
-import { login, navigateToPackage } from '@tinycld/core/e2e-helpers'
-import { deliverInbound, emailRow, expectRowVisible, uniqueSubject } from './helpers'
+import { clickSidebarItem, login, navigateToPackage } from '@tinycld/core/e2e-helpers'
+import {
+    deliverInbound,
+    emailRow,
+    expectRowVisible,
+    navigateToPersonalInbox,
+    uniqueSubject,
+} from './helpers'
 
 test.describe('Mail — Inbox', () => {
     test.beforeEach(async ({ page }) => {
@@ -33,6 +39,87 @@ test.describe('Mail — Inbox', () => {
 
         await expectRowVisible(page, matchSubject)
         await expect(emailRow(page, otherSubject)).toHaveCount(0, { timeout: 5_000 })
+    })
+
+    // Regression: archiving from the inbox list (the row's hover "Archive"
+    // action) must remove the row from the inbox AND land it in Archive. The
+    // mail_threads page query is a one-shot React Query that doesn't self-heal
+    // on a thread_state folder change — without an invalidation bridge the
+    // archived thread lingered in the inbox ("archive does nothing"). Asserting
+    // the row LEAVES the inbox is what guards that; a fresh nav to Archive on
+    // its own always refetched and so never caught the bug.
+    test('archiving from the inbox list removes the row and files it under Archive', async ({
+        page,
+        request,
+    }) => {
+        const subject = uniqueSubject('ListArchive')
+        await deliverInbound(request, { subject })
+        await page.reload()
+        await navigateToPersonalInbox(page)
+
+        const row = emailRow(page, subject)
+        await expect(row).toBeVisible({ timeout: 10_000 })
+        // The Archive/Delete actions live in a hover layer (opacity:0 +
+        // pointer-events:none until hovered), so reveal them first.
+        await row.hover()
+        await row.getByLabel('Archive').click()
+
+        // The inbox must drop the row without any manual refresh.
+        await expect(emailRow(page, subject)).toHaveCount(0, { timeout: 10_000 })
+
+        // And it now lives in Archive.
+        await clickSidebarItem(page, 'Archive')
+        await expectRowVisible(page, subject)
+    })
+
+    test('deleting from the inbox list removes the row and files it under Trash', async ({
+        page,
+        request,
+    }) => {
+        const subject = uniqueSubject('ListDelete')
+        await deliverInbound(request, { subject })
+        await page.reload()
+        await navigateToPersonalInbox(page)
+
+        const row = emailRow(page, subject)
+        await expect(row).toBeVisible({ timeout: 10_000 })
+        await row.hover()
+        await row.getByLabel('Delete').click()
+
+        await expect(emailRow(page, subject)).toHaveCount(0, { timeout: 10_000 })
+
+        await clickSidebarItem(page, 'Trash')
+        await expectRowVisible(page, subject)
+    })
+
+    // Regression: archiving from a SEARCH result. Search hits carry no
+    // thread_state id of their own and the search list previously rendered
+    // action-less rows, so archive/star/trash silently no-oped. The search
+    // rows now resolve the real thread_state and reuse the inbox row, so the
+    // hover "Archive" action works end-to-end and the thread really moves.
+    test('archiving from a search result moves the thread to Archive', async ({
+        page,
+        request,
+    }) => {
+        const subject = uniqueSubject('SearchArchive')
+        await deliverInbound(request, { subject })
+        await page.reload()
+
+        const searchInput = page.getByPlaceholder(/search/i)
+        await expect(searchInput).toBeVisible()
+        await searchInput.fill(subject)
+
+        const row = emailRow(page, subject)
+        await expect(row).toBeVisible({ timeout: 10_000 })
+        await row.hover()
+        await row.getByLabel('Archive').click()
+
+        // Clear the search and confirm the thread now lives in Archive — proof
+        // the action targeted a real thread_state record, not the thread id.
+        await searchInput.fill('')
+        await navigateToPersonalInbox(page)
+        await clickSidebarItem(page, 'Archive')
+        await expectRowVisible(page, subject)
     })
 
     // iPhone-ish viewport — the advanced-search overflow Stefan reported is
