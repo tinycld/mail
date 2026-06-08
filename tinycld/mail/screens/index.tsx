@@ -20,13 +20,14 @@ import { ComposeFAB } from '../components/ComposeFAB'
 import { EmailListToolbar } from '../components/EmailListToolbar'
 import { EmailRow } from '../components/EmailRow'
 import type { ThreadListItem } from '../components/thread-list-item'
-import { prettifyFolderKey, searchResultToThreadListItem } from '../hooks/mailListHelpers'
+import { prettifyFolderKey } from '../hooks/mailListHelpers'
 import { useCompose } from '../hooks/useComposeState'
 import { useMailBulkActions } from '../hooks/useMailBulkActions'
 import { useMailboxes } from '../hooks/useMailboxes'
 import { useMailListShortcuts } from '../hooks/useMailListShortcuts'
 import { useMailSelection } from '../hooks/useMailSelection'
 import { useMailSearchState } from '../hooks/useSearchState'
+import { useSearchThreadItems } from '../hooks/useSearchThreadItems'
 import { PAGE_SIZE, UNIFIED_INBOX, useThreadListItems } from '../hooks/useThreadListItems'
 
 function useQueryParams() {
@@ -45,6 +46,10 @@ function useQueryParams() {
         page: Number.isFinite(parsedPage) && parsedPage >= 1 ? parsedPage : 1,
     }
 }
+
+// Inert callback for MailListRow props that don't apply in search mode
+// (selection isn't tracked there). Module-level so it's referentially stable.
+const noop = () => {}
 
 function EmptyState({ folderTitle, isVisible }: { folderTitle: string; isVisible: boolean }) {
     if (!isVisible) return null
@@ -361,10 +366,7 @@ export default function MailListScreen() {
         [draftByThread, threadMap, openDraft]
     )
 
-    const searchItems = useMemo(
-        () => search.results.map(searchResultToThreadListItem),
-        [search.results]
-    )
+    const searchItems = useSearchThreadItems(userOrgId, search.results)
 
     const activeLabels = useMemo(
         () =>
@@ -430,6 +432,36 @@ export default function MailListScreen() {
         ]
     )
 
+    // Search results reuse MailListRow so swipe actions (archive / trash / star /
+    // read) work exactly as in a folder view — the items now carry real
+    // mail_thread_state ids (see useSearchThreadItems). Selection and keyboard
+    // focus aren't tracked in search mode, so those props are inert.
+    const renderSearchRow = useCallback(
+        ({ item, index }: { item: ThreadListItem; index: number }) => (
+            <MailListRow
+                item={item}
+                index={index}
+                isMobile={isMobile}
+                isFocused={false}
+                isSelected={false}
+                onToggleSelect={noop}
+                onToggleStar={toggleStar.mutate}
+                onArchive={archiveThread.mutate}
+                onTrash={trashThread.mutate}
+                onToggleRead={toggleRead.mutate}
+                onDraftPress={handleDraftPress}
+            />
+        ),
+        [
+            isMobile,
+            toggleStar.mutate,
+            archiveThread.mutate,
+            trashThread.mutate,
+            toggleRead.mutate,
+            handleDraftPress,
+        ]
+    )
+
     if (search.isActive) {
         return (
             <View className="flex-1">
@@ -446,8 +478,8 @@ export default function MailListScreen() {
                     <SwipeableRowProvider>
                         <FlashList
                             data={searchItems}
-                            keyExtractor={item => item.threadId}
-                            renderItem={({ item }) => <EmailRow email={item} isMobile={isMobile} />}
+                            keyExtractor={item => item.stateId}
+                            renderItem={renderSearchRow}
                         />
                     </SwipeableRowProvider>
                 )}
