@@ -84,6 +84,43 @@ func handleUserOrgCreated(app *pocketbase.PocketBase, userOrgRecord *core.Record
 	}
 }
 
+// handleOrgProvisioning reacts to a core org_provisioning intent record by
+// creating this org's mail domain. Core emits the intent (carrying the operator-
+// supplied domain) on admin org-create WITHOUT touching mail's collections, so
+// the org→domain wiring lives entirely here — the same dependency direction as
+// the user_org hook above (mail depends on core; core knows nothing of mail).
+func handleOrgProvisioning(app *pocketbase.PocketBase, record *core.Record) {
+	orgID := record.GetString("org")
+	domain := strings.TrimSpace(strings.ToLower(record.GetString("mail_domain")))
+	if orgID == "" || domain == "" {
+		return
+	}
+
+	// Idempotent: skip if this org already has the domain (the unique index on
+	// (org, domain) would reject a duplicate anyway).
+	if existing, _ := app.FindFirstRecordByFilter(
+		"mail_domains",
+		"org = {:org} && domain = {:domain}",
+		map[string]any{"org": orgID, "domain": domain},
+	); existing != nil {
+		return
+	}
+
+	collection, err := app.FindCollectionByNameOrId("mail_domains")
+	if err != nil {
+		app.Logger().Warn("mail lifecycle: mail_domains collection missing", "error", err)
+		return
+	}
+	md := core.NewRecord(collection)
+	md.Set("org", orgID)
+	md.Set("domain", domain)
+	md.Set("verified", true)
+	if err := app.Save(md); err != nil {
+		app.Logger().Warn("mail lifecycle: failed to create mail domain from provisioning",
+			"org", orgID, "domain", domain, "error", err)
+	}
+}
+
 // handleUserOrgDeleted cleans up orphaned personal mailboxes after a user leaves an org.
 func handleUserOrgDeleted(app *pocketbase.PocketBase, userOrgRecord *core.Record) {
 	orgID := userOrgRecord.GetString("org")
