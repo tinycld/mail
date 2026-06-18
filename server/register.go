@@ -152,6 +152,13 @@ func Register(app *pocketbase.PocketBase) {
 		return e.Next()
 	})
 
+	// Provision this org's mail domain when core emits an org_provisioning intent
+	// (admin org-create with a mail domain). Core never writes mail_domains.
+	app.OnRecordAfterCreateSuccess("org_provisioning").BindFunc(func(e *core.RecordEvent) error {
+		handleOrgProvisioning(app, e.Record)
+		return e.Next()
+	})
+
 	// Clean up orphaned personal mailboxes when a user leaves an org
 	app.OnRecordAfterDeleteSuccess("user_org").BindFunc(func(e *core.RecordEvent) error {
 		handleUserOrgDeleted(app, e.Record)
