@@ -159,6 +159,7 @@ export function useThreadListItems(
                 userOrgIds: userOrgIdsForFolder,
                 folder: filter.folder,
             })
+            // biome-ignore lint/plugin/pbtsdb-no-raw-pb-access: deliberate server-side pagination — fetches only the current page (see file header), which a whole-collection pbtsdb store read would defeat; cached per-page via React Query.
             return pb.collection('mail_threads').getList<MailThreads>(page, PAGE_SIZE, {
                 filter: filterStr,
                 sort: '-latest_date',
@@ -194,6 +195,7 @@ export function useThreadListItems(
                 visibleMailboxIds.length === 1
                     ? `thread.mailbox = ${quote(visibleMailboxIds[0])}`
                     : `(${visibleMailboxIds.map(id => `thread.mailbox = ${quote(id)}`).join(' || ')})`
+            // biome-ignore lint/plugin/pbtsdb-no-raw-pb-access: bounded server-side query for draft messages across the visible mailboxes, cached via React Query; not a whole-collection pbtsdb store read.
             return pb.collection('mail_messages').getFullList<MailMessages>({
                 filter: `delivery_status = "draft" && ${mbClause}`,
             })
