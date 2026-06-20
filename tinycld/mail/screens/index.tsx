@@ -7,6 +7,7 @@ import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { captureException } from '@tinycld/core/lib/errors'
 import type { HelpTopicId } from '@tinycld/core/lib/help/types'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
+import { markNavMilestone, NAV_PERF } from '@tinycld/core/lib/nav-perf'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { pb, queryClient } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
@@ -186,6 +187,7 @@ function helpTopicForView(
 }
 
 export default function MailListScreen() {
+    if (NAV_PERF) markNavMilestone('mail', 'render-start')
     const { folder, labels, mailbox, page } = useQueryParams()
     const router = useRouter()
     const orgHref = useOrgHref()
@@ -215,6 +217,7 @@ export default function MailListScreen() {
         threadMap,
         threadStateCollection,
         isLoading,
+        itemsLoading,
         totalItems,
     } = useThreadListItems(
         userOrgId,
@@ -488,12 +491,28 @@ export default function MailListScreen() {
     }
 
     const isEmpty = items.length === 0
-    const showEmptyState = isEmpty && !isLoading
-    const showLoadingState = isEmpty && isLoading
+    // Three mutually exclusive, exhaustive states keyed on itemsLoading (page +
+    // thread_state settled — what determines which rows EXIST). Holding the list
+    // unmounted until rows are stable lets FlashList mount once instead of
+    // re-measuring as `items` grows through the query cascade; LoadingState
+    // covers the gap. Excluding label-assignment loading (the broader isLoading)
+    // means enrichment doesn't keep the list hidden, and there's no blank frame:
+    // exactly one of these is ever true.
+    const showLoadingState = itemsLoading
+    const showEmptyState = !itemsLoading && isEmpty
+    const showList = !itemsLoading && !isEmpty
     const helpTopic = helpTopicForView(folder, labels.length, search.isActive)
 
+    if (NAV_PERF) {
+        markNavMilestone('mail', 'screen-painted')
+        if (!isLoading) markNavMilestone('mail', 'query-settled')
+    }
+
     return (
-        <View className="flex-1">
+        <View
+            className="flex-1"
+            onLayout={NAV_PERF ? () => markNavMilestone('mail', 'shell-laid-out') : undefined}
+        >
             <DocumentTitle pkg="Mail" title={tabLeaf} />
             <ActiveViewBanner
                 isVisible={showActiveViewBanner}
@@ -536,7 +555,7 @@ export default function MailListScreen() {
             </ScreenHeader>
             {showLoadingState && <LoadingState />}
             <EmptyState folderTitle={folderTitle} isVisible={showEmptyState} />
-            {!isEmpty && (
+            {showList && (
                 <SwipeableRowProvider>
                     <FlashList
                         ref={listRef}

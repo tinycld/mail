@@ -92,26 +92,36 @@ export function useThreadListItems(
             .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user_org, userOrgId))
     )
 
+    const isUnified = filter.mailboxId === UNIFIED_INBOX
+
+    // In unified mode filter.mailboxId is the synthetic UNIFIED_INBOX sentinel,
+    // so these two queries match no rows AND nothing reads their results
+    // (mailboxType falls back to 'personal' → widenSharedTeam is always false →
+    // coMembers is never consulted). Return undefined from the queryFn so the
+    // hook skips the subscription entirely instead of opening two dead live
+    // queries on every unified-inbox mount.
     const { data: targetMailbox } = useOrgLiveQuery(
         query =>
-            query
-                .from({ mail_mailboxes: mailboxesCollection })
-                .where(({ mail_mailboxes }) => eq(mail_mailboxes.id, filter.mailboxId)),
-        [filter.mailboxId]
+            isUnified
+                ? undefined
+                : query
+                      .from({ mail_mailboxes: mailboxesCollection })
+                      .where(({ mail_mailboxes }) => eq(mail_mailboxes.id, filter.mailboxId)),
+        [filter.mailboxId, isUnified]
     )
     const mailboxType = targetMailbox?.[0]?.type ?? 'personal'
 
     const { data: coMembers } = useOrgLiveQuery(
         query =>
-            query
-                .from({ mail_mailbox_members: membersCollection })
-                .where(({ mail_mailbox_members }) =>
-                    eq(mail_mailbox_members.mailbox, filter.mailboxId)
-                ),
-        [filter.mailboxId]
+            isUnified
+                ? undefined
+                : query
+                      .from({ mail_mailbox_members: membersCollection })
+                      .where(({ mail_mailbox_members }) =>
+                          eq(mail_mailbox_members.mailbox, filter.mailboxId)
+                      ),
+        [filter.mailboxId, isUnified]
     )
-
-    const isUnified = filter.mailboxId === UNIFIED_INBOX
 
     // The mailbox-id set the page query restricts threads to. For unified inbox
     // it's every mailbox the user belongs to; otherwise just the active one.
@@ -303,6 +313,14 @@ export function useThreadListItems(
     // First-load gate: page query + always-needed support queries.
     const isLoading = pageLoading || threadStatesLoading || assignmentsLoading
 
+    // Narrower gate for the list itself: the page query + thread_state determine
+    // which rows EXIST (items skips threads without a state row), so the list is
+    // safe to mount once these settle. Label assignments only enrich existing
+    // rows, so excluding assignmentsLoading lets the list paint without waiting
+    // on label data — and avoids a blank frame where items are present but
+    // isLoading is still true (which would hide both the list and LoadingState).
+    const itemsLoading = pageLoading || threadStatesLoading
+
     // Publish the visible thread IDs so the conversation detail screen can
     // navigate prev/next within the same page.
     const setThreadIds = useThreadListStore(s => s.setThreadIds)
@@ -324,6 +342,7 @@ export function useThreadListItems(
         threadMap,
         threadStateCollection,
         isLoading,
+        itemsLoading,
         page,
         totalPages,
         totalItems,
