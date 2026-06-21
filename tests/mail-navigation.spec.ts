@@ -28,13 +28,13 @@ test.describe('Mail — Navigation', () => {
         await page
             .locator('[data-testid="email-row"]:visible')
             .first()
-            .waitFor({ state: 'visible', timeout: 30_000 })
+            .waitFor({ state: 'visible' })
 
         await page.keyboard.press('j')
         await page.keyboard.press('j')
         await page.keyboard.press('Enter')
 
-        await page.waitForURL(new RegExp(`/a/${ORG_SLUG}/mail/[^/?]+`), { timeout: 5_000 })
+        await page.waitForURL(new RegExp(`/a/${ORG_SLUG}/mail/[^/?]+`))
     })
 
     test('navigate to Sent', async ({ page }) => {

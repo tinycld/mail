@@ -85,12 +85,8 @@ async function deliverInbound(request: APIRequestContext, url: string, payload: 
 
 async function expectImageLoaded(target: Locator) {
     await expect
-        .poll(
-            async () =>
-                target.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0),
-            {
-                timeout: 5_000,
-            }
+        .poll(async () =>
+            target.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)
         )
         .toBe(true)
 }
@@ -121,7 +117,7 @@ test.describe('Mail — Attachments', () => {
             waitFor: page.getByTestId('package-sidebar-mounted'),
         })
 
-        await expect(emailRow(page, subject)).toBeVisible({ timeout: 10_000 })
+        await expect(emailRow(page, subject)).toBeVisible()
         await openThread(page, subject)
 
         const inlineImg = inlineBodyImageLocator(page)

@@ -38,7 +38,7 @@ test.describe('Mail — Inbox', () => {
         await searchInput.fill(matchSubject)
 
         await expectRowVisible(page, matchSubject)
-        await expect(emailRow(page, otherSubject)).toHaveCount(0, { timeout: 5_000 })
+        await expect(emailRow(page, otherSubject)).toHaveCount(0)
     })
 
     // Regression: archiving from the inbox list (the row's hover "Archive"
@@ -58,14 +58,14 @@ test.describe('Mail — Inbox', () => {
         await navigateToPersonalInbox(page)
 
         const row = emailRow(page, subject)
-        await expect(row).toBeVisible({ timeout: 10_000 })
+        await expect(row).toBeVisible()
         // The Archive/Delete actions live in a hover layer (opacity:0 +
         // pointer-events:none until hovered), so reveal them first.
         await row.hover()
         await row.getByLabel('Archive').click()
 
         // The inbox must drop the row without any manual refresh.
-        await expect(emailRow(page, subject)).toHaveCount(0, { timeout: 10_000 })
+        await expect(emailRow(page, subject)).toHaveCount(0)
 
         // And it now lives in Archive.
         await clickSidebarItem(page, 'Archive')
@@ -82,11 +82,11 @@ test.describe('Mail — Inbox', () => {
         await navigateToPersonalInbox(page)
 
         const row = emailRow(page, subject)
-        await expect(row).toBeVisible({ timeout: 10_000 })
+        await expect(row).toBeVisible()
         await row.hover()
         await row.getByLabel('Delete').click()
 
-        await expect(emailRow(page, subject)).toHaveCount(0, { timeout: 10_000 })
+        await expect(emailRow(page, subject)).toHaveCount(0)
 
         await clickSidebarItem(page, 'Trash')
         await expectRowVisible(page, subject)
@@ -110,7 +110,7 @@ test.describe('Mail — Inbox', () => {
         await searchInput.fill(subject)
 
         const row = emailRow(page, subject)
-        await expect(row).toBeVisible({ timeout: 10_000 })
+        await expect(row).toBeVisible()
         await row.hover()
         await row.getByLabel('Archive').click()
 
@@ -193,6 +193,6 @@ test.describe('Mail — Inbox', () => {
         await page.getByTestId('advanced-search-submit').click()
 
         await expectRowVisible(page, subjectA)
-        await expect(emailRow(page, subjectB)).toHaveCount(0, { timeout: 5_000 })
+        await expect(emailRow(page, subjectB)).toHaveCount(0)
     })
 })

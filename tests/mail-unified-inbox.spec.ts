@@ -24,7 +24,6 @@ test.describe('Mail — Unified inbox', () => {
         // the sidebar entry.
         await page.getByTestId('package-sidebar-mounted').waitFor({
             state: 'visible',
-            timeout: 30_000,
         })
 
         await clickSidebarItem(page, 'All Inboxes')
@@ -56,7 +55,6 @@ test.describe('Mail — Unified inbox', () => {
         // the sidebar entry.
         await page.getByTestId('package-sidebar-mounted').waitFor({
             state: 'visible',
-            timeout: 30_000,
         })
 
         await clickSidebarItem(page, 'All Inboxes')

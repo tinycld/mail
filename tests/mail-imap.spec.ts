@@ -57,7 +57,7 @@ test.describe('Mail — IMAP Integration', () => {
         // visible elements.
         await expect(
             page.locator('[data-testid="email-row"]:visible').filter({ hasText: subject }).first()
-        ).toBeVisible({ timeout: 10_000 })
+        ).toBeVisible()
     })
 
     test('MOVE to label folder adds label (Gmail-like)', async () => {
@@ -208,7 +208,7 @@ test.describe('Mail — IMAP Integration', () => {
             .locator('[data-testid="email-row"]:visible')
             .filter({ hasText: subject })
             .first()
-        await expect(row).toBeVisible({ timeout: 10_000 })
+        await expect(row).toBeVisible()
 
         await withImapClient(async client => {
             const mailboxes = await listMailboxes(client)
@@ -221,6 +221,6 @@ test.describe('Mail — IMAP Integration', () => {
         await page.reload()
         await expect(
             page.locator('[data-testid="email-row"]:visible').filter({ hasText: subject })
-        ).toHaveCount(0, { timeout: 10_000 })
+        ).toHaveCount(0)
     })
 })
