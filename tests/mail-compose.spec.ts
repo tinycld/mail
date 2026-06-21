@@ -15,14 +15,14 @@ test.describe('Mail — Compose', () => {
         // The compose drawer mounts as a lazy chunk; first paint can
         // exceed the default 5s on CI under load. Once the first field
         // ("To") is up the rest are in the same render frame.
-        await expect(page.getByText('To', { exact: true })).toBeVisible({ timeout: 15_000 })
+        await expect(page.getByText('To', { exact: true })).toBeVisible()
         await expect(page.getByText('Subject', { exact: true })).toBeVisible()
         await expect(page.getByText('Send', { exact: true })).toBeVisible()
     })
 
     test('close compose without sending', async ({ page }) => {
         await page.getByText('Compose', { exact: true }).click()
-        await expect(page.getByText('To', { exact: true })).toBeVisible({ timeout: 15_000 })
+        await expect(page.getByText('To', { exact: true })).toBeVisible()
 
         await page.keyboard.press('Escape')
     })
@@ -33,7 +33,7 @@ test.describe('Mail — Compose', () => {
     test('body editor fills the compose width', async ({ page }) => {
         await page.setViewportSize({ width: 1400, height: 900 })
         await page.getByText('Compose', { exact: true }).click()
-        await expect(page.getByText('To', { exact: true })).toBeVisible({ timeout: 15_000 })
+        await expect(page.getByText('To', { exact: true })).toBeVisible()
 
         const wrapper = page.locator('.tinycld-mail-editor')
         const editable = page.locator('.tinycld-mail-editor .ProseMirror')

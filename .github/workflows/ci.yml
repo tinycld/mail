@@ -71,16 +71,12 @@ jobs:
       # the tinycld member, assembled at ws/tinycld.
       - name: Configure test env
         uses: ./ws/tinycld/.github/actions/configure-test-env
-      - name: Install Playwright browsers
-        working-directory: ws/tinycld
-        run: pnpm exec playwright install --with-deps chromium
       - name: E2E
         working-directory: ws/${{ env.PACKAGE }}
         env:
-          # Pre-warm mail's lazy screen chunk in globalSetup so the
-          # first test per worker doesn't race the cold Metro compile.
-          # See tinycld/app#18.
-          TINYCLD_WARM_PACKAGES: mail
+          # The bundle was built by the action above; reuse it (the webServer
+          # still seeds + promotes + serves, just doesn't export a second time).
+          TINYCLD_E2E_SKIP_EXPORT: '1'
         run: pnpm exec tinycld-pkg test:e2e
       # Capture Playwright's per-failure artifacts (trace, screenshot,
       # video, error-context.md) so a CI failure can be diagnosed

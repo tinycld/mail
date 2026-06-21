@@ -21,7 +21,7 @@ test.describe('Mail — Shared mailbox creation', () => {
         await page.getByText('Create mailbox', { exact: true }).click()
 
         // Drawer closes only when both inserts (mailbox + first owner member) succeed.
-        await expect(page.getByText('New shared mailbox')).toBeHidden({ timeout: 10_000 })
+        await expect(page.getByText('New shared mailbox')).toBeHidden()
         await expect(page.getByText(address).first()).toBeVisible()
         await expect(page.getByText('Shared Test · 1 member')).toBeVisible()
     })
