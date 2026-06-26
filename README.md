@@ -118,7 +118,8 @@ mail_mailbox_members
 mail_mailbox_aliases
   mailbox, address (local part)
 mail_threads
-  mailbox, subject, latest_date, message_count, has_attachments
+  mailbox, subject, snippet, latest_date, message_count, participants,
+  has_attachments, has_draft
 mail_messages
   thread, sender_*, recipients_*, subject, body_html (file),
   attachments (file list), attachment_thumbnails (file list),
