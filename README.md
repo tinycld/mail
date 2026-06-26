@@ -122,18 +122,18 @@ mail_threads
 mail_messages
   thread, sender_*, recipients_*, subject, body_html (file),
   attachments (file list), attachment_thumbnails (file list),
-  cid_map (json), delivery_status, message_id, in_reply_to, references,
+  cid_map (json), delivery_status, message_id, in_reply_to,
   total_size, alias (relation, nullable)
 mail_thread_state
   thread, user_org, folder ('inbox'|'sent'|'drafts'|'trash'|'spam'|'archive'),
-  is_read, is_starred, labels (relation to mail_labels, up to 20),
-  snoozed_until (date, nullable)
+  is_read, is_starred
+  (labels live in core's unified label_assignments, not a field here)
 mail_imap_mailbox_state
   mailbox, uid_validity, uid_next   (one row per mailbox; UNIQUE(mailbox))
 fts_mail_threads
-  FTS5 virtual table mirroring mail_threads (subject, snippet, sender, recipients)
+  FTS5 virtual table mirroring mail_threads (subject, snippet, participants)
 fts_mail_messages
-  FTS5 virtual table mirroring mail_messages (body, attachments names)
+  FTS5 virtual table mirroring mail_messages (subject, snippet, sender_name, sender_email, body_text)
 mail_folder_counts
   SQL view aggregating counts per (mailbox, user_org, folder)
 ```
