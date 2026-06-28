@@ -454,34 +454,14 @@ func newProviderByName(name, serverToken, accountToken string, smtpCfg SMTPConfi
 	}
 }
 
-// providerForOrg reads mail provider settings for the given org, layering: per-org
-// `settings` (highest priority) → system_settings (deployment-wide) → built-in
-// default. Env vars are no longer consulted (system_settings is the source of
-// truth; existing deployments are migrated by the core seed migration).
-func providerForOrg(app core.App, orgID string) Provider {
-	settings := getOrgSettings(app, "mail", orgID)
-
-	name := settings["provider"]
-	serverToken := settings["postmark_server_token"]
-	accountToken := settings["postmark_account_token"]
-
-	// Fall back to system settings when the org has no override.
-	if name == "" {
-		name = systemSetting(app, "mail.provider")
-	}
-	if name == "" {
-		name = "postmark"
-	}
-	if serverToken == "" {
-		serverToken = systemSetting(app, "mail.postmark_server_token")
-	}
-	if accountToken == "" {
-		accountToken = systemSetting(app, "mail.postmark_account_token")
-	}
-
-	smtpCfg := smtpConfigFromSettings(app, settings)
-
-	return newProviderByName(name, serverToken, accountToken, smtpCfg)
+// providerForOrg builds the mail provider for an org. The provider choice and its
+// credentials/SMTP config are SYSTEM-WIDE (deployment infrastructure), not per-org
+// — they come from system_settings, configured in the /admin Settings console, so
+// every org resolves to the same system provider. The orgID is retained in the
+// signature because the call sites are org-scoped (per-org domains still matter
+// elsewhere), but it no longer affects provider selection.
+func providerForOrg(app core.App, _ string) Provider {
+	return newProviderFromSystem(app)
 }
 
 // smtpConfigFromSystem reads SMTPConfig from system settings (the deployment-wide
@@ -503,50 +483,6 @@ func smtpConfigFromSystem(app core.App) SMTPConfig {
 		IMAPPollInterval: time.Duration(poll) * time.Second,
 		DKIMSelector:     systemSetting(app, "mail.smtp_dkim_selector"),
 	}
-	return cfg
-}
-
-// smtpConfigFromSettings builds an SMTPConfig from per-org settings, falling back
-// to system-settings defaults for any unset field. Numeric fields with parse
-// errors are treated as unset (the constructor's applyDefaults handles them).
-func smtpConfigFromSettings(app core.App, settings map[string]string) SMTPConfig {
-	cfg := smtpConfigFromSystem(app)
-
-	if v := settings["smtp_public_hostname"]; v != "" {
-		cfg.PublicHostname = v
-	}
-	if v := settings["smtp_inbound_mode"]; v != "" {
-		cfg.InboundMode = v
-	}
-	if v := settings["smtp_imap_host"]; v != "" {
-		cfg.IMAPHost = v
-	}
-	if v := settings["smtp_imap_port"]; v != "" {
-		if port, err := strconv.Atoi(v); err == nil {
-			cfg.IMAPPort = port
-		}
-	}
-	if v := settings["smtp_imap_username"]; v != "" {
-		cfg.IMAPUsername = v
-	}
-	if v := settings["smtp_imap_password"]; v != "" {
-		cfg.IMAPPassword = v
-	}
-	if v := settings["smtp_imap_use_tls"]; v != "" {
-		cfg.IMAPUseTLS = v != "false"
-	}
-	if v := settings["smtp_imap_mailbox"]; v != "" {
-		cfg.IMAPMailbox = v
-	}
-	if v := settings["smtp_imap_poll_interval_seconds"]; v != "" {
-		if poll, err := strconv.Atoi(v); err == nil {
-			cfg.IMAPPollInterval = time.Duration(poll) * time.Second
-		}
-	}
-	if v := settings["smtp_dkim_selector"]; v != "" {
-		cfg.DKIMSelector = v
-	}
-
 	return cfg
 }
 

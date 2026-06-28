@@ -1,4 +1,5 @@
 import { eq } from '@tanstack/db'
+import { useLiveQuery } from '@tanstack/react-db'
 import { useMutation as useReactQueryMutation } from '@tanstack/react-query'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { errorToString, handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
@@ -7,19 +8,7 @@ import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useOrgInfo } from '@tinycld/core/lib/use-org-info'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
-import { useSettings } from '@tinycld/core/lib/use-settings'
-import { Divider } from '@tinycld/core/ui/divider'
-import {
-    type Control,
-    FormErrorSummary,
-    NumberInput,
-    SelectInput,
-    TextInput,
-    Toggle,
-    useForm,
-    z,
-    zodResolver,
-} from '@tinycld/core/ui/form'
+import { FormErrorSummary, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
 import {
     CheckCircle,
     Copy,
@@ -32,38 +21,8 @@ import {
 } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb/core'
 import { useState } from 'react'
-import { useWatch } from 'react-hook-form'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import type { MailDomainVerificationDetails } from '../types'
-
-const PROVIDER_OPTIONS = [
-    { label: 'Postmark', value: 'postmark' },
-    { label: 'Self-hosted SMTP', value: 'smtp' },
-]
-
-const SMTP_INBOUND_MODE_OPTIONS = [
-    { label: 'None (outbound only)', value: '' },
-    { label: 'Built-in SMTP listener (we are the MX)', value: 'smtp' },
-    { label: 'Poll IMAP mailbox', value: 'imap' },
-]
-
-const mailSettingsSchema = z.object({
-    provider: z.enum(['postmark', 'smtp']),
-    postmark_server_token: z.string(),
-    postmark_account_token: z.string(),
-    smtp_public_hostname: z.string(),
-    smtp_inbound_mode: z.enum(['', 'smtp', 'imap']),
-    smtp_imap_host: z.string(),
-    smtp_imap_port: z.number().int().min(0).max(65535),
-    smtp_imap_username: z.string(),
-    smtp_imap_password: z.string(),
-    smtp_imap_use_tls: z.boolean(),
-    smtp_imap_mailbox: z.string(),
-    smtp_imap_poll_interval_seconds: z.number().int().min(0),
-    smtp_dkim_selector: z.string(),
-})
-
-type MailSettingsForm = z.infer<typeof mailSettingsSchema>
 
 const addDomainSchema = z.object({
     domain: z
@@ -75,152 +34,21 @@ const addDomainSchema = z.object({
         ),
 })
 
-const PERSISTED_KEYS: (keyof MailSettingsForm)[] = [
-    'provider',
-    'postmark_server_token',
-    'postmark_account_token',
-    'smtp_public_hostname',
-    'smtp_inbound_mode',
-    'smtp_imap_host',
-    'smtp_imap_port',
-    'smtp_imap_username',
-    'smtp_imap_password',
-    'smtp_imap_use_tls',
-    'smtp_imap_mailbox',
-    'smtp_imap_poll_interval_seconds',
-    'smtp_dkim_selector',
-]
-
-function readStringSetting(
-    settingsMap: Map<string, { value: unknown }>,
-    key: string,
-    fallback: string
-): string {
-    const raw = settingsMap.get(key)?.value
-    return typeof raw === 'string' ? raw : fallback
-}
-
-function readNumberSetting(
-    settingsMap: Map<string, { value: unknown }>,
-    key: string,
-    fallback: number
-): number {
-    const raw = settingsMap.get(key)?.value
-    if (typeof raw === 'number') return raw
-    if (typeof raw === 'string' && raw !== '') {
-        const parsed = Number(raw)
-        return Number.isFinite(parsed) ? parsed : fallback
-    }
-    return fallback
-}
-
-function readBooleanSetting(
-    settingsMap: Map<string, { value: unknown }>,
-    key: string,
-    fallback: boolean
-): boolean {
-    const raw = settingsMap.get(key)?.value
-    if (typeof raw === 'boolean') return raw
-    if (typeof raw === 'string') return raw !== 'false'
-    return fallback
-}
-
 export default function ProviderSettings() {
     const primaryColor = useThemeColor('primary')
     const { orgId } = useOrgInfo()
-    const settings = useSettings('mail', orgId)
-    const [settingsCollection] = useStore('settings')
+    const [systemSettings] = useStore('system_settings')
 
-    const settingsMap = new Map(settings.map(s => [s.key, s]))
-
-    const {
-        control,
-        handleSubmit,
-        setError,
-        getValues,
-        formState: { errors, isSubmitted, isDirty },
-    } = useForm<MailSettingsForm>({
-        mode: 'onChange',
-        resolver: zodResolver(mailSettingsSchema),
-        values: {
-            provider: readStringSetting(settingsMap, 'provider', 'postmark') as 'postmark' | 'smtp',
-            postmark_server_token: readStringSetting(settingsMap, 'postmark_server_token', ''),
-            postmark_account_token: readStringSetting(settingsMap, 'postmark_account_token', ''),
-            smtp_public_hostname: readStringSetting(settingsMap, 'smtp_public_hostname', ''),
-            smtp_inbound_mode: readStringSetting(settingsMap, 'smtp_inbound_mode', '') as
-                | ''
-                | 'smtp'
-                | 'imap',
-            smtp_imap_host: readStringSetting(settingsMap, 'smtp_imap_host', ''),
-            smtp_imap_port: readNumberSetting(settingsMap, 'smtp_imap_port', 0),
-            smtp_imap_username: readStringSetting(settingsMap, 'smtp_imap_username', ''),
-            smtp_imap_password: readStringSetting(settingsMap, 'smtp_imap_password', ''),
-            smtp_imap_use_tls: readBooleanSetting(settingsMap, 'smtp_imap_use_tls', true),
-            smtp_imap_mailbox: readStringSetting(settingsMap, 'smtp_imap_mailbox', 'INBOX'),
-            smtp_imap_poll_interval_seconds: readNumberSetting(
-                settingsMap,
-                'smtp_imap_poll_interval_seconds',
-                60
-            ),
-            smtp_dkim_selector: readStringSetting(settingsMap, 'smtp_dkim_selector', 'tinycld'),
-        },
-    })
-
-    const watchedProvider = useWatch({ control, name: 'provider' })
-
-    const saveMutation = useMutation({
-        mutationFn: mutation(function* (data: MailSettingsForm) {
-            for (const key of PERSISTED_KEYS) {
-                const value = data[key]
-                const serialized = typeof value === 'boolean' ? String(value) : value
-                const existing = settingsMap.get(key)
-                if (existing) {
-                    yield settingsCollection.update(existing.id, draft => {
-                        draft.value = serialized
-                    })
-                } else {
-                    yield settingsCollection.insert({
-                        id: newRecordId(),
-                        app: 'mail',
-                        key,
-                        value: serialized,
-                        org: orgId,
-                    })
-                }
-            }
-        }),
-        onError: handleMutationErrorsWithForm({ setError, getValues }),
-    })
-
-    const onSubmit = handleSubmit(data => saveMutation.mutate(data))
-    const canSubmit = !saveMutation.isPending && isDirty
+    const { data: sysRows = [] } = useLiveQuery(query => query.from({ s: systemSettings }))
+    const provider =
+        (sysRows.find(r => r.key === 'mail.provider')?.value as 'postmark' | 'smtp') || 'postmark'
 
     return (
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="bg-background">
             <View className="flex-1 gap-5 p-5" style={{ maxWidth: 600 }}>
                 <ProviderHeader primaryColor={primaryColor} />
 
-                <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
-
-                <View className="gap-4">
-                    <SelectInput
-                        control={control}
-                        name="provider"
-                        label="Provider"
-                        options={PROVIDER_OPTIONS}
-                    />
-                    <ProviderFields provider={watchedProvider} control={control} />
-                </View>
-
-                <SaveButton
-                    disabled={!canSubmit}
-                    pending={saveMutation.isPending}
-                    onPress={onSubmit}
-                />
-
-                <Divider />
-
-                <DomainsSection orgId={orgId} provider={watchedProvider} />
+                <DomainsSection orgId={orgId} provider={provider} />
             </View>
         </ScrollView>
     )
@@ -232,147 +60,13 @@ function ProviderHeader({ primaryColor }: { primaryColor: string }) {
             <Globe size={32} color={primaryColor} />
             <View className="flex-row items-center gap-2">
                 <Text className="text-foreground" style={{ fontSize: 20, fontWeight: 'bold' }}>
-                    Mail Provider
+                    Mail Domains
                 </Text>
                 <HelpIcon topic="mail:provider-setup" size={18} />
             </View>
             <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
-                Configure the email provider and domains for your organization.
+                Manage the domains your organization can send and receive email on.
             </Text>
-        </View>
-    )
-}
-
-function SaveButton({
-    disabled,
-    pending,
-    onPress,
-}: {
-    disabled: boolean
-    pending: boolean
-    onPress: () => void
-}) {
-    return (
-        <Pressable
-            onPress={onPress}
-            disabled={disabled}
-            className={`items-center justify-center rounded-lg h-11 bg-primary ${disabled ? 'opacity-50' : 'opacity-100'}`}
-        >
-            <Text className="text-primary-foreground" style={{ fontWeight: '600' }}>
-                {pending ? 'Saving...' : 'Save'}
-            </Text>
-        </Pressable>
-    )
-}
-
-function ProviderFields({
-    provider,
-    control,
-}: {
-    provider: 'postmark' | 'smtp'
-    control: Control<MailSettingsForm, unknown, MailSettingsForm>
-}) {
-    if (provider === 'smtp') return <SmtpFields control={control} />
-    return <PostmarkFields control={control} />
-}
-
-function PostmarkFields({
-    control,
-}: {
-    control: Control<MailSettingsForm, unknown, MailSettingsForm>
-}) {
-    return (
-        <>
-            <TextInput
-                control={control}
-                name="postmark_server_token"
-                label="Postmark Server Token"
-                secureTextEntry
-            />
-            <TextInput
-                control={control}
-                name="postmark_account_token"
-                label="Postmark Account Token"
-                secureTextEntry
-            />
-        </>
-    )
-}
-
-function SmtpFields({
-    control,
-}: {
-    control: Control<MailSettingsForm, unknown, MailSettingsForm>
-}) {
-    const inboundMode = useWatch({ control, name: 'smtp_inbound_mode' })
-    return (
-        <>
-            <TextInput
-                control={control}
-                name="smtp_public_hostname"
-                label="Public hostname"
-                placeholder="mx.example.com"
-            />
-            <TextInput
-                control={control}
-                name="smtp_dkim_selector"
-                label="DKIM selector"
-                placeholder="tinycld"
-            />
-            <SelectInput
-                control={control}
-                name="smtp_inbound_mode"
-                label="Inbound mode"
-                options={SMTP_INBOUND_MODE_OPTIONS}
-            />
-            <ImapFieldsBlock isVisible={inboundMode === 'imap'} control={control} />
-        </>
-    )
-}
-
-function ImapFieldsBlock({
-    isVisible,
-    control,
-}: {
-    isVisible: boolean
-    control: Control<MailSettingsForm, unknown, MailSettingsForm>
-}) {
-    if (!isVisible) return null
-    return (
-        <View className="gap-3 p-3 rounded-md border border-border">
-            <Text className="text-foreground" style={{ fontWeight: '600' }}>
-                IMAP fetcher
-            </Text>
-            <TextInput
-                control={control}
-                name="smtp_imap_host"
-                label="IMAP host"
-                placeholder="imap.example.com"
-            />
-            <NumberInput
-                control={control}
-                name="smtp_imap_port"
-                label="IMAP port (0 = default by TLS)"
-            />
-            <TextInput control={control} name="smtp_imap_username" label="Username" />
-            <TextInput
-                control={control}
-                name="smtp_imap_password"
-                label="Password"
-                secureTextEntry
-            />
-            <TextInput
-                control={control}
-                name="smtp_imap_mailbox"
-                label="Mailbox"
-                placeholder="INBOX"
-            />
-            <NumberInput
-                control={control}
-                name="smtp_imap_poll_interval_seconds"
-                label="Poll interval (seconds)"
-            />
-            <Toggle control={control} name="smtp_imap_use_tls" label="Use TLS" />
         </View>
     )
 }
