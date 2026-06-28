@@ -72,10 +72,10 @@ func TestIMAPFetcher_PullsUnseenAndIngests(t *testing.T) {
 		IMAPPassword: "secret",
 		IMAPMailbox:  "INBOX",
 	}
-	mgr := &imapFetcherManager{app: app, workers: make(map[string]context.CancelFunc)}
+	mgr := &imapFetcherManager{app: app}
 
-	if err := mgr.tickOrg(context.Background(), orgID, cfg); err != nil {
-		t.Fatalf("tickOrg: %v", err)
+	if err := mgr.tick(context.Background(), cfg); err != nil {
+		t.Fatalf("tick: %v", err)
 	}
 
 	msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "from imap"})
@@ -83,8 +83,8 @@ func TestIMAPFetcher_PullsUnseenAndIngests(t *testing.T) {
 		t.Fatalf("expected 1 stored message, got %d", len(msgs))
 	}
 
-	if err := mgr.tickOrg(context.Background(), orgID, cfg); err != nil {
-		t.Fatalf("second tickOrg: %v", err)
+	if err := mgr.tick(context.Background(), cfg); err != nil {
+		t.Fatalf("second tick: %v", err)
 	}
 	msgs2, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "from imap"})
 	if len(msgs2) != 1 {
@@ -92,29 +92,44 @@ func TestIMAPFetcher_PullsUnseenAndIngests(t *testing.T) {
 	}
 }
 
-// dispatchToOrgMailboxes must not store a message under an org that doesn't
-// own the recipient's domain. This is the cross-org isolation guarantee for
-// any operator who hosts multiple orgs against a shared IMAP account.
-func TestDispatchToOrgMailboxes_RejectsCrossOrg(t *testing.T) {
+// dispatchInbound routes purely by recipient domain → owning org. The system
+// IMAP account receives mail for every hosted domain, so isolation must come from
+// the address: a message addressed to a domain we don't host is dropped (stored
+// nowhere), and one to a hosted domain lands only in that domain's mailbox.
+func TestDispatchInbound_RoutesByRecipientDomain(t *testing.T) {
 	app := setupInboundTestApp(t)
+	// alpha hosts acme.com; beta hosts other.example.
 	seedDomainMailboxAndOrg(t, app, "acme.com", "alice", "mb_iso_001", "org_alpha")
 	seedMember(t, app, "mb_iso_001", "userorg_alice")
 
-	msg := &InboundMessage{
+	// 1. Recipient on an UN-hosted domain → dropped (no mailbox resolves).
+	unhosted := &InboundMessage{
 		From:      Recipient{Email: "sender@external.example"},
-		To:        []Recipient{{Email: "alice@acme.com"}},
-		Subject:   "cross-org",
-		TextBody:  "should not be stored under wrong org",
-		MessageID: "<cross-org-1@example.org>",
+		To:        []Recipient{{Email: "nobody@nothosted.example"}},
+		Subject:   "unhosted",
+		TextBody:  "should be stored nowhere",
+		MessageID: "<unhosted-1@example.org>",
 		Date:      time.Now().UTC().Format(time.RFC3339),
 	}
+	_ = dispatchInbound(app, unhosted)
+	if msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "unhosted"}); len(msgs) != 0 {
+		t.Fatalf("expected 0 messages for an unhosted recipient domain, got %d", len(msgs))
+	}
 
-	// Dispatch with the wrong org ID — should reject every recipient.
-	_ = dispatchToOrgMailboxes(app, "org_beta", msg)
-
-	msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "cross-org"})
-	if len(msgs) != 0 {
-		t.Fatalf("expected 0 messages under wrong org, got %d", len(msgs))
+	// 2. Recipient on a hosted domain → delivered to that domain's mailbox.
+	hosted := &InboundMessage{
+		From:      Recipient{Email: "sender@external.example"},
+		To:        []Recipient{{Email: "alice@acme.com"}},
+		Subject:   "hosted",
+		TextBody:  "delivered to acme",
+		MessageID: "<hosted-1@example.org>",
+		Date:      time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := dispatchInbound(app, hosted); err != nil {
+		t.Fatalf("dispatchInbound: %v", err)
+	}
+	if msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "hosted"}); len(msgs) != 1 {
+		t.Fatalf("expected 1 message delivered to the hosted domain, got %d", len(msgs))
 	}
 }
 

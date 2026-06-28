@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -124,7 +124,7 @@ func Register(app *pocketbase.PocketBase) {
 		}
 		orgID := records[0].GetString("org")
 		if orgID == "" {
-			return newProviderFromEnv()
+			return newProviderFromSystem(app)
 		}
 		return providerForOrg(app, orgID)
 	}
@@ -180,6 +180,19 @@ func Register(app *pocketbase.PocketBase) {
 	app.OnRecordAfterCreateSuccess("settings").BindFunc(invalidateSettingsCache)
 	app.OnRecordAfterUpdateSuccess("settings").BindFunc(invalidateSettingsCache)
 	app.OnRecordAfterDeleteSuccess("settings").BindFunc(invalidateSettingsCache)
+
+	// The mail provider + IMAP config are SYSTEM-WIDE (system_settings), so a
+	// system-settings change to a mail.* key may toggle the IMAP fetcher on/off.
+	// Reconcile on those changes too (filtered so sentry.*/vapid.* edits don't
+	// churn the fetcher).
+	reconcileOnSystemMail := func(e *core.RecordEvent) error {
+		if globalIMAPManager != nil && strings.HasPrefix(e.Record.GetString("key"), "mail.") {
+			globalIMAPManager.onSettingsChanged()
+		}
+		return e.Next()
+	}
+	app.OnRecordAfterCreateSuccess("system_settings").BindFunc(reconcileOnSystemMail)
+	app.OnRecordAfterUpdateSuccess("system_settings").BindFunc(reconcileOnSystemMail)
 
 	// FTS sync hooks for mail_threads
 	app.OnRecordAfterCreateSuccess("mail_threads").BindFunc(func(e *core.RecordEvent) error {
@@ -408,12 +421,32 @@ func Register(app *pocketbase.PocketBase) {
 	})
 }
 
-func newProviderFromEnv() Provider {
-	name := os.Getenv("MAIL_PROVIDER")
+// systemSetting reads a value from the system_settings collection — the
+// system-wide config store core owns. Mail reads it directly from the app (not
+// via a core import) to stay decoupled, mirroring the per-org `settings` reads.
+// Returns "" when the key is unset (or the collection is absent).
+func systemSetting(app core.App, key string) string {
+	rec, err := app.FindFirstRecordByFilter("system_settings", "key = {:key}", map[string]any{"key": key})
+	if err != nil {
+		return ""
+	}
+	return rec.GetString("value")
+}
+
+// newProviderFromSystem builds the provider from SYSTEM settings only — the
+// deployment-wide default used when there's no org context (e.g. inbound routing
+// before an org is resolved). Per-org overrides are layered on by providerForOrg.
+func newProviderFromSystem(app core.App) Provider {
+	name := systemSetting(app, "mail.provider")
 	if name == "" {
 		name = "postmark"
 	}
-	return newProviderByName(name, os.Getenv("POSTMARK_SERVER_TOKEN"), os.Getenv("POSTMARK_ACCOUNT_TOKEN"), smtpConfigFromEnv())
+	return newProviderByName(
+		name,
+		systemSetting(app, "mail.postmark_server_token"),
+		systemSetting(app, "mail.postmark_account_token"),
+		smtpConfigFromSystem(app),
+	)
 }
 
 func newProviderByName(name, serverToken, accountToken string, smtpCfg SMTPConfig) Provider {
@@ -435,96 +468,35 @@ func newProviderByName(name, serverToken, accountToken string, smtpCfg SMTPConfi
 	}
 }
 
-// providerForOrg reads mail provider settings from the settings table for the
-// given org, falling back to environment variables when no settings are stored.
-func providerForOrg(app core.App, orgID string) Provider {
-	settings := getOrgSettings(app, "mail", orgID)
-
-	name := settings["provider"]
-	serverToken := settings["postmark_server_token"]
-	accountToken := settings["postmark_account_token"]
-
-	// Fall back to env vars when org has no settings
-	if name == "" {
-		name = os.Getenv("MAIL_PROVIDER")
-	}
-	if name == "" {
-		name = "postmark"
-	}
-	if serverToken == "" {
-		serverToken = os.Getenv("POSTMARK_SERVER_TOKEN")
-	}
-	if accountToken == "" {
-		accountToken = os.Getenv("POSTMARK_ACCOUNT_TOKEN")
-	}
-
-	smtpCfg := smtpConfigFromSettings(settings)
-
-	return newProviderByName(name, serverToken, accountToken, smtpCfg)
+// providerForOrg builds the mail provider for an org. The provider choice and its
+// credentials/SMTP config are SYSTEM-WIDE (deployment infrastructure), not per-org
+// — they come from system_settings, configured in the /admin Settings console, so
+// every org resolves to the same system provider. The orgID is retained in the
+// signature because the call sites are org-scoped (per-org domains still matter
+// elsewhere), but it no longer affects provider selection.
+func providerForOrg(app core.App, _ string) Provider {
+	return newProviderFromSystem(app)
 }
 
-// smtpConfigFromEnv reads SMTPConfig from environment variables. Used by
-// newProviderFromEnv (the env-only fallback) and as a baseline when an org's
-// settings table doesn't override a particular field.
-func smtpConfigFromEnv() SMTPConfig {
-	port, _ := strconv.Atoi(os.Getenv("SMTP_IMAP_PORT"))
-	poll, _ := strconv.Atoi(os.Getenv("SMTP_IMAP_POLL_INTERVAL_SECONDS"))
+// smtpConfigFromSystem reads SMTPConfig from system settings (the deployment-wide
+// SMTP/IMAP config). Used as the no-org baseline and as the fallback layer beneath
+// per-org overrides. Numeric fields that don't parse are left zero (the
+// constructor's applyDefaults handles them).
+func smtpConfigFromSystem(app core.App) SMTPConfig {
+	port, _ := strconv.Atoi(systemSetting(app, "mail.smtp_imap_port"))
+	poll, _ := strconv.Atoi(systemSetting(app, "mail.smtp_imap_poll_interval_seconds"))
 	cfg := SMTPConfig{
-		PublicHostname:   os.Getenv("SMTP_PUBLIC_HOSTNAME"),
-		InboundMode:      os.Getenv("SMTP_INBOUND_MODE"),
-		IMAPHost:         os.Getenv("SMTP_IMAP_HOST"),
+		PublicHostname:   systemSetting(app, "mail.smtp_public_hostname"),
+		InboundMode:      systemSetting(app, "mail.smtp_inbound_mode"),
+		IMAPHost:         systemSetting(app, "mail.smtp_imap_host"),
 		IMAPPort:         port,
-		IMAPUsername:     os.Getenv("SMTP_IMAP_USERNAME"),
-		IMAPPassword:     os.Getenv("SMTP_IMAP_PASSWORD"),
-		IMAPUseTLS:       os.Getenv("SMTP_IMAP_USE_TLS") != "false",
-		IMAPMailbox:      os.Getenv("SMTP_IMAP_MAILBOX"),
+		IMAPUsername:     systemSetting(app, "mail.smtp_imap_username"),
+		IMAPPassword:     systemSetting(app, "mail.smtp_imap_password"),
+		IMAPUseTLS:       systemSetting(app, "mail.smtp_imap_use_tls") != "false",
+		IMAPMailbox:      systemSetting(app, "mail.smtp_imap_mailbox"),
 		IMAPPollInterval: time.Duration(poll) * time.Second,
-		DKIMSelector:     os.Getenv("SMTP_DKIM_SELECTOR"),
+		DKIMSelector:     systemSetting(app, "mail.smtp_dkim_selector"),
 	}
-	return cfg
-}
-
-// smtpConfigFromSettings builds an SMTPConfig from per-org settings, falling
-// back to env-var defaults for any unset field. Numeric fields with parse
-// errors are treated as unset (the constructor's applyDefaults handles them).
-func smtpConfigFromSettings(settings map[string]string) SMTPConfig {
-	cfg := smtpConfigFromEnv()
-
-	if v := settings["smtp_public_hostname"]; v != "" {
-		cfg.PublicHostname = v
-	}
-	if v := settings["smtp_inbound_mode"]; v != "" {
-		cfg.InboundMode = v
-	}
-	if v := settings["smtp_imap_host"]; v != "" {
-		cfg.IMAPHost = v
-	}
-	if v := settings["smtp_imap_port"]; v != "" {
-		if port, err := strconv.Atoi(v); err == nil {
-			cfg.IMAPPort = port
-		}
-	}
-	if v := settings["smtp_imap_username"]; v != "" {
-		cfg.IMAPUsername = v
-	}
-	if v := settings["smtp_imap_password"]; v != "" {
-		cfg.IMAPPassword = v
-	}
-	if v := settings["smtp_imap_use_tls"]; v != "" {
-		cfg.IMAPUseTLS = v != "false"
-	}
-	if v := settings["smtp_imap_mailbox"]; v != "" {
-		cfg.IMAPMailbox = v
-	}
-	if v := settings["smtp_imap_poll_interval_seconds"]; v != "" {
-		if poll, err := strconv.Atoi(v); err == nil {
-			cfg.IMAPPollInterval = time.Duration(poll) * time.Second
-		}
-	}
-	if v := settings["smtp_dkim_selector"]; v != "" {
-		cfg.DKIMSelector = v
-	}
-
 	return cfg
 }
 

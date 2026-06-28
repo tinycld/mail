@@ -28,7 +28,32 @@ func setupSettingsTestApp(t *testing.T) *tests.TestApp {
 	if err := app.Save(settings); err != nil {
 		t.Fatalf("failed to save settings collection: %v", err)
 	}
+
+	// system_settings is system-wide (no org); mail reads provider/creds from it.
+	// `value` is a plain text field here, matching the core migration (systemSetting
+	// reads it via GetString).
+	sys := core.NewBaseCollection("system_settings")
+	sys.Fields.Add(&core.TextField{Name: "key", Required: true})
+	sys.Fields.Add(&core.TextField{Name: "value"})
+	sys.Fields.Add(&core.BoolField{Name: "is_secret"})
+	if err := app.Save(sys); err != nil {
+		t.Fatalf("failed to save system_settings collection: %v", err)
+	}
 	return app
+}
+
+func saveSystemSetting(t *testing.T, app *tests.TestApp, key, value string) {
+	t.Helper()
+	col, err := app.FindCollectionByNameOrId("system_settings")
+	if err != nil {
+		t.Fatalf("system_settings collection missing: %v", err)
+	}
+	rec := core.NewRecord(col)
+	rec.Set("key", key)
+	rec.Set("value", value)
+	if err := app.Save(rec); err != nil {
+		t.Fatalf("failed to save system setting %s: %v", key, err)
+	}
 }
 
 func saveSetting(t *testing.T, app *tests.TestApp, appName, key, value, orgID string) {
@@ -68,42 +93,45 @@ func TestGetOrgSettings_ReadsJSONStringValues(t *testing.T) {
 	}
 }
 
-// providerForOrg should hand back a configured Postmark provider built from
-// the org's stored server token (no env fallback in play). A regression in
-// getOrgSettings would drop the token, leaving the provider unconfigured —
-// which the send/verify paths now reject early — so assert Configured().
-func TestProviderForOrg_UsesOrgPostmarkToken(t *testing.T) {
-	t.Setenv("POSTMARK_SERVER_TOKEN", "")
-	t.Setenv("MAIL_PROVIDER", "")
-
+// Provider + credentials are SYSTEM-WIDE (system_settings), not per-org. A token
+// stored in system_settings yields a configured Postmark provider; the orgID no
+// longer affects selection. (An org-stored 'provider'/token is ignored.)
+func TestProviderForOrg_UsesSystemPostmarkToken(t *testing.T) {
 	app := setupSettingsTestApp(t)
-	const orgID = "org222222222222"
-	saveSetting(t, app, "mail", "provider", "postmark", orgID)
-	saveSetting(t, app, "mail", "postmark_server_token", "tok-org-only", orgID)
+	saveSystemSetting(t, app, "mail.provider", "postmark")
+	saveSystemSetting(t, app, "mail.postmark_server_token", "tok-system")
 
-	provider := providerForOrg(app, orgID)
+	provider := providerForOrg(app, "org222222222222")
 	if _, ok := provider.(*PostmarkProvider); !ok {
-		t.Fatalf("expected *PostmarkProvider from org settings, got %T", provider)
+		t.Fatalf("expected *PostmarkProvider from system settings, got %T", provider)
 	}
 	if !provider.Configured() {
-		t.Error("provider built from org token should report Configured() == true")
+		t.Error("provider built from the system token should report Configured() == true")
 	}
 }
 
-// With no org token and no env fallback, the provider is a PostmarkProvider but
-// reports Configured() == false — the signal the send/verify endpoints use to
-// reject with a clear "not configured" error instead of an opaque API failure.
-func TestProviderForOrg_NoToken_NotConfigured(t *testing.T) {
-	t.Setenv("POSTMARK_SERVER_TOKEN", "")
-	t.Setenv("POSTMARK_ACCOUNT_TOKEN", "")
-	t.Setenv("MAIL_PROVIDER", "")
-
+// Provider/creds are system-wide: a token set only in an ORG's settings must NOT
+// configure the provider (org settings no longer carry provider credentials).
+func TestProviderForOrg_IgnoresOrgPostmarkToken(t *testing.T) {
 	app := setupSettingsTestApp(t)
-	const orgID = "org444444444444"
-	// provider configured as postmark, but no token saved
-	saveSetting(t, app, "mail", "provider", "postmark", orgID)
+	saveSystemSetting(t, app, "mail.provider", "postmark")
+	// Org-level provider/token (legacy shape) — must be ignored now.
+	saveSetting(t, app, "mail", "postmark_server_token", "tok-org-only", "org222222222222")
 
-	provider := providerForOrg(app, orgID)
+	provider := providerForOrg(app, "org222222222222")
+	if provider.Configured() {
+		t.Error("an org-stored token must NOT configure the provider (system-wide only)")
+	}
+}
+
+// With no system token, the provider is a PostmarkProvider but reports
+// Configured() == false — the signal send/verify use to reject with a clear
+// "not configured" error instead of an opaque API failure.
+func TestProviderForOrg_NoToken_NotConfigured(t *testing.T) {
+	app := setupSettingsTestApp(t)
+	saveSystemSetting(t, app, "mail.provider", "postmark")
+
+	provider := providerForOrg(app, "org444444444444")
 	if provider.Configured() {
 		t.Error("provider with no server token should report Configured() == false")
 	}
@@ -157,5 +185,31 @@ func TestSettingsCacheInvalidation_DeletesCompositeKey(t *testing.T) {
 
 	if got := getOrgSettings(app, "mail", orgID)["postmark_server_token"]; got != "tok-new" {
 		t.Errorf("after invalidation, postmark_server_token = %q, want %q", got, "tok-new")
+	}
+}
+
+// The IMAP fetcher decides whether to run from the SYSTEM provider config (it no
+// longer queries org settings — the regression that left the fetcher never
+// starting). With system settings set to self-hosted SMTP in imap inbound mode
+// and a host, smtpConfigFromSystem must yield a config the fetcher treats as
+// "want" (InboundMode == "imap" && IMAPHost != ""). org settings are irrelevant.
+func TestSmtpConfigFromSystem_DrivesImapFetcher(t *testing.T) {
+	app := setupSettingsTestApp(t)
+
+	// Not configured for imap → fetcher should NOT want to run.
+	if cfg := smtpConfigFromSystem(app); cfg.InboundMode == "imap" && cfg.IMAPHost != "" {
+		t.Fatal("empty system config should not request an imap fetcher")
+	}
+
+	saveSystemSetting(t, app, "mail.provider", "smtp")
+	saveSystemSetting(t, app, "mail.smtp_inbound_mode", "imap")
+	saveSystemSetting(t, app, "mail.smtp_imap_host", "imap.example.com")
+
+	cfg := smtpConfigFromSystem(app)
+	if cfg.InboundMode != "imap" {
+		t.Errorf("InboundMode = %q, want imap", cfg.InboundMode)
+	}
+	if cfg.IMAPHost != "imap.example.com" {
+		t.Errorf("IMAPHost = %q, want imap.example.com", cfg.IMAPHost)
 	}
 }
