@@ -187,3 +187,29 @@ func TestSettingsCacheInvalidation_DeletesCompositeKey(t *testing.T) {
 		t.Errorf("after invalidation, postmark_server_token = %q, want %q", got, "tok-new")
 	}
 }
+
+// The IMAP fetcher decides whether to run from the SYSTEM provider config (it no
+// longer queries org settings — the regression that left the fetcher never
+// starting). With system settings set to self-hosted SMTP in imap inbound mode
+// and a host, smtpConfigFromSystem must yield a config the fetcher treats as
+// "want" (InboundMode == "imap" && IMAPHost != ""). org settings are irrelevant.
+func TestSmtpConfigFromSystem_DrivesImapFetcher(t *testing.T) {
+	app := setupSettingsTestApp(t)
+
+	// Not configured for imap → fetcher should NOT want to run.
+	if cfg := smtpConfigFromSystem(app); cfg.InboundMode == "imap" && cfg.IMAPHost != "" {
+		t.Fatal("empty system config should not request an imap fetcher")
+	}
+
+	saveSystemSetting(t, app, "mail.provider", "smtp")
+	saveSystemSetting(t, app, "mail.smtp_inbound_mode", "imap")
+	saveSystemSetting(t, app, "mail.smtp_imap_host", "imap.example.com")
+
+	cfg := smtpConfigFromSystem(app)
+	if cfg.InboundMode != "imap" {
+		t.Errorf("InboundMode = %q, want imap", cfg.InboundMode)
+	}
+	if cfg.IMAPHost != "imap.example.com" {
+		t.Errorf("IMAPHost = %q, want imap.example.com", cfg.IMAPHost)
+	}
+}

@@ -13,21 +13,23 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
-// imapFetcherManager runs one IMAP polling goroutine per org that has the
-// self-hosted SMTP provider configured in "imap" inbound mode. It listens for
-// mail-settings record changes to (re)spawn workers when an org switches
-// modes, edits credentials, or removes its config.
+// imapFetcherManager runs a SINGLE IMAP polling goroutine for the deployment's
+// system mail account. The provider + IMAP credentials are system-wide
+// (system_settings, configured in /admin), so there is one mailbox to poll, not
+// one per org. Each fetched message is dispatched to whichever org owns the
+// recipient's domain (dispatchInbound resolves the mailbox — and thus the org —
+// from the recipient address). It (re)starts/stops the fetcher when the system
+// mail settings change.
 //
-// We deliberately keep this simple — one fetcher per org, on a per-org poll
-// interval. IMAP IDLE is a follow-up; the current design pulls on a fixed
-// cadence so a misconfigured account fails predictably without saturating
-// the network with reconnect loops.
+// Deliberately simple: a single poll loop on a fixed cadence. IMAP IDLE is a
+// follow-up; polling fails predictably without saturating the network with
+// reconnect loops.
 type imapFetcherManager struct {
 	app    core.App
 	parent context.Context
 
-	mu      sync.Mutex
-	workers map[string]context.CancelFunc // orgID → cancel
+	mu     sync.Mutex
+	cancel context.CancelFunc // non-nil while the fetcher loop is running
 }
 
 // globalIMAPManager is set by startIMAPFetchers and consulted by the settings
@@ -39,97 +41,62 @@ var globalIMAPManager *imapFetcherManager
 // shutdown function for OnTerminate.
 func startIMAPFetchers(app core.App) func() {
 	ctx, cancel := context.WithCancel(context.Background())
-	m := &imapFetcherManager{
-		app:     app,
-		parent:  ctx,
-		workers: make(map[string]context.CancelFunc),
-	}
+	m := &imapFetcherManager{app: app, parent: ctx}
 	globalIMAPManager = m
 	go m.reconcile()
 	return func() {
 		cancel()
-		m.stopAll()
+		m.stop()
 		globalIMAPManager = nil
 	}
 }
 
-// reconcile sweeps the settings table and spawns/stops workers to match the
-// current per-org configuration. Called on startup and (via the caller) any
-// time mail settings change. Deliberately tolerant of read errors — we'd
-// rather skip a sweep than crash the loop.
+// reconcile starts the fetcher when the system provider is self-hosted SMTP in
+// "imap" inbound mode (with a host configured), and stops it otherwise. Called
+// on startup and whenever mail/system settings change. Idempotent.
 func (m *imapFetcherManager) reconcile() {
-	records, err := m.app.FindRecordsByFilter(
-		"settings",
-		"app = 'mail' && key = 'provider' && value = '\"smtp\"'",
-		"",
-		0,
-		0,
-	)
-	if err != nil {
-		m.app.Logger().Warn("imap fetcher: failed to list smtp-provider orgs", "error", err)
-		return
-	}
-
-	desired := make(map[string]bool)
-	for _, rec := range records {
-		orgID := rec.GetString("org")
-		if orgID == "" {
-			continue
-		}
-		cfg := smtpConfigFromSystem(m.app)
-		if cfg.InboundMode != "imap" || cfg.IMAPHost == "" {
-			continue
-		}
-		desired[orgID] = true
-	}
+	cfg := smtpConfigFromSystem(m.app)
+	want := cfg.InboundMode == "imap" && cfg.IMAPHost != ""
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	// Stop workers for orgs that are no longer configured.
-	for orgID, cancel := range m.workers {
-		if !desired[orgID] {
-			cancel()
-			delete(m.workers, orgID)
-		}
-	}
-	// Start workers for newly-configured orgs.
-	for orgID := range desired {
-		if _, running := m.workers[orgID]; running {
-			continue
-		}
+	running := m.cancel != nil
+	switch {
+	case want && !running:
 		ctx, cancel := context.WithCancel(m.parent)
-		m.workers[orgID] = cancel
-		go m.runOrg(ctx, orgID)
+		m.cancel = cancel
+		go m.run(ctx)
+	case !want && running:
+		m.cancel()
+		m.cancel = nil
 	}
 }
 
-// onSettingsChanged is called by the settings record hooks. We rate-limit by
-// rerunning reconcile (cheap — bounded by the org count) instead of trying
-// to figure out exactly what changed.
+// onSettingsChanged is called by the settings/system_settings record hooks.
+// Rerunning reconcile is cheap, so we don't try to diff what changed.
 func (m *imapFetcherManager) onSettingsChanged() {
 	go m.reconcile()
 }
 
-func (m *imapFetcherManager) stopAll() {
+func (m *imapFetcherManager) stop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for _, cancel := range m.workers {
-		cancel()
+	if m.cancel != nil {
+		m.cancel()
+		m.cancel = nil
 	}
-	m.workers = nil
 }
 
-// runOrg is the per-org polling loop. It re-reads settings each tick so
-// rotating credentials takes effect without restart.
-func (m *imapFetcherManager) runOrg(ctx context.Context, orgID string) {
+// run is the single poll loop. It re-reads system settings each tick so rotating
+// credentials (and switching off imap mode) takes effect without a restart.
+func (m *imapFetcherManager) run(ctx context.Context) {
 	for {
 		cfg := smtpConfigFromSystem(m.app)
 		if cfg.InboundMode != "imap" || cfg.IMAPHost == "" {
 			return
 		}
-		if err := m.tickOrg(ctx, orgID, cfg); err != nil {
-			m.app.Logger().Warn("imap fetcher: tick failed", "org", orgID, "error", err)
+		if err := m.tick(ctx, cfg); err != nil {
+			m.app.Logger().Warn("imap fetcher: tick failed", "error", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -139,10 +106,10 @@ func (m *imapFetcherManager) runOrg(ctx context.Context, orgID string) {
 	}
 }
 
-// tickOrg performs one fetch cycle: connect, login, select mailbox, search
-// for unseen messages, fetch + ingest each, then mark seen. Returns the first
-// error encountered (the loop logs and continues on the next tick).
-func (m *imapFetcherManager) tickOrg(ctx context.Context, orgID string, cfg SMTPConfig) error {
+// tick performs one fetch cycle: connect, login, select mailbox, search for
+// unseen messages, fetch + dispatch each (by recipient domain → org), then mark
+// seen. Returns the first error encountered (the loop logs and retries next tick).
+func (m *imapFetcherManager) tick(ctx context.Context, cfg SMTPConfig) error {
 	addr := imapAddress(cfg)
 
 	client, err := dialIMAP(ctx, addr, cfg.IMAPUseTLS)
@@ -192,12 +159,12 @@ func (m *imapFetcherManager) tickOrg(ctx context.Context, orgID string, cfg SMTP
 		}
 		msg, err := parser.ParseInbound(body)
 		if err != nil {
-			m.app.Logger().Warn("imap fetcher: parse failed", "org", orgID, "error", err)
+			m.app.Logger().Warn("imap fetcher: parse failed", "error", err)
 			continue
 		}
-		if err := dispatchToOrgMailboxes(m.app, orgID, msg); err != nil {
+		if err := dispatchInbound(m.app, msg); err != nil {
 			m.app.Logger().Warn("imap fetcher: dispatch failed",
-				"org", orgID, "messageID", msg.MessageID, "error", err)
+				"messageID", msg.MessageID, "error", err)
 			// Do not mark this UID seen — next tick retries.
 			continue
 		}
@@ -261,11 +228,14 @@ func realIMAPDial(ctx context.Context, addr string, useTLS bool) (*imapclient.Cl
 	return imapclient.New(conn, nil), nil
 }
 
-// dispatchToOrgMailboxes routes a parsed message to every recipient mailbox
-// that belongs to the given org. Reuses processInboundForMailbox (same path
-// the webhook + inbound SMTP listener use), so threading, FTS, notifications
-// and dedup all behave identically.
-func dispatchToOrgMailboxes(app core.App, orgID string, msg *InboundMessage) error {
+// dispatchInbound routes a parsed message to each recipient's mailbox. The
+// system IMAP account receives mail for every hosted domain, so routing is
+// purely by recipient address: resolveMailboxByAddress finds the mailbox via its
+// own domain (and thus the owning org), which keeps org isolation intact without
+// a separate org filter. Reuses processInboundForMailbox (same path the webhook +
+// inbound SMTP listener use), so threading, FTS, notifications and dedup behave
+// identically.
+func dispatchInbound(app core.App, msg *InboundMessage) error {
 	var dispatched int
 	var firstErr error
 
@@ -282,13 +252,6 @@ func dispatchToOrgMailboxes(app core.App, orgID string, msg *InboundMessage) err
 
 		mailbox, _, err := resolveMailboxByAddress(app, localPart, domain)
 		if err != nil {
-			continue
-		}
-		// Confirm the resolved mailbox belongs to this org — the IMAP account
-		// could (in principle) deliver mail addressed to a domain on a
-		// different org we happen to also host. Org isolation is critical.
-		mailboxDomain, err := app.FindRecordById("mail_domains", mailbox.GetString("domain"))
-		if err != nil || mailboxDomain.GetString("org") != orgID {
 			continue
 		}
 		if err := processInboundForMailbox(app, mailbox, msg); err != nil {

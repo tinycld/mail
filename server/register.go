@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -179,6 +180,19 @@ func Register(app *pocketbase.PocketBase) {
 	app.OnRecordAfterCreateSuccess("settings").BindFunc(invalidateSettingsCache)
 	app.OnRecordAfterUpdateSuccess("settings").BindFunc(invalidateSettingsCache)
 	app.OnRecordAfterDeleteSuccess("settings").BindFunc(invalidateSettingsCache)
+
+	// The mail provider + IMAP config are SYSTEM-WIDE (system_settings), so a
+	// system-settings change to a mail.* key may toggle the IMAP fetcher on/off.
+	// Reconcile on those changes too (filtered so sentry.*/vapid.* edits don't
+	// churn the fetcher).
+	reconcileOnSystemMail := func(e *core.RecordEvent) error {
+		if globalIMAPManager != nil && strings.HasPrefix(e.Record.GetString("key"), "mail.") {
+			globalIMAPManager.onSettingsChanged()
+		}
+		return e.Next()
+	}
+	app.OnRecordAfterCreateSuccess("system_settings").BindFunc(reconcileOnSystemMail)
+	app.OnRecordAfterUpdateSuccess("system_settings").BindFunc(reconcileOnSystemMail)
 
 	// FTS sync hooks for mail_threads
 	app.OnRecordAfterCreateSuccess("mail_threads").BindFunc(func(e *core.RecordEvent) error {
