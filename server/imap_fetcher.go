@@ -76,7 +76,7 @@ func (m *imapFetcherManager) reconcile() {
 		if orgID == "" {
 			continue
 		}
-		cfg := smtpConfigFromSettings(getOrgSettings(m.app, "mail", orgID))
+		cfg := smtpConfigFromSettings(m.app, getOrgSettings(m.app, "mail", orgID))
 		if cfg.InboundMode != "imap" || cfg.IMAPHost == "" {
 			continue
 		}
@@ -124,7 +124,7 @@ func (m *imapFetcherManager) stopAll() {
 // rotating credentials takes effect without restart.
 func (m *imapFetcherManager) runOrg(ctx context.Context, orgID string) {
 	for {
-		cfg := smtpConfigFromSettings(getOrgSettings(m.app, "mail", orgID))
+		cfg := smtpConfigFromSettings(m.app, getOrgSettings(m.app, "mail", orgID))
 		if cfg.InboundMode != "imap" || cfg.IMAPHost == "" {
 			return
 		}
@@ -318,4 +318,3 @@ func firstBodySection(buf *imapclient.FetchMessageBuffer) []byte {
 	}
 	return nil
 }
-

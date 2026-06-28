@@ -12,6 +12,7 @@
         "./seed": "./tinycld/mail/seed.ts",
         "./sidebar": "./tinycld/mail/sidebar.tsx",
         "./settings/*": "./tinycld/mail/settings/*.tsx",
+        "./system-settings/*": "./tinycld/mail/system-settings/*.tsx",
         "./hooks/*": "./tinycld/mail/hooks/*.ts",
         "./components/*": "./tinycld/mail/components/*.tsx"
     },

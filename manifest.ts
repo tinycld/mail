@@ -11,6 +11,9 @@ const manifest = {
         { slug: 'provider', label: 'Provider', component: 'settings/provider' },
         { slug: 'mailboxes', label: 'Mailboxes', component: 'settings/mailboxes' },
     ],
+    systemSettings: [
+        { slug: 'provider', label: 'Provider', component: 'system-settings/provider' },
+    ],
     migrations: { directory: 'pb-migrations' },
     collections: { register: 'collections', types: 'types' },
     help: { directory: 'help' },
