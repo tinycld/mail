@@ -193,8 +193,8 @@ The 25 MB limit is enforced via `smtp.Server.MaxMessageBytes`. UTF-8 (`SMTPUTF8`
 
 `server/imap_server.go` wraps `github.com/emersion/go-imap/v2/imapserver`. Per-session state lives in `imapSession` (`imap_session.go`):
 
-- **LOGIN** — same auth as SMTP. Loads every `user_org` for the user, then every `mail_mailbox_members` row, then materializes a per-mailbox namespace in the form `<orgSlug>/<mailbox-name>` (or just the mailbox name when the user is single-org).
-- **LIST** — returns the standard set: `INBOX`, `Sent`, `Drafts`, `Trash`, `Spam`, `Archive`, with the appropriate `\Sent` / `\Drafts` / `\Trash` / `\Junk` / `\Archive` special-use flags.
+- **LOGIN** — same auth as SMTP. Loads every `user_org` for the user, then every `mail_mailbox_members` row, then materializes a per-mailbox namespace prefixed with the mailbox's friendly name (its `name`, falling back to `display_name`, then `address@domain`) — e.g. `Acme Corp/INBOX`.
+- **LIST** — returns the standard set: `INBOX`, `Sent`, `Drafts`, `Trash`, `Spam`, `Archive`, `Starred`, `All Mail`, with the appropriate `\Sent` / `\Drafts` / `\Trash` / `\Junk` / `\Archive` / `\Flagged` / `\All` special-use flags.
 - **SELECT** — opens a mailbox/folder, returning UID validity and UID next. UID validity and the next-UID counter live on `mail_imap_mailbox_state`, keyed per-mailbox (one row per `mail_mailboxes` record, regardless of how many members it has). UID assignment is serialized through an in-process per-mailbox mutex (`mailboxUIDMutex`) so monotonicity is guaranteed under concurrent inbound writes.
 - **FETCH** — converts `mail_messages` rows to RFC 5322 bytes on the fly via `imap_rfc5322.go`. This is the only place TinyCld emits raw RFC 5322 — internally everything is structured fields.
 - **IDLE** — the session subscribes to a per-mailbox channel via the package's `globalNotifier`. When the package-level hooks see a new `mail_messages` row or a `mail_thread_state` change for a mailbox, they `globalNotifier.notify(mailboxID)`, which wakes up every IDLE'd session subscribed to that mailbox and dispatches an `EXISTS` / `EXPUNGE` / flag-update untagged response.
