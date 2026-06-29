@@ -20,6 +20,7 @@ const manifest = {
     seed: { script: 'seed' },
     server: { package: 'server', module: 'tinycld.org/packages/mail' },
     repository: { url: 'https://github.com/tinycld/mail' },
+    peerVersions: { '@tinycld/core': '>=0.2.1 <0.3.0' },
 }
 
 export default manifest
