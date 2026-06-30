@@ -2,14 +2,13 @@ package mail
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
-	"net/smtp"
-	"sort"
 	"strings"
 	"time"
+
+	"tinycld.org/core/mailer"
 )
 
 // errSMTPNoBounceWebhook is returned by SMTPProvider.ParseBounce because the
@@ -68,19 +67,28 @@ func (c *SMTPConfig) applyDefaults() {
 	}
 }
 
-// SMTPProvider implements Provider by talking SMTP directly: outbound via
-// recipient-domain MX lookup, inbound via the built-in inbound listener or
-// IMAP fetcher. There is no provider account — credentials are not used for
-// outbound; per-recipient delivery either works or it doesn't.
+// SMTPProvider implements Provider by talking SMTP directly: outbound is
+// delegated to the shared core mailer's SMTPSender (recipient-domain MX
+// lookup); inbound arrives via the built-in inbound listener or IMAP fetcher.
+// There is no provider account — credentials are not used for outbound;
+// per-recipient delivery either works or it doesn't.
 type SMTPProvider struct {
-	cfg SMTPConfig
+	cfg    SMTPConfig
+	sender *mailer.SMTPSender
 }
 
 // NewSMTPProvider builds an SMTPProvider with defaults applied. Callers
-// (providerForOrg) populate cfg from org settings + env vars.
+// (providerForOrg) populate cfg from system settings. Outbound sending is
+// handled by a core mailer.SMTPSender built from the outbound config subset.
 func NewSMTPProvider(cfg SMTPConfig) *SMTPProvider {
 	cfg.applyDefaults()
-	return &SMTPProvider{cfg: cfg}
+	return &SMTPProvider{
+		cfg: cfg,
+		sender: mailer.NewSMTPSender(mailer.SMTPConfig{
+			PublicHostname:  cfg.PublicHostname,
+			OutboundTimeout: cfg.OutboundTimeout,
+		}),
+	}
 }
 
 // Configured reports true: the SMTP provider needs no credentials to attempt
@@ -97,265 +105,10 @@ func (p *SMTPProvider) Config() SMTPConfig {
 	return p.cfg
 }
 
-// smtpMXLookup is swappable for tests. Mirrors the pattern in domain_verify.go.
-var smtpMXLookup = net.DefaultResolver.LookupMX
-
-// smtpDial opens a connection to host:port. Swappable for tests.
-var smtpDial = func(ctx context.Context, network, addr string) (net.Conn, error) {
-	d := net.Dialer{}
-	return d.DialContext(ctx, network, addr)
-}
-
-// Send performs a single outbound delivery attempt per recipient-domain group.
-// Recipients are grouped by their domain; for each group we resolve MX, walk
-// MX hosts in priority order, and try opportunistic STARTTLS. A permanent
-// (5xx) response for a recipient bubbles up as a RecipientFailure on the
-// returned SendResult. A successful send to at least one recipient returns nil
-// error; if every recipient permanently failed we still return nil error (the
-// FailedRecipients slice carries the bad news so the caller can persist the
-// message as 'bounced'). A transport-level failure (e.g. all MX hosts
-// unreachable) returns an error and no SendResult.
+// Send delegates to the core mailer's direct-MX sender. See
+// mailer.SMTPSender.SendFull for the delivery + bounce-reporting contract.
 func (p *SMTPProvider) Send(ctx context.Context, req *SendRequest) (*SendResult, error) {
-	if req == nil {
-		return nil, fmt.Errorf("nil send request")
-	}
-
-	messageID := generateMessageID(p.cfg.PublicHostname)
-	body, err := buildOutgoingRFC5322(req, messageID, p.cfg.PublicHostname)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build message: %w", err)
-	}
-
-	envelopeFrom, err := envelopeAddress(req.From)
-	if err != nil {
-		return nil, fmt.Errorf("invalid From address: %w", err)
-	}
-
-	groups := groupRecipientsByDomain(req)
-	if len(groups) == 0 {
-		return nil, fmt.Errorf("no recipients")
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, p.cfg.OutboundTimeout)
-	defer cancel()
-
-	result := &SendResult{MessageID: messageID, ProviderMessageID: messageID}
-	deliveredAny := false
-	var lastTransportErr error
-
-	for domain, recipients := range groups {
-		delivered, failures, transportErr := p.deliverToDomain(ctx, domain, envelopeFrom, recipients, body)
-		if transportErr != nil {
-			lastTransportErr = transportErr
-			// Transport error against this domain → mark every recipient in
-			// the group as failed so the caller can persist bounce_reason.
-			for _, rcpt := range recipients {
-				result.FailedRecipients = append(result.FailedRecipients, RecipientFailure{
-					Email:  rcpt,
-					Reason: transportErr.Error(),
-				})
-			}
-			continue
-		}
-		result.FailedRecipients = append(result.FailedRecipients, failures...)
-		if delivered {
-			deliveredAny = true
-		}
-	}
-
-	if !deliveredAny && lastTransportErr != nil && len(result.FailedRecipients) == len(allRecipients(req)) {
-		// Every recipient failed transport — return error so the caller
-		// surfaces 502 to the user instead of silently storing the message.
-		return nil, fmt.Errorf("smtp delivery failed for all recipients: %w", lastTransportErr)
-	}
-
-	return result, nil
-}
-
-// deliverToDomain opens an SMTP connection to one MX host for `domain` and
-// issues MAIL FROM / RCPT TO (one per recipient) / DATA. Returns whether at
-// least one recipient was accepted, the list of recipients that got a
-// permanent (5xx) failure, and any transport error (failed to reach any MX).
-func (p *SMTPProvider) deliverToDomain(ctx context.Context, domain, from string, recipients []string, body []byte) (bool, []RecipientFailure, error) {
-	hosts, err := resolveMXHosts(ctx, domain)
-	if err != nil {
-		return false, nil, fmt.Errorf("mx lookup for %s: %w", domain, err)
-	}
-
-	var lastErr error
-	for _, host := range hosts {
-		conn, err := smtpDial(ctx, "tcp", host+":25")
-		if err != nil {
-			lastErr = fmt.Errorf("dial %s: %w", host, err)
-			continue
-		}
-
-		delivered, failures, convErr := runSMTPConversation(conn, host, p.cfg.PublicHostname, from, recipients, body)
-		// runSMTPConversation closes its own connection on the happy path;
-		// on transport error we still close defensively.
-		_ = conn.Close()
-		if convErr != nil {
-			lastErr = fmt.Errorf("smtp to %s: %w", host, convErr)
-			continue
-		}
-		return delivered, failures, nil
-	}
-
-	return false, nil, fmt.Errorf("all MX hosts unreachable for %s: %w", domain, lastErr)
-}
-
-// runSMTPConversation drives the SMTP conversation against an already-dialed
-// connection. STARTTLS is attempted when advertised; AUTH is never offered
-// (this is server-to-server traffic, not client submission).
-func runSMTPConversation(conn net.Conn, host, helo, from string, recipients []string, body []byte) (bool, []RecipientFailure, error) {
-	client, err := smtp.NewClient(conn, host)
-	if err != nil {
-		return false, nil, fmt.Errorf("new client: %w", err)
-	}
-	defer client.Close()
-
-	if err := client.Hello(helo); err != nil {
-		return false, nil, fmt.Errorf("EHLO: %w", err)
-	}
-
-	if ok, _ := client.Extension("STARTTLS"); ok {
-		tlsCfg := &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
-		if err := client.StartTLS(tlsCfg); err != nil {
-			// Fall through without TLS — opportunistic. Most receivers accept.
-			// We deliberately do not fail here: a failing STARTTLS is far
-			// rarer than a misconfigured TLS cert on the receiver, and most
-			// receivers accept plaintext fallback for incoming mail.
-		}
-	}
-
-	if err := client.Mail(from); err != nil {
-		return false, nil, fmt.Errorf("MAIL FROM: %w", err)
-	}
-
-	var failures []RecipientFailure
-	acceptedCount := 0
-	for _, rcpt := range recipients {
-		if err := client.Rcpt(rcpt); err != nil {
-			// Distinguish permanent (5xx) from temporary (4xx) failures by
-			// the leading digit of the SMTP code carried in the error. The
-			// net/smtp client wraps the response as "<code> <text>" in
-			// err.Error(), so a simple prefix check is reliable enough.
-			reason := err.Error()
-			if isPermanentSMTPError(reason) {
-				failures = append(failures, RecipientFailure{Email: rcpt, Reason: reason})
-				continue
-			}
-			// Temporary failure → treat as transport error so the caller
-			// retries the whole batch on the next MX (or surfaces 502).
-			return false, nil, fmt.Errorf("RCPT TO %s: %w", rcpt, err)
-		}
-		acceptedCount++
-	}
-
-	if acceptedCount == 0 {
-		// All recipients permanently failed at RCPT — close cleanly without
-		// sending DATA. The failures slice carries the per-recipient bounces.
-		_ = client.Reset()
-		_ = client.Quit()
-		return false, failures, nil
-	}
-
-	w, err := client.Data()
-	if err != nil {
-		return false, failures, fmt.Errorf("DATA: %w", err)
-	}
-	if _, err := w.Write(body); err != nil {
-		return false, failures, fmt.Errorf("write body: %w", err)
-	}
-	if err := w.Close(); err != nil {
-		return false, failures, fmt.Errorf("close DATA: %w", err)
-	}
-
-	_ = client.Quit()
-	return true, failures, nil
-}
-
-// isPermanentSMTPError checks whether an error string from net/smtp begins
-// with a 5xx response code. Net/smtp formats responses as "NNN <text>" or
-// "NNN-<text>" for multiline; both forms are covered by checking the first
-// digit. Returns false for empty strings and non-numeric prefixes so transient
-// network errors don't get mistaken for permanent bounces.
-func isPermanentSMTPError(s string) bool {
-	if len(s) < 3 {
-		return false
-	}
-	return s[0] == '5' && isDigit(s[1]) && isDigit(s[2])
-}
-
-func isDigit(b byte) bool { return b >= '0' && b <= '9' }
-
-// resolveMXHosts returns hosts sorted by preference. If MX lookup yields no
-// records (NXDOMAIN or empty), RFC 5321 §5.1 requires falling back to the
-// domain's A/AAAA record — we honor that by returning the domain itself.
-func resolveMXHosts(ctx context.Context, domain string) ([]string, error) {
-	mxs, err := smtpMXLookup(ctx, domain)
-	if err == nil && len(mxs) > 0 {
-		sort.SliceStable(mxs, func(i, j int) bool { return mxs[i].Pref < mxs[j].Pref })
-		hosts := make([]string, len(mxs))
-		for i, mx := range mxs {
-			hosts[i] = strings.TrimSuffix(mx.Host, ".")
-		}
-		return hosts, nil
-	}
-	// Fallback to the bare domain — receivers without explicit MX still get mail.
-	return []string{domain}, nil
-}
-
-// groupRecipientsByDomain partitions To+Cc+Bcc by recipient domain.
-func groupRecipientsByDomain(req *SendRequest) map[string][]string {
-	groups := make(map[string][]string)
-	add := func(addr string) {
-		_, domain := splitAddress(addr)
-		if domain == "" {
-			return
-		}
-		groups[domain] = append(groups[domain], addr)
-	}
-	for _, r := range req.To {
-		add(r.Email)
-	}
-	for _, r := range req.Cc {
-		add(r.Email)
-	}
-	for _, r := range req.Bcc {
-		add(r.Email)
-	}
-	return groups
-}
-
-// allRecipients flattens To+Cc+Bcc into a single slice of email addresses.
-func allRecipients(req *SendRequest) []string {
-	out := make([]string, 0, len(req.To)+len(req.Cc)+len(req.Bcc))
-	for _, r := range req.To {
-		out = append(out, r.Email)
-	}
-	for _, r := range req.Cc {
-		out = append(out, r.Email)
-	}
-	for _, r := range req.Bcc {
-		out = append(out, r.Email)
-	}
-	return out
-}
-
-// envelopeAddress extracts the bare email from a possibly-display-name-wrapped
-// From string ("Alice <a@example.com>" → "a@example.com"). The wire-level
-// MAIL FROM must be the bare address.
-func envelopeAddress(from string) (string, error) {
-	if from == "" {
-		return "", fmt.Errorf("empty from")
-	}
-	if i := strings.LastIndex(from, "<"); i >= 0 {
-		if j := strings.Index(from[i:], ">"); j > 0 {
-			return strings.TrimSpace(from[i+1 : i+j]), nil
-		}
-	}
-	return strings.TrimSpace(from), nil
+	return p.sender.SendFull(ctx, req)
 }
 
 // ParseInbound parses a raw RFC 5322 message into the InboundMessage shape
@@ -505,16 +258,6 @@ func (p *SMTPProvider) CheckInboundDomain(_ context.Context) (*InboundVerificati
 	default:
 		return &InboundVerification{}, nil
 	}
-}
-
-// generateMessageID builds an RFC-compliant Message-ID rooted at the operator's
-// public hostname. Time + 8 random hex chars keep collision probability negligible.
-func generateMessageID(hostname string) string {
-	if hostname == "" {
-		hostname = "localhost"
-	}
-	suffix, _ := randomHex(8)
-	return fmt.Sprintf("<%d.%s@%s>", time.Now().UTC().UnixNano(), suffix, hostname)
 }
 
 // Compile-time assertion that SMTPProvider satisfies Provider.
