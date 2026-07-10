@@ -393,12 +393,17 @@ func Register(app *pocketbase.PocketBase) {
 			return handleBounce(app, resolveWebhookProvider(secret), re, secret)
 		})
 
-		// Webhook URLs endpoint (requires auth, returns URLs for a domain)
+		// Webhook URLs endpoint (requires auth; handler checks org admin/owner
+		// since the URLs embed the domain's webhook secret)
 		e.Router.GET("/api/mail/domains/{id}/webhook-urls", func(re *core.RequestEvent) error {
 			domainID := re.Request.PathValue("id")
 			domain, err := app.FindRecordById("mail_domains", domainID)
 			if err != nil {
 				return re.NotFoundError("Domain not found", nil)
+			}
+			orgID := domain.GetString("org")
+			if err := verifyOrgAdmin(app, re.Auth.Id, orgID); err != nil {
+				return re.ForbiddenError("only org admins or owners can view webhook URLs", err)
 			}
 			secret := domain.GetString("webhook_secret")
 			baseURL := app.Settings().Meta.AppURL
