@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,9 +17,15 @@ func TestIsPrivateIP(t *testing.T) {
 		{"172.16.0.1", true},
 		{"192.168.1.1", true},
 		{"169.254.1.1", true},
+		{"100.64.0.1", true},
 		{"::1", true},
+		{"::", true},
+		{"fe80::1", true},
+		{"fc00::1", true},
+		{"fd12:3456::1", true},
 		{"0.0.0.0", true},
 		{"8.8.8.8", false},
+		{"2001:4860:4860::8888", false},
 	}
 
 	for _, tt := range tests {
@@ -56,6 +63,36 @@ func TestProxyRejectsPrivateIP(t *testing.T) {
 	}
 }
 
+func TestProxyRejectsIPv6Loopback(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/mail/image-proxy?url=http://[::1]/secret.jpg", nil)
+	rr := httptest.NewRecorder()
+	handleImageProxy(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", rr.Code)
+	}
+}
+
+func TestProxyBlocksRedirectToPrivate(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://169.254.169.254/latest/meta-data", http.StatusFound)
+	}))
+	defer ts.Close()
+
+	// Allow the loopback test server but keep every other private range
+	// blocked, so the redirect target is still rejected.
+	orig := checkPrivateIP
+	checkPrivateIP = func(ip net.IP) bool { return !ip.IsLoopback() && isPrivateIP(ip) }
+	defer func() { checkPrivateIP = orig }()
+
+	req := httptest.NewRequest("GET", "/api/mail/image-proxy?url="+ts.URL+"/img.png", nil)
+	rr := httptest.NewRecorder()
+	handleImageProxy(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Errorf("expected 502 for redirect to private address, got %d", rr.Code)
+	}
+}
+
 func TestProxyFetchesExternalImage(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
@@ -64,9 +101,9 @@ func TestProxyFetchesExternalImage(t *testing.T) {
 	defer ts.Close()
 
 	// Allow loopback for this test since httptest binds to 127.0.0.1
-	orig := checkPrivateHost
-	checkPrivateHost = func(host string) bool { return false }
-	defer func() { checkPrivateHost = orig }()
+	orig := checkPrivateIP
+	checkPrivateIP = func(ip net.IP) bool { return false }
+	defer func() { checkPrivateIP = orig }()
 
 	req := httptest.NewRequest("GET", "/api/mail/image-proxy?url="+ts.URL+"/img.png", nil)
 	rr := httptest.NewRecorder()
