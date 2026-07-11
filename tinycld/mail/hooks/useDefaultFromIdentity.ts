@@ -15,11 +15,13 @@ export function useDefaultFromIdentity({
     replyToAddresses,
 }: UseDefaultFromIdentityParams): FromIdentity {
     const identities = useSendableIdentities()
-    const addresses = replyToAddresses ?? []
-    const key = addresses.join('\x00').toLowerCase()
-    // biome-ignore lint/correctness/useExhaustiveDependencies: `key` is a stable primitive derived from `addresses`; depending on `addresses` directly would re-memo on every render since callers typically pass a fresh array
-    return useMemo(
-        () => pickDefaultFrom({ mode, identities, replyToAddresses: addresses }),
-        [mode, identities, key]
-    )
+    // Callers typically pass a fresh `replyToAddresses` array each render, so we
+    // key the memo on a stable primitive derived from its contents. The raw
+    // strings are recovered inside the memo by splitting that key; casing is
+    // irrelevant because `pickDefaultFrom` lowercases via `extractBareAddress`.
+    const key = (replyToAddresses ?? []).join('\x00').toLowerCase()
+    return useMemo(() => {
+        const addresses = key ? key.split('\x00') : []
+        return pickDefaultFrom({ mode, identities, replyToAddresses: addresses })
+    }, [mode, identities, key])
 }

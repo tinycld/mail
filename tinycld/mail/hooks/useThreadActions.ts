@@ -1,23 +1,17 @@
-import type { Transaction } from '@tanstack/react-db'
 import { captureException } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
+import type { useStore } from '@tinycld/core/lib/pocketbase'
 import { useLabelMutations } from '@tinycld/core/ui/hooks/useLabelMutations'
 import type { MailThreadState } from '../types'
 
-interface ThreadStateCollection {
-    update(
-        id: string | number,
-        callback: (draft: MailThreadState) => void
-    ): Transaction<Record<string, unknown>>
-}
+type ThreadStateCollection = ReturnType<typeof useStore<['mail_thread_state']>>[0]
 
 export function useThreadActions(
-    // biome-ignore lint/suspicious/noExplicitAny: pbtsdb collection type is deeply generic; narrowing it is impractical
-    threadStateCollection: any,
+    threadStateCollection: ThreadStateCollection,
     threadState: MailThreadState | undefined,
     onNavigateBack: () => void
 ) {
-    const col: ThreadStateCollection = threadStateCollection
+    const col = threadStateCollection
     const { assignLabel, unassignLabel } = useLabelMutations()
 
     const onError = (error: unknown) => {

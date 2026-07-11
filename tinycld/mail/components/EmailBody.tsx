@@ -82,9 +82,12 @@ function useIframeAutoHeight(html: string) {
         return () => observer.disconnect()
     }, [])
 
-    // Re-measure when html changes after iframe is already loaded
-    // biome-ignore lint/correctness/useExhaustiveDependencies: `html` is the intentional trigger — the effect re-measures the iframe each time the body content changes, but reads the dimensions from the DOM, not from `html` directly
+    // Re-measure when the body content changes after the iframe is already
+    // loaded. `html` is read here (not just listed as a trigger) so the effect
+    // is honestly keyed to it: an empty body has nothing to measure, and any
+    // change re-runs the DOM read below.
     useEffect(() => {
+        if (!html) return
         const doc = iframeRef.current?.contentDocument
         if (doc?.documentElement) {
             const h = doc.documentElement.scrollHeight
