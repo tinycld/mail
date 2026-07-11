@@ -1,5 +1,4 @@
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { useEffect } from 'react'
 import { Text, View } from 'react-native'
 import { useSendableIdentities } from '../hooks/useSendableIdentities'
 import { useComposeStore } from '../stores/compose-store'
@@ -15,14 +14,13 @@ export function ComposeFromRow() {
     const fgColor = useThemeColor('foreground')
     const borderColor = useThemeColor('border')
 
-    useEffect(() => {
-        if (!mailboxId && identities.length > 0) {
-            setFromIdentity(identities[0].mailboxId, null)
-        }
-    }, [mailboxId, identities, setFromIdentity])
-
     if (identities.length === 0) return null
 
+    // Resolve the displayed identity during render rather than syncing a
+    // default into the store via an effect: an unset store mailboxId (a fresh
+    // compose) falls back to the first identity here, and the send paths read
+    // their own mailbox (useMailSendReadiness / useDefaultMailbox), so no store
+    // write is needed until the user explicitly picks a different From.
     const resolved = identities.find(i => i.mailboxId === mailboxId) ?? identities[0]
     const currentAddress = aliasId
         ? (resolved.aliases.find(a => a.id === aliasId)?.address ?? resolved.primaryAddress)
