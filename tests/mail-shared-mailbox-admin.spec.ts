@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { ORG_SLUG } from '@tinycld/core/e2e-helpers'
 import PocketBase from 'pocketbase'
+import { navigateToMailboxSettings } from './helpers'
 
 // PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
 // through to PB transparently — see scripts/dev.ts::isPbPath.
@@ -62,9 +63,7 @@ test.describe('Mail — Shared mailbox lifecycle as admin', () => {
         const admin = await seedOrgUser('admin', 'dupadmin')
 
         await loginAs(page, admin)
-        await page.goto(`/a/${ORG_SLUG}/settings/mail/mailboxes`)
-        await page.waitForLoadState('domcontentloaded')
-        await expect(page.getByText('Mailboxes', { exact: true }).first()).toBeVisible()
+        await navigateToMailboxSettings(page)
 
         // Create a baseline mailbox owned by this test, then attempt to
         // create a second one with the same address. The unique index
@@ -98,10 +97,7 @@ test.describe('Mail — Shared mailbox lifecycle as admin', () => {
         const teammate = await seedOrgUser('member', 'mate')
 
         await loginAs(page, admin)
-
-        await page.goto(`/a/${ORG_SLUG}/settings/mail/mailboxes`)
-        await page.waitForLoadState('domcontentloaded')
-        await expect(page.getByText('Mailboxes', { exact: true }).first()).toBeVisible()
+        await navigateToMailboxSettings(page)
 
         const address = `admin-${Date.now().toString(36)}`
 

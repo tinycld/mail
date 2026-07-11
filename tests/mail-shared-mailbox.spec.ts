@@ -1,12 +1,11 @@
 import { expect, test } from '@playwright/test'
-import { login, ORG_SLUG } from '@tinycld/core/e2e-helpers'
+import { login } from '@tinycld/core/e2e-helpers'
+import { navigateToMailboxSettings } from './helpers'
 
 test.describe('Mail — Shared mailbox creation', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
-        await page.goto(`/a/${ORG_SLUG}/settings/mail/mailboxes`)
-        await page.waitForLoadState('domcontentloaded')
-        await expect(page.getByText('Mailboxes', { exact: true }).first()).toBeVisible()
+        await navigateToMailboxSettings(page)
     })
 
     test('creating a shared mailbox adds it with the creator as owner', async ({ page }) => {

@@ -108,6 +108,20 @@ export async function navigateToPersonalInbox(page: Page) {
     })
 }
 
+// Navigate to the mail package's "Mailboxes" settings screen
+// (/a/<org>/settings/mail/mailboxes) purely through the SPA — the rail's
+// settings button lands on the settings index, whose per-package section
+// exposes the "Mailboxes" link. A page.goto here would tear down the SPA and
+// cancel the in-flight settings chunk. Requires an org admin/owner session:
+// the package-settings group only renders for isAdmin (owner || admin).
+export async function navigateToMailboxSettings(page: Page) {
+    await page.getByTestId('nav-settings').click()
+    await page.waitForURL(new RegExp(`/a/${ORG_SLUG}/settings(/|$|\\?)`), { timeout: 15_000 })
+    await page.getByText('Mailboxes', { exact: true }).first().click()
+    await page.waitForURL(new RegExp(`/a/${ORG_SLUG}/settings/mail/mailboxes`), { timeout: 15_000 })
+    await expect(page.getByText('Mailboxes', { exact: true }).first()).toBeVisible()
+}
+
 // PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
 // through to PB transparently — see scripts/dev.ts::isPbPath.
 const PB_URL = 'http://127.0.0.1:7200'
