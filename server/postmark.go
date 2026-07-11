@@ -49,21 +49,21 @@ func (p *PostmarkProvider) Send(ctx context.Context, req *SendRequest) (*SendRes
 
 // postmarkInboundPayload matches Postmark's inbound webhook JSON structure.
 type postmarkInboundPayload struct {
-	From          string              `json:"From"`
-	FromName      string              `json:"FromName"`
-	FromFull      postmarkRecipient   `json:"FromFull"`
-	To            string              `json:"To"`
-	ToFull        []postmarkRecipient `json:"ToFull"`
-	CcFull        []postmarkRecipient `json:"CcFull"`
-	Subject       string              `json:"Subject"`
-	Date          string              `json:"Date"`
-	TextBody          string              `json:"TextBody"`
-	HTMLBody          string              `json:"HtmlBody"`
-	StrippedTextReply string              `json:"StrippedTextReply"`
-	MessageID         string              `json:"MessageID"`
-	MailboxHash   string              `json:"MailboxHash"`
-	Headers       []postmarkHeader    `json:"Headers"`
-	Attachments   []postmarkAttachment `json:"Attachments"`
+	From              string               `json:"From"`
+	FromName          string               `json:"FromName"`
+	FromFull          postmarkRecipient    `json:"FromFull"`
+	To                string               `json:"To"`
+	ToFull            []postmarkRecipient  `json:"ToFull"`
+	CcFull            []postmarkRecipient  `json:"CcFull"`
+	Subject           string               `json:"Subject"`
+	Date              string               `json:"Date"`
+	TextBody          string               `json:"TextBody"`
+	HTMLBody          string               `json:"HtmlBody"`
+	StrippedTextReply string               `json:"StrippedTextReply"`
+	MessageID         string               `json:"MessageID"`
+	MailboxHash       string               `json:"MailboxHash"`
+	Headers           []postmarkHeader     `json:"Headers"`
+	Attachments       []postmarkAttachment `json:"Attachments"`
 }
 
 type postmarkRecipient struct {
@@ -110,13 +110,13 @@ func (p *PostmarkProvider) ParseInbound(body []byte) (*InboundMessage, error) {
 			Name:  payload.FromFull.Name,
 			Email: payload.FromFull.Email,
 		},
-		To:       convertRecipients(payload.ToFull),
-		Cc:       convertRecipients(payload.CcFull),
+		To:            convertRecipients(payload.ToFull),
+		Cc:            convertRecipients(payload.CcFull),
 		Subject:       payload.Subject,
-		HTMLBody:       payload.HTMLBody,
-		TextBody:       textBody,
-		StrippedReply:  payload.StrippedTextReply,
-		Date:           normalizePostmarkDate(payload.Date),
+		HTMLBody:      payload.HTMLBody,
+		TextBody:      textBody,
+		StrippedReply: payload.StrippedTextReply,
+		Date:          normalizePostmarkDate(payload.Date),
 	}
 
 	for _, h := range payload.Headers {

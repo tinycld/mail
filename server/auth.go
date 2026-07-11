@@ -12,9 +12,9 @@ func resolveUserOrg(app *pocketbase.PocketBase, userID, orgID string) (*core.Rec
 	records, err := app.FindRecordsByFilter(
 		"user_org",
 		"user = {:user} && org = {:org}",
-		"",  // sort
-		1,   // limit
-		0,   // offset
+		"", // sort
+		1,  // limit
+		0,  // offset
 		map[string]any{"user": userID, "org": orgID},
 	)
 	if err != nil || len(records) == 0 {

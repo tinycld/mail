@@ -109,13 +109,13 @@ func TestExpectedInboundMXHost_PerProvider(t *testing.T) {
 // --- Provider check tests (pure — no DB involved) ---
 
 type fakeProvider struct {
-	inboundDomain    string
-	inboundAddress   string
-	inboundErr       error
-	outboundSPF      bool
-	outboundDKIM     bool
-	outboundRP       bool
-	outboundErr      error
+	inboundDomain  string
+	inboundAddress string
+	inboundErr     error
+	outboundSPF    bool
+	outboundDKIM   bool
+	outboundRP     bool
+	outboundErr    error
 }
 
 func (f *fakeProvider) Configured() bool { return true }
