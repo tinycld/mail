@@ -58,14 +58,14 @@ const (
 )
 
 type mailGuestEnv struct {
-	app             *tests.TestApp
-	org             *core.Record
-	domain          *core.Record
-	mailbox         *core.Record
-	memberUserOrg   *core.Record
-	guestUserOrg    *core.Record
-	memberToken     string
-	guestToken      string
+	app           *tests.TestApp
+	org           *core.Record
+	domain        *core.Record
+	mailbox       *core.Record
+	memberUserOrg *core.Record
+	guestUserOrg  *core.Record
+	memberToken   string
+	guestToken    string
 }
 
 func setupMailGuestApp(t *testing.T) *mailGuestEnv {
