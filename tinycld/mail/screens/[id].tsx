@@ -194,9 +194,17 @@ export default function MailDetailScreen() {
     )
     const toggledMessages = useThreadExpansionStore(s => s.toggled)
     const toggleExpanded = useThreadExpansionStore(s => s.toggle)
-    useThreadExpansionStore.getState().resetForThread(id)
-    useAttachmentStripStore.getState().resetForThread(id)
-    useAttachmentPreviewStore.getState().close()
+    // Reset per-thread UI state when the opened thread changes. This runs in an
+    // effect (not the render body) because each call is a Zustand set(); doing
+    // that during render triggers React's "Cannot update a component while
+    // rendering a different component" warning and can cascade a sibling
+    // re-render mid-render. The stores' resetForThread already no-op when the
+    // threadId is unchanged, so this only does work on an actual thread switch.
+    useEffect(() => {
+        useThreadExpansionStore.getState().resetForThread(id)
+        useAttachmentStripStore.getState().resetForThread(id)
+        useAttachmentPreviewStore.getState().close()
+    }, [id])
 
     const messageList = messages ?? []
     const lastMessage = messageList[messageList.length - 1] as MailMessages | undefined
