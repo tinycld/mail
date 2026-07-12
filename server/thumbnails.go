@@ -17,8 +17,9 @@ import (
 	"tinycld.org/core/thumbnails"
 )
 
-// thumbnailTimeout bounds a single attachment render so the hook goroutine
-// can't hang forever on a pathological document.
+// thumbnailTimeout bounds the doctaculous render of a single attachment. It
+// only covers the document render: the storage-blob read and core's HEIF
+// decode are not context-aware, so a hang there is not cut off by this.
 const thumbnailTimeout = 60 * time.Second
 
 // attachmentsChanged reports whether the `attachments` field differs from its
@@ -115,7 +116,7 @@ func generateAttachmentThumbnails(app *pocketbase.PocketBase, record *core.Recor
 		if !thumbnails.CanGenerate(mime) {
 			continue
 		}
-		thumbFile, thumbName, err := renderThumbnail(app, fsys, record.BaseFilesPath(), fname, mime)
+		thumbFile, thumbName, err := renderThumbnail(fsys, record.BaseFilesPath(), fname, mime)
 		if err != nil {
 			app.Logger().Warn("Mail thumbnail: generation failed",
 				"id", record.Id, "attachment", fname, "error", err)
@@ -162,7 +163,6 @@ func generateAttachmentThumbnails(app *pocketbase.PocketBase, record *core.Recor
 }
 
 func renderThumbnail(
-	app *pocketbase.PocketBase,
 	fsys *filesystem.System,
 	basePath string,
 	originalName string,
@@ -220,12 +220,7 @@ func mimeForAttachment(filename string) string {
 		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 	case ".pptx":
 		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-	case ".doc":
-		return "application/msword"
-	case ".xls":
-		return "application/vnd.ms-excel"
-	case ".ppt":
-		return "application/vnd.ms-powerpoint"
+	// Legacy binary Office formats (.doc/.xls/.ppt) are intentionally unsupported.
 	case ".heic", ".heif":
 		return "image/heic"
 	}
