@@ -285,7 +285,7 @@ server/
     imap_session.go            per-connection state, LOGIN, namespacing
     imap_folders.go            INBOX / Sent / Drafts / Trash / Spam / Archive
     imap_idle.go               globalNotifier + IDLE response dispatch
-    imap_uid.go                UID validity / UID next per (mailbox, user_org)
+    imap_uid.go                UID validity / UID next per mailbox
     imap_rfc5322.go            on-the-fly RFC 5322 emission for FETCH
     smtp_server.go             :465 / :1587 startup
     smtp_session.go            AUTH, From-header ownership check, DATA → Send
