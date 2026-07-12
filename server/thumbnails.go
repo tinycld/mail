@@ -1,12 +1,14 @@
 package mail
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
@@ -14,6 +16,10 @@ import (
 
 	"tinycld.org/core/thumbnails"
 )
+
+// thumbnailTimeout bounds a single attachment render so the hook goroutine
+// can't hang forever on a pathological document.
+const thumbnailTimeout = 60 * time.Second
 
 // attachmentsChanged reports whether the `attachments` field differs from its
 // pre-update snapshot. The thumbnail hook uses it to skip work when an unrelated
@@ -169,43 +175,16 @@ func renderThumbnail(
 	}
 	defer blob.Close()
 
-	tmpDir := os.TempDir()
-	ext := filepath.Ext(originalName)
-	if ext == "" {
-		ext = extensionForMime(mimeType)
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), thumbnailTimeout)
+	defer cancel()
 
-	inputFile, err := os.CreateTemp(tmpDir, "mailthumb-in-*"+ext)
-	if err != nil {
-		return nil, "", err
-	}
-	inputPath := inputFile.Name()
-	defer os.Remove(inputPath)
-	if _, err := inputFile.ReadFrom(blob); err != nil {
-		inputFile.Close()
-		return nil, "", err
-	}
-	inputFile.Close()
-
-	outputFile, err := os.CreateTemp(tmpDir, "mailthumb-out-*.jpg")
-	if err != nil {
-		return nil, "", err
-	}
-	outputPath := outputFile.Name()
-	outputFile.Close()
-	defer os.Remove(outputPath)
-
-	if err := thumbnails.Generate(inputPath, outputPath, mimeType, thumbnails.DefaultWidth, thumbnails.DefaultHeight); err != nil {
-		return nil, "", err
-	}
-
-	thumbData, err := os.ReadFile(outputPath)
-	if err != nil {
+	var thumb bytes.Buffer
+	if err := thumbnails.Generate(ctx, &thumb, blob, mimeType, thumbnails.DefaultWidth, thumbnails.DefaultHeight); err != nil {
 		return nil, "", err
 	}
 
 	thumbName := strings.TrimSuffix(originalName, filepath.Ext(originalName)) + "_thumb.jpg"
-	f, err := filesystem.NewFileFromBytes(thumbData, thumbName)
+	f, err := filesystem.NewFileFromBytes(thumb.Bytes(), thumbName)
 	if err != nil {
 		return nil, "", err
 	}
@@ -251,25 +230,4 @@ func mimeForAttachment(filename string) string {
 		return "image/heic"
 	}
 	return ""
-}
-
-func extensionForMime(mimeType string) string {
-	switch mimeType {
-	case "application/pdf":
-		return ".pdf"
-	case "application/epub+zip":
-		return ".epub"
-	case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-		return ".docx"
-	case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-		return ".xlsx"
-	case "application/vnd.openxmlformats-officedocument.presentationml.presentation":
-		return ".pptx"
-	case "image/heic", "image/heic-sequence":
-		return ".heic"
-	case "image/heif", "image/heif-sequence":
-		return ".heif"
-	default:
-		return ".bin"
-	}
 }
