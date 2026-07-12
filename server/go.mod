@@ -1,6 +1,6 @@
 module tinycld.org/packages/mail
 
-go 1.25.0
+go 1.26.3
 
 require (
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
