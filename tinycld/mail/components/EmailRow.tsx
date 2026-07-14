@@ -174,7 +174,7 @@ function MobileEmailRow({
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const backgroundColor = useThemeColor('background')
-    const surfaceColor = useThemeColor('surface-secondary')
+    const surfaceColor = useThemeColor('unread-background')
     const borderColor = useThemeColor('border')
     const accentBgColor = useThemeColor('accent')
     const accentFgColor = useThemeColor('accent-foreground')
@@ -314,10 +314,10 @@ function EmailRowActions({
 }: Pick<EmailRowProps, 'email' | 'isSelected' | 'onArchive' | 'onTrash' | 'onToggleRead'> & {
     tooltipPosition?: 'above' | 'below'
 }) {
-    const accentBgColor = useThemeColor('accent')
+    const primaryColor = useThemeColor('primary')
     const backgroundColor = useThemeColor('background')
     const ReadIcon = email.isRead ? Mail : MailOpen
-    const bg = isSelected ? hexToRgba(accentBgColor, 0.09) : backgroundColor
+    const bg = isSelected ? hexToRgba(primaryColor, 0.16) : backgroundColor
 
     const isTrashed = email.folder === 'trash'
     const isArchived = email.folder === 'archive'
@@ -367,24 +367,25 @@ function DesktopEmailRow({
 }: EmailRowProps) {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
-    const surfaceColor = useThemeColor('surface-secondary')
+    const surfaceColor = useThemeColor('unread-background')
     const borderColor = useThemeColor('border')
-    const accentBgColor = useThemeColor('accent')
     const activeIndicator = useThemeColor('active-indicator')
     const dangerColor = useThemeColor('danger')
+    const primaryColor = useThemeColor('primary')
     const orgHref = useOrgHref()
     const [isHovered, setIsHovered] = useRecyclingState(false, [email.stateId])
 
+    // Selection uses a primary (teal) wash rather than `accent`: `accent` is a
+    // near-black surface in dark mode, so a low-opacity accent wash is invisible
+    // there. A primary wash reads clearly as "selected" in both themes.
     const rowBg = isSelected
-        ? hexToRgba(accentBgColor, 0.09)
+        ? hexToRgba(primaryColor, 0.16)
         : email.isRead
           ? 'transparent'
           : surfaceColor
     const senderWeight = email.isRead ? '400' : '700'
     const subjectWeight = email.isRead ? '400' : '600'
     const dateDisplay = formatRelativeDate(email.latestDate)
-
-    const primaryColor = useThemeColor('primary')
     const CheckboxIcon = isSelected ? SquareCheck : Square
     const checkboxColor = isSelected ? primaryColor : mutedColor
 
