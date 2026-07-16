@@ -1,7 +1,7 @@
 const manifest = {
     name: 'Mail',
     slug: 'mail',
-    version: '0.2.1',
+    version: '0.3.1',
     description: 'Gmail-style email client for your organization',
     routes: { directory: 'screens' },
     nav: { label: 'Mail', icon: 'mail', order: 5, shortcut: 'm' },
