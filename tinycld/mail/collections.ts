@@ -80,10 +80,10 @@ export function registerCollections(
 
     const mail_thread_state = newCollection('mail_thread_state', {
         omitOnInsert: ['created', 'updated'] as const,
-        expand: {
-            thread: mail_threads,
-            user_org: coreStores.user_org,
-        },
+        // Large imported mailboxes can have tens of thousands of state rows.
+        // Keep these on-demand and let each screen request only its visible
+        // thread ids; eagerly syncing the collection can exhaust a browser tab.
+        syncMode: 'on-demand' as const,
         collectionOptions: {
             autoIndex: 'eager' as const,
             defaultIndexType: BasicIndex,

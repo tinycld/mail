@@ -1,4 +1,4 @@
-import { and, eq } from '@tanstack/db'
+import { and, eq, inArray } from '@tanstack/db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useMemo } from 'react'
@@ -14,8 +14,8 @@ import type { MailSearchResult } from './useMailSearch'
  * Search hits come from a server FTS endpoint that returns thread display data
  * but no thread_state id — so on their own a hit's swipe actions (archive /
  * trash / star) would target `thread_id` as if it were a state id and silently
- * no-op. mail_thread_state is eager and bounded per user, so we live-query it
- * here, index it by thread id, and merge each hit with its resolved state. Hits
+ * no-op. mail_thread_state is queried only for the returned search thread ids,
+ * indexed by thread id, and merged with each hit. Hits
  * with no resolvable state (shouldn't happen — a searchable thread the user can
  * see has a state row) are dropped so the list never shows an un-actionable row.
  *
@@ -31,13 +31,22 @@ export function useSearchThreadItems(
         'label_assignments'
     )
     const { labelMap } = useLabels()
+    const resultThreadIds = useMemo(() => results.map(result => result.thread_id), [results])
+    const resultThreadIdsKey = resultThreadIds.join(',')
 
     const { data: threadStates } = useOrgLiveQuery(
         query =>
-            query
-                .from({ mail_thread_state: threadStateCollection })
-                .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, userOrgId)),
-        [userOrgId]
+            resultThreadIds.length === 0
+                ? undefined
+                : query
+                      .from({ mail_thread_state: threadStateCollection })
+                      .where(({ mail_thread_state }) =>
+                          and(
+                              eq(mail_thread_state.user_org, userOrgId),
+                              inArray(mail_thread_state.thread, resultThreadIds)
+                          )
+                      ),
+        [userOrgId, resultThreadIdsKey]
     )
 
     const { data: allAssignments } = useOrgLiveQuery((query, { userOrgId }) =>
