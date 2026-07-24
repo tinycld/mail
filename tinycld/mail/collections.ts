@@ -29,7 +29,7 @@ export function registerCollections(
 
     const mail_mailbox_members = newCollection('mail_mailbox_members', {
         omitOnInsert: ['created', 'updated'] as const,
-        expand: { mailbox: mail_mailboxes, user_org: coreStores.user_org },
+        expand: { mailbox: mail_mailboxes, user_org: coreStores.users },
         collectionOptions: {
             autoIndex: 'eager' as const,
             defaultIndexType: BasicIndex,
@@ -82,7 +82,7 @@ export function registerCollections(
         omitOnInsert: ['created', 'updated'] as const,
         expand: {
             thread: mail_threads,
-            user_org: coreStores.user_org,
+            user_org: coreStores.users,
         },
         collectionOptions: {
             autoIndex: 'eager' as const,
@@ -105,7 +105,7 @@ export function registerCollections(
     // No omitOnInsert — view collections are read-only.
     const mail_folder_counts = newCollection('mail_folder_counts', {
         expand: {
-            user_org: coreStores.user_org,
+            user_org: coreStores.users,
             mailbox: mail_mailboxes,
         },
         collectionOptions: {

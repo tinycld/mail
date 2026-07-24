@@ -1,4 +1,3 @@
-import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useMutation as useReactQueryMutation } from '@tanstack/react-query'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
@@ -87,10 +86,9 @@ interface DomainRow {
 function DomainsSection({ orgId, provider }: { orgId: string; provider: 'postmark' | 'smtp' }) {
     const [domainsCollection] = useStore('mail_domains')
 
-    const { data: domains } = useOrgLiveQuery((query, { orgId }) =>
+    const { data: domains } = useOrgLiveQuery(query =>
         query
             .from({ mail_domains: domainsCollection })
-            .where(({ mail_domains }) => eq(mail_domains.org, orgId))
             .orderBy(({ mail_domains }) => mail_domains.created, 'asc')
     )
 

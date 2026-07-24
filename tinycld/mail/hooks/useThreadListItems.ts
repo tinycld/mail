@@ -42,7 +42,7 @@ interface UseThreadListItemsOptions {
  *     for the current page's thread ids — small bounded queries.
  */
 export function useThreadListItems(
-    userOrgId: string,
+    currentUserId: string,
     filter: UseThreadListItemsFilter,
     { page }: UseThreadListItemsOptions = { page: 1 }
 ) {
@@ -66,18 +66,18 @@ export function useThreadListItems(
         query =>
             query
                 .from({ mail_thread_state: threadStateCollection })
-                .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, userOrgId)),
-        [userOrgId]
+                .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, currentUserId)),
+        [currentUserId]
     )
 
     const { data: allAssignments, isLoading: assignmentsLoading } = useOrgLiveQuery(
-        (query, { userOrgId }) =>
+        (query, { userId }) =>
             query
                 .from({ label_assignments: assignmentsCollection })
                 .where(({ label_assignments }) =>
                     and(
                         eq(label_assignments.collection, 'mail_thread_state'),
-                        eq(label_assignments.user_org, userOrgId)
+                        eq(label_assignments.user, userId)
                     )
                 )
     )
@@ -86,10 +86,10 @@ export function useThreadListItems(
         query.from({ mail_mailboxes: mailboxesCollection })
     )
 
-    const { data: userMemberships } = useOrgLiveQuery((query, { userOrgId }) =>
+    const { data: userMemberships } = useOrgLiveQuery((query, { userId }) =>
         query
             .from({ mail_mailbox_members: membersCollection })
-            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user_org, userOrgId))
+            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user_org, userId))
     )
 
     const isUnified = filter.mailboxId === UNIFIED_INBOX
@@ -139,25 +139,32 @@ export function useThreadListItems(
         // and inbox/starred/etc. always scope to the active user.
         const widenSharedTeam =
             mailboxType === 'shared' && (filter.folder === 'sent' || filter.folder === 'drafts')
-        if (!widenSharedTeam) return [userOrgId]
-        const ids = new Set<string>([userOrgId])
+        if (!widenSharedTeam) return [currentUserId]
+        const ids = new Set<string>([currentUserId])
         for (const m of coMembers ?? []) ids.add(m.user_org)
         return [...ids]
-    }, [mailboxType, filter.folder, userOrgId, coMembers])
+    }, [mailboxType, filter.folder, currentUserId, coMembers])
 
     const pageQueryEnabled = visibleMailboxIds.length > 0 && (isUnified ? !!userMemberships : true)
 
     const pageQueryKey = useMemo(
         () => [
             'mail_threads_page',
-            userOrgId,
+            currentUserId,
             filter.mailboxId,
             filter.folder ?? 'inbox',
             visibleMailboxIds.slice().sort().join(','),
             userOrgIdsForFolder.slice().sort().join(','),
             page,
         ],
-        [userOrgId, filter.mailboxId, filter.folder, visibleMailboxIds, userOrgIdsForFolder, page]
+        [
+            currentUserId,
+            filter.mailboxId,
+            filter.folder,
+            visibleMailboxIds,
+            userOrgIdsForFolder,
+            page,
+        ]
     )
 
     const { data: pageResult, isLoading: pageLoading } = useQuery({

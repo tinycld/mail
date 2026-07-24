@@ -1,5 +1,6 @@
 import { eq } from '@tanstack/db'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
+import { useAuth } from '@tinycld/core/lib/auth'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
@@ -33,25 +34,23 @@ interface OrgMemberRow {
     userEmail: string
 }
 
-function useMailboxData(currentUserOrgId: string) {
+function useMailboxData(currentUserId: string) {
     const [
         domainsCollection,
         mailboxesCollection,
         membersCollection,
         aliasesCollection,
-        userOrgCollection,
+        usersCollection,
     ] = useStore(
         'mail_domains',
         'mail_mailboxes',
         'mail_mailbox_members',
         'mail_mailbox_aliases',
-        'user_org'
+        'users'
     )
 
-    const { data: domains } = useOrgLiveQuery((query, { orgId }) =>
-        query
-            .from({ mail_domains: domainsCollection })
-            .where(({ mail_domains }) => eq(mail_domains.org, orgId))
+    const { data: domains } = useOrgLiveQuery(query =>
+        query.from({ mail_domains: domainsCollection })
     )
 
     const domainId = (domains ?? [])[0]?.id ?? ''
@@ -71,19 +70,18 @@ function useMailboxData(currentUserOrgId: string) {
         query.from({ mail_mailbox_aliases: aliasesCollection })
     )
 
-    const { data: userOrgs } = useOrgLiveQuery((query, { orgId }) =>
-        query.from({ user_org: userOrgCollection }).where(({ user_org }) => eq(user_org.org, orgId))
-    )
+    // Single-org: every user in the DB is a potential mailbox member.
+    const { data: orgUsers } = useOrgLiveQuery(query => query.from({ users: usersCollection }))
 
     const domainMap = new Map((domains ?? []).map(d => [d.id, d.domain]))
 
     const userOrgsById = new Map(
-        (userOrgs ?? []).map(uo => [
-            uo.id,
+        (orgUsers ?? []).map(u => [
+            u.id,
             {
-                userOrgId: uo.id,
-                userName: uo.expand?.user?.name || uo.expand?.user?.email || uo.user,
-                userEmail: uo.expand?.user?.email ?? '',
+                userOrgId: u.id,
+                userName: u.name || u.email || u.id,
+                userEmail: u.email ?? '',
             },
         ])
     )
@@ -98,7 +96,7 @@ function useMailboxData(currentUserOrgId: string) {
             userName: uo.userName,
             userEmail: uo.userEmail,
             role: m.role as 'owner' | 'member',
-            isYou: uo.userOrgId === currentUserOrgId,
+            isYou: uo.userOrgId === currentUserId,
         }
         const list = membersByMailbox.get(m.mailbox) ?? []
         list.push(row)
@@ -148,8 +146,9 @@ export default function MailboxesSettings() {
     const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
 
-    const { isAdmin, userOrgId } = useCurrentRole()
-    const data = useMailboxData(userOrgId)
+    const { isAdmin } = useCurrentRole()
+    const currentUserId = useAuth().user.id
+    const data = useMailboxData(currentUserId)
     const orgHref = useOrgHref()
 
     const [query, setQuery] = useState('')
@@ -381,7 +380,7 @@ export default function MailboxesSettings() {
                 members={selectedMembers}
                 orgMembers={data.orgMembers}
                 domainOptions={domainOptions}
-                userOrgId={userOrgId}
+                userOrgId={currentUserId}
             />
         </>
     )

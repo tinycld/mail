@@ -4,6 +4,7 @@ import { LoadingState } from '@tinycld/core/components/LoadingState'
 import { ScreenHeader } from '@tinycld/core/components/ScreenHeader'
 import { SwipeableRowProvider } from '@tinycld/core/components/SwipeableRow'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
+import { useAuth } from '@tinycld/core/lib/auth'
 import { captureException } from '@tinycld/core/lib/errors'
 import type { HelpTopicId } from '@tinycld/core/lib/help/types'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
@@ -11,7 +12,6 @@ import { markNavMilestone, NAV_PERF } from '@tinycld/core/lib/nav-perf'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { pb, queryClient } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Archive, Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
@@ -192,7 +192,7 @@ export default function MailListScreen() {
     const router = useRouter()
     const orgHref = useOrgHref()
     const breakpoint = useBreakpoint()
-    const { userOrgId } = useCurrentRole()
+    const currentUserId = useAuth().user.id
     const { isScrolled, onScroll } = useScrollShadow()
     const { openDraft } = useCompose()
     const search = useMailSearchState()
@@ -220,7 +220,7 @@ export default function MailListScreen() {
         itemsLoading,
         totalItems,
     } = useThreadListItems(
-        userOrgId,
+        currentUserId,
         {
             folder,
             labels,
@@ -369,7 +369,7 @@ export default function MailListScreen() {
         [draftByThread, threadMap, openDraft]
     )
 
-    const searchItems = useSearchThreadItems(userOrgId, search.results)
+    const searchItems = useSearchThreadItems(currentUserId, search.results)
 
     const activeLabels = useMemo(
         () =>

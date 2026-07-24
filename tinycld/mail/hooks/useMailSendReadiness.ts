@@ -19,10 +19,10 @@ export function useMailSendReadiness(): MailSendReadiness {
         'mail_domains'
     )
 
-    const { data: members } = useOrgLiveQuery((query, { userOrgId }) =>
+    const { data: members } = useOrgLiveQuery((query, { userId }) =>
         query
             .from({ mail_mailbox_members: membersCollection })
-            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user_org, userOrgId))
+            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user_org, userId))
     )
 
     const mailboxId = members?.[0]?.mailbox ?? null

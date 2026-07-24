@@ -64,11 +64,11 @@ export default function MailDetailScreen() {
     )
 
     const { data: threadStates } = useOrgLiveQuery(
-        (query, { userOrgId }) =>
+        (query, { userId }) =>
             query
                 .from({ mail_thread_state: threadStateCollection })
                 .where(({ mail_thread_state }) =>
-                    and(eq(mail_thread_state.thread, id), eq(mail_thread_state.user_org, userOrgId))
+                    and(eq(mail_thread_state.thread, id), eq(mail_thread_state.user_org, userId))
                 ),
         [id]
     )

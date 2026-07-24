@@ -1,4 +1,4 @@
-import type { UserOrg } from '@tinycld/core/types/pbSchema'
+import type { Users } from '@tinycld/core/types/pbSchema'
 
 export interface MailDomainVerificationDetails {
     mx?: {
@@ -144,9 +144,7 @@ export interface MailFolderCounts {
 export type MailSchema = {
     mail_domains: {
         type: MailDomains
-        relations: {
-            org: import('@tinycld/core/types/pbSchema').Orgs
-        }
+        relations: Record<string, never>
     }
     mail_mailboxes: {
         type: MailMailboxes
@@ -158,7 +156,7 @@ export type MailSchema = {
         type: MailMailboxMembers
         relations: {
             mailbox: MailMailboxes
-            user_org: UserOrg
+            user_org: Users
         }
     }
     mail_mailbox_aliases: {
@@ -184,7 +182,7 @@ export type MailSchema = {
         type: MailThreadState
         relations: {
             thread: MailThreads
-            user_org: UserOrg
+            user_org: Users
         }
     }
     mail_imap_mailbox_state: {
@@ -196,7 +194,7 @@ export type MailSchema = {
     mail_folder_counts: {
         type: MailFolderCounts
         relations: {
-            user_org: UserOrg
+            user_org: Users
             mailbox: MailMailboxes
         }
     }

@@ -23,7 +23,7 @@ import type { MailSearchResult } from './useMailSearch'
  * read / starred / folder / label state and update in place as those change.
  */
 export function useSearchThreadItems(
-    userOrgId: string,
+    currentUserId: string,
     results: MailSearchResult[]
 ): ThreadListItem[] {
     const [threadStateCollection, assignmentsCollection] = useStore(
@@ -36,17 +36,17 @@ export function useSearchThreadItems(
         query =>
             query
                 .from({ mail_thread_state: threadStateCollection })
-                .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, userOrgId)),
-        [userOrgId]
+                .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, currentUserId)),
+        [currentUserId]
     )
 
-    const { data: allAssignments } = useOrgLiveQuery((query, { userOrgId }) =>
+    const { data: allAssignments } = useOrgLiveQuery((query, { userId }) =>
         query
             .from({ label_assignments: assignmentsCollection })
             .where(({ label_assignments }) =>
                 and(
                     eq(label_assignments.collection, 'mail_thread_state'),
-                    eq(label_assignments.user_org, userOrgId)
+                    eq(label_assignments.user, userId)
                 )
             )
     )
