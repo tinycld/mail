@@ -24,8 +24,8 @@ migrate(
             type: 'view',
             system: false,
             // Only the user's own counts are visible.
-            listRule: 'user_org.user ?= @request.auth.id',
-            viewRule: 'user_org.user ?= @request.auth.id',
+            listRule: 'user_org ?= @request.auth.id',
+            viewRule: 'user_org ?= @request.auth.id',
             viewQuery: `
                 SELECT
                     (s.user_org || ':' || t.mailbox) AS id,

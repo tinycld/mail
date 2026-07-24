@@ -11,15 +11,6 @@ migrate(
             system: false,
             fields: [
                 {
-                    id: 'mail_domains_org',
-                    name: 'org',
-                    type: 'relation',
-                    required: true,
-                    collectionId: 'pbc_orgs_00001',
-                    cascadeDelete: true,
-                    maxSelect: 1,
-                },
-                {
                     id: 'mail_domains_domain',
                     name: 'domain',
                     type: 'text',
@@ -48,8 +39,7 @@ migrate(
                 },
             ],
             indexes: [
-                'CREATE UNIQUE INDEX `idx_mail_domains_org_domain` ON `mail_domains` (`org`, `domain`)',
-                'CREATE INDEX `idx_mail_domains_org` ON `mail_domains` (`org`)',
+                'CREATE UNIQUE INDEX `idx_mail_domains_domain` ON `mail_domains` (`domain`)',
             ],
         })
         app.save(domains)
@@ -136,7 +126,7 @@ migrate(
                     name: 'user_org',
                     type: 'relation',
                     required: true,
-                    collectionId: 'pbc_user_org_01',
+                    collectionId: '_pb_users_auth_',
                     cascadeDelete: true,
                     maxSelect: 1,
                 },
@@ -179,15 +169,6 @@ migrate(
             system: false,
             fields: [
                 {
-                    id: 'mail_labels_org',
-                    name: 'org',
-                    type: 'relation',
-                    required: true,
-                    collectionId: 'pbc_orgs_00001',
-                    cascadeDelete: true,
-                    maxSelect: 1,
-                },
-                {
                     id: 'mail_labels_name',
                     name: 'name',
                     type: 'text',
@@ -218,8 +199,7 @@ migrate(
                 },
             ],
             indexes: [
-                'CREATE UNIQUE INDEX `idx_mail_labels_org_name` ON `mail_labels` (`org`, `name`)',
-                'CREATE INDEX `idx_mail_labels_org` ON `mail_labels` (`org`)',
+                'CREATE UNIQUE INDEX `idx_mail_labels_name` ON `mail_labels` (`name`)',
             ],
         })
         app.save(labels)
@@ -437,7 +417,7 @@ migrate(
                     name: 'user_org',
                     type: 'relation',
                     required: true,
-                    collectionId: 'pbc_user_org_01',
+                    collectionId: '_pb_users_auth_',
                     cascadeDelete: true,
                     maxSelect: 1,
                 },
@@ -498,21 +478,21 @@ migrate(
         app.save(threadState)
 
         // Phase 2: Apply access rules now that all collections exist and back-relations resolve
-        const orgMemberRule = 'org.user_org_via_org.user ?= @request.auth.id'
+        const authedRule = '@request.auth.id != ""'
         // Mirrored in 1713000011_mail_domains_allow_owner.js (adminOrOwnerRule).
         // Update both when changing the mail_domains write-rule.
-        const orgAdminRule =
-            'org.user_org_via_org.user ?= @request.auth.id && (org.user_org_via_org.role ?= "admin" || org.user_org_via_org.role ?= "owner")'
-        const mbMemberRule = 'mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id'
+        const adminRule =
+            '@request.auth.id != "" && (@request.auth.role = "admin" || @request.auth.role = "owner")'
+        const mbMemberRule = 'mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id'
         const mbOwnerRule =
-            'mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id && mail_mailbox_members_via_mailbox.role ?= "owner"'
+            'mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id && mail_mailbox_members_via_mailbox.role ?= "owner"'
         const mbMemberViaMailboxRule =
-            'mailbox.mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id'
+            'mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id'
         const mbMemberViaThreadRule =
-            'thread.mailbox.mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id'
-        const userOrgRule = 'user_org.user = @request.auth.id'
+            'thread.mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id'
+        const userOrgRule = 'user_org = @request.auth.id'
         const threadStateCreateRule =
-            'user_org.user = @request.auth.id && thread.mailbox.mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id'
+            'user_org = @request.auth.id && thread.mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id'
 
         function setRules(collection, { list, view, create, update, del }) {
             collection.listRule = list
@@ -522,23 +502,23 @@ migrate(
             collection.deleteRule = del
         }
 
-        // mail_domains: any org member can read, only admins can mutate
+        // mail_domains: any authenticated user can read, only admins/owners can mutate
         const domainsCol = app.findCollectionByNameOrId('mail_domains')
         setRules(domainsCol, {
-            list: orgMemberRule,
-            view: orgMemberRule,
-            create: orgAdminRule,
-            update: orgAdminRule,
-            del: orgAdminRule,
+            list: authedRule,
+            view: authedRule,
+            create: adminRule,
+            update: adminRule,
+            del: adminRule,
         })
         app.save(domainsCol)
 
-        // mail_mailboxes: members can read, org members can create, owners can mutate
+        // mail_mailboxes: members can read, any authenticated user can create, owners can mutate
         const mailboxesCol = app.findCollectionByNameOrId('mail_mailboxes')
         setRules(mailboxesCol, {
             list: mbMemberRule,
             view: mbMemberRule,
-            create: 'domain.org.user_org_via_org.user ?= @request.auth.id',
+            create: authedRule,
             update: mbOwnerRule,
             del: mbOwnerRule,
         })
@@ -546,34 +526,33 @@ migrate(
 
         // mail_mailbox_members: own records readable, only mailbox owners can add/modify members.
         // Two paths permit a create:
-        //   (1) ownerCanAdd — an existing owner of the mailbox adds any user_org from the
-        //       owning org. Cross-org adds are blocked by `user_org.org = mailbox.domain.org`.
-        //   (2) bootstrapFirstOwner — when a mailbox has no members yet, an org member may
-        //       self-insert as the first owner. Without this, the very first owner could never
-        //       be added because the owner-check chain resolves to an empty set on a freshly
-        //       created mailbox.
+        //   (1) ownerCanAdd — an existing owner of the mailbox adds any user.
+        //   (2) bootstrapFirstOwner — when a mailbox has no members yet, any authenticated
+        //       user may self-insert as the first owner. Without this, the very first owner
+        //       could never be added because the owner-check chain resolves to an empty set on
+        //       a freshly created mailbox.
         // Mirrored in 1713000017_mail_mailbox_members_owner_adds_member.js.
         const mbMembersCol = app.findCollectionByNameOrId('mail_mailbox_members')
         const ownerCanAdd =
-            'mailbox.mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner" && user_org.org = mailbox.domain.org'
+            'mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
         const bootstrapFirstOwner =
-            'user_org.user = @request.auth.id && role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = "" && mailbox.domain.org.user_org_via_org.user ?= @request.auth.id'
+            'user_org = @request.auth.id && role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = ""'
         setRules(mbMembersCol, {
             list: userOrgRule,
             view: userOrgRule,
             create: `(${ownerCanAdd}) || (${bootstrapFirstOwner})`,
-            update: 'mailbox.mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"',
+            update: 'mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"',
             del: userOrgRule,
         })
         app.save(mbMembersCol)
 
         const labelsCol = app.findCollectionByNameOrId('mail_labels')
         setRules(labelsCol, {
-            list: orgMemberRule,
-            view: orgMemberRule,
-            create: orgMemberRule,
-            update: orgMemberRule,
-            del: orgMemberRule,
+            list: authedRule,
+            view: authedRule,
+            create: authedRule,
+            update: authedRule,
+            del: authedRule,
         })
         app.save(labelsCol)
 

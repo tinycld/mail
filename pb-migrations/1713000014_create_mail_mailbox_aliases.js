@@ -44,16 +44,14 @@ migrate(
                 'CREATE UNIQUE INDEX `idx_mail_aliases_mailbox_address` ON `mail_mailbox_aliases` (`mailbox`, `address`)',
                 'CREATE INDEX `idx_mail_aliases_address` ON `mail_mailbox_aliases` (`address`)',
             ],
-            listRule:
-                '@request.auth.id != "" && mailbox.domain.org.user_org_via_org.user ?= @request.auth.id',
-            viewRule:
-                '@request.auth.id != "" && mailbox.domain.org.user_org_via_org.user ?= @request.auth.id',
+            listRule: '@request.auth.id != ""',
+            viewRule: '@request.auth.id != ""',
             createRule:
-                '@request.auth.id != "" && mailbox.domain.org.user_org_via_org.user ?= @request.auth.id && (mailbox.domain.org.user_org_via_org.role ?= "admin" || mailbox.domain.org.user_org_via_org.role ?= "owner")',
+                '@request.auth.id != "" && (@request.auth.role = "admin" || @request.auth.role = "owner")',
             updateRule:
-                '@request.auth.id != "" && mailbox.domain.org.user_org_via_org.user ?= @request.auth.id && (mailbox.domain.org.user_org_via_org.role ?= "admin" || mailbox.domain.org.user_org_via_org.role ?= "owner")',
+                '@request.auth.id != "" && (@request.auth.role = "admin" || @request.auth.role = "owner")',
             deleteRule:
-                '@request.auth.id != "" && mailbox.domain.org.user_org_via_org.user ?= @request.auth.id && (mailbox.domain.org.user_org_via_org.role ?= "admin" || mailbox.domain.org.user_org_via_org.role ?= "owner")',
+                '@request.auth.id != "" && (@request.auth.role = "admin" || @request.auth.role = "owner")',
         })
         app.save(aliases)
     },

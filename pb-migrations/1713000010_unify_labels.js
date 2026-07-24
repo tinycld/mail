@@ -16,15 +16,6 @@ migrate(
             system: false,
             fields: [
                 {
-                    id: 'mail_labels_org',
-                    name: 'org',
-                    type: 'relation',
-                    required: true,
-                    collectionId: 'pbc_orgs_00001',
-                    cascadeDelete: true,
-                    maxSelect: 1,
-                },
-                {
                     id: 'mail_labels_name',
                     name: 'name',
                     type: 'text',
@@ -55,8 +46,7 @@ migrate(
                 },
             ],
             indexes: [
-                'CREATE UNIQUE INDEX `idx_mail_labels_org_name` ON `mail_labels` (`org`, `name`)',
-                'CREATE INDEX `idx_mail_labels_org` ON `mail_labels` (`org`)',
+                'CREATE UNIQUE INDEX `idx_mail_labels_name` ON `mail_labels` (`name`)',
             ],
         })
         app.save(mailLabels)
