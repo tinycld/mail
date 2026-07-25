@@ -9,7 +9,6 @@ import (
 
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -32,7 +31,7 @@ import (
 // recipient through processInboundForMailbox, the same path the Postmark
 // webhook uses, so all downstream behavior (threading, FTS, notifications)
 // stays identical.
-func StartSMTPInboundServer(app *pocketbase.PocketBase, certManager *autocert.Manager) (func(), error) {
+func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func(), error) {
 	if os.Getenv("MAIL_INBOUND_SMTP_ENABLED") != "true" {
 		return func() {}, nil
 	}
@@ -99,7 +98,7 @@ func (b *smtpInboundBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 // through processInboundForMailbox once per accepted recipient.
 //
 // The app field is typed as core.App (the minimal interface this code needs)
-// so production *pocketbase.PocketBase and the test *tests.TestApp both
+// so production core.App and the test *tests.TestApp both
 // satisfy it without conversion.
 type smtpInboundSession struct {
 	app      core.App

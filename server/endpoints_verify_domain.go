@@ -1,11 +1,10 @@
 package mail
 
 import (
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
-func handleVerifyDomain(app *pocketbase.PocketBase, re *core.RequestEvent) error {
+func handleVerifyDomain(app core.App, re *core.RequestEvent) error {
 	domainID := re.Request.PathValue("id")
 	if domainID == "" {
 		return re.BadRequestError("domain id is required", nil)

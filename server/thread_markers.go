@@ -1,7 +1,6 @@
 package mail
 
 import (
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -64,7 +63,7 @@ func messageExists(app core.App, threadID, condition string) (bool, error) {
 // registerThreadMarkerHooks wires recomputeThreadMarkers into mail_messages
 // lifecycle events. Bound from Register() so it runs alongside the other
 // mail hooks.
-func registerThreadMarkerHooks(app *pocketbase.PocketBase) {
+func registerThreadMarkerHooks(app core.App) {
 	app.OnRecordAfterCreateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
 		if err := recomputeThreadMarkers(app, e.Record.GetString("thread")); err != nil {
 			app.Logger().Warn("recomputeThreadMarkers (create) failed", "thread", e.Record.GetString("thread"), "error", err)

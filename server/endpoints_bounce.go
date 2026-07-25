@@ -6,11 +6,10 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
-func handleBounce(app *pocketbase.PocketBase, provider Provider, re *core.RequestEvent, secret string) error {
+func handleBounce(app core.App, provider Provider, re *core.RequestEvent, secret string) error {
 	token := re.Request.PathValue("token")
 	if secret == "" || subtle.ConstantTimeCompare([]byte(token), []byte(secret)) != 1 {
 		return re.ForbiddenError("Invalid token", nil)

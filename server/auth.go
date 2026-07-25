@@ -3,14 +3,13 @@ package mail
 import (
 	"fmt"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
 // verifyMailboxMembership checks that a user has access to a mailbox. Single-org:
 // membership rows reference the users collection directly (the former user_org
 // junction is gone), so the caller's user id IS the membership key.
-func verifyMailboxMembership(app *pocketbase.PocketBase, mailboxID, userID string) (*core.Record, error) {
+func verifyMailboxMembership(app core.App, mailboxID, userID string) (*core.Record, error) {
 	records, err := app.FindRecordsByFilter(
 		"mail_mailbox_members",
 		"mailbox = {:mailbox} && user = {:user}",

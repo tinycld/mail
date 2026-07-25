@@ -8,7 +8,7 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapserver"
-	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/core"
 	"golang.org/x/crypto/acme/autocert"
 )
 
@@ -19,7 +19,7 @@ import (
 // listener on :993 is started — no plain-text IMAP is exposed.
 // In dev mode, a plain listener on :1143 is started with optional STARTTLS
 // and an optional implicit TLS listener on :1993.
-func StartIMAPServer(app *pocketbase.PocketBase, certManager *autocert.Manager) (func(), error) {
+func StartIMAPServer(app core.App, certManager *autocert.Manager) (func(), error) {
 	if os.Getenv("IMAP_ENABLED") == "false" {
 		app.Logger().Info("IMAP server disabled via IMAP_ENABLED=false")
 		return func() {}, nil
@@ -54,7 +54,7 @@ func StartIMAPServer(app *pocketbase.PocketBase, certManager *autocert.Manager) 
 	return startIMAPDev(app, tlsConfig)
 }
 
-func startIMAPTLSOnly(app *pocketbase.PocketBase, tlsConfig *tls.Config) (func(), error) {
+func startIMAPTLSOnly(app core.App, tlsConfig *tls.Config) (func(), error) {
 	imapsAddr := os.Getenv("IMAPS_ADDR")
 	if imapsAddr == "" {
 		imapsAddr = ":993"
@@ -80,7 +80,7 @@ func startIMAPTLSOnly(app *pocketbase.PocketBase, tlsConfig *tls.Config) (func()
 	}, nil
 }
 
-func startIMAPDev(app *pocketbase.PocketBase, tlsConfig *tls.Config) (func(), error) {
+func startIMAPDev(app core.App, tlsConfig *tls.Config) (func(), error) {
 	addr := os.Getenv("IMAP_ADDR")
 	if addr == "" {
 		addr = ":1143"
@@ -129,7 +129,7 @@ func startIMAPDev(app *pocketbase.PocketBase, tlsConfig *tls.Config) (func(), er
 	}, nil
 }
 
-func newIMAPServerInstance(app *pocketbase.PocketBase, tlsConfig *tls.Config, insecureAuth bool) *imapserver.Server {
+func newIMAPServerInstance(app core.App, tlsConfig *tls.Config, insecureAuth bool) *imapserver.Server {
 	return imapserver.New(&imapserver.Options{
 		NewSession: func(conn *imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
 			sess := newIMAPSession(app)

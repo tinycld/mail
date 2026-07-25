@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -14,7 +13,7 @@ var addressSanitizer = regexp.MustCompile(`[^a-z0-9._-]`)
 // handleUserCreated auto-creates a personal mailbox for a new user. Single-org:
 // the deployment IS the org, so this fires on the users record itself (the former
 // user_org junction is gone) and provisions against the first verified domain.
-func handleUserCreated(app *pocketbase.PocketBase, user *core.Record) {
+func handleUserCreated(app core.App, user *core.Record) {
 	// Find the deployment's verified mail domains
 	domains, err := app.FindRecordsByFilter(
 		"mail_domains",
@@ -75,7 +74,7 @@ func handleUserCreated(app *pocketbase.PocketBase, user *core.Record) {
 // handleUserDeleted cleans up personal mailboxes orphaned by a user deletion.
 // The membership rows cascade away with the users record, so a personal mailbox
 // left with no members has no owner and is swept here.
-func handleUserDeleted(app *pocketbase.PocketBase, _ *core.Record) {
+func handleUserDeleted(app core.App, _ *core.Record) {
 	mailboxes, err := app.FindRecordsByFilter(
 		"mail_mailboxes",
 		"type = 'personal'",
@@ -107,7 +106,7 @@ func handleUserDeleted(app *pocketbase.PocketBase, _ *core.Record) {
 }
 
 // deriveMailboxAddress generates a unique mailbox address from a user's email.
-func deriveMailboxAddress(app *pocketbase.PocketBase, userEmail, domainID string) string {
+func deriveMailboxAddress(app core.App, userEmail, domainID string) string {
 	parts := strings.SplitN(userEmail, "@", 2)
 	if len(parts) == 0 || parts[0] == "" {
 		return ""

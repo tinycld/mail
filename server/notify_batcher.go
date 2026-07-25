@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/notify"
 )
@@ -42,7 +41,7 @@ func bufferMailNotificationForUser(userID, sender, subject string) {
 	buf.mu.Unlock()
 }
 
-func startMailBatcher(app *pocketbase.PocketBase) {
+func startMailBatcher(app core.App) {
 	ticker := time.NewTicker(2 * time.Minute)
 	defer ticker.Stop()
 
@@ -51,7 +50,7 @@ func startMailBatcher(app *pocketbase.PocketBase) {
 	}
 }
 
-func flushMailBuffer(app *pocketbase.PocketBase) {
+func flushMailBuffer(app core.App) {
 	mailBuffer.Range(func(key, value any) bool {
 		userID := key.(string)
 		buf := value.(*mailBucket)

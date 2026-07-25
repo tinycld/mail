@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/emersion/go-smtp"
-	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/core"
 	"golang.org/x/crypto/acme/autocert"
 )
 
@@ -19,7 +19,7 @@ import (
 // listener on :465 is started — no plain-text SMTP is exposed.
 // In dev mode, a plain listener on :1587 is started with optional STARTTLS
 // and an optional implicit TLS listener on :1465.
-func StartSMTPServer(app *pocketbase.PocketBase, certManager *autocert.Manager) (func(), error) {
+func StartSMTPServer(app core.App, certManager *autocert.Manager) (func(), error) {
 	if os.Getenv("SMTP_ENABLED") == "false" {
 		app.Logger().Info("SMTP server disabled via SMTP_ENABLED=false")
 		return func() {}, nil
@@ -56,7 +56,7 @@ func StartSMTPServer(app *pocketbase.PocketBase, certManager *autocert.Manager) 
 	return startSMTPDev(app, tlsConfig)
 }
 
-func newSMTPServerInstance(app *pocketbase.PocketBase, tlsConfig *tls.Config, insecureAuth bool) *smtp.Server {
+func newSMTPServerInstance(app core.App, tlsConfig *tls.Config, insecureAuth bool) *smtp.Server {
 	domain := os.Getenv("SMTP_DOMAIN")
 	if domain == "" {
 		domain = "localhost"
@@ -76,7 +76,7 @@ func newSMTPServerInstance(app *pocketbase.PocketBase, tlsConfig *tls.Config, in
 	return server
 }
 
-func startSMTPTLSOnly(app *pocketbase.PocketBase, tlsConfig *tls.Config) (func(), error) {
+func startSMTPTLSOnly(app core.App, tlsConfig *tls.Config) (func(), error) {
 	smtpsAddr := os.Getenv("SMTPS_ADDR")
 	if smtpsAddr == "" {
 		smtpsAddr = ":465"
@@ -103,7 +103,7 @@ func startSMTPTLSOnly(app *pocketbase.PocketBase, tlsConfig *tls.Config) (func()
 	}, nil
 }
 
-func startSMTPDev(app *pocketbase.PocketBase, tlsConfig *tls.Config) (func(), error) {
+func startSMTPDev(app core.App, tlsConfig *tls.Config) (func(), error) {
 	addr := os.Getenv("SMTP_ADDR")
 	if addr == "" {
 		addr = ":1587"

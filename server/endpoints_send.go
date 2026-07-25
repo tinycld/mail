@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
 	"tinycld.org/core/coreserver"
@@ -38,7 +37,7 @@ type sendRequest struct {
 	InReplyToMessageID string      `json:"in_reply_to_message_id"` // PB record ID of the message being replied to
 }
 
-func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
+func handleSend(app core.App, re *core.RequestEvent) error {
 	userID := re.Auth.Id
 
 	var req sendRequest

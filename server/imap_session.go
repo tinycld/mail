@@ -9,7 +9,6 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapserver"
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 )
@@ -22,7 +21,7 @@ type mailboxContext struct {
 
 // imapSession implements imapserver.SessionIMAP4rev2 backed by PocketBase.
 type imapSession struct {
-	app *pocketbase.PocketBase
+	app core.App
 
 	// Set after Login
 	user *core.Record // users record
@@ -42,7 +41,7 @@ type imapSession struct {
 
 var _ imapserver.SessionIMAP4rev2 = (*imapSession)(nil)
 
-func newIMAPSession(app *pocketbase.PocketBase) *imapSession {
+func newIMAPSession(app core.App) *imapSession {
 	return &imapSession{
 		app:     app,
 		deleted: make(map[string]bool),
@@ -1231,7 +1230,7 @@ func (s *imapSession) addLabelToThread(threadID, imapName string) {
 }
 
 // storeRawHeaders saves original RFC 5322 headers to a message record.
-func storeRawHeaders(app *pocketbase.PocketBase, record *core.Record, headers []byte) {
+func storeRawHeaders(app core.App, record *core.Record, headers []byte) {
 	f, err := filesystem.NewFileFromBytes(headers, "headers.txt")
 	if err != nil {
 		return
@@ -1243,7 +1242,7 @@ func storeRawHeaders(app *pocketbase.PocketBase, record *core.Record, headers []
 // matchesCriteria checks if a message matches IMAP search criteria.
 // ftsMatchIDs is a pre-computed set of message record IDs matching Body/Text
 // criteria via FTS5. nil means no FTS criteria are present.
-func matchesCriteria(app *pocketbase.PocketBase, msg *core.Record, criteria *imap.SearchCriteria, deleted map[string]bool, ftsMatchIDs map[string]bool) bool {
+func matchesCriteria(app core.App, msg *core.Record, criteria *imap.SearchCriteria, deleted map[string]bool, ftsMatchIDs map[string]bool) bool {
 	if criteria == nil {
 		return true
 	}

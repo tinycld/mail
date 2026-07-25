@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -94,7 +93,7 @@ func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error
 	return nil, lastErr
 }
 
-func handleImageProxyRequest(app *pocketbase.PocketBase, re *core.RequestEvent) error {
+func handleImageProxyRequest(app core.App, re *core.RequestEvent) error {
 	token := re.Request.URL.Query().Get("token")
 	if token == "" {
 		return re.UnauthorizedError("missing token", nil)

@@ -9,13 +9,12 @@ import (
 
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/coreserver"
 )
 
 type smtpBackend struct {
-	app *pocketbase.PocketBase
+	app core.App
 }
 
 func (b *smtpBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
@@ -23,7 +22,7 @@ func (b *smtpBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 }
 
 type smtpSession struct {
-	app *pocketbase.PocketBase
+	app core.App
 
 	// Auth state (persists across transactions)
 	user *core.Record

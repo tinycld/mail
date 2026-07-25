@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/emersion/go-imap/v2"
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -65,7 +64,7 @@ func imapNameToFolder(name string) (folder string, isVirtual bool) {
 // thread_state IDs via label_assignments (the polymorphic junction the web
 // UI also uses) and emits an `id ~ ...` filter. Returns an impossible filter
 // if the label doesn't exist or the folder name is unknown.
-func folderToFilter(app *pocketbase.PocketBase, imapName, userID string) (string, map[string]any) {
+func folderToFilter(app core.App, imapName, userID string) (string, map[string]any) {
 	folder, isVirtual := imapNameToFolder(imapName)
 
 	if isVirtual {
@@ -98,7 +97,7 @@ func folderToFilter(app *pocketbase.PocketBase, imapName, userID string) (string
 // filter by joining through label_assignments. Matches both shared labels
 // (user = "") and the user's personal labels. Returns an impossible filter
 // if the label doesn't exist or has no assignments.
-func labelFolderFilter(app *pocketbase.PocketBase, labelName, userID string) (string, map[string]any) {
+func labelFolderFilter(app core.App, labelName, userID string) (string, map[string]any) {
 	labels, err := app.FindRecordsByFilter(
 		"labels",
 		`name = {:name} && (user = "" || user = {:user})`,
@@ -156,7 +155,7 @@ func isLabelFolder(name string) bool {
 // system folders and label-based folders.
 // Label folders include shared labels (user = "") and the authenticated
 // user's personal labels (user = userID).
-func listUserFolders(app *pocketbase.PocketBase, userID string) ([]imap.ListData, error) {
+func listUserFolders(app core.App, userID string) ([]imap.ListData, error) {
 	var result []imap.ListData
 
 	// System folders
@@ -198,7 +197,7 @@ func listUserFolders(app *pocketbase.PocketBase, userID string) ([]imap.ListData
 // createLabelFolder creates a new shared label for a "Labels/<name>" folder.
 // IMAP-created labels are always shared (user = ""); personal labels
 // stay a web-UI concept.
-func createLabelFolder(app *pocketbase.PocketBase, imapName string) error {
+func createLabelFolder(app core.App, imapName string) error {
 	labelName := extractLabelName(imapName)
 	if labelName == "" {
 		return fmt.Errorf("invalid label folder name: %s", imapName)
@@ -232,7 +231,7 @@ func createLabelFolder(app *pocketbase.PocketBase, imapName string) error {
 
 // deleteLabelFolder deletes a shared label.
 // IMAP can only delete shared labels; personal labels are managed from the web UI.
-func deleteLabelFolder(app *pocketbase.PocketBase, imapName string) error {
+func deleteLabelFolder(app core.App, imapName string) error {
 	labelName := extractLabelName(imapName)
 	if labelName == "" {
 		return fmt.Errorf("invalid label folder name: %s", imapName)
@@ -259,7 +258,7 @@ func deleteLabelFolder(app *pocketbase.PocketBase, imapName string) error {
 
 // renameLabelFolder renames a shared label.
 // IMAP can only rename shared labels; personal labels are managed from the web UI.
-func renameLabelFolder(app *pocketbase.PocketBase, oldName, newName string) error {
+func renameLabelFolder(app core.App, oldName, newName string) error {
 	oldLabel := extractLabelName(oldName)
 	newLabel := extractLabelName(newName)
 	if oldLabel == "" || newLabel == "" {

@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 // that are not yet fully verified. Verified rows are skipped — a user clicks
 // Verify again if they change DNS after success. Cancels cleanly when ctx is
 // done (hooked to OnTerminate in register.go).
-func startDomainReverifyLoop(ctx context.Context, app *pocketbase.PocketBase) {
+func startDomainReverifyLoop(ctx context.Context, app core.App) {
 	initialDelay := domainReverifyDelay + time.Duration(rand.Int63n(int64(domainReverifyJitter)))
 	timer := time.NewTimer(initialDelay)
 	select {
@@ -43,7 +43,7 @@ func startDomainReverifyLoop(ctx context.Context, app *pocketbase.PocketBase) {
 	}
 }
 
-func reverifyUnconfirmedDomains(ctx context.Context, app *pocketbase.PocketBase) {
+func reverifyUnconfirmedDomains(ctx context.Context, app core.App) {
 	records, err := app.FindRecordsByFilter(
 		"mail_domains",
 		"verified = false",

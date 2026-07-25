@@ -11,14 +11,13 @@ import (
 	"time"
 
 	gomail "github.com/emersion/go-message/mail"
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
 // buildRFC5322 constructs a complete RFC 5322 message from a PocketBase
 // mail_messages record. Handles multipart/alternative (HTML + text fallback)
 // and MIME attachments.
-func buildRFC5322(app *pocketbase.PocketBase, record *core.Record) ([]byte, error) {
+func buildRFC5322(app core.App, record *core.Record) ([]byte, error) {
 	var buf bytes.Buffer
 
 	// Build header
@@ -127,7 +126,7 @@ func writeAlternativePart(mw *gomail.Writer, textBody, htmlBody string) error {
 	return nil
 }
 
-func writeAttachmentFromRecord(app *pocketbase.PocketBase, record *core.Record, filename string, mw *gomail.Writer) error {
+func writeAttachmentFromRecord(app core.App, record *core.Record, filename string, mw *gomail.Writer) error {
 	fsys, err := app.NewFilesystem()
 	if err != nil {
 		return err
@@ -259,7 +258,7 @@ func parseRFC5322(raw []byte) (*storedMessage, error) {
 }
 
 // loadHTMLBody reads the body_html file content from a message record.
-func loadHTMLBody(app *pocketbase.PocketBase, record *core.Record) string {
+func loadHTMLBody(app core.App, record *core.Record) string {
 	htmlFile := record.GetString("body_html")
 	if htmlFile == "" {
 		return ""

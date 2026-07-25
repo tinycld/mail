@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 )
@@ -26,7 +25,7 @@ type draftRequest struct {
 	TextBody  string      `json:"text_body"`
 }
 
-func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
+func handleDraft(app core.App, re *core.RequestEvent) error {
 	userID := re.Auth.Id
 
 	var req draftRequest
@@ -171,7 +170,7 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	})
 }
 
-func updateDraftRecord(app *pocketbase.PocketBase, record *core.Record, req draftRequest, subject, senderEmail, date string, uploadedFiles []*multipart.FileHeader) error {
+func updateDraftRecord(app core.App, record *core.Record, req draftRequest, subject, senderEmail, date string, uploadedFiles []*multipart.FileHeader) error {
 	record.Set("subject", subject)
 	record.Set("date", date)
 	record.Set("sender_email", senderEmail)
@@ -238,7 +237,7 @@ func appendFileAttachments(record *core.Record, fileHeaders []*multipart.FileHea
 
 // addFileAttachmentsToRecord adds uploaded files directly to a PocketBase record's
 // attachments field and saves it.
-func addFileAttachmentsToRecord(app *pocketbase.PocketBase, record *core.Record, fileHeaders []*multipart.FileHeader) error {
+func addFileAttachmentsToRecord(app core.App, record *core.Record, fileHeaders []*multipart.FileHeader) error {
 	if len(fileHeaders) == 0 {
 		return nil
 	}

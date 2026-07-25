@@ -21,7 +21,7 @@ import (
 // a job is in flight. Once the app is torn down, ConcurrentDB() is nil and any
 // record query (PocketBase v0.38 RecordQuery) panics on the nil DB instead of
 // returning an error. Bail out instead of touching the DB in that window.
-func appIsLive(app *pocketbase.PocketBase) bool {
+func appIsLive(app core.App) bool {
 	return app != nil && app.ConcurrentDB() != nil
 }
 
@@ -412,7 +412,7 @@ func smtpConfigFromSystem(app core.App) SMTPConfig {
 // indexMessageRecordFromStorage builds FTS body_text from the record's stored
 // HTML body and text-based attachments. Used by record hooks when storeMessage()
 // wasn't involved or on updates.
-func indexMessageRecordFromStorage(app *pocketbase.PocketBase, record *core.Record) {
+func indexMessageRecordFromStorage(app core.App, record *core.Record) {
 	bodyText := record.GetString("snippet") // fallback
 
 	html := loadHTMLBody(app, record)
@@ -438,7 +438,7 @@ func randomHex(bytes int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func isValidDomainWebhookSecret(app *pocketbase.PocketBase, secret string) bool {
+func isValidDomainWebhookSecret(app core.App, secret string) bool {
 	records, err := app.FindRecordsByFilter(
 		"mail_domains",
 		"webhook_secret = {:secret}",
@@ -459,7 +459,7 @@ func requireAuth(re *core.RequestEvent) error {
 }
 
 // bufferMailNotification queues a mail notification for batched delivery.
-func bufferMailNotification(app *pocketbase.PocketBase, msgRecord *core.Record) {
+func bufferMailNotification(app core.App, msgRecord *core.Record) {
 	if !appIsLive(app) {
 		return
 	}

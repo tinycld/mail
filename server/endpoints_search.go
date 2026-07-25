@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -152,7 +151,7 @@ func buildFolderJoin(f *advancedFilters, userID string, params map[string]any) s
 	return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.folder = {:folder}"
 }
 
-func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
+func handleSearch(app core.App, re *core.RequestEvent) error {
 	userID := re.Auth.Id
 	q := re.Request.URL.Query().Get("q")
 	mailboxID := re.Request.URL.Query().Get("mailbox_id")
@@ -360,7 +359,7 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 
 // handleStructuredSearch runs a SQL-only search (no FTS) when only structured filters are present.
 func handleStructuredSearch(
-	app *pocketbase.PocketBase,
+	app core.App,
 	re *core.RequestEvent,
 	inClause, messageWhere, folderJoin string,
 	params map[string]any,
@@ -423,7 +422,7 @@ func handleStructuredSearch(
 // getUserMailboxIDs returns the mailbox IDs the user has access to. If mailboxID
 // is provided, it filters to just that mailbox (after verifying access).
 // Single-org: membership rows point at the user directly, so this is one query.
-func getUserMailboxIDs(app *pocketbase.PocketBase, userID, mailboxID string) ([]string, error) {
+func getUserMailboxIDs(app core.App, userID, mailboxID string) ([]string, error) {
 	members, err := app.FindRecordsByFilter(
 		"mail_mailbox_members",
 		"user = {:user}",
