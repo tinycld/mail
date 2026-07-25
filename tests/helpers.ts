@@ -1,6 +1,5 @@
 import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import { expect } from '@playwright/test'
-import { ORG_SLUG } from '@tinycld/core/e2e-helpers'
 import PocketBase from 'pocketbase'
 
 // Mail tests share a few patterns that are sensitive to two layout choices
@@ -109,16 +108,16 @@ export async function navigateToPersonalInbox(page: Page) {
 }
 
 // Navigate to the mail package's "Mailboxes" settings screen
-// (/a/<org>/settings/mail/mailboxes) purely through the SPA — the rail's
+// (/settings/mail/mailboxes) purely through the SPA — the rail's
 // settings button lands on the settings index, whose per-package section
 // exposes the "Mailboxes" link. A page.goto here would tear down the SPA and
 // cancel the in-flight settings chunk. Requires an org admin/owner session:
 // the package-settings group only renders for isAdmin (owner || admin).
 export async function navigateToMailboxSettings(page: Page) {
     await page.getByTestId('nav-settings').click()
-    await page.waitForURL(new RegExp(`/a/${ORG_SLUG}/settings(/|$|\\?)`), { timeout: 15_000 })
+    await page.waitForURL(/\/settings(\/|$|\?)/, { timeout: 15_000 })
     await page.getByText('Mailboxes', { exact: true }).first().click()
-    await page.waitForURL(new RegExp(`/a/${ORG_SLUG}/settings/mail/mailboxes`), { timeout: 15_000 })
+    await page.waitForURL(/\/settings\/mail\/mailboxes/, { timeout: 15_000 })
     await expect(page.getByText('Mailboxes', { exact: true }).first()).toBeVisible()
 }
 
@@ -202,5 +201,3 @@ export async function deliverInbound(
 export function uniqueSubject(label: string): string {
     return `${label} ${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
-
-export { ORG_SLUG }

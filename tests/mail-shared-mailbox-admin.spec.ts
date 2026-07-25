@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test'
-import { ORG_SLUG } from '@tinycld/core/e2e-helpers'
 import PocketBase from 'pocketbase'
 import { navigateToMailboxSettings } from './helpers'
 
@@ -16,7 +15,9 @@ interface SeededUser {
     name: string
 }
 
-async function seedOrgUser(role: 'admin' | 'member', label: string): Promise<SeededUser> {
+// Single-org: the role lives on the users record itself, so seeding a test
+// account is a single create (the former orgs + user_org junction is gone).
+async function seedUser(role: 'admin' | 'member', label: string): Promise<SeededUser> {
     const pb = new PocketBase(PB_URL)
     await pb.collection('_superusers').authWithPassword(SUPERUSER_EMAIL, SUPERUSER_PASSWORD)
 
@@ -28,7 +29,7 @@ async function seedOrgUser(role: 'admin' | 'member', label: string): Promise<See
         name: `${label.charAt(0).toUpperCase() + label.slice(1)} Tester`,
     }
 
-    const user = await pb.collection('users').create({
+    await pb.collection('users').create({
         email: seeded.email,
         username: seeded.username,
         password: seeded.password,
@@ -36,12 +37,6 @@ async function seedOrgUser(role: 'admin' | 'member', label: string): Promise<See
         name: seeded.name,
         emailVisibility: true,
         verified: true,
-    })
-
-    const org = await pb.collection('orgs').getFirstListItem(`slug = "${ORG_SLUG}"`)
-    await pb.collection('user_org').create({
-        user: user.id,
-        org: org.id,
         role,
     })
 
@@ -53,14 +48,14 @@ async function loginAs(page: import('@playwright/test').Page, user: SeededUser) 
     await page.getByTestId('identifier').fill(user.email)
     await page.getByPlaceholder('Password').fill(user.password)
     await page.getByText('Sign in', { exact: true }).last().click()
-    await page.waitForURL(/\/a\//)
+    await expect(page.getByTestId('nav-home')).toBeVisible({ timeout: 20_000 })
 }
 
 test.describe('Mail — Shared mailbox lifecycle as admin', () => {
     test('creating a shared mailbox with a duplicate address surfaces a form error', async ({
         page,
     }) => {
-        const admin = await seedOrgUser('admin', 'dupadmin')
+        const admin = await seedUser('admin', 'dupadmin')
 
         await loginAs(page, admin)
         await navigateToMailboxSettings(page)
@@ -93,8 +88,8 @@ test.describe('Mail — Shared mailbox lifecycle as admin', () => {
     })
 
     test('admin can create a shared mailbox and add another org member to it', async ({ page }) => {
-        const admin = await seedOrgUser('admin', 'admin')
-        const teammate = await seedOrgUser('member', 'mate')
+        const admin = await seedUser('admin', 'admin')
+        const teammate = await seedUser('member', 'mate')
 
         await loginAs(page, admin)
         await navigateToMailboxSettings(page)
@@ -122,7 +117,7 @@ test.describe('Mail — Shared mailbox lifecycle as admin', () => {
 
         // The drawer's Members tab shows the count; the row for the new teammate
         // appears in the "Who has access" list. Both update only when the
-        // mail_mailbox_members create rule lets the owner add another user_org.
+        // mail_mailbox_members create rule lets the owner add another user.
         await expect(page.getByText('Members · 2')).toBeVisible()
         await expect(page.getByText(teammate.name).first()).toBeVisible()
         await expect(page.getByText(teammate.email).first()).toBeVisible()

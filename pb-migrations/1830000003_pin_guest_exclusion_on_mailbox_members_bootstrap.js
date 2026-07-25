@@ -17,9 +17,9 @@
 migrate(
     app => {
         const ownerCanAdd =
-            'mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
+            'mailbox.mail_mailbox_members_via_mailbox.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
         const bootstrapFirstOwner =
-            'user_org = @request.auth.id && role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = "" && @request.auth.role != "guest"'
+            'user = @request.auth.id && role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = "" && @request.auth.role != "guest"'
 
         const col = app.findCollectionByNameOrId('mail_mailbox_members')
         col.createRule = `(${ownerCanAdd}) || (${bootstrapFirstOwner})`
@@ -28,9 +28,9 @@ migrate(
     app => {
         // Restore the prior (de-orged) createRule (from 1713000017 forward path).
         const ownerCanAdd =
-            'mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
+            'mailbox.mail_mailbox_members_via_mailbox.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
         const bootstrapFirstOwner =
-            'user_org = @request.auth.id && role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = ""'
+            'user = @request.auth.id && role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = ""'
 
         const col = app.findCollectionByNameOrId('mail_mailbox_members')
         col.createRule = `(${ownerCanAdd}) || (${bootstrapFirstOwner})`

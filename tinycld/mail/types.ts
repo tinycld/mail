@@ -55,7 +55,7 @@ export interface MailMailboxes {
 export interface MailMailboxMembers {
     id: string
     mailbox: string
-    user_org: string
+    user: string
     role: 'owner' | 'member'
     created: string
     updated: string
@@ -112,7 +112,7 @@ export interface MailMessages {
 export interface MailThreadState {
     id: string
     thread: string
-    user_org: string
+    user: string
     folder: 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam' | 'archive'
     is_read: boolean
     is_starred: boolean
@@ -131,7 +131,7 @@ export interface MailImapMailboxState {
 
 export interface MailFolderCounts {
     id: string
-    user_org: string
+    user: string
     mailbox: string
     inbox: number
     drafts: number
@@ -156,7 +156,7 @@ export type MailSchema = {
         type: MailMailboxMembers
         relations: {
             mailbox: MailMailboxes
-            user_org: Users
+            user: Users
         }
     }
     mail_mailbox_aliases: {
@@ -182,7 +182,7 @@ export type MailSchema = {
         type: MailThreadState
         relations: {
             thread: MailThreads
-            user_org: Users
+            user: Users
         }
     }
     mail_imap_mailbox_state: {
@@ -194,7 +194,7 @@ export type MailSchema = {
     mail_folder_counts: {
         type: MailFolderCounts
         relations: {
-            user_org: Users
+            user: Users
             mailbox: MailMailboxes
         }
     }

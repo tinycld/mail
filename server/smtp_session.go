@@ -33,8 +33,6 @@ type smtpSession struct {
 	mailbox    *core.Record
 	alias      *core.Record
 	domain     *core.Record
-	orgID      string
-	userOrg    *core.Record
 	recipients []string
 }
 
@@ -142,18 +140,7 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 		}
 	}
 
-	orgID := domainRecord.GetString("org")
-
-	userOrg, err := resolveUserOrg(s.app, s.user.Id, orgID)
-	if err != nil {
-		return &smtp.SMTPError{
-			Code:         550,
-			EnhancedCode: smtp.EnhancedCode{5, 7, 1},
-			Message:      "Not authorized to send from this address",
-		}
-	}
-
-	if _, err := verifyMailboxMembership(s.app, mailbox.Id, userOrg.Id); err != nil {
+	if _, err := verifyMailboxMembership(s.app, mailbox.Id, s.user.Id); err != nil {
 		return &smtp.SMTPError{
 			Code:         550,
 			EnhancedCode: smtp.EnhancedCode{5, 7, 1},
@@ -165,8 +152,6 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 	s.mailbox = mailbox
 	s.alias = alias
 	s.domain = domainRecord
-	s.orgID = orgID
-	s.userOrg = userOrg
 	s.recipients = nil
 
 	return nil
@@ -294,7 +279,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 	}
 
 	// Resolve provider
-	provider := providerForOrg(s.app, s.orgID)
+	provider := newProviderFromSystem(s.app)
 
 	// Preserve threading headers from the original message
 	inReplyToHeader := msg.InReplyTo
@@ -346,7 +331,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 	// is an SMTP retry), reuse the existing thread and just retag the folder.
 	existingMsg, existingThread, _ := findMessageInMailbox(s.app, mailboxID, result.MessageID)
 	if existingMsg != nil {
-		if err := ensureThreadState(s.app, existingThread.Id, s.userOrg.Id, "sent", true); err != nil {
+		if err := ensureThreadState(s.app, existingThread.Id, s.user.Id, "sent", true); err != nil {
 			s.app.Logger().Error("SMTP: failed to create thread state for deduped message", "error", err)
 		}
 		globalNotifier.notify(mailboxID)
@@ -389,7 +374,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 		s.app.Logger().Error("SMTP: failed to update thread metadata", "error", err)
 	}
 
-	if err := ensureThreadState(s.app, thread.Id, s.userOrg.Id, "sent", true); err != nil {
+	if err := ensureThreadState(s.app, thread.Id, s.user.Id, "sent", true); err != nil {
 		s.app.Logger().Error("SMTP: failed to create thread state", "error", err)
 	}
 
@@ -404,8 +389,6 @@ func (s *smtpSession) Reset() {
 	s.mailbox = nil
 	s.alias = nil
 	s.domain = nil
-	s.orgID = ""
-	s.userOrg = nil
 	s.recipients = nil
 }
 

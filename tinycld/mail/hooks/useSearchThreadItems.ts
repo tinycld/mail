@@ -36,7 +36,7 @@ export function useSearchThreadItems(
         query =>
             query
                 .from({ mail_thread_state: threadStateCollection })
-                .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, currentUserId)),
+                .where(({ mail_thread_state }) => eq(mail_thread_state.user, currentUserId)),
         [currentUserId]
     )
 

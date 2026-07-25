@@ -6,7 +6,7 @@ export interface MailboxesResult {
 }
 
 /**
- * Pure: given membership rows for the current user_org and the list of all
+ * Pure: given membership rows for the current user and the list of all
  * mailboxes in the org, return the user's personal mailbox and shared
  * mailboxes they belong to. Shared mailboxes are sorted by `created` ascending.
  */

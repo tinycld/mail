@@ -7,63 +7,35 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
-// resolveUserOrg finds the user_org record linking a user to an org.
-func resolveUserOrg(app *pocketbase.PocketBase, userID, orgID string) (*core.Record, error) {
+// verifyMailboxMembership checks that a user has access to a mailbox. Single-org:
+// membership rows reference the users collection directly (the former user_org
+// junction is gone), so the caller's user id IS the membership key.
+func verifyMailboxMembership(app *pocketbase.PocketBase, mailboxID, userID string) (*core.Record, error) {
 	records, err := app.FindRecordsByFilter(
-		"user_org",
-		"user = {:user} && org = {:org}",
+		"mail_mailbox_members",
+		"mailbox = {:mailbox} && user = {:user}",
 		"", // sort
 		1,  // limit
 		0,  // offset
-		map[string]any{"user": userID, "org": orgID},
+		map[string]any{"mailbox": mailboxID, "user": userID},
 	)
 	if err != nil || len(records) == 0 {
-		return nil, fmt.Errorf("user %s is not a member of org %s", userID, orgID)
+		return nil, fmt.Errorf("user %s is not a member of mailbox %s", userID, mailboxID)
 	}
 	return records[0], nil
 }
 
-// verifyMailboxMembership checks that a user_org has access to a mailbox.
-func verifyMailboxMembership(app *pocketbase.PocketBase, mailboxID, userOrgID string) (*core.Record, error) {
-	records, err := app.FindRecordsByFilter(
-		"mail_mailbox_members",
-		"mailbox = {:mailbox} && user_org = {:userOrg}",
-		"",
-		1,
-		0,
-		map[string]any{"mailbox": mailboxID, "userOrg": userOrgID},
-	)
-	if err != nil || len(records) == 0 {
-		return nil, fmt.Errorf("user_org %s is not a member of mailbox %s", userOrgID, mailboxID)
+// verifyAdmin checks that the authenticated user holds an administrative role.
+// Single-org: role is a field on the users auth record, so this reads the
+// already-authenticated record rather than a membership junction.
+func verifyAdmin(auth *core.Record) error {
+	if auth == nil {
+		return fmt.Errorf("authentication required")
 	}
-	return records[0], nil
-}
-
-// verifyOrgAdmin checks that a user has the admin role for the given org.
-func verifyOrgAdmin(app *pocketbase.PocketBase, userID, orgID string) error {
-	userOrg, err := resolveUserOrg(app, userID, orgID)
-	if err != nil {
-		return err
+	switch auth.GetString("role") {
+	case "owner", "admin":
+		return nil
+	default:
+		return fmt.Errorf("user %s is not an admin", auth.Id)
 	}
-	role := userOrg.GetString("role")
-	if role != "admin" && role != "owner" {
-		return fmt.Errorf("user %s is not an admin of org %s", userID, orgID)
-	}
-	return nil
-}
-
-// getMailboxOrgID returns the org ID for a mailbox by expanding through its domain.
-func getMailboxOrgID(app *pocketbase.PocketBase, mailboxID string) (string, error) {
-	mailbox, err := app.FindRecordById("mail_mailboxes", mailboxID)
-	if err != nil {
-		return "", fmt.Errorf("mailbox not found: %w", err)
-	}
-
-	domainID := mailbox.GetString("domain")
-	domain, err := app.FindRecordById("mail_domains", domainID)
-	if err != nil {
-		return "", fmt.Errorf("domain not found: %w", err)
-	}
-
-	return domain.GetString("org"), nil
 }

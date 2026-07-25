@@ -209,10 +209,9 @@ func verifyDomainRecord(ctx context.Context, app *pocketbase.PocketBase, record 
 	unlock := recordLock(record.Id)
 	defer unlock()
 
-	orgID := record.GetString("org")
 	domain := record.GetString("domain")
 
-	provider := providerForOrg(app, orgID)
+	provider := newProviderFromSystem(app)
 	providerName, providerConfigured := describeProvider(provider)
 
 	details := &verificationDetails{

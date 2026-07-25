@@ -4,22 +4,16 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/audit"
 )
-
-// settingsCache caches settings per org to avoid DB queries on every request.
-// Invalidated by PocketBase record hooks on the settings collection.
-var settingsCache sync.Map // map[string]map[string]string  (orgID → {key: value})
 
 // appIsLive reports whether the app still has an open database connection.
 // The mail thumbnail + notification workers run in background goroutines that
@@ -37,79 +31,24 @@ func Register(app *pocketbase.PocketBase) {
 		ExtractLabel: audit.LabelFromField("domain"),
 	})
 
-	resolveOrgViaMailbox := func(a core.App, mailboxID string) string {
-		mailbox, err := a.FindRecordById("mail_mailboxes", mailboxID)
-		if err != nil {
-			return ""
-		}
-		domainID := mailbox.GetString("domain")
-		if domainID == "" {
-			return ""
-		}
-		return audit.ResolveViaRelation(a, "mail_domains", domainID, "org")
-	}
-
 	audit.RegisterCollection(app, "mail_mailboxes", &audit.CollectionConfig{
-		ResolveOrg: func(a core.App, record *core.Record) string {
-			domainID := record.GetString("domain")
-			if domainID == "" {
-				return ""
-			}
-			return audit.ResolveViaRelation(a, "mail_domains", domainID, "org")
-		},
 		ExtractLabel: audit.LabelFromField("address"),
 	})
 
-	audit.RegisterCollection(app, "mail_mailbox_members", &audit.CollectionConfig{
-		ResolveOrg: func(a core.App, record *core.Record) string {
-			mailboxID := record.GetString("mailbox")
-			if mailboxID == "" {
-				return ""
-			}
-			return resolveOrgViaMailbox(a, mailboxID)
-		},
-	})
-
-	resolveOrgViaThread := func(a core.App, threadID string) string {
-		thread, err := a.FindRecordById("mail_threads", threadID)
-		if err != nil {
-			return ""
-		}
-		mailboxID := thread.GetString("mailbox")
-		if mailboxID == "" {
-			return ""
-		}
-		return resolveOrgViaMailbox(a, mailboxID)
-	}
+	audit.RegisterCollection(app, "mail_mailbox_members", &audit.CollectionConfig{})
 
 	audit.RegisterCollection(app, "mail_messages", &audit.CollectionConfig{
-		ResolveOrg: func(a core.App, record *core.Record) string {
-			threadID := record.GetString("thread")
-			if threadID == "" {
-				return ""
-			}
-			return resolveOrgViaThread(a, threadID)
-		},
 		ExtractLabel: audit.LabelFromField("subject"),
 	})
 
 	audit.RegisterCollection(app, "mail_thread_state", &audit.CollectionConfig{
-		ResolveOrg: func(a core.App, record *core.Record) string {
-			threadID := record.GetString("thread")
-			if threadID == "" {
-				return ""
-			}
-			return resolveOrgViaThread(a, threadID)
-		},
 		ExtractLabel: audit.LabelFromField("folder"),
 	})
 
-	// Per-secret webhook provider resolver. We can't pre-bake one provider for
-	// all webhooks because two orgs in the same install may pick different
-	// providers (Postmark vs SMTP) — the inbound/bounce endpoints are
-	// unauthenticated and the only identifier on the request is the
-	// per-domain webhook secret in the URL. Resolve the secret → domain → org
-	// → provider on each call so each webhook lands on the right adapter.
+	// Single-org: the provider is deployment-wide (system_settings), so every
+	// webhook secret resolves to the same adapter. We still look the secret up
+	// to reject unknown ones — an unrecognized secret gets a Noop provider so a
+	// forged webhook can't reach a live adapter.
 	resolveWebhookProvider := func(secret string) Provider {
 		records, err := app.FindRecordsByFilter(
 			"mail_domains",
@@ -122,46 +61,30 @@ func Register(app *pocketbase.PocketBase) {
 		if err != nil || len(records) == 0 {
 			return &NoopProvider{}
 		}
-		orgID := records[0].GetString("org")
-		if orgID == "" {
-			return newProviderFromSystem(app)
-		}
-		return providerForOrg(app, orgID)
+		return newProviderFromSystem(app)
 	}
 
-	// Invalidate settings cache when settings records change. getOrgSettings
-	// caches under "orgID:appName" (see cacheKey there); delete the same
-	// composite key, not the bare orgID (which is never a real cache key, so
-	// the stale entry would otherwise survive until restart).
-	invalidateSettingsCache := func(e *core.RecordEvent) error {
-		orgID := e.Record.GetString("org")
-		appName := e.Record.GetString("app")
-		if orgID != "" && appName != "" {
-			settingsCache.Delete(orgID + ":" + appName)
-		}
-		// Trigger an IMAP-fetcher reconcile when mail settings change —
-		// the operator may have toggled provider or inbound mode.
-		if appName == "mail" && globalIMAPManager != nil {
+	// A settings change to the mail app may toggle provider or inbound mode —
+	// reconcile the IMAP fetcher. (The former per-org settings cache is gone;
+	// provider config is deployment-wide in system_settings.)
+	reconcileOnMailSettings := func(e *core.RecordEvent) error {
+		if e.Record.GetString("app") == "mail" && globalIMAPManager != nil {
 			globalIMAPManager.onSettingsChanged()
 		}
 		return e.Next()
 	}
-	// Auto-create personal mailbox when a user joins an org
-	app.OnRecordAfterCreateSuccess("user_org").BindFunc(func(e *core.RecordEvent) error {
-		handleUserOrgCreated(app, e.Record)
+
+	// Auto-create a personal mailbox when a user is created. Single-org: the
+	// process IS the org, so membership is the users record itself (the former
+	// user_org junction is gone).
+	app.OnRecordAfterCreateSuccess("users").BindFunc(func(e *core.RecordEvent) error {
+		handleUserCreated(app, e.Record)
 		return e.Next()
 	})
 
-	// Provision this org's mail domain when core emits an org_provisioning intent
-	// (admin org-create with a mail domain). Core never writes mail_domains.
-	app.OnRecordAfterCreateSuccess("org_provisioning").BindFunc(func(e *core.RecordEvent) error {
-		handleOrgProvisioning(app, e.Record)
-		return e.Next()
-	})
-
-	// Clean up orphaned personal mailboxes when a user leaves an org
-	app.OnRecordAfterDeleteSuccess("user_org").BindFunc(func(e *core.RecordEvent) error {
-		handleUserOrgDeleted(app, e.Record)
+	// Clean up orphaned personal mailboxes when a user is deleted.
+	app.OnRecordAfterDeleteSuccess("users").BindFunc(func(e *core.RecordEvent) error {
+		handleUserDeleted(app, e.Record)
 		return e.Next()
 	})
 
@@ -177,9 +100,9 @@ func Register(app *pocketbase.PocketBase) {
 		return e.Next()
 	})
 
-	app.OnRecordAfterCreateSuccess("settings").BindFunc(invalidateSettingsCache)
-	app.OnRecordAfterUpdateSuccess("settings").BindFunc(invalidateSettingsCache)
-	app.OnRecordAfterDeleteSuccess("settings").BindFunc(invalidateSettingsCache)
+	app.OnRecordAfterCreateSuccess("settings").BindFunc(reconcileOnMailSettings)
+	app.OnRecordAfterUpdateSuccess("settings").BindFunc(reconcileOnMailSettings)
+	app.OnRecordAfterDeleteSuccess("settings").BindFunc(reconcileOnMailSettings)
 
 	// The mail provider + IMAP config are SYSTEM-WIDE (system_settings), so a
 	// system-settings change to a mail.* key may toggle the IMAP fetcher on/off.
@@ -277,13 +200,6 @@ func Register(app *pocketbase.PocketBase) {
 	registerThreadMarkerHooks(app)
 
 	audit.RegisterCollection(app, "mail_mailbox_aliases", &audit.CollectionConfig{
-		ResolveOrg: func(a core.App, record *core.Record) string {
-			mailboxID := record.GetString("mailbox")
-			if mailboxID == "" {
-				return ""
-			}
-			return resolveOrgViaMailbox(a, mailboxID)
-		},
 		ExtractLabel: audit.LabelFromField("address"),
 	})
 
@@ -393,7 +309,7 @@ func Register(app *pocketbase.PocketBase) {
 			return handleBounce(app, resolveWebhookProvider(secret), re, secret)
 		})
 
-		// Webhook URLs endpoint (requires auth; handler checks org admin/owner
+		// Webhook URLs endpoint (requires auth; handler checks admin/owner
 		// since the URLs embed the domain's webhook secret)
 		e.Router.GET("/api/mail/domains/{id}/webhook-urls", func(re *core.RequestEvent) error {
 			domainID := re.Request.PathValue("id")
@@ -401,9 +317,8 @@ func Register(app *pocketbase.PocketBase) {
 			if err != nil {
 				return re.NotFoundError("Domain not found", nil)
 			}
-			orgID := domain.GetString("org")
-			if err := verifyOrgAdmin(app, re.Auth.Id, orgID); err != nil {
-				return re.ForbiddenError("only org admins or owners can view webhook URLs", err)
+			if err := verifyAdmin(re.Auth); err != nil {
+				return re.ForbiddenError("only admins or owners can view webhook URLs", err)
 			}
 			secret := domain.GetString("webhook_secret")
 			baseURL := app.Settings().Meta.AppURL
@@ -438,9 +353,9 @@ func systemSetting(app core.App, key string) string {
 	return rec.GetString("value")
 }
 
-// newProviderFromSystem builds the provider from SYSTEM settings only — the
-// deployment-wide default used when there's no org context (e.g. inbound routing
-// before an org is resolved). Per-org overrides are layered on by providerForOrg.
+// newProviderFromSystem builds the provider from system settings. The provider
+// choice and its credentials/SMTP config are deployment-wide infrastructure,
+// configured in the /admin Settings console.
 func newProviderFromSystem(app core.App) Provider {
 	name := systemSetting(app, "mail.provider")
 	if name == "" {
@@ -473,19 +388,8 @@ func newProviderByName(name, serverToken, accountToken string, smtpCfg SMTPConfi
 	}
 }
 
-// providerForOrg builds the mail provider for an org. The provider choice and its
-// credentials/SMTP config are SYSTEM-WIDE (deployment infrastructure), not per-org
-// — they come from system_settings, configured in the /admin Settings console, so
-// every org resolves to the same system provider. The orgID is retained in the
-// signature because the call sites are org-scoped (per-org domains still matter
-// elsewhere), but it no longer affects provider selection.
-func providerForOrg(app core.App, _ string) Provider {
-	return newProviderFromSystem(app)
-}
-
 // smtpConfigFromSystem reads SMTPConfig from system settings (the deployment-wide
-// SMTP/IMAP config). Used as the no-org baseline and as the fallback layer beneath
-// per-org overrides. Numeric fields that don't parse are left zero (the
+// SMTP/IMAP config). Numeric fields that don't parse are left zero (the
 // constructor's applyDefaults handles them).
 func smtpConfigFromSystem(app core.App) SMTPConfig {
 	port, _ := strconv.Atoi(systemSetting(app, "mail.smtp_imap_port"))
@@ -503,49 +407,6 @@ func smtpConfigFromSystem(app core.App) SMTPConfig {
 		DKIMSelector:     systemSetting(app, "mail.smtp_dkim_selector"),
 	}
 	return cfg
-}
-
-// getOrgSettings returns all settings for an app+org as a key→value map.
-// Results are cached in memory and invalidated by record hooks.
-func getOrgSettings(app core.App, appName, orgID string) map[string]string {
-	cacheKey := orgID + ":" + appName
-
-	if cached, ok := settingsCache.Load(cacheKey); ok {
-		return cached.(map[string]string)
-	}
-
-	result := make(map[string]string)
-
-	records, err := app.FindRecordsByFilter(
-		"settings",
-		"app = {:app} && org = {:org}",
-		"",
-		100,
-		0,
-		map[string]any{"app": appName, "org": orgID},
-	)
-	if err == nil {
-		for _, r := range records {
-			key := r.GetString("key")
-			// settings.value is a `json` field, so app.Get returns a
-			// types.JSONRaw — not a string or json.RawMessage. Asserting on
-			// those concrete types silently misses every value (leaving the
-			// map empty, which falls back to env-var provider creds). Marshal
-			// then unmarshal instead so we handle whatever concrete type the
-			// json field decodes to; settings values are JSON strings.
-			raw, marshalErr := json.Marshal(r.Get("value"))
-			if marshalErr != nil {
-				continue
-			}
-			var s string
-			if json.Unmarshal(raw, &s) == nil {
-				result[key] = s
-			}
-		}
-	}
-
-	settingsCache.Store(cacheKey, result)
-	return result
 }
 
 // indexMessageRecordFromStorage builds FTS body_text from the record's stored
@@ -646,14 +507,8 @@ func bufferMailNotification(app *pocketbase.PocketBase, msgRecord *core.Record) 
 	}
 
 	for _, member := range members {
-		userOrgID := member.GetString("user_org")
-		userOrgRecord, err := app.FindRecordById("user_org", userOrgID)
-		if err != nil {
-			continue
+		if userID := member.GetString("user"); userID != "" {
+			bufferMailNotificationForUser(userID, sender, subject)
 		}
-		userID := userOrgRecord.GetString("user")
-		orgID := userOrgRecord.GetString("org")
-
-		bufferMailNotificationForUser(userID, orgID, sender, subject)
 	}
 }

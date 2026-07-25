@@ -22,7 +22,7 @@ function st(overrides: Partial<MailThreadState>): MailThreadState {
     return {
         id: 's1',
         thread: 't1',
-        user_org: 'uo1',
+        user: 'u1',
         folder: 'inbox',
         is_read: false,
         is_starred: false,

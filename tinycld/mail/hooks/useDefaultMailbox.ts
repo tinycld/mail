@@ -8,7 +8,7 @@ export function useDefaultMailbox() {
     const { data: members } = useOrgLiveQuery((query, { userId }) =>
         query
             .from({ mail_mailbox_members: membersCollection })
-            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user_org, userId))
+            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user, userId))
     )
 
     const firstMember = members?.[0]

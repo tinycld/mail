@@ -29,7 +29,7 @@ export function registerCollections(
 
     const mail_mailbox_members = newCollection('mail_mailbox_members', {
         omitOnInsert: ['created', 'updated'] as const,
-        expand: { mailbox: mail_mailboxes, user_org: coreStores.users },
+        expand: { mailbox: mail_mailboxes, user: coreStores.users },
         collectionOptions: {
             autoIndex: 'eager' as const,
             defaultIndexType: BasicIndex,
@@ -82,7 +82,7 @@ export function registerCollections(
         omitOnInsert: ['created', 'updated'] as const,
         expand: {
             thread: mail_threads,
-            user_org: coreStores.users,
+            user: coreStores.users,
         },
         collectionOptions: {
             autoIndex: 'eager' as const,
@@ -99,13 +99,13 @@ export function registerCollections(
         },
     })
 
-    // Server-side aggregation of (user_org, mailbox) → folder counts. Backed by
+    // Server-side aggregation of (user, mailbox) → folder counts. Backed by
     // a PocketBase view collection (see pb-migrations/1713000020). Eager: at
     // most one row per mailbox per user, used everywhere the sidebar renders.
     // No omitOnInsert — view collections are read-only.
     const mail_folder_counts = newCollection('mail_folder_counts', {
         expand: {
-            user_org: coreStores.users,
+            user: coreStores.users,
             mailbox: mail_mailboxes,
         },
         collectionOptions: {

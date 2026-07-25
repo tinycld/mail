@@ -5,17 +5,17 @@
 // BOTH files.
 //
 // Why this fix exists: the previous rule wrapped both the owner-adds-member
-// path and the bootstrap path with `user_org = @request.auth.id`, which
+// path and the bootstrap path with `user = @request.auth.id`, which
 // only makes sense for the bootstrap (self-insert as first owner). When an
-// owner adds a teammate, `user_org` on the new row is the teammate's, not the
+// owner adds a teammate, `user` on the new row is the teammate's, not the
 // requester's, so the outer constraint always failed. Move the requester-self
 // check inside the bootstrap branch.
 migrate(
     app => {
         const ownerCanAdd =
-            'mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
+            'mailbox.mail_mailbox_members_via_mailbox.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
         const bootstrapFirstOwner =
-            'user_org = @request.auth.id && role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = ""'
+            'user = @request.auth.id && role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = ""'
 
         const col = app.findCollectionByNameOrId('mail_mailbox_members')
         col.createRule = `(${ownerCanAdd}) || (${bootstrapFirstOwner})`
@@ -23,12 +23,12 @@ migrate(
     },
     app => {
         const ownerCanAdd =
-            'mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
+            'mailbox.mail_mailbox_members_via_mailbox.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
         const bootstrapFirstOwner =
             'role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = ""'
 
         const col = app.findCollectionByNameOrId('mail_mailbox_members')
-        col.createRule = `user_org = @request.auth.id && ((${ownerCanAdd}) || (${bootstrapFirstOwner}))`
+        col.createRule = `user = @request.auth.id && ((${ownerCanAdd}) || (${bootstrapFirstOwner}))`
         app.save(col)
     }
 )

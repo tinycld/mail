@@ -21,7 +21,7 @@ import { MailboxSearchBar } from './MailboxSearchBar'
 
 interface MemberRow {
     id: string
-    userOrgId: string
+    userId: string
     userName: string
     userEmail: string
     role: 'owner' | 'member'
@@ -29,7 +29,7 @@ interface MemberRow {
 }
 
 interface OrgMemberRow {
-    userOrgId: string
+    userId: string
     userName: string
     userEmail: string
 }
@@ -75,11 +75,11 @@ function useMailboxData(currentUserId: string) {
 
     const domainMap = new Map((domains ?? []).map(d => [d.id, d.domain]))
 
-    const userOrgsById = new Map(
+    const usersById = new Map(
         (orgUsers ?? []).map(u => [
             u.id,
             {
-                userOrgId: u.id,
+                userId: u.id,
                 userName: u.name || u.email || u.id,
                 userEmail: u.email ?? '',
             },
@@ -88,15 +88,15 @@ function useMailboxData(currentUserId: string) {
 
     const membersByMailbox = new Map<string, MemberRow[]>()
     for (const m of members ?? []) {
-        const uo = userOrgsById.get(m.user_org)
+        const uo = usersById.get(m.user)
         if (!uo) continue
         const row: MemberRow = {
             id: m.id,
-            userOrgId: uo.userOrgId,
+            userId: uo.userId,
             userName: uo.userName,
             userEmail: uo.userEmail,
             role: m.role as 'owner' | 'member',
-            isYou: uo.userOrgId === currentUserId,
+            isYou: uo.userId === currentUserId,
         }
         const list = membersByMailbox.get(m.mailbox) ?? []
         list.push(row)
@@ -129,7 +129,7 @@ function useMailboxData(currentUserId: string) {
             }
         })
 
-    const orgMembersList: OrgMemberRow[] = Array.from(userOrgsById.values())
+    const orgMembersList: OrgMemberRow[] = Array.from(usersById.values())
 
     const rawMailboxes = new Map((mailboxes ?? []).map(mb => [mb.id, mb]))
 
@@ -380,7 +380,7 @@ export default function MailboxesSettings() {
                 members={selectedMembers}
                 orgMembers={data.orgMembers}
                 domainOptions={domainOptions}
-                userOrgId={currentUserId}
+                userId={currentUserId}
             />
         </>
     )

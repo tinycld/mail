@@ -7,11 +7,10 @@ import (
 	"github.com/pocketbase/pocketbase/tests"
 )
 
-// setupSettingsTestApp builds a test app with a `settings` collection whose
-// `value` field is a json type — matching the production schema
-// (core pb_migrations: settings_value is type:'json'). This is what makes the
-// regression real: app.Get("value") returns a types.JSONRaw, not a string, so
-// the value can only be read via marshal/unmarshal.
+// setupSettingsTestApp builds a test app with the `settings` and
+// `system_settings` collections. Mail's provider config is deployment-wide and
+// lives in system_settings; the per-app `settings` collection is retained here
+// because mail still binds record hooks to it (the IMAP-fetcher reconcile).
 func setupSettingsTestApp(t *testing.T) *tests.TestApp {
 	t.Helper()
 	app, err := tests.NewTestApp()
@@ -24,12 +23,11 @@ func setupSettingsTestApp(t *testing.T) *tests.TestApp {
 	settings.Fields.Add(&core.TextField{Name: "app", Required: true})
 	settings.Fields.Add(&core.TextField{Name: "key", Required: true})
 	settings.Fields.Add(&core.JSONField{Name: "value", MaxSize: 1 << 20})
-	settings.Fields.Add(&core.TextField{Name: "org"})
 	if err := app.Save(settings); err != nil {
 		t.Fatalf("failed to save settings collection: %v", err)
 	}
 
-	// system_settings is system-wide (no org); mail reads provider/creds from it.
+	// system_settings holds the deployment-wide provider/credentials mail reads.
 	// `value` is a plain text field here, matching the core migration (systemSetting
 	// reads it via GetString).
 	sys := core.NewBaseCollection("system_settings")
@@ -56,52 +54,14 @@ func saveSystemSetting(t *testing.T, app *tests.TestApp, key, value string) {
 	}
 }
 
-func saveSetting(t *testing.T, app *tests.TestApp, appName, key, value, orgID string) {
-	t.Helper()
-	col, err := app.FindCollectionByNameOrId("settings")
-	if err != nil {
-		t.Fatalf("settings collection missing: %v", err)
-	}
-	rec := core.NewRecord(col)
-	rec.Set("app", appName)
-	rec.Set("key", key)
-	rec.Set("value", value)
-	rec.Set("org", orgID)
-	if err := app.Save(rec); err != nil {
-		t.Fatalf("failed to save setting %s: %v", key, err)
-	}
-}
-
-// Regression: settings.value is a json field, so a string value round-trips as
-// types.JSONRaw. getOrgSettings must decode it; the old code asserted on
-// string/json.RawMessage and silently dropped every value, which fell back to
-// env-var provider credentials (wrong Postmark server).
-func TestGetOrgSettings_ReadsJSONStringValues(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	const orgID = "org123456789012"
-
-	saveSetting(t, app, "mail", "provider", "postmark", orgID)
-	saveSetting(t, app, "mail", "postmark_server_token", "tok-abc-123", orgID)
-
-	got := getOrgSettings(app, "mail", orgID)
-
-	if got["postmark_server_token"] != "tok-abc-123" {
-		t.Errorf("postmark_server_token = %q, want %q", got["postmark_server_token"], "tok-abc-123")
-	}
-	if got["provider"] != "postmark" {
-		t.Errorf("provider = %q, want %q", got["provider"], "postmark")
-	}
-}
-
-// Provider + credentials are SYSTEM-WIDE (system_settings), not per-org. A token
-// stored in system_settings yields a configured Postmark provider; the orgID no
-// longer affects selection. (An org-stored 'provider'/token is ignored.)
-func TestProviderForOrg_UsesSystemPostmarkToken(t *testing.T) {
+// Provider + credentials are deployment-wide (system_settings). A token stored
+// there yields a configured Postmark provider.
+func TestNewProviderFromSystem_UsesSystemPostmarkToken(t *testing.T) {
 	app := setupSettingsTestApp(t)
 	saveSystemSetting(t, app, "mail.provider", "postmark")
 	saveSystemSetting(t, app, "mail.postmark_server_token", "tok-system")
 
-	provider := providerForOrg(app, "org222222222222")
+	provider := newProviderFromSystem(app)
 	if _, ok := provider.(*PostmarkProvider); !ok {
 		t.Fatalf("expected *PostmarkProvider from system settings, got %T", provider)
 	}
@@ -110,28 +70,14 @@ func TestProviderForOrg_UsesSystemPostmarkToken(t *testing.T) {
 	}
 }
 
-// Provider/creds are system-wide: a token set only in an ORG's settings must NOT
-// configure the provider (org settings no longer carry provider credentials).
-func TestProviderForOrg_IgnoresOrgPostmarkToken(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	saveSystemSetting(t, app, "mail.provider", "postmark")
-	// Org-level provider/token (legacy shape) — must be ignored now.
-	saveSetting(t, app, "mail", "postmark_server_token", "tok-org-only", "org222222222222")
-
-	provider := providerForOrg(app, "org222222222222")
-	if provider.Configured() {
-		t.Error("an org-stored token must NOT configure the provider (system-wide only)")
-	}
-}
-
 // With no system token, the provider is a PostmarkProvider but reports
 // Configured() == false — the signal send/verify use to reject with a clear
 // "not configured" error instead of an opaque API failure.
-func TestProviderForOrg_NoToken_NotConfigured(t *testing.T) {
+func TestNewProviderFromSystem_NoToken_NotConfigured(t *testing.T) {
 	app := setupSettingsTestApp(t)
 	saveSystemSetting(t, app, "mail.provider", "postmark")
 
-	provider := providerForOrg(app, "org444444444444")
+	provider := newProviderFromSystem(app)
 	if provider.Configured() {
 		t.Error("provider with no server token should report Configured() == false")
 	}
@@ -155,36 +101,21 @@ func TestNewProviderByName_PostmarkConfiguredReflectsToken(t *testing.T) {
 	}
 }
 
-// Settings are cached per org+app. Updating a setting must invalidate that
-// cache entry, or stale (or empty) values survive until restart. This mirrors
-// the invalidateSettingsCache hook's contract: it deletes "orgID:appName".
-func TestSettingsCacheInvalidation_DeletesCompositeKey(t *testing.T) {
+// Provider config is read fresh from system_settings on every call (there is no
+// cache), so an operator edit in /admin applies without a restart. This is the
+// contract the deleted per-org settings cache used to complicate.
+func TestNewProviderFromSystem_ReflectsLiveEdits(t *testing.T) {
 	app := setupSettingsTestApp(t)
-	const orgID = "org333333333333"
-	saveSetting(t, app, "mail", "postmark_server_token", "tok-old", orgID)
+	saveSystemSetting(t, app, "mail.provider", "postmark")
 
-	// Prime the cache.
-	if got := getOrgSettings(app, "mail", orgID)["postmark_server_token"]; got != "tok-old" {
-		t.Fatalf("priming read = %q, want %q", got, "tok-old")
+	if newProviderFromSystem(app).Configured() {
+		t.Fatal("provider should start unconfigured with no token")
 	}
 
-	// Simulate the invalidation hook deleting the composite key, then change
-	// the stored value and confirm the fresh value is read.
-	settingsCache.Delete(orgID + ":mail")
+	saveSystemSetting(t, app, "mail.postmark_server_token", "tok-new")
 
-	rec, err := app.FindFirstRecordByFilter("settings",
-		"app = 'mail' && key = 'postmark_server_token' && org = {:org}",
-		map[string]any{"org": orgID})
-	if err != nil {
-		t.Fatalf("find setting: %v", err)
-	}
-	rec.Set("value", "tok-new")
-	if err := app.Save(rec); err != nil {
-		t.Fatalf("update setting: %v", err)
-	}
-
-	if got := getOrgSettings(app, "mail", orgID)["postmark_server_token"]; got != "tok-new" {
-		t.Errorf("after invalidation, postmark_server_token = %q, want %q", got, "tok-new")
+	if !newProviderFromSystem(app).Configured() {
+		t.Error("provider should pick up a newly-saved token without a restart")
 	}
 }
 

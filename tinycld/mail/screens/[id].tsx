@@ -68,7 +68,7 @@ export default function MailDetailScreen() {
             query
                 .from({ mail_thread_state: threadStateCollection })
                 .where(({ mail_thread_state }) =>
-                    and(eq(mail_thread_state.thread, id), eq(mail_thread_state.user_org, userId))
+                    and(eq(mail_thread_state.thread, id), eq(mail_thread_state.user, userId))
                 ),
         [id]
     )

@@ -134,26 +134,22 @@ func buildMessageWhere(f *advancedFilters, params map[string]any) string {
 	return " AND " + strings.Join(clauses, " AND ")
 }
 
-// buildFolderJoin builds an additional JOIN + WHERE clause for folder/starred filtering.
-func buildFolderJoin(f *advancedFilters, userOrgIDs []string, params map[string]any) string {
-	if f.folder == "" || len(userOrgIDs) == 0 {
+// buildFolderJoin builds an additional JOIN + WHERE clause for folder/starred
+// filtering. Single-org: thread state is keyed by the user directly, so this is
+// a single bound parameter rather than an IN over the caller's memberships.
+func buildFolderJoin(f *advancedFilters, userID string, params map[string]any) string {
+	if f.folder == "" || userID == "" {
 		return ""
 	}
 
-	uoPlaceholders := make([]string, len(userOrgIDs))
-	for i, id := range userOrgIDs {
-		key := "uo" + strconv.Itoa(i)
-		params[key] = id
-		uoPlaceholders[i] = "{:" + key + "}"
-	}
-	uoInClause := "(" + strings.Join(uoPlaceholders, ", ") + ")"
+	params["stateUser"] = userID
 
 	if f.folder == "starred" {
-		return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user_org IN " + uoInClause + " AND ts.is_starred = 1"
+		return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.is_starred = 1"
 	}
 
 	params["folder"] = f.folder
-	return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user_org IN " + uoInClause + " AND ts.folder = {:folder}"
+	return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.folder = {:folder}"
 }
 
 func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
@@ -186,7 +182,7 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		return re.JSON(http.StatusOK, emptyResponse)
 	}
 
-	accessibleMailboxIDs, userOrgIDs, err := getUserMailboxAndOrgIDs(app, userID, mailboxID)
+	accessibleMailboxIDs, err := getUserMailboxIDs(app, userID, mailboxID)
 	if err != nil || len(accessibleMailboxIDs) == 0 {
 		return re.JSON(http.StatusOK, emptyResponse)
 	}
@@ -207,7 +203,7 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	maps.Copy(params, mailboxParams)
 
 	messageWhere := buildMessageWhere(&filters, params)
-	folderJoin := buildFolderJoin(&filters, userOrgIDs, params)
+	folderJoin := buildFolderJoin(&filters, userID, params)
 
 	// SQL-only path: no FTS terms, only structured filters
 	if !hasFTSTerms {
@@ -424,50 +420,33 @@ func handleStructuredSearch(
 	return re.JSON(http.StatusOK, searchResponse{Items: items, Total: total})
 }
 
-// getUserMailboxAndOrgIDs returns the mailbox IDs and user_org IDs the user has access to.
-// If mailboxID is provided, it filters to just that mailbox (after verifying access).
-func getUserMailboxAndOrgIDs(app *pocketbase.PocketBase, userID, mailboxID string) ([]string, []string, error) {
-	userOrgs, err := app.FindRecordsByFilter(
-		"user_org",
+// getUserMailboxIDs returns the mailbox IDs the user has access to. If mailboxID
+// is provided, it filters to just that mailbox (after verifying access).
+// Single-org: membership rows point at the user directly, so this is one query.
+func getUserMailboxIDs(app *pocketbase.PocketBase, userID, mailboxID string) ([]string, error) {
+	members, err := app.FindRecordsByFilter(
+		"mail_mailbox_members",
 		"user = {:user}",
 		"",
 		100,
 		0,
 		map[string]any{"user": userID},
 	)
-	if err != nil || len(userOrgs) == 0 {
-		return nil, nil, err
+	if err != nil {
+		return nil, err
 	}
 
-	userOrgIDs := make([]string, len(userOrgs))
-	for i, uo := range userOrgs {
-		userOrgIDs[i] = uo.Id
-	}
-
-	var allMailboxIDs []string
-	for _, uoID := range userOrgIDs {
-		members, err := app.FindRecordsByFilter(
-			"mail_mailbox_members",
-			"user_org = {:userOrg}",
-			"",
-			100,
-			0,
-			map[string]any{"userOrg": uoID},
-		)
-		if err != nil {
-			continue
-		}
-		for _, m := range members {
-			allMailboxIDs = append(allMailboxIDs, m.GetString("mailbox"))
-		}
+	allMailboxIDs := make([]string, 0, len(members))
+	for _, m := range members {
+		allMailboxIDs = append(allMailboxIDs, m.GetString("mailbox"))
 	}
 
 	if mailboxID != "" {
 		if slices.Contains(allMailboxIDs, mailboxID) {
-			return []string{mailboxID}, userOrgIDs, nil
+			return []string{mailboxID}, nil
 		}
-		return nil, userOrgIDs, nil
+		return nil, nil
 	}
 
-	return allMailboxIDs, userOrgIDs, nil
+	return allMailboxIDs, nil
 }

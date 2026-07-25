@@ -2,13 +2,13 @@ import type { MailThreadState } from '../types'
 
 export function mergeSharedFolderStates(
     states: MailThreadState[],
-    coMemberUserOrgIds: string[]
+    coMemberUserIds: string[]
 ): MailThreadState[] {
-    const coMemberSet = new Set(coMemberUserOrgIds)
+    const coMemberSet = new Set(coMemberUserIds)
     const seen = new Set<string>()
     const merged: MailThreadState[] = []
     for (const s of states) {
-        if (!coMemberSet.has(s.user_org)) continue
+        if (!coMemberSet.has(s.user)) continue
         if (seen.has(s.thread)) continue
         seen.add(s.thread)
         merged.push(s)

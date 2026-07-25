@@ -122,8 +122,8 @@ migrate(
                     maxSelect: 1,
                 },
                 {
-                    id: 'mail_mb_members_user_org',
-                    name: 'user_org',
+                    id: 'mail_mb_members_user',
+                    name: 'user',
                     type: 'relation',
                     required: true,
                     collectionId: '_pb_users_auth_',
@@ -154,8 +154,8 @@ migrate(
                 },
             ],
             indexes: [
-                'CREATE UNIQUE INDEX `idx_mail_mb_members_unique` ON `mail_mailbox_members` (`mailbox`, `user_org`)',
-                'CREATE INDEX `idx_mail_mb_members_user_org` ON `mail_mailbox_members` (`user_org`)',
+                'CREATE UNIQUE INDEX `idx_mail_mb_members_unique` ON `mail_mailbox_members` (`mailbox`, `user`)',
+                'CREATE INDEX `idx_mail_mb_members_user` ON `mail_mailbox_members` (`user`)',
                 'CREATE INDEX `idx_mail_mb_members_mailbox` ON `mail_mailbox_members` (`mailbox`)',
             ],
         })
@@ -413,8 +413,8 @@ migrate(
                     maxSelect: 1,
                 },
                 {
-                    id: 'mail_thr_state_user_org',
-                    name: 'user_org',
+                    id: 'mail_thr_state_user',
+                    name: 'user',
                     type: 'relation',
                     required: true,
                     collectionId: '_pb_users_auth_',
@@ -470,9 +470,9 @@ migrate(
                 },
             ],
             indexes: [
-                'CREATE UNIQUE INDEX `idx_mail_thr_state_unique` ON `mail_thread_state` (`thread`, `user_org`)',
-                'CREATE INDEX `idx_mail_thr_state_user_folder` ON `mail_thread_state` (`user_org`, `folder`)',
-                'CREATE INDEX `idx_mail_thr_state_user_starred` ON `mail_thread_state` (`user_org`, `is_starred`)',
+                'CREATE UNIQUE INDEX `idx_mail_thr_state_unique` ON `mail_thread_state` (`thread`, `user`)',
+                'CREATE INDEX `idx_mail_thr_state_user_folder` ON `mail_thread_state` (`user`, `folder`)',
+                'CREATE INDEX `idx_mail_thr_state_user_starred` ON `mail_thread_state` (`user`, `is_starred`)',
             ],
         })
         app.save(threadState)
@@ -483,16 +483,16 @@ migrate(
         // Update both when changing the mail_domains write-rule.
         const adminRule =
             '@request.auth.id != "" && (@request.auth.role = "admin" || @request.auth.role = "owner")'
-        const mbMemberRule = 'mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id'
+        const mbMemberRule = 'mail_mailbox_members_via_mailbox.user ?= @request.auth.id'
         const mbOwnerRule =
-            'mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id && mail_mailbox_members_via_mailbox.role ?= "owner"'
+            'mail_mailbox_members_via_mailbox.user ?= @request.auth.id && mail_mailbox_members_via_mailbox.role ?= "owner"'
         const mbMemberViaMailboxRule =
-            'mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id'
+            'mailbox.mail_mailbox_members_via_mailbox.user ?= @request.auth.id'
         const mbMemberViaThreadRule =
-            'thread.mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id'
-        const userOrgRule = 'user_org = @request.auth.id'
+            'thread.mailbox.mail_mailbox_members_via_mailbox.user ?= @request.auth.id'
+        const ownUserRule = 'user = @request.auth.id'
         const threadStateCreateRule =
-            'user_org = @request.auth.id && thread.mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id'
+            'user = @request.auth.id && thread.mailbox.mail_mailbox_members_via_mailbox.user ?= @request.auth.id'
 
         function setRules(collection, { list, view, create, update, del }) {
             collection.listRule = list
@@ -534,15 +534,15 @@ migrate(
         // Mirrored in 1713000017_mail_mailbox_members_owner_adds_member.js.
         const mbMembersCol = app.findCollectionByNameOrId('mail_mailbox_members')
         const ownerCanAdd =
-            'mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
+            'mailbox.mail_mailbox_members_via_mailbox.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
         const bootstrapFirstOwner =
-            'user_org = @request.auth.id && role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = ""'
+            'user = @request.auth.id && role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = ""'
         setRules(mbMembersCol, {
-            list: userOrgRule,
-            view: userOrgRule,
+            list: ownUserRule,
+            view: ownUserRule,
             create: `(${ownerCanAdd}) || (${bootstrapFirstOwner})`,
-            update: 'mailbox.mail_mailbox_members_via_mailbox.user_org ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"',
-            del: userOrgRule,
+            update: 'mailbox.mail_mailbox_members_via_mailbox.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"',
+            del: ownUserRule,
         })
         app.save(mbMembersCol)
 
@@ -579,11 +579,11 @@ migrate(
         // mail_thread_state: own records only, but create requires mailbox membership
         const threadStateCol = app.findCollectionByNameOrId('mail_thread_state')
         setRules(threadStateCol, {
-            list: userOrgRule,
-            view: userOrgRule,
+            list: ownUserRule,
+            view: ownUserRule,
             create: threadStateCreateRule,
-            update: userOrgRule,
-            del: userOrgRule,
+            update: ownUserRule,
+            del: ownUserRule,
         })
         app.save(threadStateCol)
     },

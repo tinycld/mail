@@ -11,32 +11,23 @@ import (
 
 var addressSanitizer = regexp.MustCompile(`[^a-z0-9._-]`)
 
-// handleUserOrgCreated auto-creates a personal mailbox when a user joins an org.
-func handleUserOrgCreated(app *pocketbase.PocketBase, userOrgRecord *core.Record) {
-	orgID := userOrgRecord.GetString("org")
-	userID := userOrgRecord.GetString("user")
-
-	// Find verified mail domains for this org
+// handleUserCreated auto-creates a personal mailbox for a new user. Single-org:
+// the deployment IS the org, so this fires on the users record itself (the former
+// user_org junction is gone) and provisions against the first verified domain.
+func handleUserCreated(app *pocketbase.PocketBase, user *core.Record) {
+	// Find the deployment's verified mail domains
 	domains, err := app.FindRecordsByFilter(
 		"mail_domains",
-		"org = {:org} && verified = true",
+		"verified = true",
 		"created",
 		1,
 		0,
-		map[string]any{"org": orgID},
+		nil,
 	)
 	if err != nil || len(domains) == 0 {
 		return
 	}
 	domain := domains[0]
-
-	// Look up user to get name/email
-	user, err := app.FindRecordById("users", userID)
-	if err != nil {
-		app.Logger().Warn("mail lifecycle: failed to find user",
-			"userID", userID, "error", err)
-		return
-	}
 
 	address := deriveMailboxAddress(app, user.GetString("email"), domain.Id)
 	if address == "" {
@@ -57,10 +48,7 @@ func handleUserOrgCreated(app *pocketbase.PocketBase, userOrgRecord *core.Record
 	mailbox.Set("domain", domain.Id)
 	mailbox.Set("display_name", user.GetString("name"))
 	mailbox.Set("type", "personal")
-	org, orgErr := app.FindRecordById("orgs", orgID)
-	if orgErr == nil {
-		mailbox.Set("name", org.GetString("name"))
-	}
+	mailbox.Set("name", user.GetString("name"))
 	if err := app.Save(mailbox); err != nil {
 		app.Logger().Warn("mail lifecycle: failed to create personal mailbox",
 			"address", address, "error", err)
@@ -76,7 +64,7 @@ func handleUserOrgCreated(app *pocketbase.PocketBase, userOrgRecord *core.Record
 
 	member := core.NewRecord(memberCollection)
 	member.Set("mailbox", mailbox.Id)
-	member.Set("user_org", userOrgRecord.Id)
+	member.Set("user", user.Id)
 	member.Set("role", "owner")
 	if err := app.Save(member); err != nil {
 		app.Logger().Warn("mail lifecycle: failed to create mailbox member",
@@ -84,86 +72,35 @@ func handleUserOrgCreated(app *pocketbase.PocketBase, userOrgRecord *core.Record
 	}
 }
 
-// handleOrgProvisioning reacts to a core org_provisioning intent record by
-// creating this org's mail domain. Core emits the intent (carrying the operator-
-// supplied domain) on admin org-create WITHOUT touching mail's collections, so
-// the org→domain wiring lives entirely here — the same dependency direction as
-// the user_org hook above (mail depends on core; core knows nothing of mail).
-func handleOrgProvisioning(app *pocketbase.PocketBase, record *core.Record) {
-	orgID := record.GetString("org")
-	domain := strings.TrimSpace(strings.ToLower(record.GetString("mail_domain")))
-	if orgID == "" || domain == "" {
-		return
-	}
-
-	// Idempotent: skip if this org already has the domain (the unique index on
-	// (org, domain) would reject a duplicate anyway).
-	if existing, _ := app.FindFirstRecordByFilter(
-		"mail_domains",
-		"org = {:org} && domain = {:domain}",
-		map[string]any{"org": orgID, "domain": domain},
-	); existing != nil {
-		return
-	}
-
-	collection, err := app.FindCollectionByNameOrId("mail_domains")
-	if err != nil {
-		app.Logger().Warn("mail lifecycle: mail_domains collection missing", "error", err)
-		return
-	}
-	md := core.NewRecord(collection)
-	md.Set("org", orgID)
-	md.Set("domain", domain)
-	md.Set("verified", true)
-	if err := app.Save(md); err != nil {
-		app.Logger().Warn("mail lifecycle: failed to create mail domain from provisioning",
-			"org", orgID, "domain", domain, "error", err)
-	}
-}
-
-// handleUserOrgDeleted cleans up orphaned personal mailboxes after a user leaves an org.
-func handleUserOrgDeleted(app *pocketbase.PocketBase, userOrgRecord *core.Record) {
-	orgID := userOrgRecord.GetString("org")
-
-	domains, err := app.FindRecordsByFilter(
-		"mail_domains",
-		"org = {:org}",
+// handleUserDeleted cleans up personal mailboxes orphaned by a user deletion.
+// The membership rows cascade away with the users record, so a personal mailbox
+// left with no members has no owner and is swept here.
+func handleUserDeleted(app *pocketbase.PocketBase, _ *core.Record) {
+	mailboxes, err := app.FindRecordsByFilter(
+		"mail_mailboxes",
+		"type = 'personal'",
 		"",
-		100,
+		1000,
 		0,
-		map[string]any{"org": orgID},
+		nil,
 	)
-	if err != nil || len(domains) == 0 {
+	if err != nil {
 		return
 	}
 
-	for _, domain := range domains {
-		mailboxes, err := app.FindRecordsByFilter(
-			"mail_mailboxes",
-			"type = 'personal' && domain = {:domain}",
+	for _, mailbox := range mailboxes {
+		members, err := app.FindRecordsByFilter(
+			"mail_mailbox_members",
+			"mailbox = {:mailbox}",
 			"",
-			1000,
+			1,
 			0,
-			map[string]any{"domain": domain.Id},
+			map[string]any{"mailbox": mailbox.Id},
 		)
-		if err != nil {
-			continue
-		}
-
-		for _, mailbox := range mailboxes {
-			members, err := app.FindRecordsByFilter(
-				"mail_mailbox_members",
-				"mailbox = {:mailbox}",
-				"",
-				1,
-				0,
-				map[string]any{"mailbox": mailbox.Id},
-			)
-			if err != nil || len(members) == 0 {
-				if err := app.Delete(mailbox); err != nil {
-					app.Logger().Warn("mail lifecycle: failed to delete orphaned mailbox",
-						"mailboxID", mailbox.Id, "error", err)
-				}
+		if err != nil || len(members) == 0 {
+			if err := app.Delete(mailbox); err != nil {
+				app.Logger().Warn("mail lifecycle: failed to delete orphaned mailbox",
+					"mailboxID", mailbox.Id, "error", err)
 			}
 		}
 	}

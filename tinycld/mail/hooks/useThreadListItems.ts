@@ -66,7 +66,7 @@ export function useThreadListItems(
         query =>
             query
                 .from({ mail_thread_state: threadStateCollection })
-                .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, currentUserId)),
+                .where(({ mail_thread_state }) => eq(mail_thread_state.user, currentUserId)),
         [currentUserId]
     )
 
@@ -89,7 +89,7 @@ export function useThreadListItems(
     const { data: userMemberships } = useOrgLiveQuery((query, { userId }) =>
         query
             .from({ mail_mailbox_members: membersCollection })
-            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user_org, userId))
+            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user, userId))
     )
 
     const isUnified = filter.mailboxId === UNIFIED_INBOX
@@ -141,7 +141,7 @@ export function useThreadListItems(
             mailboxType === 'shared' && (filter.folder === 'sent' || filter.folder === 'drafts')
         if (!widenSharedTeam) return [currentUserId]
         const ids = new Set<string>([currentUserId])
-        for (const m of coMembers ?? []) ids.add(m.user_org)
+        for (const m of coMembers ?? []) ids.add(m.user)
         return [...ids]
     }, [mailboxType, filter.folder, currentUserId, coMembers])
 
@@ -376,10 +376,10 @@ function buildThreadsFilter(params: {
     // user_orgs (just the user normally; widened to co-members on shared
     // mailbox sent/drafts views).
     if (params.userOrgIds.length === 1) {
-        clauses.push(`mail_thread_state_via_thread.user_org ?= ${quote(params.userOrgIds[0])}`)
+        clauses.push(`mail_thread_state_via_thread.user ?= ${quote(params.userOrgIds[0])}`)
     } else {
         clauses.push(
-            `(${params.userOrgIds.map(id => `mail_thread_state_via_thread.user_org ?= ${quote(id)}`).join(' || ')})`
+            `(${params.userOrgIds.map(id => `mail_thread_state_via_thread.user ?= ${quote(id)}`).join(' || ')})`
         )
     }
 

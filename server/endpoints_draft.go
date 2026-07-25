@@ -70,15 +70,7 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		return re.NotFoundError("Domain not found", err)
 	}
 
-	orgID := domainRecord.GetString("org")
-
-	// Verify user is a member of this mailbox's org
-	userOrg, err := resolveUserOrg(app, userID, orgID)
-	if err != nil {
-		return re.ForbiddenError("Not a member of this organization", err)
-	}
-
-	if _, err := verifyMailboxMembership(app, req.MailboxID, userOrg.Id); err != nil {
+	if _, err := verifyMailboxMembership(app, req.MailboxID, userID); err != nil {
 		return re.ForbiddenError("Not a member of this mailbox", err)
 	}
 
@@ -169,7 +161,7 @@ func handleDraft(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		return re.InternalServerError("Failed to update thread", err)
 	}
 
-	if err := ensureThreadState(app, thread.Id, userOrg.Id, "drafts", true); err != nil {
+	if err := ensureThreadState(app, thread.Id, userID, "drafts", true); err != nil {
 		return re.InternalServerError("Failed to create thread state", err)
 	}
 

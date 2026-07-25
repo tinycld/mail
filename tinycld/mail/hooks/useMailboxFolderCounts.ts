@@ -26,7 +26,7 @@ export function useMailboxFolderCounts(): Map<string, FolderCounts> {
     )
 
     const { data: rows } = useOrgLiveQuery((query, { userId }) =>
-        query.from({ counts: countsCollection }).where(({ counts }) => eq(counts.user_org, userId))
+        query.from({ counts: countsCollection }).where(({ counts }) => eq(counts.user, userId))
     )
 
     useEffect(() => {

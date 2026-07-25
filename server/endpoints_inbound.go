@@ -235,12 +235,12 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 		return fmt.Errorf("getMailboxMembers: %w", err)
 	}
 	for _, member := range members {
-		userOrgID := member.GetString("user_org")
-		if err := ensureThreadState(app, thread.Id, userOrgID, "inbox", false); err != nil {
+		userID := member.GetString("user")
+		if err := ensureThreadState(app, thread.Id, userID, "inbox", false); err != nil {
 			// Per-member state failure is non-fatal: the message is stored,
 			// the affected user's thread state can be reconciled later.
 			app.Logger().Error("inbound: failed to create thread state",
-				"threadID", thread.Id, "userOrgID", userOrgID, "error", err)
+				"threadID", thread.Id, "userID", userID, "error", err)
 		}
 	}
 

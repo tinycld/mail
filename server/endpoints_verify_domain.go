@@ -16,12 +16,11 @@ func handleVerifyDomain(app *pocketbase.PocketBase, re *core.RequestEvent) error
 		return re.NotFoundError("domain not found", err)
 	}
 
-	orgID := record.GetString("org")
-	if err := verifyOrgAdmin(app, re.Auth.Id, orgID); err != nil {
-		return re.ForbiddenError("only org admins or owners can verify domains", err)
+	if err := verifyAdmin(re.Auth); err != nil {
+		return re.ForbiddenError("only admins or owners can verify domains", err)
 	}
 
-	if !providerForOrg(app, orgID).Configured() {
+	if !newProviderFromSystem(app).Configured() {
 		return re.BadRequestError(
 			"configure the mail provider in settings before verifying",
 			errProviderNotConfigured,
