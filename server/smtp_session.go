@@ -333,7 +333,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 		if err := ensureThreadState(s.app, existingThread.Id, s.user.Id, "sent", true); err != nil {
 			s.app.Logger().Error("SMTP: failed to create thread state for deduped message", "error", err)
 		}
-		globalNotifier.notify(mailboxID)
+		globalNotifier.Notify(mailboxID)
 		return nil
 	}
 
@@ -377,7 +377,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 		s.app.Logger().Error("SMTP: failed to create thread state", "error", err)
 	}
 
-	globalNotifier.notify(mailboxID)
+	globalNotifier.Notify(mailboxID)
 
 	return nil
 }

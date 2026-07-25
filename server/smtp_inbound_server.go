@@ -11,6 +11,7 @@ import (
 	"github.com/emersion/go-smtp"
 	"github.com/pocketbase/pocketbase/core"
 	"golang.org/x/crypto/acme/autocert"
+	"tinycld.org/core/mailproto"
 )
 
 // StartSMTPInboundServer starts the public-facing SMTP listener that accepts
@@ -31,6 +32,12 @@ import (
 // recipient through processInboundForMailbox, the same path the Postmark
 // webhook uses, so all downstream behavior (threading, FTS, notifications)
 // stays identical.
+//
+// Unlike the IMAP/submission listeners, this one keeps its own bind loop rather
+// than going through mailproto.StartSMTP: it is opt-in via env, always binds a
+// single plain listener (STARTTLS only), and derives its domain from the public
+// hostname. Forcing it through the shared options struct would distort both.
+// It does share the TLS resolution.
 func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func(), error) {
 	if os.Getenv("MAIL_INBOUND_SMTP_ENABLED") != "true" {
 		return func() {}, nil
@@ -41,7 +48,9 @@ func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func()
 		addr = ":25"
 	}
 
-	tlsConfig, err := resolveTLSConfig("SMTP_INBOUND_TLS_CERT", "SMTP_INBOUND_TLS_KEY", "SMTP_TLS_CERT", "SMTP_TLS_KEY", certManager)
+	tlsConfig, err := mailproto.ResolveTLSConfig(
+		"SMTP_INBOUND_TLS_CERT", "SMTP_INBOUND_TLS_KEY", "SMTP_TLS_CERT", "SMTP_TLS_KEY", certManager,
+	)
 	if err != nil {
 		return nil, err
 	}

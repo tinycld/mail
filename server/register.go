@@ -162,7 +162,7 @@ func Register(app *pocketbase.PocketBase) {
 		threadID := e.Record.GetString("thread")
 		thread, err := app.FindRecordById("mail_threads", threadID)
 		if err == nil {
-			globalNotifier.notify(thread.GetString("mailbox"))
+			globalNotifier.Notify(thread.GetString("mailbox"))
 		}
 		return e.Next()
 	})
@@ -170,7 +170,7 @@ func Register(app *pocketbase.PocketBase) {
 		threadID := e.Record.GetString("thread")
 		thread, err := app.FindRecordById("mail_threads", threadID)
 		if err == nil {
-			globalNotifier.notify(thread.GetString("mailbox"))
+			globalNotifier.Notify(thread.GetString("mailbox"))
 		}
 		return e.Next()
 	})

@@ -1,154 +1,35 @@
 package mail
 
 import (
-	"crypto/tls"
-	"fmt"
-	"net"
-	"os"
-	"time"
-
-	"github.com/emersion/go-smtp"
 	"github.com/pocketbase/pocketbase/core"
 	"golang.org/x/crypto/acme/autocert"
+	"tinycld.org/core/mailproto"
 )
 
-// StartSMTPServer reads configuration from environment variables, creates an
-// SMTP submission server, starts listening, and returns a shutdown function.
+// StartSMTPServer starts the authenticated SMTP submission listener. The
+// transport lives in core/mailproto; mail supplies the backend.
 //
-// In production with TLS (via env vars or autocert), only an implicit TLS
-// listener on :465 is started — no plain-text SMTP is exposed.
-// In dev mode, a plain listener on :1587 is started with optional STARTTLS
-// and an optional implicit TLS listener on :1465.
+// SMTP falls back to the IMAP_TLS_* pair, so a missing SMTP cert is fine as
+// long as IMAP's is set.
 func StartSMTPServer(app core.App, certManager *autocert.Manager) (func(), error) {
-	if os.Getenv("SMTP_ENABLED") == "false" {
-		app.Logger().Info("SMTP server disabled via SMTP_ENABLED=false")
-		return func() {}, nil
-	}
-
-	tlsConfig, err := resolveTLSConfig("SMTP_TLS_CERT", "SMTP_TLS_KEY", "IMAP_TLS_CERT", "IMAP_TLS_KEY", certManager)
-	if err != nil {
-		return nil, err
-	}
-
-	// In production with TLS: only implicit TLS, no plain listener
-	if !app.IsDev() && tlsConfig != nil {
-		return startSMTPTLSOnly(app, tlsConfig)
-	}
-
-	// Production but no TLS source: refuse to silently fall through to the dev
-	// branch (which would bind plain :1587 instead of :465). See StartIMAPServer
-	// for the rationale — a healthy-looking container with no SMTPS listener is
-	// the exact failure we're guarding against. To intentionally run without
-	// SMTP submission in production, set SMTP_ENABLED=false. (SMTP falls back to
-	// the IMAP_TLS_* pair, so a missing SMTP cert is fine as long as IMAP's is
-	// set.)
-	if !app.IsDev() {
-		return nil, fmt.Errorf(
-			"SMTPS (:465) cannot start: no TLS configured in production. " +
-				"Set SMTP_TLS_CERT/SMTP_TLS_KEY (or IMAP_TLS_CERT/IMAP_TLS_KEY) " +
-				"to readable cert/key files, or enable autocert " +
-				"(AUTOCERT_ENABLED=true + PRIMARY_DOMAIN), " +
-				"or set SMTP_ENABLED=false to run without SMTP submission",
-		)
-	}
-
-	// Dev mode: plain listener with optional STARTTLS + optional implicit TLS
-	return startSMTPDev(app, tlsConfig)
-}
-
-func newSMTPServerInstance(app core.App, tlsConfig *tls.Config, insecureAuth bool) *smtp.Server {
-	domain := os.Getenv("SMTP_DOMAIN")
-	if domain == "" {
-		domain = "localhost"
-	}
-
-	backend := &smtpBackend{app: app}
-	server := smtp.NewServer(backend)
-	server.Domain = domain
-	server.AllowInsecureAuth = insecureAuth
-	server.MaxMessageBytes = 25 << 20
-	server.EnableSMTPUTF8 = true
-	server.ReadTimeout = 60 * time.Second
-	server.WriteTimeout = 60 * time.Second
-	if tlsConfig != nil {
-		server.TLSConfig = tlsConfig
-	}
-	return server
-}
-
-func startSMTPTLSOnly(app core.App, tlsConfig *tls.Config) (func(), error) {
-	smtpsAddr := os.Getenv("SMTPS_ADDR")
-	if smtpsAddr == "" {
-		smtpsAddr = ":465"
-	}
-
-	server := newSMTPServerInstance(app, tlsConfig, false)
-	server.Addr = smtpsAddr
-
-	tlsLn, err := tls.Listen("tcp", smtpsAddr, tlsConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to listen on %s: %w", smtpsAddr, err)
-	}
-	app.Logger().Info("SMTPS server listening (implicit TLS, no plain listener)", "addr", smtpsAddr)
-	go func() {
-		if err := server.Serve(tlsLn); err != nil {
-			app.Logger().Error("SMTPS server error", "addr", smtpsAddr, "error", err)
-		}
-	}()
-
-	return func() {
-		app.Logger().Info("Shutting down SMTP server")
-		tlsLn.Close()
-		server.Close()
-	}, nil
-}
-
-func startSMTPDev(app core.App, tlsConfig *tls.Config) (func(), error) {
-	addr := os.Getenv("SMTP_ADDR")
-	if addr == "" {
-		addr = ":1587"
-	}
-
-	insecureAuth := os.Getenv("SMTP_INSECURE_AUTH") == "true" || app.IsDev()
-	server := newSMTPServerInstance(app, tlsConfig, insecureAuth)
-	server.Addr = addr
-
-	plainLn, err := net.Listen("tcp", addr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)
-	}
-	app.Logger().Info("SMTP server listening", "addr", addr, "starttls", tlsConfig != nil)
-	go func() {
-		if err := server.Serve(plainLn); err != nil {
-			app.Logger().Error("SMTP server error", "addr", addr, "error", err)
-		}
-	}()
-
-	var tlsLn net.Listener
-	if tlsConfig != nil {
-		smtpsAddr := os.Getenv("SMTPS_ADDR")
-		if smtpsAddr == "" {
-			smtpsAddr = ":1465"
-		}
-		tlsLn, err = tls.Listen("tcp", smtpsAddr, tlsConfig)
-		if err != nil {
-			plainLn.Close()
-			return nil, fmt.Errorf("failed to listen on %s: %w", smtpsAddr, err)
-		}
-		app.Logger().Info("SMTPS server listening (implicit TLS)", "addr", smtpsAddr)
-		go func() {
-			if err := server.Serve(tlsLn); err != nil {
-				app.Logger().Error("SMTPS server error", "addr", smtpsAddr, "error", err)
-			}
-		}()
-	}
-
-	return func() {
-		app.Logger().Info("Shutting down SMTP server")
-		plainLn.Close()
-		if tlsLn != nil {
-			tlsLn.Close()
-		}
-		server.Close()
-	}, nil
+	return mailproto.StartSMTP(app, certManager, mailproto.SMTPOptions{
+		Backend:           &smtpBackend{app: app},
+		Label:             "SMTP",
+		EnabledEnv:        "SMTP_ENABLED",
+		AddrEnv:           "SMTP_ADDR",
+		TLSAddrEnv:        "SMTPS_ADDR",
+		DefaultTLSAddr:    ":465",
+		DefaultAddr:       ":1587",
+		DefaultDevTLSAddr: ":1465",
+		CertEnv:           "SMTP_TLS_CERT",
+		KeyEnv:            "SMTP_TLS_KEY",
+		FallbackCertEnv:   "IMAP_TLS_CERT",
+		FallbackKeyEnv:    "IMAP_TLS_KEY",
+		InsecureAuthEnv:   "SMTP_INSECURE_AUTH",
+		ProductionTLSError: "SMTPS (:465) cannot start: no TLS configured in production. " +
+			"Set SMTP_TLS_CERT/SMTP_TLS_KEY (or IMAP_TLS_CERT/IMAP_TLS_KEY) " +
+			"to readable cert/key files, or enable autocert " +
+			"(AUTOCERT_ENABLED=true + PRIMARY_DOMAIN), " +
+			"or set SMTP_ENABLED=false to run without SMTP submission",
+	})
 }
