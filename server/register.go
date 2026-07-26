@@ -13,6 +13,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/audit"
+	"tinycld.org/core/quota"
 )
 
 // appIsLive reports whether the app still has an open database connection.
@@ -26,6 +27,16 @@ func appIsLive(app core.App) bool {
 }
 
 func Register(app *pocketbase.PocketBase) {
+	// Storage ceilings: message bodies are real disk. No owner field —
+	// a mailbox is shared by its members, so a message is not chargeable to
+	// any one of them — which means these bytes count toward the ORG total
+	// only, never a per-user one. core/quota binds the enforcement.
+	quota.RegisterSources(quota.Source{
+		Slug:       "mail",
+		Collection: "mail_messages",
+		SizeField:  "total_size",
+	})
+
 	// Audit logging for mail collections
 	audit.RegisterCollection(app, "mail_domains", &audit.CollectionConfig{
 		ExtractLabel: audit.LabelFromField("domain"),
