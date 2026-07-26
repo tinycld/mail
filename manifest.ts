@@ -18,6 +18,9 @@ const manifest = {
     collections: { register: 'collections', types: 'types' },
     help: { directory: 'help' },
     seed: { script: 'seed' },
+    // Message bodies are real disk. No ownerField: a mailbox is shared by its
+    // members, so these bytes count toward the ORG ceiling only.
+    quota: [{ collection: 'mail_messages', sizeField: 'total_size' }],
     server: { package: 'server', module: 'tinycld.org/packages/mail' },
     repository: { url: 'https://github.com/tinycld/mail' },
     peerVersions: { '@tinycld/core': '>=0.4.0 <0.5.0' },
