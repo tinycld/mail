@@ -28,10 +28,10 @@ func handleUserCreated(app core.App, user *core.Record) {
 	}
 	domain := domains[0]
 
-	address := deriveMailboxAddress(app, user.GetString("email"), domain.Id)
+	address := deriveMailboxAddress(app, user.GetString("username"), domain.Id)
 	if address == "" {
 		app.Logger().Warn("mail lifecycle: could not derive mailbox address",
-			"userEmail", user.GetString("email"))
+			"username", user.GetString("username"))
 		return
 	}
 
@@ -105,14 +105,23 @@ func handleUserDeleted(app core.App, _ *core.Record) {
 	}
 }
 
-// deriveMailboxAddress generates a unique mailbox address from a user's email.
-func deriveMailboxAddress(app core.App, userEmail, domainID string) string {
-	parts := strings.SplitN(userEmail, "@", 2)
-	if len(parts) == 0 || parts[0] == "" {
-		return ""
-	}
-
-	base := strings.ToLower(parts[0])
+// deriveMailboxAddress generates a unique mailbox address from a user's
+// USERNAME — deliberately not their email.
+//
+// Provisioning from the email took its local-part and dropped the domain, so
+// inviting bob@google.com minted bob@<our-verified-domain>: an address the
+// invitee never asked for, silently colliding with any real `bob` and implying
+// we can host mail for a domain we don't control. The email is a contact
+// address for an account that may live anywhere; only the username is ours to
+// map into our own domain.
+//
+// It's also the better key mechanically: usernames are already validated as
+// ^[a-z0-9][a-z0-9_-]{0,31}$ (coreserver.IsValidUsername) — lowercase, unique,
+// and never empty — whereas email is optional at invite time, which left
+// emailless invitees with no mailbox at all. The sanitizer below is kept as
+// defence in depth for legacy rows predating that validation.
+func deriveMailboxAddress(app core.App, username, domainID string) string {
+	base := strings.ToLower(strings.TrimSpace(username))
 	base = addressSanitizer.ReplaceAllString(base, "")
 	if base == "" {
 		return ""
