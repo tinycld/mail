@@ -26,7 +26,37 @@ func appIsLive(app core.App) bool {
 	return app != nil && app.ConcurrentDB() != nil
 }
 
+// Register composes the mail server for the SINGLE-ORG app: the shared set
+// plus the host-only tail. The generator's package_extensions.go calls it.
 func Register(app *pocketbase.PocketBase) {
+	registerShared(app)
+
+	// ---- Host-only ----
+	// The IMAP / SMTP-submission / inbound-SMTP listeners bind fixed TCP
+	// ports, and the multi-org router owns every listening socket (a tenant
+	// serves on a unix socket handed down to it) — so a tenant must not start
+	// them, and in production a failed listener aborts the whole boot, which
+	// would take the org down. Per-tenant mail protocols need an injected
+	// listener first (multi-org/HANDOFF.md §6, mailproto).
+	registerMailListeners(app)
+}
+
+// RegisterTenant composes the mail server for a multi-org TENANT process: the
+// shared set only — record hooks, endpoints, FTS sync, mailbox lifecycle, the
+// outbound-dialing workers — without the port-binding listeners above. The
+// router's pinned package menu calls it, gated by the org's resolved package
+// set (multi-org/docs/SCOPE-tenant-feature-go.md).
+//
+// Do NOT hand-pick registrations here — add to registerShared so both
+// compositions get them, or to Register's host-only tail with a reason. A
+// hand-rolled subset is exactly the drift that produced
+// multi-org/docs/FINDING-tenant-composition-gap.md.
+func RegisterTenant(app *pocketbase.PocketBase) {
+	registerShared(app)
+}
+
+// registerShared is the single source of truth for what BOTH compositions run.
+func registerShared(app *pocketbase.PocketBase) {
 	// Storage ceilings: message bodies are real disk. No owner field —
 	// a mailbox is shared by its members, so a message is not chargeable to
 	// any one of them — which means these bytes count toward the ORG total
@@ -215,57 +245,6 @@ func Register(app *pocketbase.PocketBase) {
 	})
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
-		// In production a failed mail listener is a deploy-breaking
-		// misconfiguration (missing/unreadable cert, lost privileged-port
-		// capability, port already bound): abort the boot so it's loud rather
-		// than coming up healthy on HTTP with mail silently absent. In dev we
-		// log and continue, so a missing local cert doesn't block the app.
-		failLoud := !app.IsDev()
-
-		// Start IMAP server
-		imapShutdown, err := StartIMAPServer(app, e.CertManager)
-		if err != nil {
-			app.Logger().Error("Failed to start IMAP server", "error", err)
-			if failLoud {
-				return fmt.Errorf("aborting startup: IMAP server failed to start: %w", err)
-			}
-		} else {
-			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
-				imapShutdown()
-				return te.Next()
-			})
-		}
-
-		// Start SMTP submission server
-		smtpShutdown, smtpErr := StartSMTPServer(app, e.CertManager)
-		if smtpErr != nil {
-			app.Logger().Error("Failed to start SMTP server", "error", smtpErr)
-			if failLoud {
-				return fmt.Errorf("aborting startup: SMTP server failed to start: %w", smtpErr)
-			}
-		} else {
-			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
-				smtpShutdown()
-				return te.Next()
-			})
-		}
-
-		// Start inbound SMTP listener (no-op unless MAIL_INBOUND_SMTP_ENABLED=true).
-		// This is the public MX target for the self-hosted SMTP provider in
-		// "smtp" inbound mode — distinct from the submission server above.
-		inboundShutdown, inboundErr := StartSMTPInboundServer(app, e.CertManager)
-		if inboundErr != nil {
-			app.Logger().Error("Failed to start inbound SMTP server", "error", inboundErr)
-			if failLoud {
-				return fmt.Errorf("aborting startup: inbound SMTP server failed to start: %w", inboundErr)
-			}
-		} else {
-			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
-				inboundShutdown()
-				return te.Next()
-			})
-		}
-
 		// Send endpoint (requires auth, resolves provider from org settings)
 		e.Router.POST("/api/mail/send", func(re *core.RequestEvent) error {
 			return handleSend(app, re)
@@ -347,6 +326,66 @@ func Register(app *pocketbase.PocketBase) {
 		// Mail notification batcher: drains the per-user buffer every 2min
 		// and dispatches one batched notification per user.
 		go startMailBatcher(app)
+
+		return e.Next()
+	})
+}
+
+// registerMailListeners starts the port-binding mail protocol servers on
+// OnServe. Host-only: see the tail of Register for why a tenant must not run
+// these.
+func registerMailListeners(app *pocketbase.PocketBase) {
+	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
+		// In production a failed mail listener is a deploy-breaking
+		// misconfiguration (missing/unreadable cert, lost privileged-port
+		// capability, port already bound): abort the boot so it's loud rather
+		// than coming up healthy on HTTP with mail silently absent. In dev we
+		// log and continue, so a missing local cert doesn't block the app.
+		failLoud := !app.IsDev()
+
+		// Start IMAP server
+		imapShutdown, err := StartIMAPServer(app, e.CertManager)
+		if err != nil {
+			app.Logger().Error("Failed to start IMAP server", "error", err)
+			if failLoud {
+				return fmt.Errorf("aborting startup: IMAP server failed to start: %w", err)
+			}
+		} else {
+			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
+				imapShutdown()
+				return te.Next()
+			})
+		}
+
+		// Start SMTP submission server
+		smtpShutdown, smtpErr := StartSMTPServer(app, e.CertManager)
+		if smtpErr != nil {
+			app.Logger().Error("Failed to start SMTP server", "error", smtpErr)
+			if failLoud {
+				return fmt.Errorf("aborting startup: SMTP server failed to start: %w", smtpErr)
+			}
+		} else {
+			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
+				smtpShutdown()
+				return te.Next()
+			})
+		}
+
+		// Start inbound SMTP listener (no-op unless MAIL_INBOUND_SMTP_ENABLED=true).
+		// This is the public MX target for the self-hosted SMTP provider in
+		// "smtp" inbound mode — distinct from the submission server above.
+		inboundShutdown, inboundErr := StartSMTPInboundServer(app, e.CertManager)
+		if inboundErr != nil {
+			app.Logger().Error("Failed to start inbound SMTP server", "error", inboundErr)
+			if failLoud {
+				return fmt.Errorf("aborting startup: inbound SMTP server failed to start: %w", inboundErr)
+			}
+		} else {
+			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
+				inboundShutdown()
+				return te.Next()
+			})
+		}
 
 		return e.Next()
 	})
