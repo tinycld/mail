@@ -82,9 +82,14 @@ test.describe('Mail — Shared mailbox lifecycle as admin', () => {
         await page.getByTestId('display_name').fill('Duplicate Test')
         await page.getByText('Create mailbox', { exact: true }).click()
 
-        // The drawer must stay open and surface the error to the user.
+        // The drawer must stay open and surface the error to the user. Scope
+        // the match to the form's own error summary — /already|in use|exists/
+        // anywhere in the DOM is satisfiable by any other package's content.
         await expect(page.getByText('New shared mailbox')).toBeVisible()
-        await expect(page.getByText(/already|unique|in use|exists/i).first()).toBeVisible()
+        await expect(page.getByTestId('mailbox-form-errors')).toBeVisible()
+        await expect(page.getByTestId('mailbox-form-errors')).toContainText(
+            /already|unique|in use|exists/i
+        )
     })
 
     test('admin can create a shared mailbox and add another org member to it', async ({ page }) => {

@@ -212,7 +212,11 @@ function FormLayout({
 
     return (
         <View className="gap-4">
-            <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
+            <FormErrorSummary
+                errors={errors}
+                isEnabled={isSubmitted}
+                testID="mailbox-form-errors"
+            />
             <TextInput
                 control={control}
                 name="address"

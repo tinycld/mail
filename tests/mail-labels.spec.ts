@@ -11,8 +11,14 @@ test.describe('Mail — Labels', () => {
     })
 
     test('filter by label in sidebar navigates to label-scoped URL', async ({ page }) => {
-        const labelsSection = page.getByText('Labels').locator('xpath=ancestor::*[5]')
-        await labelsSection.getByText('Work', { exact: true }).click()
+        // Each label row carries a stable testID — no DOM-structure walking
+        // (the old ancestor::*[5] xpath broke on any layout change and could
+        // match unrelated text).
+        await page
+            .getByTestId(/^mail-sidebar-label-/)
+            .filter({ hasText: 'Work' })
+            .first()
+            .click()
         await expect(page).toHaveURL(/label=/)
     })
 

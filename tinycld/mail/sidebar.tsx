@@ -102,6 +102,7 @@ export default function MailSidebar(_props: MailSidebarProps) {
     const labelItems = orgLabels.map(label => (
         <SidebarItem
             key={label.id}
+            testID={`mail-sidebar-label-${label.id}`}
             label={label.name}
             colorDot={label.color}
             isActive={activeLabels.has(label.id)}
