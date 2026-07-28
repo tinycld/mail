@@ -26,7 +26,6 @@ export interface MailDomainVerificationDetails {
 
 export interface MailDomains {
     id: string
-    org: string
     domain: string
     verified: boolean
     mx_verified: boolean
