@@ -133,7 +133,7 @@ export function useThreadListItems(
     }, [isUnified, filter.mailboxId, userMemberships])
 
     const _folderKey = filter.folder ?? 'inbox'
-    const userOrgIdsForFolder = useMemo(() => {
+    const userIdsForFolder = useMemo(() => {
         // For shared mailboxes' Sent / Drafts views, we widen to co-members
         // so the team sees each others' outbound activity. Personal folders
         // and inbox/starred/etc. always scope to the active user.
@@ -154,17 +154,10 @@ export function useThreadListItems(
             filter.mailboxId,
             filter.folder ?? 'inbox',
             visibleMailboxIds.slice().sort().join(','),
-            userOrgIdsForFolder.slice().sort().join(','),
+            userIdsForFolder.slice().sort().join(','),
             page,
         ],
-        [
-            currentUserId,
-            filter.mailboxId,
-            filter.folder,
-            visibleMailboxIds,
-            userOrgIdsForFolder,
-            page,
-        ]
+        [currentUserId, filter.mailboxId, filter.folder, visibleMailboxIds, userIdsForFolder, page]
     )
 
     const { data: pageResult, isLoading: pageLoading } = useQuery({
@@ -173,7 +166,7 @@ export function useThreadListItems(
         queryFn: async () => {
             const filterStr = buildThreadsFilter({
                 mailboxIds: visibleMailboxIds,
-                userOrgIds: userOrgIdsForFolder,
+                userIds: userIdsForFolder,
                 folder: filter.folder,
             })
             // biome-ignore lint/plugin/pbtsdb-no-raw-pb-access: deliberate server-side pagination — fetches only the current page (see file header), which a whole-collection pbtsdb store read would defeat; cached per-page via React Query.
@@ -361,7 +354,7 @@ export function useThreadListItems(
 // server joins state and threads itself — no need to pre-fetch thread ids.
 function buildThreadsFilter(params: {
     mailboxIds: string[]
-    userOrgIds: string[]
+    userIds: string[]
     folder: string | null
 }): string {
     const clauses: string[] = []
@@ -373,13 +366,13 @@ function buildThreadsFilter(params: {
     }
 
     // Each thread must have a thread_state row owned by one of the relevant
-    // user_orgs (just the user normally; widened to co-members on shared
+    // users (just the current user normally; widened to co-members on shared
     // mailbox sent/drafts views).
-    if (params.userOrgIds.length === 1) {
-        clauses.push(`mail_thread_state_via_thread.user ?= ${quote(params.userOrgIds[0])}`)
+    if (params.userIds.length === 1) {
+        clauses.push(`mail_thread_state_via_thread.user ?= ${quote(params.userIds[0])}`)
     } else {
         clauses.push(
-            `(${params.userOrgIds.map(id => `mail_thread_state_via_thread.user ?= ${quote(id)}`).join(' || ')})`
+            `(${params.userIds.map(id => `mail_thread_state_via_thread.user ?= ${quote(id)}`).join(' || ')})`
         )
     }
 
