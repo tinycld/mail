@@ -49,58 +49,52 @@ function useMailboxData(currentUserId: string) {
         'users'
     )
 
+    // Standalone: gates the whole screen and feeds the create-form's domain
+    // options, both of which must work with zero mailboxes.
     const { data: domains } = useOrgLiveQuery(query =>
         query.from({ mail_domains: domainsCollection })
     )
 
-    const domainId = (domains ?? [])[0]?.id ?? ''
-    const { data: mailboxes } = useOrgLiveQuery(
-        query =>
-            query
-                .from({ mail_mailboxes: mailboxesCollection })
-                .where(({ mail_mailboxes }) => eq(mail_mailboxes.domain, domainId)),
-        [domainId]
+    // Each mailbox resolves its domain in the same expression; one whose
+    // domain is gone drops out via the inner join.
+    const { data: mailboxRows } = useOrgLiveQuery(query =>
+        query
+            .from({ mailbox: mailboxesCollection })
+            .innerJoin({ domain: domainsCollection }, ({ mailbox, domain }) =>
+                eq(mailbox.domain, domain.id)
+            )
     )
 
-    const { data: members } = useOrgLiveQuery(query =>
-        query.from({ mail_mailbox_members: membersCollection })
+    // Membership rows carry their user in the same expression; a row whose
+    // user is gone drops out via the inner join.
+    const { data: memberRows } = useOrgLiveQuery(query =>
+        query
+            .from({ member: membersCollection })
+            .innerJoin({ user: usersCollection }, ({ member, user }) => eq(member.user, user.id))
     )
 
     const { data: aliases } = useOrgLiveQuery(query =>
         query.from({ mail_mailbox_aliases: aliasesCollection })
     )
 
-    // Single-org: every user in the DB is a potential mailbox member.
+    // Single-org: every user in the DB is a potential mailbox member — the
+    // add-member picker needs users with no membership row, so this cannot
+    // derive from the membership join.
     const { data: orgUsers } = useOrgLiveQuery(query => query.from({ users: usersCollection }))
 
-    const domainMap = new Map((domains ?? []).map(d => [d.id, d.domain]))
-
-    const usersById = new Map(
-        (orgUsers ?? []).map(u => [
-            u.id,
-            {
-                userId: u.id,
-                userName: u.name || u.email || u.id,
-                userEmail: u.email ?? '',
-            },
-        ])
-    )
-
     const membersByMailbox = new Map<string, MemberRow[]>()
-    for (const m of members ?? []) {
-        const uo = usersById.get(m.user)
-        if (!uo) continue
+    for (const { member, user } of memberRows ?? []) {
         const row: MemberRow = {
-            id: m.id,
-            userId: uo.userId,
-            userName: uo.userName,
-            userEmail: uo.userEmail,
-            role: m.role as 'owner' | 'member',
-            isYou: uo.userId === currentUserId,
+            id: member.id,
+            userId: user.id,
+            userName: user.name || user.email || user.id,
+            userEmail: user.email ?? '',
+            role: member.role as 'owner' | 'member',
+            isYou: user.id === currentUserId,
         }
-        const list = membersByMailbox.get(m.mailbox) ?? []
+        const list = membersByMailbox.get(member.mailbox) ?? []
         list.push(row)
-        membersByMailbox.set(m.mailbox, list)
+        membersByMailbox.set(member.mailbox, list)
     }
 
     const aliasesByMailbox = new Map<string, string[]>()
@@ -110,35 +104,37 @@ function useMailboxData(currentUserId: string) {
         aliasesByMailbox.set(a.mailbox, list)
     }
 
-    const items: MailboxListItem[] = (mailboxes ?? [])
-        .filter(mb => domainMap.has(mb.domain))
-        .map(mb => {
-            const mbMembers = membersByMailbox.get(mb.id) ?? []
-            const mbAliases = aliasesByMailbox.get(mb.id) ?? []
-            return {
-                id: mb.id,
-                address: mb.address,
-                domainName: domainMap.get(mb.domain) ?? '',
-                displayName: mb.display_name || mb.name || '',
-                type: mb.type,
-                memberCount: mbMembers.length,
-                aliasCount: mbAliases.length,
-                memberNames: mbMembers.map(m => m.userName),
-                memberEmails: mbMembers.map(m => m.userEmail).filter(Boolean),
-                aliasAddresses: mbAliases,
-            }
-        })
+    const items: MailboxListItem[] = (mailboxRows ?? []).map(({ mailbox, domain }) => {
+        const mbMembers = membersByMailbox.get(mailbox.id) ?? []
+        const mbAliases = aliasesByMailbox.get(mailbox.id) ?? []
+        return {
+            id: mailbox.id,
+            address: mailbox.address,
+            domainName: domain.domain,
+            displayName: mailbox.display_name || mailbox.name || '',
+            type: mailbox.type,
+            memberCount: mbMembers.length,
+            aliasCount: mbAliases.length,
+            memberNames: mbMembers.map(m => m.userName),
+            memberEmails: mbMembers.map(m => m.userEmail).filter(Boolean),
+            aliasAddresses: mbAliases,
+        }
+    })
 
-    const orgMembersList: OrgMemberRow[] = Array.from(usersById.values())
+    const orgMembers: OrgMemberRow[] = (orgUsers ?? []).map(u => ({
+        userId: u.id,
+        userName: u.name || u.email || u.id,
+        userEmail: u.email ?? '',
+    }))
 
-    const rawMailboxes = new Map((mailboxes ?? []).map(mb => [mb.id, mb]))
+    const rawMailboxes = new Map((mailboxRows ?? []).map(r => [r.mailbox.id, r.mailbox]))
 
     return {
         domains: domains ?? [],
         items,
         rawMailboxes,
         membersByMailbox,
-        orgMembers: orgMembersList,
+        orgMembers,
     }
 }
 

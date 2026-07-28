@@ -7,33 +7,49 @@ export interface SendableIdentity {
     aliases: { id: string; address: string }[]
 }
 
-export function flattenSendableIdentities(
-    mailboxes: MailMailboxes[],
-    allAliases: MailMailboxAliases[],
-    allDomains: MailDomains[]
-): SendableIdentity[] {
-    const domainMap = new Map(allDomains.map(d => [d.id, d.domain]))
-    const aliasesByMailbox = new Map<string, { id: string; address: string }[]>()
-    for (const a of allAliases) {
-        const list = aliasesByMailbox.get(a.mailbox) ?? []
-        list.push({ id: a.id, address: a.address })
-        aliasesByMailbox.set(a.mailbox, list)
+/**
+ * One row per (membership × alias) from useSendableIdentities' joined query.
+ * `alias` is undefined for a mailbox with no aliases (left join).
+ */
+export interface SendableIdentityRow {
+    mailbox: MailMailboxes
+    domain: MailDomains
+    alias?: MailMailboxAliases
+}
+
+/**
+ * Pure: group the joined rows into one identity per mailbox, personal first,
+ * then shared by `created` ascending — the order pickers present them in.
+ */
+export function groupSendableIdentities(rows: SendableIdentityRow[]): SendableIdentity[] {
+    const byMailbox = new Map<
+        string,
+        { mailbox: MailMailboxes; domainName: string; aliases: { id: string; address: string }[] }
+    >()
+    for (const row of rows) {
+        let entry = byMailbox.get(row.mailbox.id)
+        if (!entry) {
+            entry = { mailbox: row.mailbox, domainName: row.domain.domain, aliases: [] }
+            byMailbox.set(row.mailbox.id, entry)
+        }
+        if (row.alias) {
+            entry.aliases.push({
+                id: row.alias.id,
+                address: `${row.alias.address}@${entry.domainName}`,
+            })
+        }
     }
 
-    const result: SendableIdentity[] = []
-    for (const mb of mailboxes) {
-        const domainName = domainMap.get(mb.domain)
-        if (!domainName) continue
-        const aliases = (aliasesByMailbox.get(mb.id) ?? []).map(a => ({
-            id: a.id,
-            address: `${a.address}@${domainName}`,
-        }))
-        result.push({
-            mailboxId: mb.id,
-            mailboxDisplayName: mb.display_name || mb.address,
-            primaryAddress: `${mb.address}@${domainName}`,
-            aliases,
-        })
-    }
-    return result
+    const entries = Array.from(byMailbox.values())
+    const personal = entries.filter(e => e.mailbox.type === 'personal')
+    const shared = entries
+        .filter(e => e.mailbox.type === 'shared')
+        .sort((a, b) => a.mailbox.created.localeCompare(b.mailbox.created))
+
+    return [...personal, ...shared].map(e => ({
+        mailboxId: e.mailbox.id,
+        mailboxDisplayName: e.mailbox.display_name || e.mailbox.address,
+        primaryAddress: `${e.mailbox.address}@${e.domainName}`,
+        aliases: e.aliases,
+    }))
 }

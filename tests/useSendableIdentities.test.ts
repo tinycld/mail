@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { flattenSendableIdentities } from '~/tinycld/mail/hooks/flattenSendableIdentities'
+import {
+    groupSendableIdentities,
+    type SendableIdentityRow,
+} from '~/tinycld/mail/hooks/flattenSendableIdentities'
 import type { MailDomains, MailMailboxAliases, MailMailboxes } from '~/tinycld/mail/types'
+
+// These cover the pure grouping of useSendableIdentities' joined rows. The
+// join semantics themselves (membership predicate, domain inner join, alias
+// left join) are covered against real collections in
+// tests/useMailboxHooks.mount.test.tsx.
 
 function mb(overrides: Partial<MailMailboxes>): MailMailboxes {
     return {
@@ -44,68 +52,87 @@ function al(id: string, mailbox: string, address: string): MailMailboxAliases {
     }
 }
 
-describe('flattenSendableIdentities', () => {
+describe('groupSendableIdentities', () => {
     it('includes mailbox primary + its aliases', () => {
-        const got = flattenSendableIdentities(
-            [mb({ id: 'mb1', address: 'alice', domain: 'd1' })],
-            [al('a1', 'mb1', 'alice.smith')],
-            [dn('d1', 'acme.com')]
-        )
+        const mailbox = mb({ id: 'mb1', address: 'alice', domain: 'd1' })
+        const rows: SendableIdentityRow[] = [
+            { mailbox, domain: dn('d1', 'acme.com'), alias: al('a1', 'mb1', 'alice.smith') },
+        ]
+        const got = groupSendableIdentities(rows)
         expect(got).toHaveLength(1)
         expect(got[0].mailboxId).toBe('mb1')
         expect(got[0].primaryAddress).toBe('alice@acme.com')
         expect(got[0].aliases).toEqual([{ id: 'a1', address: 'alice.smith@acme.com' }])
     })
 
-    it('groups aliases by their owning mailbox', () => {
-        const got = flattenSendableIdentities(
-            [
-                mb({ id: 'mb1', address: 'alice', domain: 'd1' }),
-                mb({
-                    id: 'mb2',
-                    address: 'support',
-                    domain: 'd1',
-                    type: 'shared',
-                    display_name: 'Support',
-                }),
-            ],
-            [al('a1', 'mb2', 'help')],
-            [dn('d1', 'acme.com')]
-        )
-        expect(got.find(i => i.mailboxId === 'mb1')?.aliases).toEqual([])
-        expect(got.find(i => i.mailboxId === 'mb2')?.aliases).toEqual([
-            { id: 'a1', address: 'help@acme.com' },
-        ])
-    })
-
-    it('falls back to address when display_name is empty', () => {
-        const got = flattenSendableIdentities(
-            [mb({ id: 'mb1', address: 'alice', display_name: '' })],
-            [],
-            [dn('d1', 'acme.com')]
-        )
-        expect(got[0].mailboxDisplayName).toBe('alice')
-    })
-
-    it('returns empty list when no mailboxes', () => {
-        expect(flattenSendableIdentities([], [], [])).toEqual([])
-    })
-
-    it('ignores aliases whose mailbox is not in the input list', () => {
-        const got = flattenSendableIdentities(
-            [mb({ id: 'mb1', address: 'alice', domain: 'd1' })],
-            [al('a1', 'mb2', 'help')],
-            [dn('d1', 'acme.com')]
-        )
+    it('a mailbox with no aliases still yields an identity (left-join row)', () => {
+        const rows: SendableIdentityRow[] = [
+            { mailbox: mb({ id: 'mb1' }), domain: dn('d1', 'acme.com') },
+        ]
+        const got = groupSendableIdentities(rows)
+        expect(got).toHaveLength(1)
         expect(got[0].aliases).toEqual([])
     })
 
-    it('skips mailboxes whose domain is unknown', () => {
-        const got = flattenSendableIdentities(
-            [mb({ id: 'mb1', address: 'alice', domain: 'd_missing' })],
-            [],
-            []
-        )
-        expect(got).toEqual([])
+    it('collapses multiple alias rows into one identity per mailbox', () => {
+        const shared = mb({
+            id: 'mb2',
+            address: 'support',
+            domain: 'd1',
+            type: 'shared',
+            display_name: 'Support',
+        })
+        const domain = dn('d1', 'acme.com')
+        const rows: SendableIdentityRow[] = [
+            { mailbox: shared, domain, alias: al('a1', 'mb2', 'help') },
+            { mailbox: shared, domain, alias: al('a2', 'mb2', 'sos') },
+        ]
+        const got = groupSendableIdentities(rows)
+        expect(got).toHaveLength(1)
+        expect(got[0].aliases).toEqual([
+            { id: 'a1', address: 'help@acme.com' },
+            { id: 'a2', address: 'sos@acme.com' },
+        ])
+    })
+
+    it('orders personal first, then shared by created ascending', () => {
+        const domain = dn('d1', 'acme.com')
+        const rows: SendableIdentityRow[] = [
+            {
+                mailbox: mb({
+                    id: 'mb_late',
+                    type: 'shared',
+                    address: 'late',
+                    created: '2024-06-01T00:00:00Z',
+                }),
+                domain,
+            },
+            {
+                mailbox: mb({
+                    id: 'mb_early',
+                    type: 'shared',
+                    address: 'early',
+                    created: '2024-01-02T00:00:00Z',
+                }),
+                domain,
+            },
+            { mailbox: mb({ id: 'mb_me', type: 'personal', address: 'alice' }), domain },
+        ]
+        const got = groupSendableIdentities(rows)
+        expect(got.map(i => i.mailboxId)).toEqual(['mb_me', 'mb_early', 'mb_late'])
+    })
+
+    it('falls back to address when display_name is empty', () => {
+        const rows: SendableIdentityRow[] = [
+            {
+                mailbox: mb({ id: 'mb1', address: 'alice', display_name: '' }),
+                domain: dn('d1', 'acme.com'),
+            },
+        ]
+        expect(groupSendableIdentities(rows)[0].mailboxDisplayName).toBe('alice')
+    })
+
+    it('returns empty list for no rows', () => {
+        expect(groupSendableIdentities([])).toEqual([])
     })
 })
