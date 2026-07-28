@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { splitMailboxes } from '~/tinycld/mail/hooks/splitMailboxes'
+import { getMailboxLabel } from '~/tinycld/mail/hooks/useMailboxes'
 import type { MailMailboxes } from '~/tinycld/mail/types'
 
 function makeMailbox(overrides: Partial<MailMailboxes>): MailMailboxes {
@@ -51,5 +52,26 @@ describe('splitMailboxes', () => {
         const got = splitMailboxes(['mb2'], [shared])
         expect(got.personal).toBeNull()
         expect(got.shared).toHaveLength(1)
+    })
+})
+
+describe('getMailboxLabel', () => {
+    it('returns "Personal" for the personal mailbox regardless of display_name', () => {
+        const mb = makeMailbox({ display_name: 'Alice', address: 'alice@x' })
+        expect(getMailboxLabel(mb, true)).toBe('Personal')
+    })
+
+    it('returns display_name for shared mailboxes when set', () => {
+        const mb = makeMailbox({
+            type: 'shared',
+            display_name: 'Team Support',
+            address: 'support@x',
+        })
+        expect(getMailboxLabel(mb, false)).toBe('Team Support')
+    })
+
+    it('falls back to address when display_name is empty for shared mailboxes', () => {
+        const mb = makeMailbox({ type: 'shared', display_name: '', address: 'support@x' })
+        expect(getMailboxLabel(mb, false)).toBe('support@x')
     })
 })

@@ -2,13 +2,15 @@ import { eq } from '@tanstack/db'
 import { queryClient, useStore } from '@tinycld/core/lib/pocketbase'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useEffect, useMemo } from 'react'
-import type { FolderCounts } from './computeMailboxFolderCounts'
-import { computeMailboxFolderCounts } from './computeMailboxFolderCounts'
 
-export type { FolderCounts } from './computeMailboxFolderCounts'
-export { computeMailboxFolderCounts }
-
-const EMPTY: FolderCounts = { inbox: 0, drafts: 0, sent: 0, starred: 0, trash: 0, spam: 0 }
+export interface FolderCounts {
+    inbox: number
+    drafts: number
+    sent: number
+    starred: number
+    trash: number
+    spam: number
+}
 
 /**
  * Reads per-mailbox folder counts from the mail_folder_counts view collection.
@@ -51,8 +53,3 @@ export function useMailboxFolderCounts(): Map<string, FolderCounts> {
         return map
     }, [rows])
 }
-
-// Re-export the empty constant for callers that need a default — keeps the
-// public API stable for places that historically read counts via the pure
-// helper.
-export { EMPTY as EMPTY_FOLDER_COUNTS }

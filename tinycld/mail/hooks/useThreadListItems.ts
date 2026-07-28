@@ -383,7 +383,7 @@ function buildThreadsFilter(params: {
         )
     }
 
-    // Folder semantics mirror computeMailboxFolderCounts:
+    // Folder semantics mirror the mail_folder_counts view:
     //   inbox    — folder='inbox' (no unread restriction; the row visibility
     //              isn't a count, the unread is a row-level visual)
     //   starred  — is_starred=true (any folder)
