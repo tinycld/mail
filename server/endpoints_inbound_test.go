@@ -386,6 +386,57 @@ func TestHandleInbound_KnownRecipientStoresMessage(t *testing.T) {
 	assertThreadStateInInbox(t, app, msgs[0].GetString("thread"), "user_alice")
 }
 
+// TestHandleInbound_DisabledUserMailboxStillReceives pins a deliberate policy
+// decision (multi-org HANDOFF §6, resolved 2026-07-28): delivery does NOT
+// consult users.disabled. Disable is a reversible suspension — mail keeps
+// accumulating so it is waiting when the account is re-enabled, and senders
+// learn nothing about the account's state (a bounce would leak it). The
+// suspended user still can't read any of it: sign-in, IMAP and the collection
+// rules are all closed by the disabled guards. If delivery ever starts
+// consulting `disabled`, this goes red so the change is made knowingly.
+func TestHandleInbound_DisabledUserMailboxStillReceives(t *testing.T) {
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "acme.com", "carol", "mb_disabled_001")
+
+	// A real users row carrying the disabled flag (core migration 1930000000),
+	// so a delivery-path disabled check would have something to find.
+	usersCol, err := app.FindCollectionByNameOrId("users")
+	if err != nil {
+		t.Fatalf("users collection missing: %v", err)
+	}
+	usersCol.Fields.Add(&core.BoolField{Name: "disabled"})
+	if err := app.Save(usersCol); err != nil {
+		t.Fatalf("failed to add disabled field: %v", err)
+	}
+	carol := core.NewRecord(usersCol)
+	carol.SetEmail("carol@local.test")
+	carol.SetVerified(true)
+	carol.SetPassword("Password123!")
+	carol.Set("disabled", true)
+	if err := app.Save(carol); err != nil {
+		t.Fatalf("failed to save disabled user: %v", err)
+	}
+	seedMember(t, app, "mb_disabled_001", carol.Id)
+
+	body := postmarkPayload(t, []string{"carol@acme.com"}, "While suspended", "Body text", "<msg-disabled-1@example.org>")
+	re, _ := makeInboundRequest(t, app, "tok-disabled", body)
+
+	provider := &stubProvider{parse: (&PostmarkProvider{}).ParseInbound}
+
+	if err := handleInbound(app, provider, re, "tok-disabled"); err != nil {
+		t.Fatalf("expected delivery to a disabled user's mailbox to succeed, got %v", err)
+	}
+
+	msgs, err := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "While suspended"})
+	if err != nil {
+		t.Fatalf("failed to query mail_messages: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected exactly 1 message stored, got %d", len(msgs))
+	}
+	assertThreadStateInInbox(t, app, msgs[0].GetString("thread"), carol.Id)
+}
+
 // assertThreadStateInInbox fails unless the given user has a mail_thread_state
 // row for the thread, in their inbox — i.e. the message was actually delivered
 // to them, not merely stored.

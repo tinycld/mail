@@ -36,8 +36,12 @@ func Register(app *pocketbase.PocketBase) {
 	// ports, and the multi-org router owns every listening socket (a tenant
 	// serves on a unix socket handed down to it) — so a tenant must not start
 	// them, and in production a failed listener aborts the whole boot, which
-	// would take the org down. Per-tenant mail protocols need an injected
-	// listener first (multi-org/HANDOFF.md §6, mailproto).
+	// would take the org down. mailproto now accepts an injected listener
+	// (mailproto.ListenFunc on IMAPOptions/SMTPOptions), so the remaining
+	// per-tenant work is router-side: demux inbound IMAP/SMTP connections to
+	// an org (TLS SNI — there is no Host header) and hand each tenant its
+	// listener (the ExtraFiles fd precedent), then thread a ListenFunc through
+	// RegisterTenant. Until then the listeners stay host-only.
 	registerMailListeners(app)
 }
 

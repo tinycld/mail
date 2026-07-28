@@ -23,7 +23,7 @@ const manifest = {
     quota: [{ collection: 'mail_messages', sizeField: 'total_size' }],
     server: { package: 'server', module: 'tinycld.org/packages/mail' },
     repository: { url: 'https://github.com/tinycld/mail' },
-    peerVersions: { '@tinycld/core': '>=0.4.0 <0.5.0' },
+    peerVersions: { '@tinycld/core': '>=0.0.4 <0.1.0' },
 }
 
 export default manifest

@@ -11,9 +11,9 @@ import (
 // serve, shutdown) lives in core/mailproto; mail supplies the session, which is
 // the part that speaks mail's schema.
 func StartIMAPServer(app core.App, certManager *autocert.Manager) (func(), error) {
-	return mailproto.StartIMAP(app, certManager,
-		func(app core.App, _ *imapserver.Conn) imapserver.Session {
+	return mailproto.StartIMAP(app, certManager, mailproto.IMAPOptions{
+		NewSession: func(app core.App, _ *imapserver.Conn) imapserver.Session {
 			return newIMAPSession(app)
 		},
-	)
+	})
 }

@@ -234,6 +234,13 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 	if err != nil {
 		return fmt.Errorf("getMailboxMembers: %w", err)
 	}
+	// Deliberately no users.disabled check here (decided 2026-07-28; this is
+	// the delivery path both the webhook and inbound-SMTP routes converge on).
+	// Disable is a reversible suspension: mail keeps accumulating so it is
+	// waiting when an admin re-enables the account, and senders learn nothing
+	// about the account's state — bouncing or deferring would leak it. The
+	// suspended user still can't READ any of it: sign-in, token refresh, IMAP
+	// and the collection rules are all closed by the disabled guards.
 	for _, member := range members {
 		userID := member.GetString("user")
 		if err := ensureThreadState(app, thread.Id, userID, "inbox", false); err != nil {
