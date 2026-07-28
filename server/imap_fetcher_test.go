@@ -14,7 +14,6 @@ import (
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/emersion/go-imap/v2/imapserver/imapmemserver"
-	"github.com/pocketbase/pocketbase/core"
 )
 
 // TestIMAPFetcher_PullsUnseenAndIngests boots an in-memory IMAP server with
@@ -25,9 +24,8 @@ import (
 // every poll.
 func TestIMAPFetcher_PullsUnseenAndIngests(t *testing.T) {
 	app := setupInboundTestApp(t)
-	const orgID = "org_imap_fetch01"
-	seedDomainMailboxAndOrg(t, app, "acme.com", "alice", "mb_imap_fetch_001", orgID)
-	seedMember(t, app, "mb_imap_fetch_001", "userorg_alice")
+	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_imap_fetch_001")
+	seedMember(t, app, "mb_imap_fetch_001", "user_alice")
 
 	server, addr, cleanup := newMemIMAPServer(t)
 	defer cleanup()
@@ -98,9 +96,8 @@ func TestIMAPFetcher_PullsUnseenAndIngests(t *testing.T) {
 // nowhere), and one to a hosted domain lands only in that domain's mailbox.
 func TestDispatchInbound_RoutesByRecipientDomain(t *testing.T) {
 	app := setupInboundTestApp(t)
-	// alpha hosts acme.com; beta hosts other.example.
-	seedDomainMailboxAndOrg(t, app, "acme.com", "alice", "mb_iso_001", "org_alpha")
-	seedMember(t, app, "mb_iso_001", "userorg_alice")
+	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_iso_001")
+	seedMember(t, app, "mb_iso_001", "user_alice")
 
 	// 1. Recipient on an UN-hosted domain → dropped (no mailbox resolves).
 	unhosted := &InboundMessage{
@@ -134,36 +131,6 @@ func TestDispatchInbound_RoutesByRecipientDomain(t *testing.T) {
 }
 
 // --- helpers ---
-
-// seedDomainMailboxAndOrg creates a mail_domains row pinned to the specified
-// org and a primary-address mailbox under it. Mirrors seedDomainAndMailbox
-// but lets the caller pick the org (needed for cross-org isolation tests).
-func seedDomainMailboxAndOrg(t *testing.T, app core.App, domainStr, localPart, mailboxID, orgID string) {
-	t.Helper()
-	domainsCol, err := app.FindCollectionByNameOrId("mail_domains")
-	if err != nil {
-		t.Fatalf("mail_domains collection missing: %v", err)
-	}
-	domain := core.NewRecord(domainsCol)
-	domain.Set("domain", domainStr)
-	domain.Set("org", orgID)
-	if err := app.Save(domain); err != nil {
-		t.Fatalf("failed to save domain %s: %v", domainStr, err)
-	}
-
-	mailboxesCol, err := app.FindCollectionByNameOrId("mail_mailboxes")
-	if err != nil {
-		t.Fatalf("mail_mailboxes collection missing: %v", err)
-	}
-	mailbox := core.NewRecord(mailboxesCol)
-	mailbox.Id = padID(mailboxID)
-	mailbox.Set("address", localPart)
-	mailbox.Set("domain", domain.Id)
-	mailbox.Set("type", "personal")
-	if err := app.Save(mailbox); err != nil {
-		t.Fatalf("failed to save mailbox %s@%s: %v", localPart, domainStr, err)
-	}
-}
 
 // newMemIMAPServer starts an in-memory IMAP server on a random local port
 // and returns the server, its bind address, and a cleanup function.

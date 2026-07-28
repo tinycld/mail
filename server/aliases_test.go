@@ -34,10 +34,10 @@ func setupAliasTestApp(t *testing.T) *tests.TestApp {
 	}
 	t.Cleanup(func() { app.Cleanup() })
 
-	// mail_domains (domain text only — we don't care about org FK for these unit tests)
+	// mail_domains — mirrors the shipped migration's fields these tests touch;
+	// there is no org field (single-org: the deployment IS the org).
 	domains := core.NewBaseCollection("mail_domains")
 	domains.Fields.Add(&core.TextField{Name: "domain", Required: true})
-	domains.Fields.Add(&core.TextField{Name: "org"})
 	if err := app.Save(domains); err != nil {
 		t.Fatalf("failed to save mail_domains: %v", err)
 	}
@@ -202,7 +202,6 @@ func seedDomainAndMailbox(t *testing.T, app core.App, domainStr, localPart, mail
 	}
 	domain := core.NewRecord(domainsCol)
 	domain.Set("domain", domainStr)
-	domain.Set("org", "orgplaceholder")
 	if err := app.Save(domain); err != nil {
 		t.Fatalf("failed to save domain %s: %v", domainStr, err)
 	}

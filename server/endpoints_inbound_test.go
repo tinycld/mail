@@ -126,7 +126,7 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 		CascadeDelete: true,
 		MaxSelect:     1,
 	})
-	members.Fields.Add(&core.TextField{Name: "user_org", Required: true})
+	members.Fields.Add(&core.TextField{Name: "user", Required: true})
 	members.Fields.Add(&core.TextField{Name: "role"})
 	if err := app.Save(members); err != nil {
 		t.Fatalf("failed to save mail_mailbox_members: %v", err)
@@ -186,7 +186,7 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 		CascadeDelete: true,
 		MaxSelect:     1,
 	})
-	threadState.Fields.Add(&core.TextField{Name: "user_org", Required: true})
+	threadState.Fields.Add(&core.TextField{Name: "user", Required: true})
 	threadState.Fields.Add(&core.TextField{Name: "folder"})
 	threadState.Fields.Add(&core.BoolField{Name: "is_read"})
 	threadState.Fields.Add(&core.BoolField{Name: "is_starred"})
@@ -197,8 +197,12 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 	return app
 }
 
-// seedMember creates a mail_mailbox_members row linking a mailbox to a user_org.
-func seedMember(t *testing.T, app core.App, mailboxID, userOrgID string) {
+// seedMember creates a mail_mailbox_members row linking a mailbox to a user.
+// Field names mirror the shipped migration (1713000000: `user`, not the
+// pre-de-org `user_org`) — the inbound tests assert delivery through them, so
+// a fixture that drifts from the schema turns those assertions red instead of
+// certifying a total failure to deliver.
+func seedMember(t *testing.T, app core.App, mailboxID, userID string) {
 	t.Helper()
 	col, err := app.FindCollectionByNameOrId("mail_mailbox_members")
 	if err != nil {
@@ -206,7 +210,7 @@ func seedMember(t *testing.T, app core.App, mailboxID, userOrgID string) {
 	}
 	member := core.NewRecord(col)
 	member.Set("mailbox", padID(mailboxID))
-	member.Set("user_org", userOrgID)
+	member.Set("user", userID)
 	member.Set("role", "owner")
 	if err := app.Save(member); err != nil {
 		t.Fatalf("failed to save mailbox member: %v", err)
@@ -252,7 +256,7 @@ func TestHandleInbound_MembersLookupFailureReturns500(t *testing.T) {
 func TestHandleInbound_IdempotentRetry(t *testing.T) {
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_idem_001")
-	seedMember(t, app, "mb_idem_001", "userorg_alice")
+	seedMember(t, app, "mb_idem_001", "user_alice")
 
 	body := postmarkPayload(t, []string{"alice@acme.com"}, "retry-test", "body", "<msg-idem-1@example.org>")
 
@@ -269,6 +273,10 @@ func TestHandleInbound_IdempotentRetry(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("expected exactly 1 message after 2 deliveries (idempotency), got %d", len(msgs))
 	}
+
+	// Idempotent must not mean undelivered: the retry may skip re-storing,
+	// but exactly one thread-state row must still land in the inbox.
+	assertThreadStateInInbox(t, app, msgs[0].GetString("thread"), "user_alice")
 }
 
 // TestHandleInbound_MixedKnownAndUnknownReturns200 — when at least one
@@ -277,7 +285,7 @@ func TestHandleInbound_IdempotentRetry(t *testing.T) {
 func TestHandleInbound_MixedKnownAndUnknownReturns200(t *testing.T) {
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_mixed_001")
-	seedMember(t, app, "mb_mixed_001", "userorg_alice")
+	seedMember(t, app, "mb_mixed_001", "user_alice")
 
 	body := postmarkPayload(t, []string{"alice@acme.com", "ghost@acme.com"}, "mixed", "body", "<msg-mixed-1@example.org>")
 	re, _ := makeInboundRequest(t, app, "tok-mixed", body)
@@ -300,7 +308,7 @@ func TestHandleInbound_MixedKnownAndUnknownReturns200(t *testing.T) {
 func TestHandleInbound_StorageFailureReturns500(t *testing.T) {
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_storefail_001")
-	seedMember(t, app, "mb_storefail_001", "userorg_alice")
+	seedMember(t, app, "mb_storefail_001", "user_alice")
 
 	// Hook: reject any mail_messages save with subject "__force_storage_failure__".
 	app.OnRecordValidate("mail_messages").BindFunc(func(e *core.RecordEvent) error {
@@ -351,7 +359,7 @@ func TestHandleInbound_StorageFailureReturns500(t *testing.T) {
 func TestHandleInbound_KnownRecipientStoresMessage(t *testing.T) {
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_known_001")
-	seedMember(t, app, "mb_known_001", "userorg_alice")
+	seedMember(t, app, "mb_known_001", "user_alice")
 
 	body := postmarkPayload(t, []string{"alice@acme.com"}, "Hello", "Body text", "<msg-known-1@example.org>")
 	re, _ := makeInboundRequest(t, app, "tok-known", body)
@@ -368,6 +376,33 @@ func TestHandleInbound_KnownRecipientStoresMessage(t *testing.T) {
 	}
 	if len(msgs) != 1 {
 		t.Fatalf("expected exactly 1 message stored, got %d", len(msgs))
+	}
+
+	// A stored message is not delivered until the recipient's thread state
+	// exists — that row is what puts the thread in their inbox. Asserting it
+	// here is what keeps the fixture schema honest: this test once passed
+	// while the fixture declared a `user_org` field production never writes,
+	// so thread state was silently never created.
+	assertThreadStateInInbox(t, app, msgs[0].GetString("thread"), "user_alice")
+}
+
+// assertThreadStateInInbox fails unless the given user has a mail_thread_state
+// row for the thread, in their inbox — i.e. the message was actually delivered
+// to them, not merely stored.
+func assertThreadStateInInbox(t *testing.T, app core.App, threadID, userID string) {
+	t.Helper()
+	states, err := app.FindRecordsByFilter("mail_thread_state",
+		"thread = {:t} && user = {:u}", "", 10, 0,
+		map[string]any{"t": threadID, "u": userID})
+	if err != nil {
+		t.Fatalf("failed to query mail_thread_state: %v", err)
+	}
+	if len(states) != 1 {
+		t.Fatalf("expected 1 thread state row for user %q on thread %q, got %d — the message was stored but never delivered",
+			userID, threadID, len(states))
+	}
+	if folder := states[0].GetString("folder"); folder != "inbox" {
+		t.Fatalf("thread state folder = %q, want inbox", folder)
 	}
 }
 

@@ -16,7 +16,7 @@ import (
 func TestSMTPInboundSession_AcceptsKnownRecipient(t *testing.T) {
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_smtp_in_001")
-	seedMember(t, app, "mb_smtp_in_001", "userorg_alice")
+	seedMember(t, app, "mb_smtp_in_001", "user_alice")
 
 	sess := &smtpInboundSession{app: app, hostname: "mx.tinycld.test"}
 
@@ -48,7 +48,7 @@ func TestSMTPInboundSession_AcceptsKnownRecipient(t *testing.T) {
 func TestSMTPInboundSession_RejectsUnknownRecipient(t *testing.T) {
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_smtp_in_002")
-	seedMember(t, app, "mb_smtp_in_002", "userorg_alice")
+	seedMember(t, app, "mb_smtp_in_002", "user_alice")
 
 	sess := &smtpInboundSession{app: app, hostname: "mx.tinycld.test"}
 	if err := sess.Mail("sender@external.example", &smtp.MailOptions{}); err != nil {

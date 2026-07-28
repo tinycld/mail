@@ -20,7 +20,6 @@ function dn(id: string, domain: string): MailDomains {
     return {
         id,
         domain,
-        org: 'o',
         verified: true,
         mx_verified: true,
         inbound_domain_verified: true,
