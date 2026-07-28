@@ -1,13 +1,13 @@
 ---
 title: Setting up a mail provider
-summary: Choose Postmark or run your own SMTP — either way mail flows through your org
+summary: Choose Postmark or run your own SMTP — either way mail flows through your provider
 tags: [provider, postmark, smtp, setup, settings]
 order: 100
 ---
 
 ## Who can do this
 
-Configuring a provider is per-org — each org's mail goes through its own provider account. The provider settings page lives at **Settings → Mail → Provider** and is accessible to org **owners** and **admins** only.
+The mail provider is deployment-wide infrastructure — all mail goes through one provider account. A **super admin** (or the PocketBase superuser) configures it from the Setup dashboard's **Settings** tab (`/setup`). Mail **domains**, by contrast, are managed in-app at **Settings → Mail → Provider** by organization **owners** and **admins**.
 
 ## Picking a provider
 
@@ -16,7 +16,7 @@ Two providers ship today:
 - **Postmark** — managed SaaS. Sign up, paste two API tokens, point your DNS at Postmark's hosts. Best for most people.
 - **Self-hosted SMTP** — TinyCld delivers mail directly via SMTP and accepts inbound either as an MX target or by polling an IMAP account. No third-party account required, but you take on the deliverability work yourself (rDNS, SPF, DKIM, monitoring).
 
-The choice is per-org; you can switch between them later without losing stored mail.
+You can switch between them later without losing stored mail.
 
 ## Postmark
 
@@ -29,12 +29,12 @@ Postmark has a free tier suitable for testing; production use needs a paid plan.
 
 ### Connecting
 
-1. Open **Settings → Mail → Provider**.
+1. Open the Setup dashboard's **Settings** tab and find the **Mail Provider** panel.
 2. Pick **Postmark** as the provider.
 3. Paste your **server token** and **account token**.
 4. Click **Save**.
 
-That's the whole setup. Once saved, outbound mail submitted from any composer routes through this Postmark server, and inbound mail routed to your org's domains lands here.
+That's the whole setup. Once saved, outbound mail submitted from any composer routes through this Postmark server, and inbound mail routed to your verified domains lands here.
 
 ## Self-hosted SMTP
 
@@ -49,7 +49,7 @@ This provider does the SMTP work itself. Outbound mail goes straight to the reci
 
 ### Connecting
 
-1. Open **Settings → Mail → Provider**.
+1. Open the Setup dashboard's **Settings** tab and find the **Mail Provider** panel.
 2. Pick **Self-hosted SMTP**.
 3. Fill in:
    - **Public hostname** — the host that mail receivers will see (matches your rDNS). This is also the MX target operators will publish if they use inbound MX mode.
@@ -70,12 +70,12 @@ Three choices:
 When inbound mode is **Poll IMAP mailbox**, the following appear:
 
 - **IMAP host** / **port** — the server to poll. Port `0` picks the default (`143` plain, `993` TLS).
-- **Username** / **password** — IMAP credentials. Stored in the same way as any other org setting.
+- **Username** / **password** — IMAP credentials. Stored like the other deployment settings, with the password masked.
 - **Mailbox** — defaults to `INBOX`.
 - **Poll interval (seconds)** — defaults to `60`. Lower = fresher mail at the cost of more IMAP traffic.
 - **Use TLS** — turn off only when polling localhost or a host with broken TLS.
 
-The fetcher runs one worker per org, marks each fetched message as `\Seen` after a successful store, and re-runs only on the unseen set — so a message is ingested exactly once even if the worker restarts mid-tick.
+The fetcher runs a single poll loop for the deployment, marks each fetched message as `\Seen` after a successful store, and re-runs only on the unseen set — so a message is ingested exactly once even if it restarts mid-tick.
 
 ### Bounce model (synchronous SMTP errors)
 
@@ -87,19 +87,9 @@ DKIM **signing** of outbound mail is not yet implemented for self-hosted SMTP. T
 
 ## Where credentials are stored
 
-Provider settings live in the core `settings` table at `(app='mail', org=<orgId>, key=<key>)`. They're scoped to the org — different orgs can use different providers and accounts. Secrets (tokens, IMAP passwords) are masked in the settings UI.
+Provider settings live in the deployment-wide `system_settings` store (keys like `mail.provider`, `mail.postmark_server_token`), readable and writable only by super admins and the PocketBase superuser. Secrets (tokens, IMAP passwords) are masked in the settings UI.
 
-The values are also cached in-process per-org for performance; the cache invalidates automatically when the settings record changes, and the IMAP fetcher respawns its workers on each invalidation so credential rotation takes effect without a restart.
-
-## Per-org fallback
-
-If an org has no provider settings, the server falls back to environment variables:
-
-- `MAIL_PROVIDER` — `postmark` or `smtp`.
-- Postmark: `POSTMARK_SERVER_TOKEN`, `POSTMARK_ACCOUNT_TOKEN`.
-- SMTP: `SMTP_PUBLIC_HOSTNAME`, `SMTP_INBOUND_MODE`, `SMTP_IMAP_HOST` / `SMTP_IMAP_PORT` / `SMTP_IMAP_USERNAME` / `SMTP_IMAP_PASSWORD` / `SMTP_IMAP_MAILBOX` / `SMTP_IMAP_USE_TLS` / `SMTP_IMAP_POLL_INTERVAL_SECONDS`, `SMTP_DKIM_SELECTOR`.
-
-This is mostly useful for single-org self-hosted setups where it's simpler to put credentials in the deployment config than in the database.
+The IMAP fetcher reconciles automatically whenever a setting changes, so credential rotation takes effect without a restart. There is no environment-variable fallback — the Settings tab is the one place providers are configured. (The only env switch is the operator-level `MAIL_INBOUND_SMTP_ENABLED` guard for the built-in listener.)
 
 ## Verifying it works
 
