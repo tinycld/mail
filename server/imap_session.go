@@ -87,16 +87,41 @@ func (s *imapSession) Login(username, password string) error {
 	}
 	s.mailboxMemberships = members
 
-	// Build the mailbox index for IMAP folder namespacing. A user can still hold
-	// several mailboxes (their personal one plus any shared ones).
+	// Build the mailbox index for IMAP folder namespacing. A user can still
+	// hold several mailboxes (their personal one plus any shared ones), so
+	// batch the lookups: one query for the mailboxes, one for their domains —
+	// not two per membership. A membership whose mailbox or domain row is
+	// gone is skipped, as before.
+	mailboxIDs := make([]string, 0, len(s.mailboxMemberships))
 	for _, mb := range s.mailboxMemberships {
-		mailboxID := mb.GetString("mailbox")
-		mailbox, err := s.app.FindRecordById("mail_mailboxes", mailboxID)
-		if err != nil {
+		mailboxIDs = append(mailboxIDs, mb.GetString("mailbox"))
+	}
+	mailboxes, err := s.app.FindRecordsByIds("mail_mailboxes", mailboxIDs)
+	if err != nil {
+		return fmt.Errorf("failed to load mailboxes: %w", err)
+	}
+	mailboxByID := make(map[string]*core.Record, len(mailboxes))
+	domainIDs := make([]string, 0, len(mailboxes))
+	for _, mailbox := range mailboxes {
+		mailboxByID[mailbox.Id] = mailbox
+		domainIDs = append(domainIDs, mailbox.GetString("domain"))
+	}
+	domains, err := s.app.FindRecordsByIds("mail_domains", domainIDs)
+	if err != nil {
+		return fmt.Errorf("failed to load mail domains: %w", err)
+	}
+	domainByID := make(map[string]*core.Record, len(domains))
+	for _, domain := range domains {
+		domainByID[domain.Id] = domain
+	}
+
+	for _, mb := range s.mailboxMemberships {
+		mailbox := mailboxByID[mb.GetString("mailbox")]
+		if mailbox == nil {
 			continue
 		}
-		domain, err := s.app.FindRecordById("mail_domains", mailbox.GetString("domain"))
-		if err != nil {
+		domain := domainByID[mailbox.GetString("domain")]
+		if domain == nil {
 			continue
 		}
 		name := mailbox.GetString("name")
@@ -107,7 +132,7 @@ func (s *imapSession) Login(username, password string) error {
 			name = mailbox.GetString("address") + "@" + domain.GetString("domain")
 		}
 		s.mailboxIndex = append(s.mailboxIndex, mailboxContext{
-			name: name, mailboxID: mailboxID,
+			name: name, mailboxID: mailbox.Id,
 		})
 	}
 	s.multiMailbox = len(s.mailboxIndex) > 1
@@ -358,30 +383,24 @@ func (s *imapSession) buildFTSMatchSet(criteria *imap.SearchCriteria) map[string
 			s.app.Logger().Warn("imap: text FTS query failed", "error", err, "term", term)
 		}
 
-		var threadMatches []struct {
-			RecordID string `db:"record_id"`
+		// Map matched threads back to their messages in the same statement —
+		// a per-thread lookup here was a query per FTS match.
+		var threadMsgs []struct {
+			ID string `db:"id"`
 		}
 		err = db.NewQuery(`
-			SELECT record_id FROM fts_mail_threads
-			WHERE fts_mail_threads MATCH {:q}
-		`).Bind(map[string]any{"q": ftsQuery}).All(&threadMatches)
+			SELECT id FROM mail_messages
+			WHERE thread IN (
+				SELECT record_id FROM fts_mail_threads
+				WHERE fts_mail_threads MATCH {:q}
+			)
+		`).Bind(map[string]any{"q": ftsQuery}).All(&threadMsgs)
 		if err == nil {
-			for _, tm := range threadMatches {
-				// Find all messages in this thread
-				msgs, err := s.app.FindRecordsByFilter(
-					"mail_messages",
-					"thread = {:thread}",
-					"",
-					0,
-					0,
-					map[string]any{"thread": tm.RecordID},
-				)
-				if err == nil {
-					for _, msg := range msgs {
-						termSet[msg.Id] = true
-					}
-				}
+			for _, m := range threadMsgs {
+				termSet[m.ID] = true
 			}
+		} else {
+			s.app.Logger().Warn("imap: thread FTS query failed", "error", err, "term", term)
 		}
 
 		applyTerm(termSet)

@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -92,20 +93,43 @@ func handleUserDeleted(app core.App, _ *core.Record) {
 		return
 	}
 
+	if len(mailboxes) == 0 {
+		return
+	}
+
+	// One query for which of them still have members — not one per mailbox.
+	// On a query error, sweep nothing: deleting on unknown membership state
+	// would destroy a mailbox someone still owns.
+	ids := make([]any, len(mailboxes))
+	for i, mailbox := range mailboxes {
+		ids[i] = mailbox.Id
+	}
+	var memberRows []struct {
+		Mailbox string `db:"mailbox"`
+	}
+	err = app.DB().
+		Select("mailbox").
+		Distinct(true).
+		From("mail_mailbox_members").
+		Where(dbx.In("mailbox", ids...)).
+		All(&memberRows)
+	if err != nil {
+		app.Logger().Warn("mail lifecycle: failed to load mailbox memberships for orphan sweep",
+			"error", err)
+		return
+	}
+	hasMembers := make(map[string]bool, len(memberRows))
+	for _, row := range memberRows {
+		hasMembers[row.Mailbox] = true
+	}
+
 	for _, mailbox := range mailboxes {
-		members, err := app.FindRecordsByFilter(
-			"mail_mailbox_members",
-			"mailbox = {:mailbox}",
-			"",
-			1,
-			0,
-			map[string]any{"mailbox": mailbox.Id},
-		)
-		if err != nil || len(members) == 0 {
-			if err := app.Delete(mailbox); err != nil {
-				app.Logger().Warn("mail lifecycle: failed to delete orphaned mailbox",
-					"mailboxID", mailbox.Id, "error", err)
-			}
+		if hasMembers[mailbox.Id] {
+			continue
+		}
+		if err := app.Delete(mailbox); err != nil {
+			app.Logger().Warn("mail lifecycle: failed to delete orphaned mailbox",
+				"mailboxID", mailbox.Id, "error", err)
 		}
 	}
 }

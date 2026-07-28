@@ -75,3 +75,41 @@ func TestDeriveMailboxAddress_SuffixExhaustionYieldsNoAddress(t *testing.T) {
 		t.Fatalf("exhausted derivation = %q, want empty", got)
 	}
 }
+
+// handleUserDeleted must sweep only memberless PERSONAL mailboxes: one that
+// still has a member stays (its owner is alive), and a memberless shared
+// mailbox is out of scope (shared mailboxes are administered, not owned).
+func TestHandleUserDeleted_SweepsOnlyMemberlessPersonalMailboxes(t *testing.T) {
+	app := setupInboundTestApp(t)
+
+	domainID := seedDomainAndMailbox(t, app, "example.com", "kept", "mbox_sweep_keep")
+	seedMember(t, app, "mbox_sweep_keep", "user_alive_00001")
+
+	// Memberless personal mailbox: the one the sweep exists to remove.
+	seedMailbox(t, app, "orphan", domainID)
+
+	// Memberless SHARED mailbox: must survive the sweep.
+	mailboxesCol, err := app.FindCollectionByNameOrId("mail_mailboxes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared := core.NewRecord(mailboxesCol)
+	shared.Set("address", "team")
+	shared.Set("domain", domainID)
+	shared.Set("type", "shared")
+	if err := app.Save(shared); err != nil {
+		t.Fatal(err)
+	}
+
+	handleUserDeleted(app, nil)
+
+	if _, err := app.FindFirstRecordByFilter("mail_mailboxes", "address = 'kept'"); err != nil {
+		t.Fatalf("membered personal mailbox was swept: %v", err)
+	}
+	if _, err := app.FindFirstRecordByFilter("mail_mailboxes", "address = 'orphan'"); err == nil {
+		t.Fatal("memberless personal mailbox survived the sweep")
+	}
+	if _, err := app.FindFirstRecordByFilter("mail_mailboxes", "address = 'team'"); err != nil {
+		t.Fatalf("shared mailbox was swept: %v", err)
+	}
+}
