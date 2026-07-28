@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test'
 import { clickSidebarItem, login, navigateToPackage } from '@tinycld/core/e2e-helpers'
-import { deliverInbound, emailRow, expectRowVisible, openThread, uniqueSubject } from './helpers'
+import {
+    deliverInbound,
+    emailRow,
+    expectRowVisible,
+    openThread,
+    TEST_USER_MAILBOX,
+    uniqueSubject,
+} from './helpers'
 
 test.describe('Mail — Unified inbox', () => {
     test.beforeEach(async ({ page }) => {
@@ -16,7 +23,7 @@ test.describe('Mail — Unified inbox', () => {
     }) => {
         const personalSubject = uniqueSubject('UnifiedPersonal')
         const sharedSubject = uniqueSubject('UnifiedShared')
-        await deliverInbound(request, { subject: personalSubject, to: 'user@tinycld.org' })
+        await deliverInbound(request, { subject: personalSubject, to: TEST_USER_MAILBOX })
         await deliverInbound(request, { subject: sharedSubject, to: 'support@tinycld.org' })
         await page.reload()
         // Reload tears the sidebar's lazy chunk back to a Suspense

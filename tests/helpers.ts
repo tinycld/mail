@@ -158,6 +158,14 @@ export interface DeliverOptions {
 // Tests should call `deliverInbound({ subject: \`Test-foo-${stamp}\` })`
 // rather than reading seeded subjects — parallel specs that archive,
 // trash, or delete seed rows otherwise race the read.
+// Mailbox addresses derive from the USERNAME (server lifecycle.go
+// deriveMailboxAddress, mirrored by seed.ts) — the seeded test user is
+// username `tester` with email user@tinycld.org, so the mailbox is
+// tester@tinycld.org. Deriving the default recipient from the email
+// local-part is the exact bug commit 4d52992 fixed; with `user@…` every
+// deliverInbound 403s "No mailbox for recipient(s)".
+export const TEST_USER_MAILBOX = `${process.env.TEST_USER_USERNAME || 'tester'}@tinycld.org`
+
 export async function deliverInbound(
     request: APIRequestContext,
     opts: DeliverOptions
@@ -172,8 +180,8 @@ export async function deliverInbound(
             Name: opts.fromName ?? 'Test Sender',
             Email: opts.fromEmail ?? 'sender@example.com',
         },
-        To: opts.to ?? 'user@tinycld.org',
-        ToFull: [{ Name: 'Test User', Email: opts.to ?? 'user@tinycld.org' }],
+        To: opts.to ?? TEST_USER_MAILBOX,
+        ToFull: [{ Name: 'Test User', Email: opts.to ?? TEST_USER_MAILBOX }],
         CcFull: [],
         Subject: opts.subject,
         Date: new Date().toUTCString(),
