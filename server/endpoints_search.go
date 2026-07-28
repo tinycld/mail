@@ -9,6 +9,7 @@ import (
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/router"
 )
 
 type searchResultItem struct {
@@ -181,8 +182,15 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 		return re.JSON(http.StatusOK, emptyResponse)
 	}
 
+	// A lookup FAILURE must not read as an empty result set — that swallow is
+	// what let the ts.user_org rename present as a silent zero. No accessible
+	// mailboxes, by contrast, is a genuinely empty answer.
 	accessibleMailboxIDs, err := getUserMailboxIDs(app, userID, mailboxID)
-	if err != nil || len(accessibleMailboxIDs) == 0 {
+	if err != nil {
+		app.Logger().Error("search: mailbox lookup failed", "error", err, "user", userID)
+		return router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
+	}
+	if len(accessibleMailboxIDs) == 0 {
 		return re.JSON(http.StatusOK, emptyResponse)
 	}
 
@@ -206,7 +214,7 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 
 	// SQL-only path: no FTS terms, only structured filters
 	if !hasFTSTerms {
-		return handleStructuredSearch(app, re, inClause, messageWhere, folderJoin, params, limit, offset, emptyResponse)
+		return handleStructuredSearch(app, re, inClause, messageWhere, folderJoin, params, limit, offset)
 	}
 
 	// FTS path (possibly with additional structured filters). The two FTS
@@ -220,7 +228,7 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 		if !filters.hasStructuredFilters() {
 			return re.JSON(http.StatusOK, emptyResponse)
 		}
-		return handleStructuredSearch(app, re, inClause, messageWhere, folderJoin, params, limit, offset, emptyResponse)
+		return handleStructuredSearch(app, re, inClause, messageWhere, folderJoin, params, limit, offset)
 	}
 
 	// Only bind a param when its UNION arm is actually present in the SQL — dbx
@@ -296,8 +304,8 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 	var results []searchResultRow
 	err = app.DB().NewQuery(combinedQuery).Bind(dbx.Params(params)).All(&results)
 	if err != nil {
-		app.Logger().Warn("FTS: search query failed", "error", err, "query", q)
-		return re.JSON(http.StatusOK, emptyResponse)
+		app.Logger().Error("FTS: search query failed", "error", err, "query", q)
+		return router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
 	}
 
 	items := mapResults(results)
@@ -364,7 +372,6 @@ func handleStructuredSearch(
 	inClause, messageWhere, folderJoin string,
 	params map[string]any,
 	limit, offset int,
-	emptyResponse searchResponse,
 ) error {
 	query := `
 		SELECT DISTINCT
@@ -387,8 +394,8 @@ func handleStructuredSearch(
 	var results []searchResultRow
 	err := app.DB().NewQuery(query).Bind(dbx.Params(params)).All(&results)
 	if err != nil {
-		app.Logger().Warn("Structured search failed", "error", err)
-		return re.JSON(http.StatusOK, emptyResponse)
+		app.Logger().Error("Structured search failed", "error", err)
+		return router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
 	}
 
 	items := mapResults(results)

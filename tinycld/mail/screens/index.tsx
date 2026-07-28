@@ -164,6 +164,19 @@ function ActiveViewBanner({
     )
 }
 
+function SearchFailedState() {
+    return (
+        <View className="flex-1 items-center justify-center gap-1 p-8" testID="mail-search-failed">
+            <Text className="text-foreground" style={{ fontSize: 16, fontWeight: '600' }}>
+                Search failed
+            </Text>
+            <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
+                Something went wrong running your search. Try again in a moment.
+            </Text>
+        </View>
+    )
+}
+
 function SearchResultsHeader({ total, isSearching }: { total: number; isSearching: boolean }) {
     return (
         <View className="px-3 py-2">
@@ -469,7 +482,9 @@ export default function MailListScreen() {
         return (
             <View className="flex-1">
                 <SearchResultsHeader total={search.total} isSearching={search.isSearching} />
-                {search.isSearching && searchItems.length === 0 ? (
+                {search.error ? (
+                    <SearchFailedState />
+                ) : search.isSearching && searchItems.length === 0 ? (
                     <LoadingState />
                 ) : searchItems.length === 0 ? (
                     <View className="flex-1 items-center justify-center p-8">

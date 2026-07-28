@@ -1,3 +1,4 @@
+import { captureException } from '@tinycld/core/lib/errors'
 import { pb } from '@tinycld/core/lib/pocketbase'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AdvancedSearchFilters } from './useSearchState'
@@ -122,6 +123,7 @@ export function useMailSearch(
         } catch (err: unknown) {
             if (err instanceof DOMException && err.name === 'AbortError') return
             if (!controller.signal.aborted) {
+                captureException('mail.search', err, { query: q })
                 setError(err instanceof Error ? err.message : 'Search failed')
                 setResults([])
                 setTotal(0)
