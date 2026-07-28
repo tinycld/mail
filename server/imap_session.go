@@ -290,8 +290,24 @@ func (s *imapSession) buildFTSMatchSet(criteria *imap.SearchCriteria) map[string
 		return nil
 	}
 
-	result := make(map[string]bool)
 	db := s.app.DB()
+
+	// RFC 3501: search keys AND together, so each term produces its own match
+	// set and the sets intersect. `result` stays nil until the first term
+	// constrains it; a term FTS cannot answer (sanitizes away, query error) is
+	// skipped and handled below.
+	var result map[string]bool
+	applyTerm := func(matches map[string]bool) {
+		if result == nil {
+			result = matches
+			return
+		}
+		for id := range result {
+			if !matches[id] {
+				delete(result, id)
+			}
+		}
+	}
 
 	// Body searches message body content via FTS
 	for _, term := range bodyTerms {
@@ -307,28 +323,26 @@ func (s *imapSession) buildFTSMatchSet(criteria *imap.SearchCriteria) map[string
 			WHERE fts_mail_messages MATCH {:q}
 		`).Bind(map[string]any{"q": ftsQuery}).All(&matches)
 		if err != nil {
+			s.app.Logger().Warn("imap: body FTS query failed", "error", err, "term", term)
 			continue
 		}
-		// For the first term, seed the set; for subsequent terms, intersect
-		if len(result) == 0 && len(bodyTerms) == 1 && len(textTerms) == 0 {
-			for _, m := range matches {
-				result[m.RecordID] = true
-			}
-		} else {
-			for _, m := range matches {
-				result[m.RecordID] = true
-			}
+		termSet := make(map[string]bool, len(matches))
+		for _, m := range matches {
+			termSet[m.RecordID] = true
 		}
+		applyTerm(termSet)
 	}
 
-	// Text searches both headers and body — query both FTS tables
+	// Text searches the whole message — body via fts_mail_messages, plus
+	// subject/participants via fts_mail_threads mapped back to messages. The
+	// union across the two indexes is one term's matches; terms still AND.
 	for _, term := range textTerms {
 		ftsQuery := sanitizeFTSQuery(term)
 		if ftsQuery == "" {
 			continue
 		}
 
-		// Search messages (body + headers)
+		termSet := make(map[string]bool)
 		var msgMatches []struct {
 			RecordID string `db:"record_id"`
 		}
@@ -338,12 +352,12 @@ func (s *imapSession) buildFTSMatchSet(criteria *imap.SearchCriteria) map[string
 		`).Bind(map[string]any{"q": ftsQuery}).All(&msgMatches)
 		if err == nil {
 			for _, m := range msgMatches {
-				result[m.RecordID] = true
+				termSet[m.RecordID] = true
 			}
+		} else {
+			s.app.Logger().Warn("imap: text FTS query failed", "error", err, "term", term)
 		}
 
-		// Search threads (subject, participants) — need to map thread IDs
-		// back to message IDs
 		var threadMatches []struct {
 			RecordID string `db:"record_id"`
 		}
@@ -364,13 +378,21 @@ func (s *imapSession) buildFTSMatchSet(criteria *imap.SearchCriteria) map[string
 				)
 				if err == nil {
 					for _, msg := range msgs {
-						result[msg.Id] = true
+						termSet[msg.Id] = true
 					}
 				}
 			}
 		}
+
+		applyTerm(termSet)
 	}
 
+	// Criteria were present but no term could constrain (all unanswerable):
+	// fail closed — an empty set matches nothing — rather than treating the
+	// criteria as absent and matching everything.
+	if result == nil {
+		return map[string]bool{}
+	}
 	return result
 }
 
