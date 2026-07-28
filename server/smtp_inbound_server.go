@@ -1,9 +1,11 @@
 package mail
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"time"
 
@@ -60,18 +62,8 @@ func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func()
 		hostname = "localhost"
 	}
 
-	backend := &smtpInboundBackend{app: app, hostname: hostname}
-	server := smtp.NewServer(backend)
-	server.Domain = hostname
-	server.AllowInsecureAuth = false
-	server.MaxMessageBytes = 25 << 20
-	server.EnableSMTPUTF8 = true
-	server.ReadTimeout = 60 * time.Second
-	server.WriteTimeout = 60 * time.Second
+	server := newInboundSMTPServer(app, hostname, tlsConfig)
 	server.Addr = addr
-	if tlsConfig != nil {
-		server.TLSConfig = tlsConfig
-	}
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -90,6 +82,69 @@ func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func()
 		ln.Close()
 		server.Close()
 	}, nil
+}
+
+// newInboundSMTPServer builds the inbound-MX server around the shared inbound
+// backend; both the host's TCP bind and the tenant's injected-listener path
+// serve exactly this instance.
+func newInboundSMTPServer(app core.App, hostname string, tlsConfig *tls.Config) *smtp.Server {
+	backend := &smtpInboundBackend{app: app, hostname: hostname}
+	server := smtp.NewServer(backend)
+	server.Domain = hostname
+	server.AllowInsecureAuth = false
+	server.MaxMessageBytes = 25 << 20
+	server.EnableSMTPUTF8 = true
+	server.ReadTimeout = 60 * time.Second
+	server.WriteTimeout = 60 * time.Second
+	if tlsConfig != nil {
+		server.TLSConfig = tlsConfig
+	}
+	return server
+}
+
+// startSMTPInboundOnListener serves the inbound-MX session on an injected
+// plaintext listener — the multi-org tenant path. The router owns :25: it
+// offers and terminates STARTTLS there, routes each transaction by RCPT TO
+// domain through the control-plane registry, and relays accepted messages
+// here over the org's private unix socket. There is no
+// MAIL_INBOUND_SMTP_ENABLED gate on this path: whether :25 is open is the
+// router operator's call, and a handed-down listener nothing dials costs
+// nothing.
+func startSMTPInboundOnListener(app core.App, listen mailproto.ListenFunc) (func(), error) {
+	hostname := inboundHostname(app)
+	server := newInboundSMTPServer(app, hostname, nil)
+
+	ln, err := listen(":25")
+	if err != nil {
+		return nil, fmt.Errorf("inbound SMTP listen: %w", err)
+	}
+	app.Logger().Info("inbound SMTP server listening (external TLS termination)", "hostname", hostname)
+
+	go func() {
+		if err := server.Serve(ln); err != nil {
+			app.Logger().Error("inbound SMTP server error", "error", err)
+		}
+	}()
+
+	return func() {
+		app.Logger().Info("shutting down inbound SMTP server")
+		ln.Close()
+		server.Close()
+	}, nil
+}
+
+// inboundHostname resolves the identity the MX greeting announces:
+// SMTP_PUBLIC_HOSTNAME when the operator set one, else the app's public host —
+// a tenant's allowlist env is empty, but its AppURL was adopted from the
+// router-materialized app config at boot, so this yields <slug>.<baseDomain>.
+func inboundHostname(app core.App) string {
+	if h := os.Getenv("SMTP_PUBLIC_HOSTNAME"); h != "" {
+		return h
+	}
+	if u, err := url.Parse(app.Settings().Meta.AppURL); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return "localhost"
 }
 
 type smtpInboundBackend struct {

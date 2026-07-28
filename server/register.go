@@ -33,30 +33,31 @@ func Register(app *pocketbase.PocketBase) {
 
 	// ---- Host-only ----
 	// The IMAP / SMTP-submission / inbound-SMTP listeners bind fixed TCP
-	// ports, and the multi-org router owns every listening socket (a tenant
-	// serves on a unix socket handed down to it) — so a tenant must not start
-	// them, and in production a failed listener aborts the whole boot, which
-	// would take the org down. mailproto now accepts an injected listener
-	// (mailproto.ListenFunc on IMAPOptions/SMTPOptions), so the remaining
-	// per-tenant work is router-side: demux inbound IMAP/SMTP connections to
-	// an org (TLS SNI — there is no Host header) and hand each tenant its
-	// listener (the ExtraFiles fd precedent), then thread a ListenFunc through
-	// RegisterTenant. Until then the listeners stay host-only.
+	// ports here, on the single-org app, where the process owns its ports. A
+	// multi-org TENANT must never bind a port — the router owns every
+	// listening socket — so its listeners are injected instead: the router
+	// terminates TLS on :993/:465 (SNI demux) and fronts :25 (RCPT TO
+	// routing), forwarding plaintext over per-org unix sockets that reach the
+	// same sessions via RegisterTenantWithListeners (tenant_listeners.go).
 	registerMailListeners(app)
 }
 
-// RegisterTenant composes the mail server for a multi-org TENANT process: the
-// shared set only — record hooks, endpoints, FTS sync, mailbox lifecycle, the
-// outbound-dialing workers — without the port-binding listeners above. The
-// router's pinned package menu calls it, gated by the org's resolved package
-// set (multi-org/docs/SCOPE-tenant-feature-go.md).
+// RegisterTenant composes the mail server for a multi-org TENANT process with
+// no router-managed mail sockets: the shared set only — record hooks,
+// endpoints, FTS sync, mailbox lifecycle, the outbound-dialing workers —
+// without the protocol listeners. When the router hands the tenant per-org
+// mail sockets, use RegisterTenantWithListeners instead, which additionally
+// serves IMAP/submission/inbound-MX on exactly those listeners
+// (tenant_listeners.go). The router's pinned package menu calls one of the
+// two, gated by the org's resolved package set
+// (multi-org/docs/SCOPE-tenant-feature-go.md).
 //
 // Do NOT hand-pick registrations here — add to registerShared so both
 // compositions get them, or to Register's host-only tail with a reason. A
 // hand-rolled subset is exactly the drift that produced
 // multi-org/docs/FINDING-tenant-composition-gap.md.
 func RegisterTenant(app *pocketbase.PocketBase) {
-	registerShared(app)
+	RegisterTenantWithListeners(app, TenantListeners{})
 }
 
 // registerShared is the single source of truth for what BOTH compositions run.
