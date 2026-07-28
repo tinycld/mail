@@ -28,10 +28,15 @@ func handleUserCreated(app core.App, user *core.Record) {
 	}
 	domain := domains[0]
 
+	// Deliberate: a user we cannot derive an address for (unsanitizable legacy
+	// username, or 99 suffix collisions) gets NO mailbox rather than failing
+	// account creation — a mailboxless user is recoverable by an admin, a
+	// blocked signup is not. Error, not Warn: the user is silently mail-less
+	// until someone notices.
 	address := deriveMailboxAddress(app, user.GetString("username"), domain.Id)
 	if address == "" {
-		app.Logger().Warn("mail lifecycle: could not derive mailbox address",
-			"username", user.GetString("username"))
+		app.Logger().Error("mail lifecycle: could not derive mailbox address — user has no mailbox",
+			"username", user.GetString("username"), "user", user.Id)
 		return
 	}
 

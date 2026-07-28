@@ -29,7 +29,7 @@ function mimeFromName(name: string): string {
 }
 
 interface SeedContext {
-    user: { id: string; email: string; name: string }
+    user: { id: string; username: string; email: string; name: string }
 }
 
 interface SeedMessage {
@@ -1660,11 +1660,15 @@ const SHARED_THREADS: typeof THREADS = [
     },
 ]
 
-function deriveAddress(email: string) {
+// Mirrors server/lifecycle.go::deriveMailboxAddress — the address comes from
+// the USERNAME, never the email local-part. Deriving from the email is the
+// exact bug commit 4d52992 fixed in Go: it minted addresses the invitee never
+// asked for and diverged from what the server provisions.
+function deriveAddress(username: string) {
     return (
-        email
-            .split('@')[0]
+        username
             .toLowerCase()
+            .trim()
             .replace(/[^a-z0-9._-]/g, '') || 'user'
     )
 }
@@ -1686,12 +1690,12 @@ async function findUniqueAddress(pb: PocketBase, base: string, domainId: string)
 
 async function findOrCreatePersonalMailbox(
     pb: PocketBase,
-    email: string,
+    username: string,
     name: string,
     domainId: string,
     userId: string
 ) {
-    const base = deriveAddress(email)
+    const base = deriveAddress(username)
 
     // Check if mailbox already exists
     try {
@@ -1733,10 +1737,10 @@ export default async function seed(pb: PocketBase, { user }: SeedContext) {
         })
     }
 
-    log('Setting up personal mailbox for', user.email)
+    log('Setting up personal mailbox for', user.username)
     const personalMailbox = await findOrCreatePersonalMailbox(
         pb,
-        user.email,
+        user.username,
         user.name,
         domain.id,
         user.id
@@ -1773,8 +1777,8 @@ export default async function seed(pb: PocketBase, { user }: SeedContext) {
         log(`Setting up mailboxes for ${otherUsers.length} other user(s)`)
     }
     for (const member of otherUsers) {
-        if (!member.email) continue
-        await findOrCreatePersonalMailbox(pb, member.email, member.name, domain.id, member.id)
+        if (!member.username) continue
+        await findOrCreatePersonalMailbox(pb, member.username, member.name, domain.id, member.id)
     }
 
     // Create labels (find or create) — uses core 'labels' collection.
