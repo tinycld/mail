@@ -1,6 +1,12 @@
+import { captureException } from '@tinycld/core/lib/errors'
 import { formatBytes } from '@tinycld/core/lib/format-utils'
 import { notify } from '@tinycld/core/lib/notify'
 import { useCallback, useRef, useState } from 'react'
+
+// Thrown for the expected too-many/too-big cases so addFilesSafely can tell a
+// validation refusal (toast only — not a bug) from a genuine failure inside
+// addFiles (toast AND capture).
+class AttachmentValidationError extends Error {}
 
 export interface AttachmentFile {
     id: string
@@ -34,11 +40,13 @@ export function useAttachments() {
 
         const combined = [...attachmentsRef.current, ...incoming]
         if (combined.length > MAX_FILES) {
-            throw new Error(`Maximum ${MAX_FILES} attachments allowed`)
+            throw new AttachmentValidationError(`Maximum ${MAX_FILES} attachments allowed`)
         }
         const newTotal = combined.reduce((sum, a) => sum + a.size, 0)
         if (newTotal > MAX_TOTAL_SIZE) {
-            throw new Error(`Total attachment size exceeds ${formatBytes(MAX_TOTAL_SIZE)}`)
+            throw new AttachmentValidationError(
+                `Total attachment size exceeds ${formatBytes(MAX_TOTAL_SIZE)}`
+            )
         }
 
         setAttachments(combined)
@@ -51,6 +59,11 @@ export function useAttachments() {
             try {
                 addFiles(files)
             } catch (err) {
+                // Validation refusals are user feedback, not bugs; anything
+                // else in here IS a bug and must not hide behind the toast.
+                if (!(err instanceof AttachmentValidationError)) {
+                    captureException('mail.attachments.add', err)
+                }
                 const reason = err instanceof Error ? err.message : 'Could not attach files'
                 notify.emit({
                     event: 'mail.attachments_rejected',

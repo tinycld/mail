@@ -1,4 +1,4 @@
-import { errorToString } from '@tinycld/core/lib/errors'
+import { captureException, errorToString } from '@tinycld/core/lib/errors'
 import { useMutation } from '@tinycld/core/lib/mutations'
 import { PB_SERVER_ADDR, pb } from '@tinycld/core/lib/pocketbase'
 
@@ -50,6 +50,9 @@ export function useSaveDraft({ onSuccess, onError }: UseSaveDraftOptions = {}) {
         },
         onSuccess,
         onError: (error: unknown) => {
+            // Same contract as the useSendEmail sibling: a lost draft is real
+            // data loss and must reach Sentry, not just the caller's toast.
+            captureException('mail.draft.save', error)
             onError?.(errorToString(error))
         },
     })
