@@ -101,7 +101,9 @@ export async function navigateToPersonalInbox(page: Page) {
     // cache, which can take 30-60s on CI. Generous timeout.
     await page.getByTestId('package-sidebar-mounted').waitFor({ state: 'visible', timeout: 60_000 })
     await page.getByText('Inbox', { exact: true }).first().click()
-    await page.waitForURL(url => /folder=inbox/.test(url.search), { timeout: 5_000 })
+    // The rows ARE the assertion — a ?folder=inbox URL is set the moment the
+    // router accepts the push, while the list is still loading, so waiting on
+    // it only adds latency ahead of a check that already proves more.
     await expect(page.locator('[data-testid="email-row"]:visible').first()).toBeVisible({
         timeout: 10_000,
     })
@@ -115,9 +117,10 @@ export async function navigateToPersonalInbox(page: Page) {
 // the package-settings group only renders for isAdmin (owner || admin).
 export async function navigateToMailboxSettings(page: Page) {
     await page.getByTestId('nav-settings').click()
-    await page.waitForURL(/\/settings(\/|$|\?)/, { timeout: 15_000 })
+    // No URL waits: each click auto-waits for its target to be actionable,
+    // which proves the screen rendered — the URL only proves the router
+    // accepted the push, and gating on it raced a still-mounting screen.
     await page.getByText('Mailboxes', { exact: true }).first().click()
-    await page.waitForURL(/\/settings\/mail\/mailboxes/, { timeout: 15_000 })
     await expect(page.getByText('Mailboxes', { exact: true }).first()).toBeVisible()
 }
 

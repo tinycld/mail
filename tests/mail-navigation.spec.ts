@@ -34,7 +34,9 @@ test.describe('Mail — Navigation', () => {
         await page.keyboard.press('j')
         await page.keyboard.press('Enter')
 
-        await page.waitForURL(/\/mail\/[^/?]+/)
+        // The thread view rendered — a /mail/<id> URL is true the instant the
+        // router accepts the push, even if the detail screen never mounts.
+        await expect(page.getByTestId('mail-thread-detail')).toBeVisible()
     })
 
     test('navigate to Sent', async ({ page }) => {

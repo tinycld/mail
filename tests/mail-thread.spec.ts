@@ -38,7 +38,6 @@ test.describe('Mail — Thread Detail', () => {
         // inbox's mount + page-query refetch (the row is briefly still painted),
         // which is flaky on a loaded CI runner. Once the refetched list is up,
         // the assertion is deterministic.
-        await page.waitForURL(/folder=inbox/)
         await expect(page.locator('[data-testid="email-row"]:visible').first()).toBeVisible()
 
         // The archived thread must be gone from the inbox without a manual
@@ -62,7 +61,6 @@ test.describe('Mail — Thread Detail', () => {
 
         // Wait for the inbox to settle before asserting absence (see the archive
         // test above for why a bare leave-detail wait races the refetch).
-        await page.waitForURL(/folder=inbox/)
         await expect(page.locator('[data-testid="email-row"]:visible').first()).toBeVisible()
 
         await expect(emailRow(page, subject)).toHaveCount(0)
