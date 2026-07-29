@@ -2,9 +2,9 @@ import { eq } from '@tanstack/db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useMemo } from 'react'
-import { groupSendableIdentities } from './flattenSendableIdentities'
+import { groupSendableIdentities } from './groupSendableIdentities'
 
-export type { SendableIdentity } from './flattenSendableIdentities'
+export type { SendableIdentity } from './groupSendableIdentities'
 
 export function useSendableIdentities() {
     const [membersCollection, mailboxesCollection, domainsCollection, aliasesCollection] = useStore(

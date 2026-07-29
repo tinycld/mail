@@ -1,7 +1,7 @@
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useState } from 'react'
 import { Modal, Pressable, Text, View } from 'react-native'
-import type { SendableIdentity } from '../hooks/flattenSendableIdentities'
+import type { SendableIdentity } from '../hooks/groupSendableIdentities'
 
 interface Props {
     identities: SendableIdentity[]

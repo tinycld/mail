@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
     groupSendableIdentities,
     type SendableIdentityRow,
-} from '~/tinycld/mail/hooks/flattenSendableIdentities'
+} from '~/tinycld/mail/hooks/groupSendableIdentities'
 import type { MailDomains, MailMailboxAliases, MailMailboxes } from '~/tinycld/mail/types'
 
 // These cover the pure grouping of useSendableIdentities' joined rows. The
