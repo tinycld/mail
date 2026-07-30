@@ -11,6 +11,8 @@ import (
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
+
+	"tinycld.org/core/davauth"
 )
 
 // mailboxContext holds the resolved info for a single mailbox membership.
@@ -60,20 +62,14 @@ func (s *imapSession) Close() error {
 	return nil
 }
 
-// Login authenticates via PocketBase.
+// Login authenticates via PocketBase. davauth.VerifyCredentials is the shared
+// protocol-server check: username-or-email identifier, and the disabled
+// cutoff (this listener bypasses PocketBase's auth hooks, and unlike REST
+// tokens a protocol login never expires). One opaque failure keeps the
+// account's state invisible to a prober.
 func (s *imapSession) Login(username, password string) error {
-	record, err := s.app.FindAuthRecordByEmail("users", username)
+	record, err := davauth.VerifyCredentials(s.app, username, password)
 	if err != nil {
-		return imapserver.ErrAuthFailed
-	}
-	if !record.ValidatePassword(password) {
-		return imapserver.ErrAuthFailed
-	}
-	// This listener authenticates against the record directly, so coreserver's
-	// disabled guard (bound to PocketBase's auth hooks) never runs here — and
-	// unlike REST tokens, a protocol login never expires. The same failure as a
-	// bad password keeps the account's state invisible to a prober.
-	if record.GetBool("disabled") {
 		return imapserver.ErrAuthFailed
 	}
 
@@ -875,7 +871,7 @@ func (s *imapSession) buildStatusData(name, mailboxID string, options *imap.Stat
 	}
 
 	if options.NumUnseen {
-		filter, params := folderToFilter(s.app, name, s.user.Id)
+		filter, params := folderToFilter(s.app, name, s.user.Id, mailboxID)
 		filter += " && is_read = false"
 		states, err := s.app.FindRecordsByFilter("mail_thread_state", filter, "", 0, 0, params)
 		if err == nil {
@@ -923,7 +919,7 @@ func (s *imapSession) messagesForSelectedFolder() (map[int]*core.Record, error) 
 
 // messagesForFolder loads messages for a specific IMAP folder name.
 func (s *imapSession) messagesForFolder(imapName, mailboxID string) ([]*core.Record, error) {
-	filter, params := folderToFilter(s.app, imapName, s.user.Id)
+	filter, params := folderToFilter(s.app, imapName, s.user.Id, mailboxID)
 
 	states, err := s.app.FindRecordsByFilter(
 		"mail_thread_state",

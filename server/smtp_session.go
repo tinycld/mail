@@ -11,6 +11,7 @@ import (
 	"github.com/emersion/go-smtp"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/coreserver"
+	"tinycld.org/core/davauth"
 )
 
 type smtpBackend struct {
@@ -81,27 +82,14 @@ func (s *loginServer) Next(response []byte) (challenge []byte, done bool, err er
 	}
 }
 
+// authenticate validates AUTH credentials. davauth.VerifyCredentials is the
+// shared protocol-server check: username-or-email identifier, and the
+// disabled cutoff (this listener bypasses PocketBase's auth hooks, and unlike
+// REST tokens a protocol login never expires). One opaque failure keeps the
+// account's state invisible to a prober.
 func (s *smtpSession) authenticate(username, password string) error {
-	record, err := s.app.FindAuthRecordByEmail("users", username)
+	record, err := davauth.VerifyCredentials(s.app, username, password)
 	if err != nil {
-		return &smtp.SMTPError{
-			Code:         535,
-			EnhancedCode: smtp.EnhancedCode{5, 7, 8},
-			Message:      "Authentication credentials invalid",
-		}
-	}
-	if !record.ValidatePassword(password) {
-		return &smtp.SMTPError{
-			Code:         535,
-			EnhancedCode: smtp.EnhancedCode{5, 7, 8},
-			Message:      "Authentication credentials invalid",
-		}
-	}
-	// This listener authenticates against the record directly, so coreserver's
-	// disabled guard (bound to PocketBase's auth hooks) never runs here — and
-	// unlike REST tokens, a protocol login never expires. The same failure as a
-	// bad password keeps the account's state invisible to a prober.
-	if record.GetBool("disabled") {
 		return &smtp.SMTPError{
 			Code:         535,
 			EnhancedCode: smtp.EnhancedCode{5, 7, 8},

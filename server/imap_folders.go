@@ -59,12 +59,27 @@ func imapNameToFolder(name string) (folder string, isVirtual bool) {
 }
 
 // folderToFilter builds a PocketBase filter expression for querying
-// mail_thread_state records visible in a given IMAP folder for a specific
-// user. For label folders, it resolves the label name to a set of
-// thread_state IDs via label_assignments (the polymorphic junction the web
-// UI also uses) and emits an `id ~ ...` filter. Returns an impossible filter
-// if the label doesn't exist or the folder name is unknown.
-func folderToFilter(app core.App, imapName, userID string) (string, map[string]any) {
+// mail_thread_state records visible in a given IMAP folder of ONE mailbox.
+// For label folders, it resolves the label name to a set of thread_state IDs
+// via label_assignments (the polymorphic junction the web UI also uses) and
+// emits an `id ~ ...` filter. Returns an impossible filter if the label
+// doesn't exist or the folder name is unknown.
+//
+// Every branch pins `thread.mailbox`: thread-state rows are per-user, so a
+// user+folder filter alone unions every mailbox the user belongs to — support
+// threads showing inside Personal/INBOX, with unseen counts inflated to match.
+// The mailbox is the session's SELECTed (or STATUSed) namespace, resolved
+// from the folder path prefix.
+func folderToFilter(app core.App, imapName, userID, mailboxID string) (string, map[string]any) {
+	filter, params := folderToUserFilter(app, imapName, userID)
+	if params == nil {
+		return filter, params
+	}
+	params["mailbox"] = mailboxID
+	return "thread.mailbox = {:mailbox} && (" + filter + ")", params
+}
+
+func folderToUserFilter(app core.App, imapName, userID string) (string, map[string]any) {
 	folder, isVirtual := imapNameToFolder(imapName)
 
 	if isVirtual {

@@ -23,7 +23,7 @@ IMAP is **read + state**, not send. To also send from your client, set up [SMTP]
 | **Server** | `{{server-host}}` |
 | **Port** | **993** |
 | **Encryption** | SSL / TLS (implicit) |
-| **Username** | your TinyCld email |
+| **Username** | your TinyCld username or email |
 | **Password** | your TinyCld password |
 | **Authentication** | Normal password |
 
@@ -39,7 +39,7 @@ There is no separate "IMAP password" — use your regular TinyCld login.
 4. Apple Mail will probably fail auto-config — that's expected; the manual page appears.
 5. **Account Type**: IMAP.
 6. **Incoming Mail Server**: `{{server-host}}`.
-7. **User Name**: your TinyCld email.
+7. **User Name**: your TinyCld username or email.
 8. **Password**: your TinyCld password.
 9. Click **Sign In**.
 
@@ -51,7 +51,7 @@ The mail account appears in the sidebar. Each mailbox you have access to shows u
 2. Fill in your name, email, password.
 3. Tap **Next** — iOS will try to auto-config and fail; the manual screen appears.
 4. Pick **IMAP**.
-5. Incoming Mail Server — Host Name: `{{server-host}}`, User Name: your email, Password: your password.
+5. Incoming Mail Server — Host Name: `{{server-host}}`, User Name: your TinyCld username or email, Password: your password.
 6. Outgoing Mail Server — same hostname, port 465. (Set up [SMTP](help://mail:smtp) to send.)
 7. Tap **Save**.
 
@@ -69,7 +69,7 @@ The mail account appears in the sidebar. Each mailbox you have access to shows u
 In your `~/.muttrc`:
 
 ```muttrc
-set imap_user = "you@yourdomain.com"
+set imap_user = "your-username"
 set imap_pass = "your-tinycld-password"
 set folder = "imaps://{{server-host}}:993"
 set spoolfile = "+INBOX"
@@ -94,7 +94,7 @@ When you have multiple mailboxes, IMAP namespaces them — typically as separate
 ## Troubleshooting
 
 - **Connects, then immediately disconnects ("service unavailable" / BYE)** — the server name in your client is wrong. It must be `{{server-host}}` exactly (your TinyCld web address); a `mail.` name, your mail domain, or an IP address all reach the server but don't identify your organization, so it hangs up.
-- **Auth failed** — double-check that you're using your TinyCld *email* (the one you sign in with), not just the local part of your mail address. Your TinyCld account email and your `you@yourdomain.com` address are not necessarily the same thing.
+- **Auth failed** — use the username or email you *sign in to TinyCld with*, not your mail address. Your `you@yourdomain.com` mail address and your TinyCld sign-in identity are not necessarily the same thing.
 - **Connection refused / timeout** — verify your TinyCld instance is reachable on port 993. Try `openssl s_client -connect {{server-host}}:993 -servername {{server-host}}` from a terminal to test.
 - **TLS certificate error** — Mail's IMAP server uses the same TLS certificate as your web UI. If your web UI works, IMAP should too. If not, check the cert hostname matches what you put in the client.
 - **Folders don't sync** — IMAP IDLE should push new messages within a second, but some clients only check every 5–15 minutes by default. Look for a "check for new mail every N minutes" setting.
