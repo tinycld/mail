@@ -13,6 +13,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 
 	"tinycld.org/core/davauth"
+	"tinycld.org/core/pkgaccess"
 )
 
 // mailboxContext holds the resolved info for a single mailbox membership.
@@ -27,6 +28,11 @@ type imapSession struct {
 
 	// Set after Login
 	user *core.Record // users record
+	// pkgReadonly is the user's org_pkg_access verdict for mail, resolved at
+	// Login: reading (SELECT/FETCH/IDLE) stays available, mutating commands
+	// refuse. Cached per session — a changed level applies at next login,
+	// same as a role change.
+	pkgReadonly bool
 	// Resolved during Login: the user's mailbox memberships
 	mailboxMemberships []*core.Record // mail_mailbox_members records
 
@@ -74,6 +80,7 @@ func (s *imapSession) Login(username, password string) error {
 	}
 
 	s.user = record
+	s.pkgReadonly = !pkgaccess.CanWrite(s.app, record, "mail")
 
 	// Load the user's mailbox memberships. Single-org: membership rows point at
 	// the user directly, so this is one query (the former user_org fan-out is gone).
@@ -141,6 +148,20 @@ func (s *imapSession) Login(username, password string) error {
 	s.multiMailbox = len(s.mailboxIndex) > 1
 
 	return nil
+}
+
+// requireWritable refuses a mutating command for a session whose
+// org_pkg_access level is not full. IMAP bypasses the REST layer (where
+// core's request-hook guard lives), so without this a readonly user's client
+// could still flag, move, expunge and append — readonly means read.
+func (s *imapSession) requireWritable() error {
+	if !s.pkgReadonly {
+		return nil
+	}
+	return &imap.Error{
+		Type: imap.StatusResponseTypeNo,
+		Text: "Your mail access is read-only",
+	}
 }
 
 // Namespace returns the personal namespace descriptor.
@@ -420,6 +441,10 @@ func (s *imapSession) buildFTSMatchSet(criteria *imap.SearchCriteria) map[string
 
 // Store modifies flags on messages.
 func (s *imapSession) Store(w *imapserver.FetchWriter, numSet imap.NumSet, flags *imap.StoreFlags, options *imap.StoreOptions) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+
 	messages, err := s.resolveMessages(numSet)
 	if err != nil {
 		return err
@@ -441,6 +466,10 @@ func (s *imapSession) Store(w *imapserver.FetchWriter, numSet imap.NumSet, flags
 
 // Copy copies messages to another mailbox.
 func (s *imapSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
+
 	destCtx, destBareName := s.matchMailboxContext(dest)
 	destMailboxID, err := s.resolveFolderWithContext(destCtx)
 	if err != nil {
@@ -484,6 +513,10 @@ func (s *imapSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, err
 
 // Move moves messages to another mailbox.
 func (s *imapSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest string) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+
 	destCtx, destBareName := s.matchMailboxContext(dest)
 	_, err := s.resolveFolderWithContext(destCtx)
 	if err != nil {
@@ -527,6 +560,10 @@ func (s *imapSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest st
 
 // Append adds a message to a mailbox (e.g., saving a draft or archiving from a client).
 func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap.AppendOptions) (*imap.AppendData, error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
+
 	ctx, bareName := s.matchMailboxContext(mailbox)
 	mailboxID, err := s.resolveFolderWithContext(ctx)
 	if err != nil {
@@ -627,6 +664,10 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 
 // Expunge permanently removes messages marked with \Deleted.
 func (s *imapSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+
 	messages, err := s.selectedMessages()
 	if err != nil {
 		return err
@@ -677,6 +718,10 @@ func (s *imapSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) er
 
 // Create creates a new mailbox (only label folders supported).
 func (s *imapSession) Create(name string, options *imap.CreateOptions) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+
 	_, bareName := s.matchMailboxContext(name)
 	if isSystemFolder(bareName) {
 		return &imap.Error{
@@ -695,6 +740,10 @@ func (s *imapSession) Create(name string, options *imap.CreateOptions) error {
 
 // Delete deletes a mailbox (only label folders supported).
 func (s *imapSession) Delete(name string) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+
 	_, bareName := s.matchMailboxContext(name)
 	if isSystemFolder(bareName) {
 		return &imap.Error{
@@ -707,6 +756,10 @@ func (s *imapSession) Delete(name string) error {
 
 // Rename renames a mailbox (only label folders supported).
 func (s *imapSession) Rename(oldName, newName string, options *imap.RenameOptions) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+
 	_, oldBareName := s.matchMailboxContext(oldName)
 	_, newBareName := s.matchMailboxContext(newName)
 	if isSystemFolder(oldBareName) || isSystemFolder(newBareName) {

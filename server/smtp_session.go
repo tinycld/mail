@@ -12,6 +12,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/coreserver"
 	"tinycld.org/core/davauth"
+	"tinycld.org/core/pkgaccess"
 )
 
 type smtpBackend struct {
@@ -94,6 +95,17 @@ func (s *smtpSession) authenticate(username, password string) error {
 			Code:         535,
 			EnhancedCode: smtp.EnhancedCode{5, 7, 8},
 			Message:      "Authentication credentials invalid",
+		}
+	}
+
+	// SMTP submission exists only to send, and sending is a write: an
+	// org_pkg_access level below full refuses at AUTH. (IMAP still logs the
+	// same user in — readonly means read.)
+	if !pkgaccess.CanWrite(s.app, record, "mail") {
+		return &smtp.SMTPError{
+			Code:         535,
+			EnhancedCode: smtp.EnhancedCode{5, 7, 8},
+			Message:      "Your mail access is read-only; sending is not permitted",
 		}
 	}
 
