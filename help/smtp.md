@@ -17,12 +17,14 @@ This is **not** the same as the SMTP your mail provider uses to deliver mail acr
 
 | Setting | Value |
 |---|---|
-| **Server** | your TinyCld hostname (e.g. `mail.example.com`) |
+| **Server** | `{{server-host}}` |
 | **Port** | **465** |
 | **Encryption** | SSL / TLS (implicit) |
 | **Username** | your TinyCld email |
 | **Password** | your TinyCld password |
 | **Authentication** | Normal password |
+
+> **The server is your TinyCld web address** — the hostname in your browser's address bar, shown above. It is *not* your mail domain: even if you send as `you@yourdomain.com`, the server to enter is `{{server-host}}`, never `mail.yourdomain.com`. TinyCld identifies your organization by the hostname your client connects with, so any other name (or an IP address) is refused with "service unavailable".
 
 The same credentials as [IMAP](help://mail:imap) — your regular TinyCld login.
 
@@ -39,7 +41,7 @@ This is usually done as part of [IMAP setup](help://mail:imap) — the same acco
 1. **Mail → Settings → Accounts**, pick the TinyCld account.
 2. Click the **Server Settings** tab.
 3. Under **Outgoing Mail Server (SMTP)**:
-   - Host Name: your TinyCld hostname.
+   - Host Name: `{{server-host}}`.
    - User Name: your TinyCld email.
    - Password: your TinyCld password.
    - Use TLS/SSL: **Yes**.
@@ -51,7 +53,7 @@ This is usually done as part of [IMAP setup](help://mail:imap) — the same acco
 
 1. **Account Settings → Outgoing Server (SMTP) → Add**.
 2. Description: anything (e.g. "TinyCld").
-3. Server Name: your TinyCld hostname.
+3. Server Name: `{{server-host}}`.
 4. Port: **465**.
 5. Connection security: **SSL/TLS**.
 6. Authentication method: **Normal password**.
@@ -65,7 +67,7 @@ Then in your account's Server Settings, set this SMTP server as the outgoing ser
 In your `~/.muttrc`:
 
 ```muttrc
-set smtp_url = "smtps://you@yourdomain.com@mail.example.com:465"
+set smtp_url = "smtps://you@yourdomain.com@{{server-host}}:465"
 set smtp_pass = "your-tinycld-password"
 set ssl_force_tls = yes
 set from = "you@yourdomain.com"
@@ -87,6 +89,7 @@ Outbound messages are capped at **25 MB total** (including attachments). Larger 
 
 ## Why messages might be rejected
 
+- **Connects, then immediately disconnects ("service unavailable")** — the server name in your client is wrong. It must be `{{server-host}}` exactly (your TinyCld web address); a `mail.` name, your mail domain, or an IP address all reach the server but don't identify your organization, so it hangs up.
 - **Auth failed** — wrong email or password. Same as IMAP — use your TinyCld login.
 - **From address not owned** — see above; the From header has to match a mailbox or alias you have access to.
 - **Domain not verified** — the sending domain has to be fully verified (MX, SPF, DKIM, Return-Path). See [Custom domains](help://mail:custom-domains).
