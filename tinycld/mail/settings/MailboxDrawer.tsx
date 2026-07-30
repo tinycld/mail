@@ -449,23 +449,30 @@ function MembersTab({
             >
                 Who has access
             </Text>
-            {members.map(m => (
-                <MailboxMemberRow
-                    key={m.id}
-                    name={m.userName}
-                    email={m.userEmail}
-                    isYou={m.isYou}
-                    role={m.role}
-                    canRemove={!(m.role === 'owner' && ownerCount <= 1)}
-                    onToggleRole={() =>
-                        toggleRoleMutation.mutate({
-                            id: m.id,
-                            next: m.role === 'owner' ? 'member' : 'owner',
-                        })
-                    }
-                    onRemove={() => removeMutation.mutate(m.id)}
-                />
-            ))}
+            {members.map(m => {
+                // The server guard (registerMailboxLastOwnerGuard) rejects
+                // both anyway; the controls must not offer actions that
+                // always fail.
+                const isLastOwner = m.role === 'owner' && ownerCount <= 1
+                return (
+                    <MailboxMemberRow
+                        key={m.id}
+                        name={m.userName}
+                        email={m.userEmail}
+                        isYou={m.isYou}
+                        role={m.role}
+                        canRemove={!isLastOwner}
+                        canToggleRole={!isLastOwner}
+                        onToggleRole={() =>
+                            toggleRoleMutation.mutate({
+                                id: m.id,
+                                next: m.role === 'owner' ? 'member' : 'owner',
+                            })
+                        }
+                        onRemove={() => removeMutation.mutate(m.id)}
+                    />
+                )
+            })}
 
             {!adding && available.length > 0 && (
                 <Pressable

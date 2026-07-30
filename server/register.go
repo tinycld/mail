@@ -83,6 +83,11 @@ func registerShared(app *pocketbase.PocketBase) {
 
 	audit.RegisterCollection(app, "mail_mailbox_members", &audit.CollectionConfig{})
 
+	// A shared mailbox must never lose its last owner (self-demotion or row
+	// delete) — an ownerless mailbox is unmanageable. Server backstop for the
+	// drawer's client-side checks.
+	registerMailboxLastOwnerGuard(app)
+
 	audit.RegisterCollection(app, "mail_messages", &audit.CollectionConfig{
 		ExtractLabel: audit.LabelFromField("subject"),
 	})

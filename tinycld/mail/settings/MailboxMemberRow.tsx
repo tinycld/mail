@@ -10,6 +10,7 @@ interface Props {
     isYou?: boolean
     role: Role
     canRemove: boolean
+    canToggleRole: boolean
     onToggleRole: () => void
     onRemove: () => void
 }
@@ -20,6 +21,7 @@ export function MailboxMemberRow({
     isYou = false,
     role,
     canRemove,
+    canToggleRole,
     onToggleRole,
     onRemove,
 }: Props) {
@@ -53,8 +55,14 @@ export function MailboxMemberRow({
             </View>
             <Pressable
                 onPress={onToggleRole}
+                disabled={!canToggleRole}
                 className="rounded-md"
-                style={{ paddingVertical: 3, paddingHorizontal: 8, backgroundColor: pillBg }}
+                style={{
+                    paddingVertical: 3,
+                    paddingHorizontal: 8,
+                    backgroundColor: pillBg,
+                    opacity: canToggleRole ? 1 : 0.5,
+                }}
             >
                 <Text style={{ fontSize: 11, fontWeight: '600', color: pillFg }}>
                     {isOwner ? 'Owner' : 'Member'}
