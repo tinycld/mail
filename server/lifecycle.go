@@ -15,6 +15,15 @@ var addressSanitizer = regexp.MustCompile(`[^a-z0-9._-]`)
 // the deployment IS the org, so this fires on the users record itself (the former
 // user_org junction is gone) and provisions against the first verified domain.
 func handleUserCreated(app core.App, user *core.Record) {
+	// A share-link guest is a real users row, but must not be provisioned mail
+	// infrastructure: a mailbox plus owner membership would mint a working
+	// <username>@<verified-domain> identity that passes verifyMailboxMembership,
+	// grants IMAP login, and receives inbound mail — contradicting the
+	// guest-exclusion rules (1830000002/1830000003).
+	if user.GetString("role") == "guest" {
+		return
+	}
+
 	// Find the deployment's verified mail domains
 	domains, err := app.FindRecordsByFilter(
 		"mail_domains",

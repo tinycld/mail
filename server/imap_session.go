@@ -69,6 +69,13 @@ func (s *imapSession) Login(username, password string) error {
 	if !record.ValidatePassword(password) {
 		return imapserver.ErrAuthFailed
 	}
+	// This listener authenticates against the record directly, so coreserver's
+	// disabled guard (bound to PocketBase's auth hooks) never runs here — and
+	// unlike REST tokens, a protocol login never expires. The same failure as a
+	// bad password keeps the account's state invisible to a prober.
+	if record.GetBool("disabled") {
+		return imapserver.ErrAuthFailed
+	}
 
 	s.user = record
 

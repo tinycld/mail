@@ -1,4 +1,4 @@
-import { eq } from '@tanstack/db'
+import { and, eq, not } from '@tanstack/db'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { useAuth } from '@tinycld/core/lib/auth'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
@@ -77,10 +77,16 @@ function useMailboxData(currentUserId: string) {
         query.from({ mail_mailbox_aliases: aliasesCollection })
     )
 
-    // Single-org: every user in the DB is a potential mailbox member — the
+    // Single-org: every real member is a potential mailbox member — the
     // add-member picker needs users with no membership row, so this cannot
-    // derive from the membership join.
-    const { data: orgUsers } = useOrgLiveQuery(query => query.from({ users: usersCollection }))
+    // derive from the membership join. Guests and disabled accounts are
+    // excluded: guests never get mail infra (see the 1830000002/3 rules) and a
+    // suspended account must not be granted new access.
+    const { data: orgUsers } = useOrgLiveQuery(query =>
+        query
+            .from({ users: usersCollection })
+            .where(({ users }) => and(not(eq(users.role, 'guest')), not(eq(users.disabled, true))))
+    )
 
     const membersByMailbox = new Map<string, MemberRow[]>()
     for (const { member, user } of memberRows ?? []) {

@@ -97,6 +97,17 @@ func (s *smtpSession) authenticate(username, password string) error {
 			Message:      "Authentication credentials invalid",
 		}
 	}
+	// This listener authenticates against the record directly, so coreserver's
+	// disabled guard (bound to PocketBase's auth hooks) never runs here — and
+	// unlike REST tokens, a protocol login never expires. The same failure as a
+	// bad password keeps the account's state invisible to a prober.
+	if record.GetBool("disabled") {
+		return &smtp.SMTPError{
+			Code:         535,
+			EnhancedCode: smtp.EnhancedCode{5, 7, 8},
+			Message:      "Authentication credentials invalid",
+		}
+	}
 
 	s.user = record
 	return nil
