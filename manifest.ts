@@ -21,7 +21,9 @@ const manifest = {
     // Message bodies are real disk. No ownerField: a mailbox is shared by its
     // members, so these bytes count toward the ORG ceiling only.
     quota: [{ collection: 'mail_messages', sizeField: 'total_size' }],
-    server: { package: 'server', module: 'tinycld.org/packages/mail' },
+    // mailListeners: mail's tenant entry serves IMAP/SMTP on router-managed
+    // sockets (RegisterTenantWithListeners) — the router owns every port.
+    server: { package: 'server', module: 'tinycld.org/packages/mail', mailListeners: true },
     repository: { url: 'https://github.com/tinycld/mail' },
     peerVersions: { '@tinycld/core': '>=0.0.4 <0.1.0' },
 }
