@@ -80,10 +80,15 @@ export function registerCollections(
 
     const mail_thread_state = newCollection('mail_thread_state', {
         omitOnInsert: ['created', 'updated'] as const,
-        expand: {
-            thread: mail_threads,
-            user: coreStores.users,
-        },
+        // No `expand`, for the same reason as mail_threads and mail_messages:
+        // under on-demand each fetched state row would carry a duplicate copy
+        // of its thread and user. Both are already available — the thread from
+        // useThreadListItems' page query, the user as the signed-in account.
+        // A state row exists per (user, thread), so this collection grows with
+        // the whole mailbox, not with what's on screen: an imported account
+        // syncs tens of thousands of rows into the tab and eagerly indexes
+        // them. Consumers now query only the thread ids they are rendering.
+        syncMode: 'on-demand' as const,
         collectionOptions: {
             autoIndex: 'eager' as const,
             defaultIndexType: BasicIndex,

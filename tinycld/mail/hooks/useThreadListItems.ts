@@ -1,4 +1,4 @@
-import { and, eq } from '@tanstack/db'
+import { and, eq, inArray } from '@tanstack/db'
 import { useQuery } from '@tanstack/react-query'
 import { pb, queryClient, useStore } from '@tinycld/core/lib/pocketbase'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
@@ -36,8 +36,10 @@ interface UseThreadListItemsOptions {
  *   - The server filter uses PocketBase back-relation syntax
  *     (mail_thread_state_via_thread.<field>) so server-side joins decide
  *     which threads belong in the current folder for the current user.
- *   - mail_thread_state stays eager (per-user, bounded). It supplies the
- *     read/starred/folder flags rendered alongside each row.
+ *   - mail_thread_state is on-demand, queried for the current page's thread
+ *     ids only. It supplies the read/starred/folder flags rendered alongside
+ *     each row. It is not bounded per user — there is one row per thread the
+ *     user can see — so it is scoped to the page rather than synced whole.
  *   - mail_messages is on-demand. Draft / attachment markers fetch only
  *     for the current page's thread ids — small bounded queries.
  */
@@ -61,14 +63,6 @@ export function useThreadListItems(
     )
 
     const { labels, labelMap } = useLabels()
-
-    const { data: threadStates, isLoading: threadStatesLoading } = useOrgLiveQuery(
-        query =>
-            query
-                .from({ mail_thread_state: threadStateCollection })
-                .where(({ mail_thread_state }) => eq(mail_thread_state.user, currentUserId)),
-        [currentUserId]
-    )
 
     const { data: allAssignments, isLoading: assignmentsLoading } = useOrgLiveQuery(
         (query, { userId }) =>
@@ -179,6 +173,29 @@ export function useThreadListItems(
     })
 
     const pageThreads = useMemo(() => pageResult?.items ?? [], [pageResult])
+
+    // Bounded to the rendered page: mail_thread_state is on-demand, so this
+    // translates to a server-side filter over ~PAGE_SIZE ids rather than a
+    // whole-mailbox sync. Keyed on the joined ids so a page change refetches
+    // but a re-render with the same page does not.
+    const pageThreadIds = useMemo(() => pageThreads.map(thread => thread.id), [pageThreads])
+    const pageThreadIdsKey = pageThreadIds.join(',')
+
+    const { data: threadStates, isLoading: threadStatesLoading } = useOrgLiveQuery(
+        query =>
+            pageThreadIds.length === 0
+                ? undefined
+                : query
+                      .from({ mail_thread_state: threadStateCollection })
+                      .where(({ mail_thread_state }) =>
+                          and(
+                              eq(mail_thread_state.user, currentUserId),
+                              inArray(mail_thread_state.thread, pageThreadIds)
+                          )
+                      ),
+        [currentUserId, pageThreadIdsKey]
+    )
+
     const totalItems = pageResult?.totalItems ?? 0
     const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE))
 
