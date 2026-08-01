@@ -1,4 +1,4 @@
-import { and, eq } from '@tanstack/db'
+import { and, eq, inArray } from '@tanstack/db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useMemo } from 'react'
@@ -14,10 +14,11 @@ import type { MailSearchResult } from './useMailSearch'
  * Search hits come from a server FTS endpoint that returns thread display data
  * but no thread_state id — so on their own a hit's swipe actions (archive /
  * trash / star) would target `thread_id` as if it were a state id and silently
- * no-op. mail_thread_state is eager and bounded per user, so we live-query it
- * here, index it by thread id, and merge each hit with its resolved state. Hits
- * with no resolvable state (shouldn't happen — a searchable thread the user can
- * see has a state row) are dropped so the list never shows an un-actionable row.
+ * no-op. mail_thread_state is on-demand, so we live-query just the hits' thread
+ * ids, index them by thread id, and merge each hit with its resolved state.
+ * Hits with no resolvable state (shouldn't happen — a searchable thread the
+ * user can see has a state row) are dropped so the list never shows an
+ * un-actionable row.
  *
  * Because the merge reads the live thread_state, search rows reflect the real
  * read / starred / folder / label state and update in place as those change.
@@ -32,12 +33,24 @@ export function useSearchThreadItems(
     )
     const { labelMap } = useLabels()
 
+    // Bounded to the hits actually being rendered — see the collection note in
+    // collections.ts for why this must not read the whole collection.
+    const resultThreadIds = useMemo(() => results.map(result => result.thread_id), [results])
+    const resultThreadIdsKey = resultThreadIds.join(',')
+
     const { data: threadStates } = useOrgLiveQuery(
         query =>
-            query
-                .from({ mail_thread_state: threadStateCollection })
-                .where(({ mail_thread_state }) => eq(mail_thread_state.user, currentUserId)),
-        [currentUserId]
+            resultThreadIds.length === 0
+                ? undefined
+                : query
+                      .from({ mail_thread_state: threadStateCollection })
+                      .where(({ mail_thread_state }) =>
+                          and(
+                              eq(mail_thread_state.user, currentUserId),
+                              inArray(mail_thread_state.thread, resultThreadIds)
+                          )
+                      ),
+        [currentUserId, resultThreadIdsKey]
     )
 
     const { data: allAssignments } = useOrgLiveQuery((query, { userId }) =>
