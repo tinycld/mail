@@ -313,16 +313,16 @@ func updateThreadMetadata(app core.App, thread *core.Record, senderName, senderE
 	return nil
 }
 
-// ensureThreadState creates or updates a mail_thread_state record for a user_org.
-func ensureThreadState(app core.App, threadID, userOrgID, folder string, isRead bool) error {
+// ensureThreadState creates or updates a mail_thread_state record for a user.
+func ensureThreadState(app core.App, threadID, userID, folder string, isRead bool) error {
 	// Check for existing thread state
 	records, err := app.FindRecordsByFilter(
 		"mail_thread_state",
-		"thread = {:thread} && user_org = {:userOrg}",
+		"thread = {:thread} && user = {:user}",
 		"",
 		1,
 		0,
-		map[string]any{"thread": threadID, "userOrg": userOrgID},
+		map[string]any{"thread": threadID, "user": userID},
 	)
 	if err == nil && len(records) > 0 {
 		// Update existing
@@ -339,7 +339,7 @@ func ensureThreadState(app core.App, threadID, userOrgID, folder string, isRead 
 	}
 	record := core.NewRecord(collection)
 	record.Set("thread", threadID)
-	record.Set("user_org", userOrgID)
+	record.Set("user", userID)
 	record.Set("folder", folder)
 	record.Set("is_read", isRead)
 	record.Set("is_starred", false)

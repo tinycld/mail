@@ -2,29 +2,35 @@ import { eq } from '@tanstack/db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useMemo } from 'react'
-import { flattenSendableIdentities } from './flattenSendableIdentities'
-import { useMailboxes } from './useMailboxes'
+import { groupSendableIdentities } from './groupSendableIdentities'
 
-export type { SendableIdentity } from './flattenSendableIdentities'
-export { flattenSendableIdentities }
+export type { SendableIdentity } from './groupSendableIdentities'
 
 export function useSendableIdentities() {
-    const [aliasesCollection, domainsCollection] = useStore('mail_mailbox_aliases', 'mail_domains')
-    const { personal, shared } = useMailboxes()
-
-    const { data: allAliases } = useOrgLiveQuery(query =>
-        query.from({ mail_mailbox_aliases: aliasesCollection })
+    const [membersCollection, mailboxesCollection, domainsCollection, aliasesCollection] = useStore(
+        'mail_mailbox_members',
+        'mail_mailboxes',
+        'mail_domains',
+        'mail_mailbox_aliases'
     )
-    const { data: allDomains } = useOrgLiveQuery((query, { orgId }) =>
+
+    // One query: membership → mailbox → domain resolve in the same expression
+    // (a mailbox whose domain is gone drops out, as before), with aliases
+    // left-joined so a mailbox without any still yields an identity.
+    const { data: rows } = useOrgLiveQuery((query, { userId }) =>
         query
-            .from({ mail_domains: domainsCollection })
-            .where(({ mail_domains }) => eq(mail_domains.org, orgId))
+            .from({ member: membersCollection })
+            .innerJoin({ mailbox: mailboxesCollection }, ({ member, mailbox }) =>
+                eq(member.mailbox, mailbox.id)
+            )
+            .innerJoin({ domain: domainsCollection }, ({ mailbox, domain }) =>
+                eq(mailbox.domain, domain.id)
+            )
+            .leftJoin({ alias: aliasesCollection }, ({ mailbox, alias }) =>
+                eq(alias.mailbox, mailbox.id)
+            )
+            .where(({ member }) => eq(member.user, userId))
     )
 
-    return useMemo(() => {
-        const mailboxes = [personal, ...shared].filter(
-            (mb): mb is NonNullable<typeof mb> => mb != null
-        )
-        return flattenSendableIdentities(mailboxes, allAliases ?? [], allDomains ?? [])
-    }, [personal, shared, allAliases, allDomains])
+    return useMemo(() => groupSendableIdentities(rows ?? []), [rows])
 }

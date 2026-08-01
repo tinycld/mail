@@ -1,4 +1,3 @@
-import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useMutation as useReactQueryMutation } from '@tanstack/react-query'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
@@ -6,7 +5,6 @@ import { errorToString, handleMutationErrorsWithForm } from '@tinycld/core/lib/e
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { useOrgInfo } from '@tinycld/core/lib/use-org-info'
 import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { FormErrorSummary, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
 import {
@@ -36,7 +34,6 @@ const addDomainSchema = z.object({
 
 export default function ProviderSettings() {
     const primaryColor = useThemeColor('primary')
-    const { orgId } = useOrgInfo()
     const [systemSettings] = useStore('system_settings')
 
     const { data: sysRows = [] } = useLiveQuery(query => query.from({ s: systemSettings }))
@@ -48,7 +45,7 @@ export default function ProviderSettings() {
             <View className="flex-1 gap-5 p-5" style={{ maxWidth: 600 }}>
                 <ProviderHeader primaryColor={primaryColor} />
 
-                <DomainsSection orgId={orgId} provider={provider} />
+                <DomainsSection provider={provider} />
             </View>
         </ScrollView>
     )
@@ -84,13 +81,12 @@ interface DomainRow {
     verification_details: MailDomainVerificationDetails | null
 }
 
-function DomainsSection({ orgId, provider }: { orgId: string; provider: 'postmark' | 'smtp' }) {
+function DomainsSection({ provider }: { provider: 'postmark' | 'smtp' }) {
     const [domainsCollection] = useStore('mail_domains')
 
-    const { data: domains } = useOrgLiveQuery((query, { orgId }) =>
+    const { data: domains } = useOrgLiveQuery(query =>
         query
             .from({ mail_domains: domainsCollection })
-            .where(({ mail_domains }) => eq(mail_domains.org, orgId))
             .orderBy(({ mail_domains }) => mail_domains.created, 'asc')
     )
 
@@ -123,7 +119,7 @@ function DomainsSection({ orgId, provider }: { orgId: string; provider: 'postmar
                 <DomainRowItem key={d.id} domain={d} provider={provider} />
             ))}
 
-            <AddDomainForm orgId={orgId} />
+            <AddDomainForm />
         </View>
     )
 }
@@ -529,7 +525,7 @@ function DeleteDomainButton({
     )
 }
 
-function AddDomainForm({ orgId }: { orgId: string }) {
+function AddDomainForm() {
     const primaryFgColor = useThemeColor('primary-foreground')
     const [domainsCollection] = useStore('mail_domains')
 
@@ -551,7 +547,6 @@ function AddDomainForm({ orgId }: { orgId: string }) {
             yield domainsCollection.insert({
                 id: newRecordId(),
                 domain: data.domain,
-                org: orgId,
                 verified: false,
                 mx_verified: false,
                 inbound_domain_verified: false,

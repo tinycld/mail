@@ -132,18 +132,23 @@ test.describe('Mail — Inbox', () => {
         await page.setViewportSize(MOBILE_VIEWPORT)
         await page.getByTestId('advanced-search-toggle').click()
 
+        // Scope every assertion to the dropdown panel: page-wide absence
+        // checks fail the moment ANOTHER package renders the same word
+        // anywhere (drive showing a "Size" column would fail a mail test).
+        const panel = page.getByTestId('advanced-search-panel')
+
         // The "Has the words" field was renamed to "Body".
-        await expect(page.getByText('Body', { exact: true })).toBeVisible()
+        await expect(panel.getByText('Body', { exact: true })).toBeVisible()
 
         // The "Doesn't have" and "Size" fields were permanently removed.
-        await expect(page.getByText('Has the words', { exact: true })).toHaveCount(0)
-        await expect(page.getByText("Doesn't have", { exact: true })).toHaveCount(0)
-        await expect(page.getByText('Size', { exact: true })).toHaveCount(0)
+        await expect(panel.getByText('Has the words', { exact: true })).toHaveCount(0)
+        await expect(panel.getByText("Doesn't have", { exact: true })).toHaveCount(0)
+        await expect(panel.getByText('Size', { exact: true })).toHaveCount(0)
 
         // The surviving fields are still present.
-        await expect(page.getByText('From', { exact: true })).toBeVisible()
-        await expect(page.getByText('Subject', { exact: true })).toBeVisible()
-        await expect(page.getByText('Date within', { exact: true })).toBeVisible()
+        await expect(panel.getByText('From', { exact: true })).toBeVisible()
+        await expect(panel.getByText('Subject', { exact: true })).toBeVisible()
+        await expect(panel.getByText('Date within', { exact: true })).toBeVisible()
     })
 
     test('advanced search dropdown stays within the viewport on mobile', async ({ page }) => {

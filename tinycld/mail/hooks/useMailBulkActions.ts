@@ -1,4 +1,6 @@
+import { captureException, errorToString } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
+import { notify } from '@tinycld/core/lib/notify'
 import type { useStore } from '@tinycld/core/lib/pocketbase'
 import { useLabelMutations } from '@tinycld/core/ui/hooks/useLabelMutations'
 import type { ThreadListItem } from '../components/thread-list-item'
@@ -14,6 +16,20 @@ export function useMailBulkActions(
     const col = threadStateCollection
     const { assignLabel, unassignLabel } = useLabelMutations()
 
+    // A bulk action failing across N threads was entirely silent: no toast,
+    // no capture, selection kept — indistinguishable from success with the
+    // rows quietly reverting when the optimistic writes rolled back.
+    const bulkActionFailed = (action: string) => (error: unknown) => {
+        captureException(`mail.bulk.${action}`, error, { count: selectedItems.length })
+        notify.emit({
+            event: 'mutation.error',
+            title: 'Action failed',
+            body: errorToString(error),
+            durationMs: 6000,
+            data: { operation: `mail.bulk.${action}`, error: errorToString(error) },
+        })
+    }
+
     const archiveSelected = useMutation({
         mutationFn: mutation(function* () {
             yield selectedItems.map(item =>
@@ -23,6 +39,7 @@ export function useMailBulkActions(
             )
         }),
         onSuccess: clearSelection,
+        onError: bulkActionFailed('archive'),
     })
 
     const spamSelected = useMutation({
@@ -34,6 +51,7 @@ export function useMailBulkActions(
             )
         }),
         onSuccess: clearSelection,
+        onError: bulkActionFailed('spam'),
     })
 
     const trashSelected = useMutation({
@@ -45,6 +63,7 @@ export function useMailBulkActions(
             )
         }),
         onSuccess: clearSelection,
+        onError: bulkActionFailed('trash'),
     })
 
     const toggleReadSelected = useMutation<void, Error, { markAsRead: boolean }>({
@@ -56,6 +75,7 @@ export function useMailBulkActions(
             )
         }),
         onSuccess: clearSelection,
+        onError: bulkActionFailed('toggle_read'),
     })
 
     const moveSelected = useMutation<void, Error, MailThreadState['folder']>({
@@ -67,6 +87,7 @@ export function useMailBulkActions(
             )
         }),
         onSuccess: clearSelection,
+        onError: bulkActionFailed('move'),
     })
 
     const toggleStarSelected = useMutation<void, Error, { star: boolean }>({
@@ -78,6 +99,7 @@ export function useMailBulkActions(
             )
         }),
         onSuccess: clearSelection,
+        onError: bulkActionFailed('toggle_star'),
     })
 
     const updateLabelsSelected = {

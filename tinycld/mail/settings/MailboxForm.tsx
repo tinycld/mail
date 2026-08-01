@@ -29,7 +29,7 @@ export type MailboxFormValues = z.infer<typeof mailboxSchema>
 interface CreateProps {
     mode: 'create'
     domainOptions: Array<{ label: string; value: string }>
-    userOrgId: string
+    userId: string
     onDone: () => void
 }
 
@@ -47,7 +47,7 @@ export function MailboxForm(props: Props) {
     return props.mode === 'create' ? <CreateForm {...props} /> : <EditForm {...props} />
 }
 
-function CreateForm({ domainOptions, userOrgId, onDone }: CreateProps) {
+function CreateForm({ domainOptions, userId, onDone }: CreateProps) {
     const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
     const [mailboxesCollection, membersCollection] = useStore(
@@ -87,7 +87,7 @@ function CreateForm({ domainOptions, userOrgId, onDone }: CreateProps) {
             yield membersCollection.insert({
                 id: newRecordId(),
                 mailbox: mailboxId,
-                user_org: userOrgId,
+                user: userId,
                 role: 'owner',
             })
         }),
@@ -212,7 +212,11 @@ function FormLayout({
 
     return (
         <View className="gap-4">
-            <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
+            <FormErrorSummary
+                errors={errors}
+                isEnabled={isSubmitted}
+                testID="mailbox-form-errors"
+            />
             <TextInput
                 control={control}
                 name="address"

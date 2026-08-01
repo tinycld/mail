@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/router"
 )
 
 type searchResultItem struct {
@@ -134,29 +134,25 @@ func buildMessageWhere(f *advancedFilters, params map[string]any) string {
 	return " AND " + strings.Join(clauses, " AND ")
 }
 
-// buildFolderJoin builds an additional JOIN + WHERE clause for folder/starred filtering.
-func buildFolderJoin(f *advancedFilters, userOrgIDs []string, params map[string]any) string {
-	if f.folder == "" || len(userOrgIDs) == 0 {
+// buildFolderJoin builds an additional JOIN + WHERE clause for folder/starred
+// filtering. Single-org: thread state is keyed by the user directly, so this is
+// a single bound parameter rather than an IN over the caller's memberships.
+func buildFolderJoin(f *advancedFilters, userID string, params map[string]any) string {
+	if f.folder == "" || userID == "" {
 		return ""
 	}
 
-	uoPlaceholders := make([]string, len(userOrgIDs))
-	for i, id := range userOrgIDs {
-		key := "uo" + strconv.Itoa(i)
-		params[key] = id
-		uoPlaceholders[i] = "{:" + key + "}"
-	}
-	uoInClause := "(" + strings.Join(uoPlaceholders, ", ") + ")"
+	params["stateUser"] = userID
 
 	if f.folder == "starred" {
-		return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user_org IN " + uoInClause + " AND ts.is_starred = 1"
+		return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.is_starred = 1"
 	}
 
 	params["folder"] = f.folder
-	return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user_org IN " + uoInClause + " AND ts.folder = {:folder}"
+	return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.folder = {:folder}"
 }
 
-func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
+func handleSearch(app core.App, re *core.RequestEvent) error {
 	userID := re.Auth.Id
 	q := re.Request.URL.Query().Get("q")
 	mailboxID := re.Request.URL.Query().Get("mailbox_id")
@@ -186,8 +182,15 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		return re.JSON(http.StatusOK, emptyResponse)
 	}
 
-	accessibleMailboxIDs, userOrgIDs, err := getUserMailboxAndOrgIDs(app, userID, mailboxID)
-	if err != nil || len(accessibleMailboxIDs) == 0 {
+	// A lookup FAILURE must not read as an empty result set — that swallow is
+	// what let the ts.user_org rename present as a silent zero. No accessible
+	// mailboxes, by contrast, is a genuinely empty answer.
+	accessibleMailboxIDs, err := getUserMailboxIDs(app, userID, mailboxID)
+	if err != nil {
+		app.Logger().Error("search: mailbox lookup failed", "error", err, "user", userID)
+		return router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
+	}
+	if len(accessibleMailboxIDs) == 0 {
 		return re.JSON(http.StatusOK, emptyResponse)
 	}
 
@@ -207,11 +210,11 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	maps.Copy(params, mailboxParams)
 
 	messageWhere := buildMessageWhere(&filters, params)
-	folderJoin := buildFolderJoin(&filters, userOrgIDs, params)
+	folderJoin := buildFolderJoin(&filters, userID, params)
 
 	// SQL-only path: no FTS terms, only structured filters
 	if !hasFTSTerms {
-		return handleStructuredSearch(app, re, inClause, messageWhere, folderJoin, params, limit, offset, emptyResponse)
+		return handleStructuredSearch(app, re, inClause, messageWhere, folderJoin, params, limit, offset)
 	}
 
 	// FTS path (possibly with additional structured filters). The two FTS
@@ -225,7 +228,7 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		if !filters.hasStructuredFilters() {
 			return re.JSON(http.StatusOK, emptyResponse)
 		}
-		return handleStructuredSearch(app, re, inClause, messageWhere, folderJoin, params, limit, offset, emptyResponse)
+		return handleStructuredSearch(app, re, inClause, messageWhere, folderJoin, params, limit, offset)
 	}
 
 	// Only bind a param when its UNION arm is actually present in the SQL — dbx
@@ -301,8 +304,8 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	var results []searchResultRow
 	err = app.DB().NewQuery(combinedQuery).Bind(dbx.Params(params)).All(&results)
 	if err != nil {
-		app.Logger().Warn("FTS: search query failed", "error", err, "query", q)
-		return re.JSON(http.StatusOK, emptyResponse)
+		app.Logger().Error("FTS: search query failed", "error", err, "query", q)
+		return router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
 	}
 
 	items := mapResults(results)
@@ -364,12 +367,11 @@ func handleSearch(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 
 // handleStructuredSearch runs a SQL-only search (no FTS) when only structured filters are present.
 func handleStructuredSearch(
-	app *pocketbase.PocketBase,
+	app core.App,
 	re *core.RequestEvent,
 	inClause, messageWhere, folderJoin string,
 	params map[string]any,
 	limit, offset int,
-	emptyResponse searchResponse,
 ) error {
 	query := `
 		SELECT DISTINCT
@@ -392,8 +394,8 @@ func handleStructuredSearch(
 	var results []searchResultRow
 	err := app.DB().NewQuery(query).Bind(dbx.Params(params)).All(&results)
 	if err != nil {
-		app.Logger().Warn("Structured search failed", "error", err)
-		return re.JSON(http.StatusOK, emptyResponse)
+		app.Logger().Error("Structured search failed", "error", err)
+		return router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
 	}
 
 	items := mapResults(results)
@@ -424,50 +426,33 @@ func handleStructuredSearch(
 	return re.JSON(http.StatusOK, searchResponse{Items: items, Total: total})
 }
 
-// getUserMailboxAndOrgIDs returns the mailbox IDs and user_org IDs the user has access to.
-// If mailboxID is provided, it filters to just that mailbox (after verifying access).
-func getUserMailboxAndOrgIDs(app *pocketbase.PocketBase, userID, mailboxID string) ([]string, []string, error) {
-	userOrgs, err := app.FindRecordsByFilter(
-		"user_org",
+// getUserMailboxIDs returns the mailbox IDs the user has access to. If mailboxID
+// is provided, it filters to just that mailbox (after verifying access).
+// Single-org: membership rows point at the user directly, so this is one query.
+func getUserMailboxIDs(app core.App, userID, mailboxID string) ([]string, error) {
+	members, err := app.FindRecordsByFilter(
+		"mail_mailbox_members",
 		"user = {:user}",
 		"",
 		100,
 		0,
 		map[string]any{"user": userID},
 	)
-	if err != nil || len(userOrgs) == 0 {
-		return nil, nil, err
+	if err != nil {
+		return nil, err
 	}
 
-	userOrgIDs := make([]string, len(userOrgs))
-	for i, uo := range userOrgs {
-		userOrgIDs[i] = uo.Id
-	}
-
-	var allMailboxIDs []string
-	for _, uoID := range userOrgIDs {
-		members, err := app.FindRecordsByFilter(
-			"mail_mailbox_members",
-			"user_org = {:userOrg}",
-			"",
-			100,
-			0,
-			map[string]any{"userOrg": uoID},
-		)
-		if err != nil {
-			continue
-		}
-		for _, m := range members {
-			allMailboxIDs = append(allMailboxIDs, m.GetString("mailbox"))
-		}
+	allMailboxIDs := make([]string, 0, len(members))
+	for _, m := range members {
+		allMailboxIDs = append(allMailboxIDs, m.GetString("mailbox"))
 	}
 
 	if mailboxID != "" {
 		if slices.Contains(allMailboxIDs, mailboxID) {
-			return []string{mailboxID}, userOrgIDs, nil
+			return []string{mailboxID}, nil
 		}
-		return nil, userOrgIDs, nil
+		return nil, nil
 	}
 
-	return allMailboxIDs, userOrgIDs, nil
+	return allMailboxIDs, nil
 }

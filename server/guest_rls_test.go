@@ -10,62 +10,61 @@ import (
 )
 
 // guest_rls_test.go proves the mail-infra access rules tightened by the
-// 1713000020 migration against PocketBase's REAL rule engine. A role='guest'
-// member of an org must be DENIED while a real member is still ALLOWED.
+// 1830000002 / 1830000003 migrations against PocketBase's REAL rule engine. A
+// role='guest' user must be DENIED while a real member is still ALLOWED.
 //
-// Background: a guest share-link visitor gets a real users record + a user_org
-// row with role='guest' in the owner's org. Several mail-infra rules granted
-// access to ANY org member regardless of role:
-//   - mail_domains   list/view  (read leak: guest enumerates mail domains)
-//   - mail_mailboxes create     (write leak: guest creates a mailbox)
-//   - mail_mailbox_aliases list/view (read leak: guest enumerates aliases)
+// Background: a guest share-link visitor gets a real users record with
+// role='guest'. Several mail-infra rules granted access to ANY authenticated
+// user regardless of role:
+//   - mail_domains         list/view  (read leak: guest enumerates mail domains)
+//   - mail_mailboxes       create     (write leak: guest creates a mailbox)
+//   - mail_mailbox_aliases list/view  (read leak: guest enumerates aliases)
 //
-// Each tightened rule pins the role check to the SAME relation-path prefix as
-// the user check, so PB applies both to the same joined user_org row (verified
-// here and in core/server/coreserver/guest_rls_test.go).
+// Single-org: the caller's role lives on the `users` auth record, so the guest
+// check is a direct `@request.auth.role != "guest"` — no relation-path join
+// through a membership junction (the former user_org table is gone).
+//
+// The rule constants below MIRROR THE MIGRATIONS VERBATIM. Keep them in sync:
+// if a migration's rule changes, change it here too, or this file silently
+// stops testing what ships.
 //
 // NOTE the rules left UNCHANGED (already safe): mail_domains create/update/
 // delete + mail_mailbox_aliases create/update/delete are admin/owner-gated;
 // mail_mailboxes list/view is mailbox-membership-gated (a guest is not a
-// mailbox member). mail_mailbox_members create's bootstrap branch is the one
-// deferred item — see the migration's header note.
+// mailbox member).
 //
 // Each scenario builds a FRESH TestApp (ApiScenario.Test re-triggers OnServe;
-// reusing one app panics on duplicate route registration under PB v0.38.1).
+// reusing one app panics on duplicate route registration).
 
-// Rule strings mirror the 1713000020 migration verbatim.
+// Rule strings mirror pb-migrations/1830000002_exclude_guests_from_mail_infra.js
+// and 1830000003_pin_guest_exclusion_on_mailbox_members_bootstrap.js.
 const (
-	mailDomainsGuestReadRule = `org.user_org_via_org.user ?= @request.auth.id && ` +
-		`org.user_org_via_org.role ?!= "guest"`
-	mailMailboxesGuestCreateRule = `domain.org.user_org_via_org.user ?= @request.auth.id && ` +
-		`domain.org.user_org_via_org.role ?!= "guest"`
-	mailAliasesGuestReadRule = `@request.auth.id != "" && ` +
-		`mailbox.domain.org.user_org_via_org.user ?= @request.auth.id && ` +
-		`mailbox.domain.org.user_org_via_org.role ?!= "guest"`
+	nonGuestRule = `@request.auth.id != "" && @request.auth.role != "guest"`
 
-	// Mirrors 1830000003: bootstrap branch pins role ?!= "guest" on the SAME
-	// relation-path prefix as the user check so PB joins both onto the same
-	// user_org row.
-	mailMembersOwnerCanAdd = `mailbox.mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id && ` +
-		`mailbox.mail_mailbox_members_via_mailbox.role ?= "owner" && ` +
-		`user_org.org = mailbox.domain.org`
-	mailMembersBootstrapGuestRule = `user_org.user = @request.auth.id && ` +
+	mailDomainsGuestReadRule     = nonGuestRule
+	mailMailboxesGuestCreateRule = nonGuestRule
+	mailAliasesGuestReadRule     = nonGuestRule
+
+	// Mirrors 1830000003: the bootstrap branch pins `@request.auth.role !=
+	// "guest"` alongside the self-insert check, so a guest can never
+	// bootstrap-own a memberless mailbox.
+	mailMembersOwnerCanAdd = `mailbox.mail_mailbox_members_via_mailbox.user ?= @request.auth.id && ` +
+		`mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"`
+	mailMembersBootstrapGuestRule = `user = @request.auth.id && ` +
 		`role = "owner" && ` +
 		`mailbox.mail_mailbox_members_via_mailbox.id = "" && ` +
-		`mailbox.domain.org.user_org_via_org.user ?= @request.auth.id && ` +
-		`mailbox.domain.org.user_org_via_org.role ?!= "guest"`
+		`@request.auth.role != "guest"`
 	mailMembersGuestCreateRule = `(` + mailMembersOwnerCanAdd + `) || (` + mailMembersBootstrapGuestRule + `)`
 )
 
 type mailGuestEnv struct {
-	app           *tests.TestApp
-	org           *core.Record
-	domain        *core.Record
-	mailbox       *core.Record
-	memberUserOrg *core.Record
-	guestUserOrg  *core.Record
-	memberToken   string
-	guestToken    string
+	app         *tests.TestApp
+	domain      *core.Record
+	mailbox     *core.Record
+	member      *core.Record
+	guest       *core.Record
+	memberToken string
+	guestToken  string
 }
 
 func setupMailGuestApp(t *testing.T) *mailGuestEnv {
@@ -80,39 +79,17 @@ func setupMailGuestApp(t *testing.T) *mailGuestEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	orgs := core.NewBaseCollection("orgs")
-	orgs.Id = "pbc_orgs_00001"
-	orgs.Fields.Add(&core.TextField{Name: "name", Required: true})
-	orgs.Fields.Add(&core.TextField{Name: "slug", Required: true})
-	if err := app.Save(orgs); err != nil {
-		t.Fatal(err)
-	}
-
-	userOrg := core.NewBaseCollection("user_org")
-	userOrg.Id = "pbc_user_org_01"
-	userOrg.Fields.Add(&core.RelationField{
-		Name: "org", Required: true, CollectionId: orgs.Id,
-		CascadeDelete: true, MaxSelect: 1,
-	})
-	userOrg.Fields.Add(&core.RelationField{
-		Name: "user", Required: true, CollectionId: users.Id,
-		CascadeDelete: true, MaxSelect: 1,
-	})
-	userOrg.Fields.Add(&core.SelectField{
-		Name: "role", Required: true, MaxSelect: 1,
+	// Single-org: role is a field on the auth record itself.
+	users.Fields.Add(&core.SelectField{
+		Name: "role", MaxSelect: 1,
 		Values: []string{"owner", "admin", "member", "guest"},
 	})
-	if err := app.Save(userOrg); err != nil {
+	if err := app.Save(users); err != nil {
 		t.Fatal(err)
 	}
 
 	domains := core.NewBaseCollection("mail_domains")
 	domains.Id = "pbc_mail_domains_01"
-	domains.Fields.Add(&core.RelationField{
-		Name: "org", Required: true, CollectionId: orgs.Id,
-		CascadeDelete: true, MaxSelect: 1,
-	})
 	domains.Fields.Add(&core.TextField{Name: "domain", Required: true})
 	domains.Fields.Add(&core.BoolField{Name: "verified"})
 	if err := app.Save(domains); err != nil {
@@ -151,8 +128,9 @@ func setupMailGuestApp(t *testing.T) *mailGuestEnv {
 		Name: "mailbox", Required: true, CollectionId: mailboxes.Id,
 		CascadeDelete: true, MaxSelect: 1,
 	})
+	// Single-org: membership points straight at the users collection.
 	members.Fields.Add(&core.RelationField{
-		Name: "user_org", Required: true, CollectionId: userOrg.Id,
+		Name: "user", Required: true, CollectionId: users.Id,
 		CascadeDelete: true, MaxSelect: 1,
 	})
 	members.Fields.Add(&core.SelectField{
@@ -163,20 +141,10 @@ func setupMailGuestApp(t *testing.T) *mailGuestEnv {
 		t.Fatal(err)
 	}
 
-	org := core.NewRecord(orgs)
-	org.Set("name", "Acme")
-	org.Set("slug", "acme")
-	if err := app.Save(org); err != nil {
-		t.Fatal(err)
-	}
-
-	member := mailGuestUser(t, app, "member@test.local")
-	guest := mailGuestUser(t, app, "guest@test.local")
-	memberUserOrg := mailGuestMembership(t, app, member, org, "member")
-	guestUserOrg := mailGuestMembership(t, app, guest, org, "guest")
+	member := mailGuestUser(t, app, "member@test.local", "member")
+	guest := mailGuestUser(t, app, "guest@test.local", "guest")
 
 	domain := core.NewRecord(domains)
-	domain.Set("org", org.Id)
 	domain.Set("domain", "acme.test")
 	domain.Set("verified", true)
 	if err := app.Save(domain); err != nil {
@@ -201,38 +169,25 @@ func setupMailGuestApp(t *testing.T) *mailGuestEnv {
 	}
 
 	return &mailGuestEnv{
-		app:           app,
-		org:           org,
-		domain:        domain,
-		mailbox:       mailbox,
-		memberUserOrg: memberUserOrg,
-		guestUserOrg:  guestUserOrg,
-		memberToken:   memberToken,
-		guestToken:    guestToken,
+		app:         app,
+		domain:      domain,
+		mailbox:     mailbox,
+		member:      member,
+		guest:       guest,
+		memberToken: memberToken,
+		guestToken:  guestToken,
 	}
 }
 
-func mailGuestUser(t *testing.T, app core.App, email string) *core.Record {
+func mailGuestUser(t *testing.T, app core.App, email, role string) *core.Record {
 	t.Helper()
 	col, _ := app.FindCollectionByNameOrId("users")
 	r := core.NewRecord(col)
 	r.SetEmail(email)
 	r.Set("name", "Test")
+	r.Set("role", role)
 	r.SetVerified(true)
 	r.SetPassword("Password123!")
-	if err := app.Save(r); err != nil {
-		t.Fatal(err)
-	}
-	return r
-}
-
-func mailGuestMembership(t *testing.T, app core.App, user, org *core.Record, role string) *core.Record {
-	t.Helper()
-	col, _ := app.FindCollectionByNameOrId("user_org")
-	r := core.NewRecord(col)
-	r.Set("user", user.Id)
-	r.Set("org", org.Id)
-	r.Set("role", role)
 	if err := app.Save(r); err != nil {
 		t.Fatal(err)
 	}
@@ -363,25 +318,23 @@ func TestMailGuestRLS_Aliases_MemberCanRead(t *testing.T) {
 
 // ----- mail_mailbox_members bootstrap-first-owner (1830000003) -----
 //
-// The bootstrap branch of the createRule lets an org member self-insert as
-// the first owner of a *memberless* mailbox. Migration 1830000003 pins
-// `mailbox.domain.org.user_org_via_org.role ?!= "guest"` to the SAME
-// relation-path prefix as the existing user check so PB joins them on the
-// same user_org row — the CALLER's own membership must be non-guest. Guests
-// today are blocked transitively (they cannot create a mailbox after
-// 1830000002, and pre-existing mailboxes already have owners), but the
+// The bootstrap branch of the createRule lets a user self-insert as the first
+// owner of a *memberless* mailbox. Migration 1830000003 pins
+// `@request.auth.role != "guest"` on that branch so a guest can never take
+// ownership. Guests are also blocked transitively (they cannot create a mailbox
+// after 1830000002, and pre-existing mailboxes already have owners), but the
 // defensive pin closes the gap if a mailbox ever becomes memberless.
 
 func TestMailGuestRLS_MailboxMembers_GuestCannotBootstrapOwner(t *testing.T) {
 	env := setupMailGuestApp(t)
 	mailSetCreate(t, env.app, "mail_mailbox_members", mailMembersGuestCreateRule)
 
-	// The env.mailbox has no members yet — the bootstrap branch would
-	// match on `mail_mailbox_members_via_mailbox.id = ""`. Without the
-	// role pin, the guest's user_org row would satisfy the user check.
-	// With the pin, PB sees role='guest' on the same joined row and denies.
+	// The env.mailbox has no members yet — the bootstrap branch would match on
+	// `mail_mailbox_members_via_mailbox.id = ""`. Without the role pin the
+	// guest's self-insert would satisfy the user check; with it, PB reads
+	// role='guest' off the auth record and denies.
 	body := `{"mailbox":"` + env.mailbox.Id +
-		`","user_org":"` + env.guestUserOrg.Id +
+		`","user":"` + env.guest.Id +
 		`","role":"owner"}`
 
 	scenario := &tests.ApiScenario{
@@ -401,11 +354,10 @@ func TestMailGuestRLS_MailboxMembers_MemberCanBootstrapOwner(t *testing.T) {
 	env := setupMailGuestApp(t)
 	mailSetCreate(t, env.app, "mail_mailbox_members", mailMembersGuestCreateRule)
 
-	// Positive control: a non-guest org member must still be allowed to
-	// bootstrap-own a memberless mailbox. This is the existing-good-path
-	// the pin must not regress.
+	// Positive control: a non-guest must still be allowed to bootstrap-own a
+	// memberless mailbox. This is the existing-good path the pin must not regress.
 	body := `{"mailbox":"` + env.mailbox.Id +
-		`","user_org":"` + env.memberUserOrg.Id +
+		`","user":"` + env.member.Id +
 		`","role":"owner"}`
 
 	scenario := &tests.ApiScenario{

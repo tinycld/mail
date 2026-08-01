@@ -6,16 +6,11 @@ export interface MailboxesResult {
 }
 
 /**
- * Pure: given membership rows for the current user_org and the list of all
- * mailboxes in the org, return the user's personal mailbox and shared
- * mailboxes they belong to. Shared mailboxes are sorted by `created` ascending.
+ * Pure: given the mailboxes the current user is a member of (membership is
+ * resolved by the caller's joined query), return the personal mailbox and the
+ * shared ones. Shared mailboxes are sorted by `created` ascending.
  */
-export function splitMailboxes(
-    memberUserOrgMailboxIds: string[],
-    allMailboxes: MailMailboxes[]
-): MailboxesResult {
-    const memberSet = new Set(memberUserOrgMailboxIds)
-    const mine = allMailboxes.filter(mb => memberSet.has(mb.id))
+export function splitMailboxes(mine: MailMailboxes[]): MailboxesResult {
     const personal = mine.find(mb => mb.type === 'personal') ?? null
     const shared = mine
         .filter(mb => mb.type === 'shared')

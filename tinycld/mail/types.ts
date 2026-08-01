@@ -1,4 +1,4 @@
-import type { UserOrg } from '@tinycld/core/types/pbSchema'
+import type { Users } from '@tinycld/core/types/pbSchema'
 
 export interface MailDomainVerificationDetails {
     mx?: {
@@ -26,7 +26,6 @@ export interface MailDomainVerificationDetails {
 
 export interface MailDomains {
     id: string
-    org: string
     domain: string
     verified: boolean
     mx_verified: boolean
@@ -55,7 +54,7 @@ export interface MailMailboxes {
 export interface MailMailboxMembers {
     id: string
     mailbox: string
-    user_org: string
+    user: string
     role: 'owner' | 'member'
     created: string
     updated: string
@@ -112,7 +111,7 @@ export interface MailMessages {
 export interface MailThreadState {
     id: string
     thread: string
-    user_org: string
+    user: string
     folder: 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam' | 'archive'
     is_read: boolean
     is_starred: boolean
@@ -131,7 +130,7 @@ export interface MailImapMailboxState {
 
 export interface MailFolderCounts {
     id: string
-    user_org: string
+    user: string
     mailbox: string
     inbox: number
     drafts: number
@@ -144,9 +143,7 @@ export interface MailFolderCounts {
 export type MailSchema = {
     mail_domains: {
         type: MailDomains
-        relations: {
-            org: import('@tinycld/core/types/pbSchema').Orgs
-        }
+        relations: Record<string, never>
     }
     mail_mailboxes: {
         type: MailMailboxes
@@ -158,7 +155,7 @@ export type MailSchema = {
         type: MailMailboxMembers
         relations: {
             mailbox: MailMailboxes
-            user_org: UserOrg
+            user: Users
         }
     }
     mail_mailbox_aliases: {
@@ -184,7 +181,7 @@ export type MailSchema = {
         type: MailThreadState
         relations: {
             thread: MailThreads
-            user_org: UserOrg
+            user: Users
         }
     }
     mail_imap_mailbox_state: {
@@ -196,7 +193,7 @@ export type MailSchema = {
     mail_folder_counts: {
         type: MailFolderCounts
         relations: {
-            user_org: UserOrg
+            user: Users
             mailbox: MailMailboxes
         }
     }

@@ -10,6 +10,7 @@ import {
     moveMessage,
     withImapClient,
 } from '@tinycld/core/e2e-imap-helpers'
+import { TEST_USER_MAILBOX } from './helpers'
 
 test.describe('Mail — IMAP Integration', () => {
     test('lists mailboxes and reads appended messages via IMAP', async () => {
@@ -21,7 +22,7 @@ test.describe('Mail — IMAP Integration', () => {
 
             await appendMessage(client, inbox, {
                 from: 'sender@example.com',
-                to: 'user@tinycld.org',
+                to: TEST_USER_MAILBOX,
                 subject,
                 body: 'Round-trip test message.',
             })
@@ -40,7 +41,7 @@ test.describe('Mail — IMAP Integration', () => {
             const inbox = findPersonalInbox(mailboxes)
             await appendMessage(client, inbox, {
                 from: 'sender@example.com',
-                to: 'user@tinycld.org',
+                to: TEST_USER_MAILBOX,
                 subject,
                 body: 'This message was appended via IMAP.',
             })
@@ -76,7 +77,7 @@ test.describe('Mail — IMAP Integration', () => {
             await client.mailboxCreate(fullLabelPath)
             await appendMessage(client, inbox, {
                 from: 'labeler@example.com',
-                to: 'user@tinycld.org',
+                to: TEST_USER_MAILBOX,
                 subject,
                 body: 'This message will be labeled via MOVE.',
             })
@@ -108,7 +109,7 @@ test.describe('Mail — IMAP Integration', () => {
 
             await appendMessage(client, inbox, {
                 from: 'trasher@example.com',
-                to: 'user@tinycld.org',
+                to: TEST_USER_MAILBOX,
                 subject,
                 body: 'This message will be trashed via MOVE.',
             })
@@ -148,7 +149,7 @@ test.describe('Mail — IMAP Integration', () => {
             const sent = inbox.replace('INBOX', 'Sent')
 
             await appendMessage(client, sent, {
-                from: 'user@tinycld.org',
+                from: TEST_USER_MAILBOX,
                 to: 'recipient@example.com',
                 subject,
                 body: 'A message saved directly to Sent.',
@@ -172,7 +173,7 @@ test.describe('Mail — IMAP Integration', () => {
             const sent = inbox.replace('INBOX', 'Sent')
 
             const opts = {
-                from: 'user@tinycld.org',
+                from: TEST_USER_MAILBOX,
                 to: 'recipient@example.com',
                 subject,
                 body: 'This message is appended twice with the same Message-ID.',
@@ -194,7 +195,7 @@ test.describe('Mail — IMAP Integration', () => {
             const inbox = findPersonalInbox(mailboxes)
             await appendMessage(client, inbox, {
                 from: 'sender@example.com',
-                to: 'user@tinycld.org',
+                to: TEST_USER_MAILBOX,
                 subject,
                 body: 'This message will be deleted via IMAP.',
             })

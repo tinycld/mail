@@ -9,13 +9,14 @@ import (
 
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/coreserver"
+	"tinycld.org/core/davauth"
+	"tinycld.org/core/pkgaccess"
 )
 
 type smtpBackend struct {
-	app *pocketbase.PocketBase
+	app core.App
 }
 
 func (b *smtpBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
@@ -23,7 +24,7 @@ func (b *smtpBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 }
 
 type smtpSession struct {
-	app *pocketbase.PocketBase
+	app core.App
 
 	// Auth state (persists across transactions)
 	user *core.Record
@@ -33,8 +34,6 @@ type smtpSession struct {
 	mailbox    *core.Record
 	alias      *core.Record
 	domain     *core.Record
-	orgID      string
-	userOrg    *core.Record
 	recipients []string
 }
 
@@ -84,8 +83,13 @@ func (s *loginServer) Next(response []byte) (challenge []byte, done bool, err er
 	}
 }
 
+// authenticate validates AUTH credentials. davauth.VerifyCredentials is the
+// shared protocol-server check: username-or-email identifier, and the
+// disabled cutoff (this listener bypasses PocketBase's auth hooks, and unlike
+// REST tokens a protocol login never expires). One opaque failure keeps the
+// account's state invisible to a prober.
 func (s *smtpSession) authenticate(username, password string) error {
-	record, err := s.app.FindAuthRecordByEmail("users", username)
+	record, err := davauth.VerifyCredentials(s.app, username, password)
 	if err != nil {
 		return &smtp.SMTPError{
 			Code:         535,
@@ -93,11 +97,15 @@ func (s *smtpSession) authenticate(username, password string) error {
 			Message:      "Authentication credentials invalid",
 		}
 	}
-	if !record.ValidatePassword(password) {
+
+	// SMTP submission exists only to send, and sending is a write: an
+	// org_pkg_access level below full refuses at AUTH. (IMAP still logs the
+	// same user in — readonly means read.)
+	if !pkgaccess.CanWrite(s.app, record, "mail") {
 		return &smtp.SMTPError{
 			Code:         535,
 			EnhancedCode: smtp.EnhancedCode{5, 7, 8},
-			Message:      "Authentication credentials invalid",
+			Message:      "Your mail access is read-only; sending is not permitted",
 		}
 	}
 
@@ -142,18 +150,7 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 		}
 	}
 
-	orgID := domainRecord.GetString("org")
-
-	userOrg, err := resolveUserOrg(s.app, s.user.Id, orgID)
-	if err != nil {
-		return &smtp.SMTPError{
-			Code:         550,
-			EnhancedCode: smtp.EnhancedCode{5, 7, 1},
-			Message:      "Not authorized to send from this address",
-		}
-	}
-
-	if _, err := verifyMailboxMembership(s.app, mailbox.Id, userOrg.Id); err != nil {
+	if _, err := verifyMailboxMembership(s.app, mailbox.Id, s.user.Id); err != nil {
 		return &smtp.SMTPError{
 			Code:         550,
 			EnhancedCode: smtp.EnhancedCode{5, 7, 1},
@@ -165,8 +162,6 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 	s.mailbox = mailbox
 	s.alias = alias
 	s.domain = domainRecord
-	s.orgID = orgID
-	s.userOrg = userOrg
 	s.recipients = nil
 
 	return nil
@@ -294,7 +289,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 	}
 
 	// Resolve provider
-	provider := providerForOrg(s.app, s.orgID)
+	provider := newProviderFromSystem(s.app)
 
 	// Preserve threading headers from the original message
 	inReplyToHeader := msg.InReplyTo
@@ -346,10 +341,10 @@ func (s *smtpSession) Data(r io.Reader) error {
 	// is an SMTP retry), reuse the existing thread and just retag the folder.
 	existingMsg, existingThread, _ := findMessageInMailbox(s.app, mailboxID, result.MessageID)
 	if existingMsg != nil {
-		if err := ensureThreadState(s.app, existingThread.Id, s.userOrg.Id, "sent", true); err != nil {
+		if err := ensureThreadState(s.app, existingThread.Id, s.user.Id, "sent", true); err != nil {
 			s.app.Logger().Error("SMTP: failed to create thread state for deduped message", "error", err)
 		}
-		globalNotifier.notify(mailboxID)
+		globalNotifier.Notify(mailboxID)
 		return nil
 	}
 
@@ -389,11 +384,11 @@ func (s *smtpSession) Data(r io.Reader) error {
 		s.app.Logger().Error("SMTP: failed to update thread metadata", "error", err)
 	}
 
-	if err := ensureThreadState(s.app, thread.Id, s.userOrg.Id, "sent", true); err != nil {
+	if err := ensureThreadState(s.app, thread.Id, s.user.Id, "sent", true); err != nil {
 		s.app.Logger().Error("SMTP: failed to create thread state", "error", err)
 	}
 
-	globalNotifier.notify(mailboxID)
+	globalNotifier.Notify(mailboxID)
 
 	return nil
 }
@@ -404,8 +399,6 @@ func (s *smtpSession) Reset() {
 	s.mailbox = nil
 	s.alias = nil
 	s.domain = nil
-	s.orgID = ""
-	s.userOrg = nil
 	s.recipients = nil
 }
 

@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 
@@ -51,7 +50,7 @@ var thumbInFlight sync.Map
 // attachment_thumbnails file field; the attachment_thumbnail_map JSON field
 // records the original→thumbnail filename mapping so clients can look up the
 // thumb by attachment name. Designed to run in a background goroutine.
-func generateAttachmentThumbnails(app *pocketbase.PocketBase, record *core.Record) {
+func generateAttachmentThumbnails(app core.App, record *core.Record) {
 	defer func() {
 		if r := recover(); r != nil {
 			app.Logger().Error("Mail thumbnail: panic recovered",

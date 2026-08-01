@@ -14,20 +14,6 @@ migrate(
         )
 
         app.save(mailboxes)
-
-        // Back-fill existing mailboxes: set name to the org's name via domain → org lookup
-        const allMailboxes = app.findRecordsByFilter('mail_mailboxes', '1=1', '', 0, 0)
-        for (const mb of allMailboxes) {
-            if (mb.getString('name')) continue
-            try {
-                const domain = app.findRecordById('mail_domains', mb.getString('domain'))
-                const org = app.findRecordById('orgs', domain.getString('org'))
-                mb.set('name', org.getString('name'))
-                app.save(mb)
-            } catch (_) {
-                // skip if domain/org lookup fails
-            }
-        }
     },
     app => {
         const mailboxes = app.findCollectionByNameOrId('mail_mailboxes')

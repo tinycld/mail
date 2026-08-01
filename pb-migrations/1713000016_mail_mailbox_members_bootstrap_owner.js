@@ -12,18 +12,18 @@
 migrate(
     app => {
         const ownerCanAdd =
-            'mailbox.mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
+            'mailbox.mail_mailbox_members_via_mailbox.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
         const bootstrapFirstOwner =
-            'role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = "" && mailbox.domain.org.user_org_via_org.user ?= @request.auth.id'
+            'role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = ""'
 
         const col = app.findCollectionByNameOrId('mail_mailbox_members')
-        col.createRule = `user_org.user = @request.auth.id && ((${ownerCanAdd}) || (${bootstrapFirstOwner}))`
+        col.createRule = `user = @request.auth.id && ((${ownerCanAdd}) || (${bootstrapFirstOwner}))`
         app.save(col)
     },
     app => {
         const col = app.findCollectionByNameOrId('mail_mailbox_members')
         col.createRule =
-            'user_org.user = @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.user_org.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
+            'user = @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.user ?= @request.auth.id && mailbox.mail_mailbox_members_via_mailbox.role ?= "owner"'
         app.save(col)
     }
 )

@@ -5,6 +5,7 @@ import {
     searchResultToThreadListItem,
     stripHtmlTags,
 } from '~/tinycld/mail/hooks/mailListHelpers'
+import type { MailThreadState } from '~/tinycld/mail/types'
 
 vi.mock('@tinycld/core/lib/errors', () => ({
     captureException: vi.fn(),
@@ -60,6 +61,20 @@ describe('stripHtmlTags', () => {
 })
 
 describe('searchResultToThreadListItem', () => {
+    function buildState(overrides: Partial<MailThreadState> = {}): MailThreadState {
+        return {
+            id: 'state_abc',
+            thread: 't1',
+            user: 'u1',
+            folder: 'inbox',
+            is_read: true,
+            is_starred: false,
+            created: '2026-04-30T12:00:00Z',
+            updated: '2026-04-30T12:00:00Z',
+            ...overrides,
+        }
+    }
+
     function buildResult(
         overrides: Partial<Parameters<typeof searchResultToThreadListItem>[0]> = {}
     ) {
@@ -129,28 +144,14 @@ describe('searchResultToThreadListItem', () => {
         // The whole point of the search-archive fix: when a state row is
         // resolved, stateId must be the STATE id, not the thread id — otherwise
         // archive/star/trash target a non-existent record and silently no-op.
-        const state = {
-            id: 'state_abc',
-            thread: 't1',
-            is_read: false,
-            is_starred: true,
-            folder: 'archive',
-            // biome-ignore lint/suspicious/noExplicitAny: test stub of a MailThreadState; only the read fields matter
-        } as any
+        const state = buildState({ is_read: false, is_starred: true, folder: 'archive' })
         const item = searchResultToThreadListItem(buildResult(), state)
         expect(item.stateId).toBe('state_abc')
         expect(item.threadId).toBe('t1')
     })
 
     it('reflects the real read / starred / folder flags from the resolved state', () => {
-        const state = {
-            id: 'state_abc',
-            thread: 't1',
-            is_read: false,
-            is_starred: true,
-            folder: 'archive',
-            // biome-ignore lint/suspicious/noExplicitAny: test stub of a MailThreadState
-        } as any
+        const state = buildState({ is_read: false, is_starred: true, folder: 'archive' })
         const item = searchResultToThreadListItem(buildResult(), state)
         expect(item.isRead).toBe(false)
         expect(item.isStarred).toBe(true)
@@ -158,14 +159,7 @@ describe('searchResultToThreadListItem', () => {
     })
 
     it('passes resolved labels through to the row', () => {
-        const state = {
-            id: 'state_abc',
-            thread: 't1',
-            is_read: true,
-            is_starred: false,
-            folder: 'inbox',
-            // biome-ignore lint/suspicious/noExplicitAny: test stub of a MailThreadState
-        } as any
+        const state = buildState()
         const labels = [{ id: 'l1', name: 'Work', color: '#3b82f6' }]
         const item = searchResultToThreadListItem(buildResult(), state, labels)
         expect(item.labels).toEqual(labels)

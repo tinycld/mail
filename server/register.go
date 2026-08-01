@@ -4,22 +4,18 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/audit"
+	"tinycld.org/core/coreserver"
+	"tinycld.org/core/quota"
 )
-
-// settingsCache caches settings per org to avoid DB queries on every request.
-// Invalidated by PocketBase record hooks on the settings collection.
-var settingsCache sync.Map // map[string]map[string]string  (orgID → {key: value})
 
 // appIsLive reports whether the app still has an open database connection.
 // The mail thumbnail + notification workers run in background goroutines that
@@ -27,89 +23,77 @@ var settingsCache sync.Map // map[string]map[string]string  (orgID → {key: val
 // a job is in flight. Once the app is torn down, ConcurrentDB() is nil and any
 // record query (PocketBase v0.38 RecordQuery) panics on the nil DB instead of
 // returning an error. Bail out instead of touching the DB in that window.
-func appIsLive(app *pocketbase.PocketBase) bool {
+func appIsLive(app core.App) bool {
 	return app != nil && app.ConcurrentDB() != nil
 }
 
+// Register composes the mail server — the package's single entry point,
+// called by the generator's package_extensions.go in BOTH the single-org app
+// and a multi-org tenant. Mail is the rare package whose composition genuinely
+// differs hosted, so it DETECTS tenancy (coreserver.GetTenantContext — the
+// single-Register contract) to pick where its protocol listeners come from:
+//
+//   - Single-org app: the process owns its ports, so the IMAP /
+//     SMTP-submission / inbound-SMTP listeners bind fixed TCP ports here.
+//   - Multi-org tenant: a tenant must NEVER bind a port — the router owns
+//     every listening socket. The router terminates TLS on :993/:465 (SNI
+//     demux) and fronts :25 (RCPT TO routing), forwarding plaintext over
+//     per-org unix sockets injected through the TenantContext
+//     (tenant_listeners.go serves exactly those; none injected = no
+//     listeners, e.g. a degraded router).
 func Register(app *pocketbase.PocketBase) {
+	registerShared(app)
+	if tc, ok := coreserver.GetTenantContext(app); ok {
+		registerInjectedListeners(app, TenantListeners{
+			IMAP:       tc.Mail.IMAP,
+			Submission: tc.Mail.Submission,
+			InboundMX:  tc.Mail.InboundMX,
+		})
+		return
+	}
+	registerMailListeners(app)
+}
+
+// registerShared is the single source of truth for what BOTH compositions run.
+func registerShared(app *pocketbase.PocketBase) {
+	// Storage ceilings: message bodies are real disk. No owner field —
+	// a mailbox is shared by its members, so a message is not chargeable to
+	// any one of them — which means these bytes count toward the ORG total
+	// only, never a per-user one. core/quota binds the enforcement.
+	quota.RegisterSources(quota.Source{
+		Slug:       "mail",
+		Collection: "mail_messages",
+		SizeField:  "total_size",
+	})
+
 	// Audit logging for mail collections
 	audit.RegisterCollection(app, "mail_domains", &audit.CollectionConfig{
 		ExtractLabel: audit.LabelFromField("domain"),
 	})
 
-	resolveOrgViaMailbox := func(a core.App, mailboxID string) string {
-		mailbox, err := a.FindRecordById("mail_mailboxes", mailboxID)
-		if err != nil {
-			return ""
-		}
-		domainID := mailbox.GetString("domain")
-		if domainID == "" {
-			return ""
-		}
-		return audit.ResolveViaRelation(a, "mail_domains", domainID, "org")
-	}
-
 	audit.RegisterCollection(app, "mail_mailboxes", &audit.CollectionConfig{
-		ResolveOrg: func(a core.App, record *core.Record) string {
-			domainID := record.GetString("domain")
-			if domainID == "" {
-				return ""
-			}
-			return audit.ResolveViaRelation(a, "mail_domains", domainID, "org")
-		},
 		ExtractLabel: audit.LabelFromField("address"),
 	})
 
-	audit.RegisterCollection(app, "mail_mailbox_members", &audit.CollectionConfig{
-		ResolveOrg: func(a core.App, record *core.Record) string {
-			mailboxID := record.GetString("mailbox")
-			if mailboxID == "" {
-				return ""
-			}
-			return resolveOrgViaMailbox(a, mailboxID)
-		},
-	})
+	audit.RegisterCollection(app, "mail_mailbox_members", &audit.CollectionConfig{})
 
-	resolveOrgViaThread := func(a core.App, threadID string) string {
-		thread, err := a.FindRecordById("mail_threads", threadID)
-		if err != nil {
-			return ""
-		}
-		mailboxID := thread.GetString("mailbox")
-		if mailboxID == "" {
-			return ""
-		}
-		return resolveOrgViaMailbox(a, mailboxID)
-	}
+	// A shared mailbox must never lose its last owner (self-demotion or row
+	// delete) — an ownerless mailbox is unmanageable. Server backstop for the
+	// drawer's client-side checks.
+	registerMailboxLastOwnerGuard(app)
 
 	audit.RegisterCollection(app, "mail_messages", &audit.CollectionConfig{
-		ResolveOrg: func(a core.App, record *core.Record) string {
-			threadID := record.GetString("thread")
-			if threadID == "" {
-				return ""
-			}
-			return resolveOrgViaThread(a, threadID)
-		},
 		ExtractLabel: audit.LabelFromField("subject"),
 	})
 
 	audit.RegisterCollection(app, "mail_thread_state", &audit.CollectionConfig{
-		ResolveOrg: func(a core.App, record *core.Record) string {
-			threadID := record.GetString("thread")
-			if threadID == "" {
-				return ""
-			}
-			return resolveOrgViaThread(a, threadID)
-		},
 		ExtractLabel: audit.LabelFromField("folder"),
 	})
 
-	// Per-secret webhook provider resolver. We can't pre-bake one provider for
-	// all webhooks because two orgs in the same install may pick different
-	// providers (Postmark vs SMTP) — the inbound/bounce endpoints are
-	// unauthenticated and the only identifier on the request is the
-	// per-domain webhook secret in the URL. Resolve the secret → domain → org
-	// → provider on each call so each webhook lands on the right adapter.
+	// Single-org: the provider is deployment-wide (system_settings), so every
+	// webhook secret resolves to the same adapter. We still look the secret up
+	// to reject unknown ones — an unrecognized secret gets a Noop provider so a
+	// forged webhook can't reach a live adapter.
 	resolveWebhookProvider := func(secret string) Provider {
 		records, err := app.FindRecordsByFilter(
 			"mail_domains",
@@ -122,46 +106,30 @@ func Register(app *pocketbase.PocketBase) {
 		if err != nil || len(records) == 0 {
 			return &NoopProvider{}
 		}
-		orgID := records[0].GetString("org")
-		if orgID == "" {
-			return newProviderFromSystem(app)
-		}
-		return providerForOrg(app, orgID)
+		return newProviderFromSystem(app)
 	}
 
-	// Invalidate settings cache when settings records change. getOrgSettings
-	// caches under "orgID:appName" (see cacheKey there); delete the same
-	// composite key, not the bare orgID (which is never a real cache key, so
-	// the stale entry would otherwise survive until restart).
-	invalidateSettingsCache := func(e *core.RecordEvent) error {
-		orgID := e.Record.GetString("org")
-		appName := e.Record.GetString("app")
-		if orgID != "" && appName != "" {
-			settingsCache.Delete(orgID + ":" + appName)
-		}
-		// Trigger an IMAP-fetcher reconcile when mail settings change —
-		// the operator may have toggled provider or inbound mode.
-		if appName == "mail" && globalIMAPManager != nil {
+	// A settings change to the mail app may toggle provider or inbound mode —
+	// reconcile the IMAP fetcher. (The former per-org settings cache is gone;
+	// provider config is deployment-wide in system_settings.)
+	reconcileOnMailSettings := func(e *core.RecordEvent) error {
+		if e.Record.GetString("app") == "mail" && globalIMAPManager != nil {
 			globalIMAPManager.onSettingsChanged()
 		}
 		return e.Next()
 	}
-	// Auto-create personal mailbox when a user joins an org
-	app.OnRecordAfterCreateSuccess("user_org").BindFunc(func(e *core.RecordEvent) error {
-		handleUserOrgCreated(app, e.Record)
+
+	// Auto-create a personal mailbox when a user is created. Single-org: the
+	// process IS the org, so membership is the users record itself (the former
+	// user_org junction is gone).
+	app.OnRecordAfterCreateSuccess("users").BindFunc(func(e *core.RecordEvent) error {
+		handleUserCreated(app, e.Record)
 		return e.Next()
 	})
 
-	// Provision this org's mail domain when core emits an org_provisioning intent
-	// (admin org-create with a mail domain). Core never writes mail_domains.
-	app.OnRecordAfterCreateSuccess("org_provisioning").BindFunc(func(e *core.RecordEvent) error {
-		handleOrgProvisioning(app, e.Record)
-		return e.Next()
-	})
-
-	// Clean up orphaned personal mailboxes when a user leaves an org
-	app.OnRecordAfterDeleteSuccess("user_org").BindFunc(func(e *core.RecordEvent) error {
-		handleUserOrgDeleted(app, e.Record)
+	// Clean up orphaned personal mailboxes when a user is deleted.
+	app.OnRecordAfterDeleteSuccess("users").BindFunc(func(e *core.RecordEvent) error {
+		handleUserDeleted(app, e.Record)
 		return e.Next()
 	})
 
@@ -177,9 +145,9 @@ func Register(app *pocketbase.PocketBase) {
 		return e.Next()
 	})
 
-	app.OnRecordAfterCreateSuccess("settings").BindFunc(invalidateSettingsCache)
-	app.OnRecordAfterUpdateSuccess("settings").BindFunc(invalidateSettingsCache)
-	app.OnRecordAfterDeleteSuccess("settings").BindFunc(invalidateSettingsCache)
+	app.OnRecordAfterCreateSuccess("settings").BindFunc(reconcileOnMailSettings)
+	app.OnRecordAfterUpdateSuccess("settings").BindFunc(reconcileOnMailSettings)
+	app.OnRecordAfterDeleteSuccess("settings").BindFunc(reconcileOnMailSettings)
 
 	// The mail provider + IMAP config are SYSTEM-WIDE (system_settings), so a
 	// system-settings change to a mail.* key may toggle the IMAP fetcher on/off.
@@ -239,7 +207,7 @@ func Register(app *pocketbase.PocketBase) {
 		threadID := e.Record.GetString("thread")
 		thread, err := app.FindRecordById("mail_threads", threadID)
 		if err == nil {
-			globalNotifier.notify(thread.GetString("mailbox"))
+			globalNotifier.Notify(thread.GetString("mailbox"))
 		}
 		return e.Next()
 	})
@@ -247,7 +215,7 @@ func Register(app *pocketbase.PocketBase) {
 		threadID := e.Record.GetString("thread")
 		thread, err := app.FindRecordById("mail_threads", threadID)
 		if err == nil {
-			globalNotifier.notify(thread.GetString("mailbox"))
+			globalNotifier.Notify(thread.GetString("mailbox"))
 		}
 		return e.Next()
 	})
@@ -277,68 +245,10 @@ func Register(app *pocketbase.PocketBase) {
 	registerThreadMarkerHooks(app)
 
 	audit.RegisterCollection(app, "mail_mailbox_aliases", &audit.CollectionConfig{
-		ResolveOrg: func(a core.App, record *core.Record) string {
-			mailboxID := record.GetString("mailbox")
-			if mailboxID == "" {
-				return ""
-			}
-			return resolveOrgViaMailbox(a, mailboxID)
-		},
 		ExtractLabel: audit.LabelFromField("address"),
 	})
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
-		// In production a failed mail listener is a deploy-breaking
-		// misconfiguration (missing/unreadable cert, lost privileged-port
-		// capability, port already bound): abort the boot so it's loud rather
-		// than coming up healthy on HTTP with mail silently absent. In dev we
-		// log and continue, so a missing local cert doesn't block the app.
-		failLoud := !app.IsDev()
-
-		// Start IMAP server
-		imapShutdown, err := StartIMAPServer(app, e.CertManager)
-		if err != nil {
-			app.Logger().Error("Failed to start IMAP server", "error", err)
-			if failLoud {
-				return fmt.Errorf("aborting startup: IMAP server failed to start: %w", err)
-			}
-		} else {
-			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
-				imapShutdown()
-				return te.Next()
-			})
-		}
-
-		// Start SMTP submission server
-		smtpShutdown, smtpErr := StartSMTPServer(app, e.CertManager)
-		if smtpErr != nil {
-			app.Logger().Error("Failed to start SMTP server", "error", smtpErr)
-			if failLoud {
-				return fmt.Errorf("aborting startup: SMTP server failed to start: %w", smtpErr)
-			}
-		} else {
-			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
-				smtpShutdown()
-				return te.Next()
-			})
-		}
-
-		// Start inbound SMTP listener (no-op unless MAIL_INBOUND_SMTP_ENABLED=true).
-		// This is the public MX target for the self-hosted SMTP provider in
-		// "smtp" inbound mode — distinct from the submission server above.
-		inboundShutdown, inboundErr := StartSMTPInboundServer(app, e.CertManager)
-		if inboundErr != nil {
-			app.Logger().Error("Failed to start inbound SMTP server", "error", inboundErr)
-			if failLoud {
-				return fmt.Errorf("aborting startup: inbound SMTP server failed to start: %w", inboundErr)
-			}
-		} else {
-			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
-				inboundShutdown()
-				return te.Next()
-			})
-		}
-
 		// Send endpoint (requires auth, resolves provider from org settings)
 		e.Router.POST("/api/mail/send", func(re *core.RequestEvent) error {
 			return handleSend(app, re)
@@ -393,7 +303,7 @@ func Register(app *pocketbase.PocketBase) {
 			return handleBounce(app, resolveWebhookProvider(secret), re, secret)
 		})
 
-		// Webhook URLs endpoint (requires auth; handler checks org admin/owner
+		// Webhook URLs endpoint (requires auth; handler checks admin/owner
 		// since the URLs embed the domain's webhook secret)
 		e.Router.GET("/api/mail/domains/{id}/webhook-urls", func(re *core.RequestEvent) error {
 			domainID := re.Request.PathValue("id")
@@ -401,9 +311,8 @@ func Register(app *pocketbase.PocketBase) {
 			if err != nil {
 				return re.NotFoundError("Domain not found", nil)
 			}
-			orgID := domain.GetString("org")
-			if err := verifyOrgAdmin(app, re.Auth.Id, orgID); err != nil {
-				return re.ForbiddenError("only org admins or owners can view webhook URLs", err)
+			if err := verifyAdmin(re.Auth); err != nil {
+				return re.ForbiddenError("only admins or owners can view webhook URLs", err)
 			}
 			secret := domain.GetString("webhook_secret")
 			baseURL := app.Settings().Meta.AppURL
@@ -426,6 +335,66 @@ func Register(app *pocketbase.PocketBase) {
 	})
 }
 
+// registerMailListeners starts the port-binding mail protocol servers on
+// OnServe. Host-only: see the tail of Register for why a tenant must not run
+// these.
+func registerMailListeners(app *pocketbase.PocketBase) {
+	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
+		// In production a failed mail listener is a deploy-breaking
+		// misconfiguration (missing/unreadable cert, lost privileged-port
+		// capability, port already bound): abort the boot so it's loud rather
+		// than coming up healthy on HTTP with mail silently absent. In dev we
+		// log and continue, so a missing local cert doesn't block the app.
+		failLoud := !app.IsDev()
+
+		// Start IMAP server
+		imapShutdown, err := StartIMAPServer(app, e.CertManager)
+		if err != nil {
+			app.Logger().Error("Failed to start IMAP server", "error", err)
+			if failLoud {
+				return fmt.Errorf("aborting startup: IMAP server failed to start: %w", err)
+			}
+		} else {
+			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
+				imapShutdown()
+				return te.Next()
+			})
+		}
+
+		// Start SMTP submission server
+		smtpShutdown, smtpErr := StartSMTPServer(app, e.CertManager)
+		if smtpErr != nil {
+			app.Logger().Error("Failed to start SMTP server", "error", smtpErr)
+			if failLoud {
+				return fmt.Errorf("aborting startup: SMTP server failed to start: %w", smtpErr)
+			}
+		} else {
+			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
+				smtpShutdown()
+				return te.Next()
+			})
+		}
+
+		// Start inbound SMTP listener (no-op unless MAIL_INBOUND_SMTP_ENABLED=true).
+		// This is the public MX target for the self-hosted SMTP provider in
+		// "smtp" inbound mode — distinct from the submission server above.
+		inboundShutdown, inboundErr := StartSMTPInboundServer(app, e.CertManager)
+		if inboundErr != nil {
+			app.Logger().Error("Failed to start inbound SMTP server", "error", inboundErr)
+			if failLoud {
+				return fmt.Errorf("aborting startup: inbound SMTP server failed to start: %w", inboundErr)
+			}
+		} else {
+			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
+				inboundShutdown()
+				return te.Next()
+			})
+		}
+
+		return e.Next()
+	})
+}
+
 // systemSetting reads a value from the system_settings collection — the
 // system-wide config store core owns. Mail reads it directly from the app (not
 // via a core import) to stay decoupled, mirroring the per-org `settings` reads.
@@ -438,9 +407,9 @@ func systemSetting(app core.App, key string) string {
 	return rec.GetString("value")
 }
 
-// newProviderFromSystem builds the provider from SYSTEM settings only — the
-// deployment-wide default used when there's no org context (e.g. inbound routing
-// before an org is resolved). Per-org overrides are layered on by providerForOrg.
+// newProviderFromSystem builds the provider from system settings. The provider
+// choice and its credentials/SMTP config are deployment-wide infrastructure,
+// configured in the /admin Settings console.
 func newProviderFromSystem(app core.App) Provider {
 	name := systemSetting(app, "mail.provider")
 	if name == "" {
@@ -473,19 +442,8 @@ func newProviderByName(name, serverToken, accountToken string, smtpCfg SMTPConfi
 	}
 }
 
-// providerForOrg builds the mail provider for an org. The provider choice and its
-// credentials/SMTP config are SYSTEM-WIDE (deployment infrastructure), not per-org
-// — they come from system_settings, configured in the /admin Settings console, so
-// every org resolves to the same system provider. The orgID is retained in the
-// signature because the call sites are org-scoped (per-org domains still matter
-// elsewhere), but it no longer affects provider selection.
-func providerForOrg(app core.App, _ string) Provider {
-	return newProviderFromSystem(app)
-}
-
 // smtpConfigFromSystem reads SMTPConfig from system settings (the deployment-wide
-// SMTP/IMAP config). Used as the no-org baseline and as the fallback layer beneath
-// per-org overrides. Numeric fields that don't parse are left zero (the
+// SMTP/IMAP config). Numeric fields that don't parse are left zero (the
 // constructor's applyDefaults handles them).
 func smtpConfigFromSystem(app core.App) SMTPConfig {
 	port, _ := strconv.Atoi(systemSetting(app, "mail.smtp_imap_port"))
@@ -505,53 +463,10 @@ func smtpConfigFromSystem(app core.App) SMTPConfig {
 	return cfg
 }
 
-// getOrgSettings returns all settings for an app+org as a key→value map.
-// Results are cached in memory and invalidated by record hooks.
-func getOrgSettings(app core.App, appName, orgID string) map[string]string {
-	cacheKey := orgID + ":" + appName
-
-	if cached, ok := settingsCache.Load(cacheKey); ok {
-		return cached.(map[string]string)
-	}
-
-	result := make(map[string]string)
-
-	records, err := app.FindRecordsByFilter(
-		"settings",
-		"app = {:app} && org = {:org}",
-		"",
-		100,
-		0,
-		map[string]any{"app": appName, "org": orgID},
-	)
-	if err == nil {
-		for _, r := range records {
-			key := r.GetString("key")
-			// settings.value is a `json` field, so app.Get returns a
-			// types.JSONRaw — not a string or json.RawMessage. Asserting on
-			// those concrete types silently misses every value (leaving the
-			// map empty, which falls back to env-var provider creds). Marshal
-			// then unmarshal instead so we handle whatever concrete type the
-			// json field decodes to; settings values are JSON strings.
-			raw, marshalErr := json.Marshal(r.Get("value"))
-			if marshalErr != nil {
-				continue
-			}
-			var s string
-			if json.Unmarshal(raw, &s) == nil {
-				result[key] = s
-			}
-		}
-	}
-
-	settingsCache.Store(cacheKey, result)
-	return result
-}
-
 // indexMessageRecordFromStorage builds FTS body_text from the record's stored
 // HTML body and text-based attachments. Used by record hooks when storeMessage()
 // wasn't involved or on updates.
-func indexMessageRecordFromStorage(app *pocketbase.PocketBase, record *core.Record) {
+func indexMessageRecordFromStorage(app core.App, record *core.Record) {
 	bodyText := record.GetString("snippet") // fallback
 
 	html := loadHTMLBody(app, record)
@@ -577,7 +492,7 @@ func randomHex(bytes int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func isValidDomainWebhookSecret(app *pocketbase.PocketBase, secret string) bool {
+func isValidDomainWebhookSecret(app core.App, secret string) bool {
 	records, err := app.FindRecordsByFilter(
 		"mail_domains",
 		"webhook_secret = {:secret}",
@@ -598,7 +513,7 @@ func requireAuth(re *core.RequestEvent) error {
 }
 
 // bufferMailNotification queues a mail notification for batched delivery.
-func bufferMailNotification(app *pocketbase.PocketBase, msgRecord *core.Record) {
+func bufferMailNotification(app core.App, msgRecord *core.Record) {
 	if !appIsLive(app) {
 		return
 	}
@@ -646,14 +561,8 @@ func bufferMailNotification(app *pocketbase.PocketBase, msgRecord *core.Record) 
 	}
 
 	for _, member := range members {
-		userOrgID := member.GetString("user_org")
-		userOrgRecord, err := app.FindRecordById("user_org", userOrgID)
-		if err != nil {
-			continue
+		if userID := member.GetString("user"); userID != "" {
+			bufferMailNotificationForUser(userID, sender, subject)
 		}
-		userID := userOrgRecord.GetString("user")
-		orgID := userOrgRecord.GetString("org")
-
-		bufferMailNotificationForUser(userID, orgID, sender, subject)
 	}
 }

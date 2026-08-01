@@ -35,7 +35,7 @@ export default function MailLayout() {
         })
     }, [])
 
-    const { results, total, isSearching } = useMailSearch(searchQuery, advancedFilters)
+    const { results, total, isSearching, error } = useMailSearch(searchQuery, advancedFilters)
 
     const activeFilterCount = countActiveFilters(advancedFilters)
 
@@ -46,9 +46,10 @@ export default function MailLayout() {
             total,
             isSearching,
             isActive: searchQuery.length >= 2 || hasActiveFilters(advancedFilters),
+            error,
             filters: advancedFilters,
         }),
-        [searchQuery, results, total, isSearching, advancedFilters]
+        [searchQuery, results, total, isSearching, error, advancedFilters]
     )
 
     const isComposeVisible = composeMode !== 'closed' && composeMode !== 'inline'

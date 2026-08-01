@@ -1,4 +1,4 @@
-import type { SendableIdentity } from './flattenSendableIdentities'
+import type { SendableIdentity } from './groupSendableIdentities'
 
 export interface FromIdentity {
     mailboxId: string

@@ -5,9 +5,9 @@
 // 1713000000 exclusively, while upgrades run 1713000011 on top.
 migrate(
     app => {
-        const memberRule = 'org.user_org_via_org.user ?= @request.auth.id'
+        const memberRule = '@request.auth.id != ""'
         const adminOrOwnerRule =
-            'org.user_org_via_org.user ?= @request.auth.id && (org.user_org_via_org.role ?= "admin" || org.user_org_via_org.role ?= "owner")'
+            '@request.auth.id != "" && (@request.auth.role = "admin" || @request.auth.role = "owner")'
 
         const domains = app.findCollectionByNameOrId('mail_domains')
         domains.listRule = memberRule
@@ -18,8 +18,7 @@ migrate(
         app.save(domains)
     },
     app => {
-        const adminOnlyRule =
-            'org.user_org_via_org.user ?= @request.auth.id && org.user_org_via_org.role ?= "admin"'
+        const adminOnlyRule = '@request.auth.id != "" && @request.auth.role = "admin"'
 
         const domains = app.findCollectionByNameOrId('mail_domains')
         domains.createRule = adminOnlyRule

@@ -1,7 +1,8 @@
+import { captureException } from '@tinycld/core/lib/errors'
 import { pb } from '@tinycld/core/lib/pocketbase'
 import { proxyImageUrls } from '@tinycld/core/lib/proxy-image-urls'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Platform, View } from 'react-native'
+import { Platform, Text, View } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
 import { rewriteCidReferences } from './rewrite-cid-references'
 
@@ -19,14 +20,19 @@ function useEmailHtml(
     cidMap: Record<string, string> | null | undefined
 ) {
     const [html, setHtml] = useState('')
+    const [failed, setFailed] = useState(false)
 
     useEffect(() => {
         if (!filename) return
 
         const token = pb.authStore.token
         const url = pb.files.getURL({ collectionId, id: recordId }, filename)
+        setFailed(false)
         fetch(url)
-            .then(res => res.text())
+            .then(res => {
+                if (!res.ok) throw new Error(`body fetch: HTTP ${res.status}`)
+                return res.text()
+            })
             .then(raw => {
                 // Resolve cid: → PB file URL AFTER proxyImageUrls. The proxy
                 // wraps remote http(s) <img src> for privacy/auth-token
@@ -38,10 +44,27 @@ function useEmailHtml(
                 const proxied = proxyImageUrls(raw, token)
                 setHtml(rewriteCidReferences(proxied, collectionId, recordId, cidMap))
             })
-            .catch(() => setHtml(''))
+            .catch((err: unknown) => {
+                // A failed fetch must not render as an EMPTY email — the user
+                // has no way to tell "blank message" from "we couldn't load
+                // it", and the failure was invisible to Sentry too.
+                captureException('mail.body.fetch', err, { recordId, filename })
+                setHtml('')
+                setFailed(true)
+            })
     }, [collectionId, recordId, filename, cidMap])
 
-    return html
+    return { html, failed }
+}
+
+function BodyLoadFailed() {
+    return (
+        <View className="p-4 rounded-lg bg-surface-secondary">
+            <Text className="text-[13px] text-danger">
+                Couldn't load this message. Check your connection and reopen the thread to retry.
+            </Text>
+        </View>
+    )
 }
 
 function useIframeAutoHeight(html: string) {
@@ -99,10 +122,11 @@ function useIframeAutoHeight(html: string) {
 }
 
 export function EmailBody({ collectionId, recordId, filename, cidMap }: EmailBodyProps) {
-    const html = useEmailHtml(collectionId, recordId, filename, cidMap)
+    const { html, failed } = useEmailHtml(collectionId, recordId, filename, cidMap)
     const { iframeRef, height, handleLoad } = useIframeAutoHeight(html)
 
     if (!filename) return null
+    if (failed) return <BodyLoadFailed />
 
     if (Platform.OS === 'web') {
         return (

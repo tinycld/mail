@@ -9,27 +9,31 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapserver"
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
+
+	"tinycld.org/core/davauth"
+	"tinycld.org/core/pkgaccess"
 )
 
 // mailboxContext holds the resolved info for a single mailbox membership.
 type mailboxContext struct {
-	name      string // friendly name for IMAP prefix ("Acme Corp")
+	name      string // friendly name for IMAP prefix ("Support")
 	mailboxID string
-	orgID     string
-	userOrgID string
 }
 
 // imapSession implements imapserver.SessionIMAP4rev2 backed by PocketBase.
 type imapSession struct {
-	app *pocketbase.PocketBase
+	app core.App
 
 	// Set after Login
-	user     *core.Record   // users record
-	userOrgs []*core.Record // user_org records
-	// Resolved during Login: all mailbox memberships across all orgs
+	user *core.Record // users record
+	// pkgReadonly is the user's org_pkg_access verdict for mail, resolved at
+	// Login: reading (SELECT/FETCH/IDLE) stays available, mutating commands
+	// refuse. Cached per session — a changed level applies at next login,
+	// same as a role change.
+	pkgReadonly bool
+	// Resolved during Login: the user's mailbox memberships
 	mailboxMemberships []*core.Record // mail_mailbox_members records
 
 	// Mailbox index built at login — one entry per mailbox membership
@@ -38,8 +42,6 @@ type imapSession struct {
 
 	// Selected state
 	selectedMailboxID  string
-	selectedOrgID      string
-	selectedUserOrgID  string
 	selectedFolderName string // bare IMAP folder name (e.g. "INBOX", "Sent", "Labels/Foo")
 	// Per-session \Deleted flags (executed on EXPUNGE)
 	deleted map[string]bool // message record ID → true
@@ -47,7 +49,7 @@ type imapSession struct {
 
 var _ imapserver.SessionIMAP4rev2 = (*imapSession)(nil)
 
-func newIMAPSession(app *pocketbase.PocketBase) *imapSession {
+func newIMAPSession(app core.App) *imapSession {
 	return &imapSession{
 		app:     app,
 		deleted: make(map[string]bool),
@@ -57,7 +59,6 @@ func newIMAPSession(app *pocketbase.PocketBase) *imapSession {
 // Close cleans up the session.
 func (s *imapSession) Close() error {
 	s.user = nil
-	s.userOrgs = nil
 	s.mailboxMemberships = nil
 	s.mailboxIndex = nil
 	s.multiMailbox = false
@@ -67,21 +68,24 @@ func (s *imapSession) Close() error {
 	return nil
 }
 
-// Login authenticates via PocketBase.
+// Login authenticates via PocketBase. davauth.VerifyCredentials is the shared
+// protocol-server check: username-or-email identifier, and the disabled
+// cutoff (this listener bypasses PocketBase's auth hooks, and unlike REST
+// tokens a protocol login never expires). One opaque failure keeps the
+// account's state invisible to a prober.
 func (s *imapSession) Login(username, password string) error {
-	record, err := s.app.FindAuthRecordByEmail("users", username)
+	record, err := davauth.VerifyCredentials(s.app, username, password)
 	if err != nil {
-		return imapserver.ErrAuthFailed
-	}
-	if !record.ValidatePassword(password) {
 		return imapserver.ErrAuthFailed
 	}
 
 	s.user = record
+	s.pkgReadonly = !pkgaccess.CanWrite(s.app, record, "mail")
 
-	// Load all user_org memberships
-	userOrgs, err := s.app.FindRecordsByFilter(
-		"user_org",
+	// Load the user's mailbox memberships. Single-org: membership rows point at
+	// the user directly, so this is one query (the former user_org fan-out is gone).
+	members, err := s.app.FindRecordsByFilter(
+		"mail_mailbox_members",
 		"user = {:user}",
 		"",
 		100,
@@ -89,38 +93,47 @@ func (s *imapSession) Login(username, password string) error {
 		map[string]any{"user": record.Id},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to load user orgs: %w", err)
+		return fmt.Errorf("failed to load mailbox memberships: %w", err)
 	}
-	s.userOrgs = userOrgs
+	s.mailboxMemberships = members
 
-	// Load all mailbox memberships for all user_orgs
-	for _, uo := range userOrgs {
-		members, err := s.app.FindRecordsByFilter(
-			"mail_mailbox_members",
-			"user_org = {:userOrg}",
-			"",
-			100,
-			0,
-			map[string]any{"userOrg": uo.Id},
-		)
-		if err == nil {
-			s.mailboxMemberships = append(s.mailboxMemberships, members...)
-		}
-	}
-
-	// Build mailbox index for multi-org IMAP folder namespacing
+	// Build the mailbox index for IMAP folder namespacing. A user can still
+	// hold several mailboxes (their personal one plus any shared ones), so
+	// batch the lookups: one query for the mailboxes, one for their domains —
+	// not two per membership. A membership whose mailbox or domain row is
+	// gone is skipped, as before.
+	mailboxIDs := make([]string, 0, len(s.mailboxMemberships))
 	for _, mb := range s.mailboxMemberships {
-		mailboxID := mb.GetString("mailbox")
-		userOrgID := mb.GetString("user_org")
-		mailbox, err := s.app.FindRecordById("mail_mailboxes", mailboxID)
-		if err != nil {
+		mailboxIDs = append(mailboxIDs, mb.GetString("mailbox"))
+	}
+	mailboxes, err := s.app.FindRecordsByIds("mail_mailboxes", mailboxIDs)
+	if err != nil {
+		return fmt.Errorf("failed to load mailboxes: %w", err)
+	}
+	mailboxByID := make(map[string]*core.Record, len(mailboxes))
+	domainIDs := make([]string, 0, len(mailboxes))
+	for _, mailbox := range mailboxes {
+		mailboxByID[mailbox.Id] = mailbox
+		domainIDs = append(domainIDs, mailbox.GetString("domain"))
+	}
+	domains, err := s.app.FindRecordsByIds("mail_domains", domainIDs)
+	if err != nil {
+		return fmt.Errorf("failed to load mail domains: %w", err)
+	}
+	domainByID := make(map[string]*core.Record, len(domains))
+	for _, domain := range domains {
+		domainByID[domain.Id] = domain
+	}
+
+	for _, mb := range s.mailboxMemberships {
+		mailbox := mailboxByID[mb.GetString("mailbox")]
+		if mailbox == nil {
 			continue
 		}
-		domain, err := s.app.FindRecordById("mail_domains", mailbox.GetString("domain"))
-		if err != nil {
+		domain := domainByID[mailbox.GetString("domain")]
+		if domain == nil {
 			continue
 		}
-		orgID := domain.GetString("org")
 		name := mailbox.GetString("name")
 		if name == "" {
 			name = mailbox.GetString("display_name")
@@ -129,12 +142,26 @@ func (s *imapSession) Login(username, password string) error {
 			name = mailbox.GetString("address") + "@" + domain.GetString("domain")
 		}
 		s.mailboxIndex = append(s.mailboxIndex, mailboxContext{
-			name: name, mailboxID: mailboxID, orgID: orgID, userOrgID: userOrgID,
+			name: name, mailboxID: mailbox.Id,
 		})
 	}
 	s.multiMailbox = len(s.mailboxIndex) > 1
 
 	return nil
+}
+
+// requireWritable refuses a mutating command for a session whose
+// org_pkg_access level is not full. IMAP bypasses the REST layer (where
+// core's request-hook guard lives), so without this a readonly user's client
+// could still flag, move, expunge and append — readonly means read.
+func (s *imapSession) requireWritable() error {
+	if !s.pkgReadonly {
+		return nil
+	}
+	return &imap.Error{
+		Type: imap.StatusResponseTypeNo,
+		Text: "Your mail access is read-only",
+	}
 }
 
 // Namespace returns the personal namespace descriptor.
@@ -160,7 +187,7 @@ func (s *imapSession) List(w *imapserver.ListWriter, ref string, patterns []stri
 	var allFolders []imap.ListData
 
 	for _, ctx := range s.mailboxIndex {
-		folders, err := listUserFolders(s.app, ctx.orgID, ctx.userOrgID)
+		folders, err := listUserFolders(s.app, s.user.Id)
 		if err != nil {
 			continue
 		}
@@ -208,14 +235,12 @@ func (s *imapSession) List(w *imapserver.ListWriter, ref string, patterns []stri
 // Select opens a mailbox for access.
 func (s *imapSession) Select(name string, options *imap.SelectOptions) (*imap.SelectData, error) {
 	ctx, bareName := s.matchMailboxContext(name)
-	mailboxID, orgID, userOrgID, err := s.resolveFolderWithContext(ctx)
+	mailboxID, err := s.resolveFolderWithContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	s.selectedMailboxID = mailboxID
-	s.selectedOrgID = orgID
-	s.selectedUserOrgID = userOrgID
 	s.selectedFolderName = bareName
 	s.deleted = make(map[string]bool)
 
@@ -225,8 +250,6 @@ func (s *imapSession) Select(name string, options *imap.SelectOptions) (*imap.Se
 // Unselect closes the selected mailbox without expunging.
 func (s *imapSession) Unselect() error {
 	s.selectedMailboxID = ""
-	s.selectedOrgID = ""
-	s.selectedUserOrgID = ""
 	s.selectedFolderName = ""
 	s.deleted = make(map[string]bool)
 	return nil
@@ -235,12 +258,12 @@ func (s *imapSession) Unselect() error {
 // Status returns mailbox status without selecting it.
 func (s *imapSession) Status(name string, options *imap.StatusOptions) (*imap.StatusData, error) {
 	ctx, bareName := s.matchMailboxContext(name)
-	mailboxID, orgID, userOrgID, err := s.resolveFolderWithContext(ctx)
+	mailboxID, err := s.resolveFolderWithContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.buildStatusData(bareName, mailboxID, orgID, userOrgID, options)
+	return s.buildStatusData(bareName, mailboxID, options)
 }
 
 // Fetch retrieves messages from the selected mailbox.
@@ -316,8 +339,24 @@ func (s *imapSession) buildFTSMatchSet(criteria *imap.SearchCriteria) map[string
 		return nil
 	}
 
-	result := make(map[string]bool)
 	db := s.app.DB()
+
+	// RFC 3501: search keys AND together, so each term produces its own match
+	// set and the sets intersect. `result` stays nil until the first term
+	// constrains it; a term FTS cannot answer (sanitizes away, query error) is
+	// skipped and handled below.
+	var result map[string]bool
+	applyTerm := func(matches map[string]bool) {
+		if result == nil {
+			result = matches
+			return
+		}
+		for id := range result {
+			if !matches[id] {
+				delete(result, id)
+			}
+		}
+	}
 
 	// Body searches message body content via FTS
 	for _, term := range bodyTerms {
@@ -333,28 +372,26 @@ func (s *imapSession) buildFTSMatchSet(criteria *imap.SearchCriteria) map[string
 			WHERE fts_mail_messages MATCH {:q}
 		`).Bind(map[string]any{"q": ftsQuery}).All(&matches)
 		if err != nil {
+			s.app.Logger().Warn("imap: body FTS query failed", "error", err, "term", term)
 			continue
 		}
-		// For the first term, seed the set; for subsequent terms, intersect
-		if len(result) == 0 && len(bodyTerms) == 1 && len(textTerms) == 0 {
-			for _, m := range matches {
-				result[m.RecordID] = true
-			}
-		} else {
-			for _, m := range matches {
-				result[m.RecordID] = true
-			}
+		termSet := make(map[string]bool, len(matches))
+		for _, m := range matches {
+			termSet[m.RecordID] = true
 		}
+		applyTerm(termSet)
 	}
 
-	// Text searches both headers and body — query both FTS tables
+	// Text searches the whole message — body via fts_mail_messages, plus
+	// subject/participants via fts_mail_threads mapped back to messages. The
+	// union across the two indexes is one term's matches; terms still AND.
 	for _, term := range textTerms {
 		ftsQuery := sanitizeFTSQuery(term)
 		if ftsQuery == "" {
 			continue
 		}
 
-		// Search messages (body + headers)
+		termSet := make(map[string]bool)
 		var msgMatches []struct {
 			RecordID string `db:"record_id"`
 		}
@@ -364,44 +401,50 @@ func (s *imapSession) buildFTSMatchSet(criteria *imap.SearchCriteria) map[string
 		`).Bind(map[string]any{"q": ftsQuery}).All(&msgMatches)
 		if err == nil {
 			for _, m := range msgMatches {
-				result[m.RecordID] = true
+				termSet[m.RecordID] = true
 			}
+		} else {
+			s.app.Logger().Warn("imap: text FTS query failed", "error", err, "term", term)
 		}
 
-		// Search threads (subject, participants) — need to map thread IDs
-		// back to message IDs
-		var threadMatches []struct {
-			RecordID string `db:"record_id"`
+		// Map matched threads back to their messages in the same statement —
+		// a per-thread lookup here was a query per FTS match.
+		var threadMsgs []struct {
+			ID string `db:"id"`
 		}
 		err = db.NewQuery(`
-			SELECT record_id FROM fts_mail_threads
-			WHERE fts_mail_threads MATCH {:q}
-		`).Bind(map[string]any{"q": ftsQuery}).All(&threadMatches)
+			SELECT id FROM mail_messages
+			WHERE thread IN (
+				SELECT record_id FROM fts_mail_threads
+				WHERE fts_mail_threads MATCH {:q}
+			)
+		`).Bind(map[string]any{"q": ftsQuery}).All(&threadMsgs)
 		if err == nil {
-			for _, tm := range threadMatches {
-				// Find all messages in this thread
-				msgs, err := s.app.FindRecordsByFilter(
-					"mail_messages",
-					"thread = {:thread}",
-					"",
-					0,
-					0,
-					map[string]any{"thread": tm.RecordID},
-				)
-				if err == nil {
-					for _, msg := range msgs {
-						result[msg.Id] = true
-					}
-				}
+			for _, m := range threadMsgs {
+				termSet[m.ID] = true
 			}
+		} else {
+			s.app.Logger().Warn("imap: thread FTS query failed", "error", err, "term", term)
 		}
+
+		applyTerm(termSet)
 	}
 
+	// Criteria were present but no term could constrain (all unanswerable):
+	// fail closed — an empty set matches nothing — rather than treating the
+	// criteria as absent and matching everything.
+	if result == nil {
+		return map[string]bool{}
+	}
 	return result
 }
 
 // Store modifies flags on messages.
 func (s *imapSession) Store(w *imapserver.FetchWriter, numSet imap.NumSet, flags *imap.StoreFlags, options *imap.StoreOptions) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+
 	messages, err := s.resolveMessages(numSet)
 	if err != nil {
 		return err
@@ -423,8 +466,12 @@ func (s *imapSession) Store(w *imapserver.FetchWriter, numSet imap.NumSet, flags
 
 // Copy copies messages to another mailbox.
 func (s *imapSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
+
 	destCtx, destBareName := s.matchMailboxContext(dest)
-	destMailboxID, _, destUserOrgID, err := s.resolveFolderWithContext(destCtx)
+	destMailboxID, err := s.resolveFolderWithContext(destCtx)
 	if err != nil {
 		return nil, &imap.Error{
 			Type: imap.StatusResponseTypeNo,
@@ -446,10 +493,10 @@ func (s *imapSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, err
 		sourceUIDs.AddNum(srcUID)
 
 		if isLabelFolder(destBareName) {
-			s.addLabelToThread(msg.GetString("thread"), destUserOrgID, destCtx.orgID, destBareName)
+			s.addLabelToThread(msg.GetString("thread"), destBareName)
 		} else if destFolder != "" {
 			threadID := msg.GetString("thread")
-			ensureThreadState(s.app, threadID, destUserOrgID, destFolder, false)
+			ensureThreadState(s.app, threadID, s.user.Id, destFolder, false)
 		}
 
 		destUIDs.AddNum(srcUID)
@@ -466,8 +513,12 @@ func (s *imapSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, err
 
 // Move moves messages to another mailbox.
 func (s *imapSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest string) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+
 	destCtx, destBareName := s.matchMailboxContext(dest)
-	_, _, destUserOrgID, err := s.resolveFolderWithContext(destCtx)
+	_, err := s.resolveFolderWithContext(destCtx)
 	if err != nil {
 		return &imap.Error{
 			Type: imap.StatusResponseTypeNo,
@@ -492,9 +543,9 @@ func (s *imapSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest st
 		threadID := msg.GetString("thread")
 
 		if isLabelFolder(destBareName) {
-			s.addLabelToThread(threadID, destUserOrgID, destCtx.orgID, destBareName)
+			s.addLabelToThread(threadID, destBareName)
 		} else if destFolder != "" {
-			ensureThreadState(s.app, threadID, destUserOrgID, destFolder, false)
+			ensureThreadState(s.app, threadID, s.user.Id, destFolder, false)
 		}
 	}
 
@@ -509,8 +560,12 @@ func (s *imapSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest st
 
 // Append adds a message to a mailbox (e.g., saving a draft or archiving from a client).
 func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap.AppendOptions) (*imap.AppendData, error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
+
 	ctx, bareName := s.matchMailboxContext(mailbox)
-	mailboxID, _, userOrgID, err := s.resolveFolderWithContext(ctx)
+	mailboxID, err := s.resolveFolderWithContext(ctx)
 	if err != nil {
 		return nil, &imap.Error{
 			Type: imap.StatusResponseTypeNo,
@@ -584,11 +639,11 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 		updateThreadMetadata(s.app, thread, msg.SenderName, msg.SenderEmail, snippet, msg.Date)
 	}
 
-	ensureThreadState(s.app, thread.Id, userOrgID, folder, false)
+	ensureThreadState(s.app, thread.Id, s.user.Id, folder, false)
 
 	// Apply flags from APPEND options
 	if options != nil && len(options.Flags) > 0 {
-		s.applyAppendFlags(thread.Id, userOrgID, options.Flags)
+		s.applyAppendFlags(thread.Id, options.Flags)
 	}
 
 	uid, err := ensureMessageUID(s.app, mailboxID, record)
@@ -599,7 +654,7 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 	uidValidity, _ := getMailboxUIDValidity(s.app, mailboxID)
 
 	// Notify IDLE sessions
-	globalNotifier.notify(mailboxID)
+	globalNotifier.Notify(mailboxID)
 
 	return &imap.AppendData{
 		UID:         imap.UID(uid),
@@ -609,6 +664,10 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 
 // Expunge permanently removes messages marked with \Deleted.
 func (s *imapSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+
 	messages, err := s.selectedMessages()
 	if err != nil {
 		return err
@@ -630,11 +689,11 @@ func (s *imapSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) er
 		threadID := msg.GetString("thread")
 		states, err := s.app.FindRecordsByFilter(
 			"mail_thread_state",
-			"thread = {:thread} && user_org = {:userOrg}",
+			"thread = {:thread} && user = {:user}",
 			"",
 			1,
 			0,
-			map[string]any{"thread": threadID, "userOrg": s.selectedUserOrgID},
+			map[string]any{"thread": threadID, "user": s.user.Id},
 		)
 		if err == nil && len(states) > 0 {
 			if states[0].GetString("folder") == "trash" {
@@ -659,7 +718,11 @@ func (s *imapSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) er
 
 // Create creates a new mailbox (only label folders supported).
 func (s *imapSession) Create(name string, options *imap.CreateOptions) error {
-	ctx, bareName := s.matchMailboxContext(name)
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+
+	_, bareName := s.matchMailboxContext(name)
 	if isSystemFolder(bareName) {
 		return &imap.Error{
 			Type: imap.StatusResponseTypeNo,
@@ -672,24 +735,32 @@ func (s *imapSession) Create(name string, options *imap.CreateOptions) error {
 			Text: "Can only create label folders (Labels/<name>)",
 		}
 	}
-	return createLabelFolder(s.app, ctx.orgID, bareName)
+	return createLabelFolder(s.app, bareName)
 }
 
 // Delete deletes a mailbox (only label folders supported).
 func (s *imapSession) Delete(name string) error {
-	ctx, bareName := s.matchMailboxContext(name)
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+
+	_, bareName := s.matchMailboxContext(name)
 	if isSystemFolder(bareName) {
 		return &imap.Error{
 			Type: imap.StatusResponseTypeNo,
 			Text: "Cannot delete system folder",
 		}
 	}
-	return deleteLabelFolder(s.app, ctx.orgID, bareName)
+	return deleteLabelFolder(s.app, bareName)
 }
 
 // Rename renames a mailbox (only label folders supported).
 func (s *imapSession) Rename(oldName, newName string, options *imap.RenameOptions) error {
-	oldCtx, oldBareName := s.matchMailboxContext(oldName)
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+
+	_, oldBareName := s.matchMailboxContext(oldName)
 	_, newBareName := s.matchMailboxContext(newName)
 	if isSystemFolder(oldBareName) || isSystemFolder(newBareName) {
 		return &imap.Error{
@@ -697,7 +768,7 @@ func (s *imapSession) Rename(oldName, newName string, options *imap.RenameOption
 			Text: "Cannot rename system folder",
 		}
 	}
-	return renameLabelFolder(s.app, oldCtx.orgID, oldBareName, newBareName)
+	return renameLabelFolder(s.app, oldBareName, newBareName)
 }
 
 // Subscribe is a no-op (all folders are always subscribed).
@@ -720,8 +791,8 @@ func (s *imapSession) Idle(w *imapserver.UpdateWriter, stop <-chan struct{}) err
 	}
 
 	ch := make(chan struct{}, 1)
-	globalNotifier.subscribe(s.selectedMailboxID, ch)
-	defer globalNotifier.unsubscribe(s.selectedMailboxID, ch)
+	globalNotifier.Subscribe(s.selectedMailboxID, ch)
+	defer globalNotifier.Unsubscribe(s.selectedMailboxID, ch)
 
 	for {
 		select {
@@ -767,16 +838,16 @@ func (s *imapSession) matchMailboxContext(name string) (mailboxContext, string) 
 	return s.mailboxIndex[0], name
 }
 
-// resolveFolderWithContext resolves mailbox/org/userOrg from a pre-matched context.
-func (s *imapSession) resolveFolderWithContext(ctx mailboxContext) (mailboxID, orgID, userOrgID string, err error) {
+// resolveFolderWithContext resolves the mailbox id from a pre-matched context.
+func (s *imapSession) resolveFolderWithContext(ctx mailboxContext) (mailboxID string, err error) {
 	if ctx.mailboxID == "" {
-		return "", "", "", &imap.Error{
+		return "", &imap.Error{
 			Type: imap.StatusResponseTypeNo,
 			Code: imap.ResponseCodeNonExistent,
 			Text: "No mailbox available",
 		}
 	}
-	return ctx.mailboxID, ctx.orgID, ctx.userOrgID, nil
+	return ctx.mailboxID, nil
 }
 
 // buildSelectData constructs the response data for a SELECT command.
@@ -797,11 +868,11 @@ func (s *imapSession) buildSelectData(name string) (*imap.SelectData, error) {
 		threadID := msg.GetString("thread")
 		states, err := s.app.FindRecordsByFilter(
 			"mail_thread_state",
-			"thread = {:thread} && user_org = {:userOrg} && is_read = false",
+			"thread = {:thread} && user = {:user} && is_read = false",
 			"",
 			1,
 			0,
-			map[string]any{"thread": threadID, "userOrg": s.selectedUserOrgID},
+			map[string]any{"thread": threadID, "user": s.user.Id},
 		)
 		if err == nil && len(states) > 0 {
 			numRecent++
@@ -826,7 +897,7 @@ func (s *imapSession) buildSelectData(name string) (*imap.SelectData, error) {
 }
 
 // buildStatusData constructs the response data for a STATUS command.
-func (s *imapSession) buildStatusData(name, mailboxID, orgID, userOrgID string, options *imap.StatusOptions) (*imap.StatusData, error) {
+func (s *imapSession) buildStatusData(name, mailboxID string, options *imap.StatusOptions) (*imap.StatusData, error) {
 	data := &imap.StatusData{Mailbox: name}
 
 	if options == nil {
@@ -834,7 +905,7 @@ func (s *imapSession) buildStatusData(name, mailboxID, orgID, userOrgID string, 
 	}
 
 	if options.NumMessages {
-		messages, err := s.messagesForFolder(name, mailboxID, orgID, userOrgID)
+		messages, err := s.messagesForFolder(name, mailboxID)
 		if err == nil {
 			n := uint32(len(messages))
 			data.NumMessages = &n
@@ -853,7 +924,7 @@ func (s *imapSession) buildStatusData(name, mailboxID, orgID, userOrgID string, 
 	}
 
 	if options.NumUnseen {
-		filter, params := folderToFilter(s.app, name, orgID, userOrgID)
+		filter, params := folderToFilter(s.app, name, s.user.Id, mailboxID)
 		filter += " && is_read = false"
 		states, err := s.app.FindRecordsByFilter("mail_thread_state", filter, "", 0, 0, params)
 		if err == nil {
@@ -875,7 +946,7 @@ func (s *imapSession) selectedMessages() (map[int]*core.Record, error) {
 	}
 
 	// Determine which IMAP folder is selected based on stored state
-	// We use the mailbox + userOrg to get thread states, then load messages
+	// We use the mailbox + user to get thread states, then load messages
 	return s.messagesForSelectedFolder()
 }
 
@@ -883,7 +954,7 @@ func (s *imapSession) selectedMessages() (map[int]*core.Record, error) {
 // selected. Routes through messagesForFolder so SELECT respects the
 // mail_thread_state.folder filter (consistent with STATUS).
 func (s *imapSession) messagesForSelectedFolder() (map[int]*core.Record, error) {
-	msgs, err := s.messagesForFolder(s.selectedFolderName, s.selectedMailboxID, s.selectedOrgID, s.selectedUserOrgID)
+	msgs, err := s.messagesForFolder(s.selectedFolderName, s.selectedMailboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -900,8 +971,8 @@ func (s *imapSession) messagesForSelectedFolder() (map[int]*core.Record, error) 
 }
 
 // messagesForFolder loads messages for a specific IMAP folder name.
-func (s *imapSession) messagesForFolder(imapName, mailboxID, orgID, userOrgID string) ([]*core.Record, error) {
-	filter, params := folderToFilter(s.app, imapName, orgID, userOrgID)
+func (s *imapSession) messagesForFolder(imapName, mailboxID string) ([]*core.Record, error) {
+	filter, params := folderToFilter(s.app, imapName, s.user.Id, mailboxID)
 
 	states, err := s.app.FindRecordsByFilter(
 		"mail_thread_state",
@@ -1083,11 +1154,11 @@ func (s *imapSession) messageFlags(msg *core.Record) []imap.Flag {
 	threadID := msg.GetString("thread")
 	states, _ := s.app.FindRecordsByFilter(
 		"mail_thread_state",
-		"thread = {:thread} && user_org = {:userOrg}",
+		"thread = {:thread} && user = {:user}",
 		"",
 		1,
 		0,
-		map[string]any{"thread": threadID, "userOrg": s.selectedUserOrgID},
+		map[string]any{"thread": threadID, "user": s.user.Id},
 	)
 
 	if len(states) > 0 {
@@ -1115,11 +1186,11 @@ func (s *imapSession) applyFlags(msg *core.Record, flags *imap.StoreFlags) {
 	threadID := msg.GetString("thread")
 	states, err := s.app.FindRecordsByFilter(
 		"mail_thread_state",
-		"thread = {:thread} && user_org = {:userOrg}",
+		"thread = {:thread} && user = {:user}",
 		"",
 		1,
 		0,
-		map[string]any{"thread": threadID, "userOrg": s.selectedUserOrgID},
+		map[string]any{"thread": threadID, "user": s.user.Id},
 	)
 	if err != nil || len(states) == 0 {
 		return
@@ -1150,14 +1221,14 @@ func (s *imapSession) applyFlags(msg *core.Record, flags *imap.StoreFlags) {
 }
 
 // applyAppendFlags applies flags from an APPEND command.
-func (s *imapSession) applyAppendFlags(threadID, userOrgID string, flags []imap.Flag) {
+func (s *imapSession) applyAppendFlags(threadID string, flags []imap.Flag) {
 	states, err := s.app.FindRecordsByFilter(
 		"mail_thread_state",
-		"thread = {:thread} && user_org = {:userOrg}",
+		"thread = {:thread} && user = {:user}",
 		"",
 		1,
 		0,
-		map[string]any{"thread": threadID, "userOrg": userOrgID},
+		map[string]any{"thread": threadID, "user": s.user.Id},
 	)
 	if err != nil || len(states) == 0 {
 		return
@@ -1180,11 +1251,11 @@ func (s *imapSession) markSeen(msg *core.Record) {
 	threadID := msg.GetString("thread")
 	states, err := s.app.FindRecordsByFilter(
 		"mail_thread_state",
-		"thread = {:thread} && user_org = {:userOrg}",
+		"thread = {:thread} && user = {:user}",
 		"",
 		1,
 		0,
-		map[string]any{"thread": threadID, "userOrg": s.selectedUserOrgID},
+		map[string]any{"thread": threadID, "user": s.user.Id},
 	)
 	if err != nil || len(states) == 0 {
 		return
@@ -1198,7 +1269,7 @@ func (s *imapSession) markSeen(msg *core.Record) {
 // matches how the web UI writes labels, so IMAP tags are immediately visible
 // there. The label lookup matches both org-level labels and the user's personal
 // labels. Idempotent — a second tag of the same label is a no-op.
-func (s *imapSession) addLabelToThread(threadID, userOrgID, orgID, imapName string) {
+func (s *imapSession) addLabelToThread(threadID, imapName string) {
 	labelName := extractLabelName(imapName)
 	if labelName == "" {
 		return
@@ -1206,11 +1277,11 @@ func (s *imapSession) addLabelToThread(threadID, userOrgID, orgID, imapName stri
 
 	labels, err := s.app.FindRecordsByFilter(
 		"labels",
-		`org = {:org} && name = {:name} && (user_org = "" || user_org = {:userOrg})`,
+		`name = {:name} && (user = "" || user = {:user})`,
 		"",
 		1,
 		0,
-		map[string]any{"org": orgID, "name": labelName, "userOrg": userOrgID},
+		map[string]any{"name": labelName, "user": s.user.Id},
 	)
 	if err != nil || len(labels) == 0 {
 		return
@@ -1218,11 +1289,11 @@ func (s *imapSession) addLabelToThread(threadID, userOrgID, orgID, imapName stri
 
 	states, err := s.app.FindRecordsByFilter(
 		"mail_thread_state",
-		"thread = {:thread} && user_org = {:userOrg}",
+		"thread = {:thread} && user = {:user}",
 		"",
 		1,
 		0,
-		map[string]any{"thread": threadID, "userOrg": userOrgID},
+		map[string]any{"thread": threadID, "user": s.user.Id},
 	)
 	if err != nil || len(states) == 0 {
 		return
@@ -1233,11 +1304,11 @@ func (s *imapSession) addLabelToThread(threadID, userOrgID, orgID, imapName stri
 
 	existing, err := s.app.FindRecordsByFilter(
 		"label_assignments",
-		`label = {:label} && record_id = {:recordId} && collection = "mail_thread_state" && user_org = {:userOrg}`,
+		`label = {:label} && record_id = {:recordId} && collection = "mail_thread_state" && user = {:user}`,
 		"",
 		1,
 		0,
-		map[string]any{"label": labelID, "recordId": stateID, "userOrg": userOrgID},
+		map[string]any{"label": labelID, "recordId": stateID, "user": s.user.Id},
 	)
 	if err == nil && len(existing) > 0 {
 		return
@@ -1251,12 +1322,12 @@ func (s *imapSession) addLabelToThread(threadID, userOrgID, orgID, imapName stri
 	record.Set("label", labelID)
 	record.Set("record_id", stateID)
 	record.Set("collection", "mail_thread_state")
-	record.Set("user_org", userOrgID)
+	record.Set("user", s.user.Id)
 	s.app.Save(record)
 }
 
 // storeRawHeaders saves original RFC 5322 headers to a message record.
-func storeRawHeaders(app *pocketbase.PocketBase, record *core.Record, headers []byte) {
+func storeRawHeaders(app core.App, record *core.Record, headers []byte) {
 	f, err := filesystem.NewFileFromBytes(headers, "headers.txt")
 	if err != nil {
 		return
@@ -1268,7 +1339,7 @@ func storeRawHeaders(app *pocketbase.PocketBase, record *core.Record, headers []
 // matchesCriteria checks if a message matches IMAP search criteria.
 // ftsMatchIDs is a pre-computed set of message record IDs matching Body/Text
 // criteria via FTS5. nil means no FTS criteria are present.
-func matchesCriteria(app *pocketbase.PocketBase, msg *core.Record, criteria *imap.SearchCriteria, deleted map[string]bool, ftsMatchIDs map[string]bool) bool {
+func matchesCriteria(app core.App, msg *core.Record, criteria *imap.SearchCriteria, deleted map[string]bool, ftsMatchIDs map[string]bool) bool {
 	if criteria == nil {
 		return true
 	}

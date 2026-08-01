@@ -117,6 +117,7 @@ export function AdvancedSearchDropdown({
         <>
             <Pressable style={styles.overlay} onPress={onClose} />
             <View
+                testID="advanced-search-panel"
                 style={[
                     {
                         position: 'absolute',

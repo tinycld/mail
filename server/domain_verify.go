@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -205,14 +204,13 @@ func recordLock(recordID string) func() {
 // `verified` is derived from inbound-readiness only (MX + Postmark InboundDomain
 // match). Outbound checks are advisory. Concurrent calls on the same record
 // serialize via recordLock so writes don't interleave.
-func verifyDomainRecord(ctx context.Context, app *pocketbase.PocketBase, record *core.Record) (*verificationDetails, error) {
+func verifyDomainRecord(ctx context.Context, app core.App, record *core.Record) (*verificationDetails, error) {
 	unlock := recordLock(record.Id)
 	defer unlock()
 
-	orgID := record.GetString("org")
 	domain := record.GetString("domain")
 
-	provider := providerForOrg(app, orgID)
+	provider := newProviderFromSystem(app)
 	providerName, providerConfigured := describeProvider(provider)
 
 	details := &verificationDetails{

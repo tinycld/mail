@@ -3,7 +3,7 @@ import * as path from 'node:path'
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
 import { login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 import PocketBase from 'pocketbase'
-import { emailRow, openThread } from './helpers'
+import { emailRow, openThread, TEST_USER_MAILBOX } from './helpers'
 
 // PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
 // through to PB transparently — see scripts/dev.ts::isPbPath.
@@ -42,8 +42,8 @@ function buildPostmarkPayload({ subject, messageId, base64, byteLength }: Inboun
         From: 'sender@example.com',
         FromName: 'Hippo Sender',
         FromFull: { Name: 'Hippo Sender', Email: 'sender@example.com' },
-        To: 'user@tinycld.org',
-        ToFull: [{ Name: 'Test User', Email: 'user@tinycld.org' }],
+        To: TEST_USER_MAILBOX,
+        ToFull: [{ Name: 'Test User', Email: TEST_USER_MAILBOX }],
         CcFull: [],
         Subject: subject,
         Date: new Date().toUTCString(),

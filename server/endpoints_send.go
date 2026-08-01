@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
 	"tinycld.org/core/coreserver"
@@ -38,7 +37,7 @@ type sendRequest struct {
 	InReplyToMessageID string      `json:"in_reply_to_message_id"` // PB record ID of the message being replied to
 }
 
-func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
+func handleSend(app core.App, re *core.RequestEvent) error {
 	userID := re.Auth.Id
 
 	var req sendRequest
@@ -87,22 +86,15 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 		return re.NotFoundError("Domain not found", err)
 	}
 
-	orgID := domainRecord.GetString("org")
+	// Resolve the deployment-wide provider from system settings
+	provider := newProviderFromSystem(app)
 
-	// Resolve provider from org settings (falls back to env vars)
-	provider := providerForOrg(app, orgID)
-
-	// Verify user is a member of this mailbox's org and has access
-	userOrg, err := resolveUserOrg(app, userID, orgID)
-	if err != nil {
-		return re.ForbiddenError("Not a member of this organization", err)
-	}
-
-	if _, err := verifyMailboxMembership(app, req.MailboxID, userOrg.Id); err != nil {
+	// Verify the user has access to this mailbox
+	if _, err := verifyMailboxMembership(app, req.MailboxID, userID); err != nil {
 		return re.ForbiddenError("Not a member of this mailbox", err)
 	}
 
-	// Reject before doing any send work if the org's provider has no
+	// Reject before doing any send work if the provider has no
 	// credentials — otherwise provider.Send fails deep in the API call with an
 	// opaque error after we've already built the message.
 	if !provider.Configured() {
@@ -216,7 +208,7 @@ func handleSend(app *pocketbase.PocketBase, re *core.RequestEvent) error {
 	}
 
 	// Create thread state for the sender
-	if err := ensureThreadState(app, thread.Id, userOrg.Id, "sent", true); err != nil {
+	if err := ensureThreadState(app, thread.Id, userID, "sent", true); err != nil {
 		return re.InternalServerError("Failed to create thread state", err)
 	}
 

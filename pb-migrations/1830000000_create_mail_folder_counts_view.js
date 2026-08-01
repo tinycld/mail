@@ -1,6 +1,6 @@
 /// <reference path="../../../server/pb_data/types.d.ts" />
 
-// Aggregates mail_thread_state × mail_threads into per-(user_org, mailbox)
+// Aggregates mail_thread_state × mail_threads into per-(user, mailbox)
 // folder counts. The sidebar reads from this view instead of fetching every
 // state row + every thread to count client-side, which scaled poorly for
 // users with hundreds of thousands of emails.
@@ -24,12 +24,12 @@ migrate(
             type: 'view',
             system: false,
             // Only the user's own counts are visible.
-            listRule: 'user_org.user ?= @request.auth.id',
-            viewRule: 'user_org.user ?= @request.auth.id',
+            listRule: 'user ?= @request.auth.id',
+            viewRule: 'user ?= @request.auth.id',
             viewQuery: `
                 SELECT
-                    (s.user_org || ':' || t.mailbox) AS id,
-                    s.user_org AS user_org,
+                    (s.user || ':' || t.mailbox) AS id,
+                    s.user AS user,
                     t.mailbox AS mailbox,
                     SUM(CASE WHEN s.folder = 'inbox' AND s.is_read = 0 THEN 1 ELSE 0 END) AS inbox,
                     SUM(CASE WHEN s.folder = 'drafts' THEN 1 ELSE 0 END) AS drafts,
@@ -39,7 +39,7 @@ migrate(
                     SUM(CASE WHEN s.folder = 'spam' THEN 1 ELSE 0 END) AS spam
                 FROM mail_thread_state s
                 JOIN mail_threads t ON s.thread = t.id
-                GROUP BY s.user_org, t.mailbox
+                GROUP BY s.user, t.mailbox
             `,
         })
         app.save(view)

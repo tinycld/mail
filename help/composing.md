@@ -46,7 +46,7 @@ Click **Send**. The message goes through your org's mail provider (typically Pos
 - Immediately appears in **Sent** for the sending mailbox.
 - Gets a `delivery_status` of `sending`, updated to `sent` once the provider accepts it, then to `delivered`, `bounced`, or `spam_complaint` based on provider callbacks. See [Delivery tracking](help://mail:delivery-tracking).
 
-If your org hasn't configured a mail provider, sending fails with a clear error pointing at Provider settings.
+If the deployment has no mail provider configured, sending fails with a clear error. Configuring one is a super-admin task — see [Provider setup](help://mail:provider-setup).
 
 ## Inline replies
 

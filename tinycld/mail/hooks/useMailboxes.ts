@@ -22,18 +22,17 @@ export function useMailboxes() {
         'mail_mailboxes'
     )
 
-    const { data: members } = useOrgLiveQuery((query, { userOrgId }) =>
+    // One query: membership rows resolve to their mailbox in the same
+    // expression, so an optimistically-created mailbox appears immediately
+    // instead of waiting for a second collection's realtime round-trip.
+    const { data: rows } = useOrgLiveQuery((query, { userId }) =>
         query
-            .from({ mail_mailbox_members: membersCollection })
-            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user_org, userOrgId))
+            .from({ member: membersCollection })
+            .innerJoin({ mailbox: mailboxesCollection }, ({ member, mailbox }) =>
+                eq(member.mailbox, mailbox.id)
+            )
+            .where(({ member }) => eq(member.user, userId))
     )
 
-    const { data: mailboxes } = useOrgLiveQuery(query =>
-        query.from({ mail_mailboxes: mailboxesCollection })
-    )
-
-    return useMemo(() => {
-        const ids = (members ?? []).map(m => m.mailbox)
-        return splitMailboxes(ids, mailboxes ?? [])
-    }, [members, mailboxes])
+    return useMemo(() => splitMailboxes((rows ?? []).map(r => r.mailbox)), [rows])
 }

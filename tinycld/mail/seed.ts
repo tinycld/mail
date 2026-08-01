@@ -29,9 +29,7 @@ function mimeFromName(name: string): string {
 }
 
 interface SeedContext {
-    user: { id: string; email: string; name: string }
-    org: { id: string }
-    userOrg: { id: string }
+    user: { id: string; username: string; email: string; name: string }
 }
 
 interface SeedMessage {
@@ -1662,11 +1660,15 @@ const SHARED_THREADS: typeof THREADS = [
     },
 ]
 
-function deriveAddress(email: string) {
+// Mirrors server/lifecycle.go::deriveMailboxAddress — the address comes from
+// the USERNAME, never the email local-part. Deriving from the email is the
+// exact bug commit 4d52992 fixed in Go: it minted addresses the invitee never
+// asked for and diverged from what the server provisions.
+function deriveAddress(username: string) {
     return (
-        email
-            .split('@')[0]
+        username
             .toLowerCase()
+            .trim()
             .replace(/[^a-z0-9._-]/g, '') || 'user'
     )
 }
@@ -1688,12 +1690,12 @@ async function findUniqueAddress(pb: PocketBase, base: string, domainId: string)
 
 async function findOrCreatePersonalMailbox(
     pb: PocketBase,
-    email: string,
+    username: string,
     name: string,
     domainId: string,
-    userOrgId: string
+    userId: string
 ) {
-    const base = deriveAddress(email)
+    const base = deriveAddress(username)
 
     // Check if mailbox already exists
     try {
@@ -1715,36 +1717,33 @@ async function findOrCreatePersonalMailbox(
 
     await pb.collection('mail_mailbox_members').create({
         mailbox: mailbox.id,
-        user_org: userOrgId,
+        user: userId,
         role: 'owner',
     })
 
     return mailbox
 }
 
-export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedContext) {
+export default async function seed(pb: PocketBase, { user }: SeedContext) {
     let domain: { id: string }
     try {
-        domain = await pb
-            .collection('mail_domains')
-            .getFirstListItem(`org = "${org.id}" && domain = "tinycld.org"`)
+        domain = await pb.collection('mail_domains').getFirstListItem(`domain = "tinycld.org"`)
         log('Found existing mail domain: tinycld.org')
     } catch {
         log('Creating mail domain: tinycld.org')
         domain = await pb.collection('mail_domains').create({
-            org: org.id,
             domain: 'tinycld.org',
             verified: true,
         })
     }
 
-    log('Setting up personal mailbox for', user.email)
+    log('Setting up personal mailbox for', user.username)
     const personalMailbox = await findOrCreatePersonalMailbox(
         pb,
-        user.email,
+        user.username,
         user.name,
         domain.id,
-        userOrg.id
+        user.id
     )
 
     let sharedMailbox: { id: string }
@@ -1764,43 +1763,34 @@ export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedC
 
         await pb.collection('mail_mailbox_members').create({
             mailbox: sharedMailbox.id,
-            user_org: userOrg.id,
+            user: user.id,
             role: 'owner',
         })
     }
 
-    // Create personal mailboxes for any other org members
-    const otherMembers = await pb.collection('user_org').getFullList({
-        filter: `org = "${org.id}" && id != "${userOrg.id}"`,
-        expand: 'user',
+    // Create personal mailboxes for the other users. Single-org: the deployment
+    // IS the org, so every other user is a fellow member.
+    const otherUsers = await pb.collection('users').getFullList({
+        filter: `id != "${user.id}"`,
     })
-    if (otherMembers.length > 0) {
-        log(`Setting up mailboxes for ${otherMembers.length} other org member(s)`)
+    if (otherUsers.length > 0) {
+        log(`Setting up mailboxes for ${otherUsers.length} other user(s)`)
     }
-    for (const member of otherMembers) {
-        const memberUser = member.expand?.user as { email: string; name: string } | undefined
-        if (!memberUser) continue
-        await findOrCreatePersonalMailbox(
-            pb,
-            memberUser.email,
-            memberUser.name,
-            domain.id,
-            member.id
-        )
+    for (const member of otherUsers) {
+        if (!member.username) continue
+        await findOrCreatePersonalMailbox(pb, member.username, member.name, domain.id, member.id)
     }
 
-    // Create labels (find or create) — uses core 'labels' collection
+    // Create labels (find or create) — uses core 'labels' collection.
+    // Seeded as shared labels (no user), visible to everyone.
     log(`Setting up ${LABELS.length} labels...`)
     const labelMap: Record<string, string> = {}
     for (const label of LABELS) {
         let record: { id: string }
         try {
-            record = await pb
-                .collection('labels')
-                .getFirstListItem(`org = "${org.id}" && name = "${label.name}"`)
+            record = await pb.collection('labels').getFirstListItem(`name = "${label.name}"`)
         } catch {
             record = await pb.collection('labels').create({
-                org: org.id,
                 name: label.name,
                 color: label.color,
             })
@@ -1808,21 +1798,14 @@ export default async function seed(pb: PocketBase, { user, org, userOrg }: SeedC
         labelMap[label.name] = record.id
     }
 
-    await seedThreadsForMailbox(pb, personalMailbox.id, userOrg.id, THREADS, labelMap, 'personal')
-    await seedThreadsForMailbox(
-        pb,
-        sharedMailbox.id,
-        userOrg.id,
-        SHARED_THREADS,
-        labelMap,
-        'shared'
-    )
+    await seedThreadsForMailbox(pb, personalMailbox.id, user.id, THREADS, labelMap, 'personal')
+    await seedThreadsForMailbox(pb, sharedMailbox.id, user.id, SHARED_THREADS, labelMap, 'shared')
 }
 
 async function seedThreadsForMailbox(
     pb: PocketBase,
     mailboxId: string,
-    userOrgId: string,
+    userId: string,
     threads: typeof THREADS,
     labelMap: Record<string, string>,
     label: string
@@ -1884,7 +1867,7 @@ async function seedThreadsForMailbox(
 
         const threadState = await pb.collection('mail_thread_state').create({
             thread: threadRecord.id,
-            user_org: userOrgId,
+            user: userId,
             folder: thread.folder,
             is_read: thread.is_read,
             is_starred: thread.is_starred,
@@ -1895,7 +1878,7 @@ async function seedThreadsForMailbox(
                 label: labelId,
                 record_id: threadState.id,
                 collection: 'mail_thread_state',
-                user_org: userOrgId,
+                user: userId,
             })
         }
     }

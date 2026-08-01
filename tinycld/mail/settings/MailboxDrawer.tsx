@@ -20,7 +20,7 @@ import { MailboxMemberRow, type Role } from './MailboxMemberRow'
 
 interface MemberRow {
     id: string
-    userOrgId: string
+    userId: string
     userName: string
     userEmail: string
     role: Role
@@ -28,7 +28,7 @@ interface MemberRow {
 }
 
 interface OrgMemberRow {
-    userOrgId: string
+    userId: string
     userName: string
     userEmail: string
 }
@@ -58,7 +58,7 @@ interface Props {
     members: MemberRow[]
     orgMembers: OrgMemberRow[]
     domainOptions: Array<{ label: string; value: string }>
-    userOrgId: string
+    userId: string
 }
 
 export function MailboxDrawer({
@@ -70,7 +70,7 @@ export function MailboxDrawer({
     members,
     orgMembers,
     domainOptions,
-    userOrgId,
+    userId,
 }: Props) {
     const isOpen = mode.kind !== 'closed'
     return (
@@ -78,11 +78,7 @@ export function MailboxDrawer({
             <DrawerBackdrop />
             <DrawerContent>
                 {mode.kind === 'create' && (
-                    <CreateView
-                        domainOptions={domainOptions}
-                        userOrgId={userOrgId}
-                        onDone={onClose}
-                    />
+                    <CreateView domainOptions={domainOptions} userId={userId} onDone={onClose} />
                 )}
                 {mode.kind === 'edit' && mailbox && (
                     <EditView
@@ -107,11 +103,11 @@ export function MailboxDrawer({
 
 function CreateView({
     domainOptions,
-    userOrgId,
+    userId,
     onDone,
 }: {
     domainOptions: Array<{ label: string; value: string }>
-    userOrgId: string
+    userId: string
     onDone: () => void
 }) {
     const mutedColor = useThemeColor('muted-foreground')
@@ -137,7 +133,7 @@ function CreateView({
                 <MailboxForm
                     mode="create"
                     domainOptions={domainOptions}
-                    userOrgId={userOrgId}
+                    userId={userId}
                     onDone={onDone}
                 />
             </DrawerBody>
@@ -412,7 +408,7 @@ function MembersTab({
             yield membersCollection.insert({
                 id: newRecordId(),
                 mailbox: mailboxId,
-                user_org: selected,
+                user: selected,
                 role: 'member',
             })
         }),
@@ -436,8 +432,8 @@ function MembersTab({
         }),
     })
 
-    const existingIds = new Set(members.map(m => m.userOrgId))
-    const available = orgMembers.filter(o => !existingIds.has(o.userOrgId))
+    const existingIds = new Set(members.map(m => m.userId))
+    const available = orgMembers.filter(o => !existingIds.has(o.userId))
     const ownerCount = members.filter(m => m.role === 'owner').length
 
     return (
@@ -453,23 +449,30 @@ function MembersTab({
             >
                 Who has access
             </Text>
-            {members.map(m => (
-                <MailboxMemberRow
-                    key={m.id}
-                    name={m.userName}
-                    email={m.userEmail}
-                    isYou={m.isYou}
-                    role={m.role}
-                    canRemove={!(m.role === 'owner' && ownerCount <= 1)}
-                    onToggleRole={() =>
-                        toggleRoleMutation.mutate({
-                            id: m.id,
-                            next: m.role === 'owner' ? 'member' : 'owner',
-                        })
-                    }
-                    onRemove={() => removeMutation.mutate(m.id)}
-                />
-            ))}
+            {members.map(m => {
+                // The server guard (registerMailboxLastOwnerGuard) rejects
+                // both anyway; the controls must not offer actions that
+                // always fail.
+                const isLastOwner = m.role === 'owner' && ownerCount <= 1
+                return (
+                    <MailboxMemberRow
+                        key={m.id}
+                        name={m.userName}
+                        email={m.userEmail}
+                        isYou={m.isYou}
+                        role={m.role}
+                        canRemove={!isLastOwner}
+                        canToggleRole={!isLastOwner}
+                        onToggleRole={() =>
+                            toggleRoleMutation.mutate({
+                                id: m.id,
+                                next: m.role === 'owner' ? 'member' : 'owner',
+                            })
+                        }
+                        onRemove={() => removeMutation.mutate(m.id)}
+                    />
+                )
+            })}
 
             {!adding && available.length > 0 && (
                 <Pressable
@@ -494,11 +497,11 @@ function MembersTab({
                     </Text>
                     <View className="flex-row gap-1 flex-wrap">
                         {available.map(o => {
-                            const isSelected = selected === o.userOrgId
+                            const isSelected = selected === o.userId
                             return (
                                 <Pressable
-                                    key={o.userOrgId}
-                                    onPress={() => setSelected(o.userOrgId)}
+                                    key={o.userId}
+                                    onPress={() => setSelected(o.userId)}
                                     className="rounded-md px-3"
                                     style={{
                                         paddingVertical: 6,

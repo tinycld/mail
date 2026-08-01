@@ -1,6 +1,5 @@
 import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import { expect } from '@playwright/test'
-import { ORG_SLUG } from '@tinycld/core/e2e-helpers'
 import PocketBase from 'pocketbase'
 
 // Mail tests share a few patterns that are sensitive to two layout choices
@@ -102,23 +101,26 @@ export async function navigateToPersonalInbox(page: Page) {
     // cache, which can take 30-60s on CI. Generous timeout.
     await page.getByTestId('package-sidebar-mounted').waitFor({ state: 'visible', timeout: 60_000 })
     await page.getByText('Inbox', { exact: true }).first().click()
-    await page.waitForURL(url => /folder=inbox/.test(url.search), { timeout: 5_000 })
+    // The rows ARE the assertion — a ?folder=inbox URL is set the moment the
+    // router accepts the push, while the list is still loading, so waiting on
+    // it only adds latency ahead of a check that already proves more.
     await expect(page.locator('[data-testid="email-row"]:visible').first()).toBeVisible({
         timeout: 10_000,
     })
 }
 
 // Navigate to the mail package's "Mailboxes" settings screen
-// (/a/<org>/settings/mail/mailboxes) purely through the SPA — the rail's
+// (/settings/mail/mailboxes) purely through the SPA — the rail's
 // settings button lands on the settings index, whose per-package section
 // exposes the "Mailboxes" link. A page.goto here would tear down the SPA and
 // cancel the in-flight settings chunk. Requires an org admin/owner session:
 // the package-settings group only renders for isAdmin (owner || admin).
 export async function navigateToMailboxSettings(page: Page) {
     await page.getByTestId('nav-settings').click()
-    await page.waitForURL(new RegExp(`/a/${ORG_SLUG}/settings(/|$|\\?)`), { timeout: 15_000 })
+    // No URL waits: each click auto-waits for its target to be actionable,
+    // which proves the screen rendered — the URL only proves the router
+    // accepted the push, and gating on it raced a still-mounting screen.
     await page.getByText('Mailboxes', { exact: true }).first().click()
-    await page.waitForURL(new RegExp(`/a/${ORG_SLUG}/settings/mail/mailboxes`), { timeout: 15_000 })
     await expect(page.getByText('Mailboxes', { exact: true }).first()).toBeVisible()
 }
 
@@ -159,6 +161,14 @@ export interface DeliverOptions {
 // Tests should call `deliverInbound({ subject: \`Test-foo-${stamp}\` })`
 // rather than reading seeded subjects — parallel specs that archive,
 // trash, or delete seed rows otherwise race the read.
+// Mailbox addresses derive from the USERNAME (server lifecycle.go
+// deriveMailboxAddress, mirrored by seed.ts) — the seeded test user is
+// username `tester` with email user@tinycld.org, so the mailbox is
+// tester@tinycld.org. Deriving the default recipient from the email
+// local-part is the exact bug commit 4d52992 fixed; with `user@…` every
+// deliverInbound 403s "No mailbox for recipient(s)".
+export const TEST_USER_MAILBOX = `${process.env.TEST_USER_USERNAME || 'tester'}@tinycld.org`
+
 export async function deliverInbound(
     request: APIRequestContext,
     opts: DeliverOptions
@@ -173,8 +183,8 @@ export async function deliverInbound(
             Name: opts.fromName ?? 'Test Sender',
             Email: opts.fromEmail ?? 'sender@example.com',
         },
-        To: opts.to ?? 'user@tinycld.org',
-        ToFull: [{ Name: 'Test User', Email: opts.to ?? 'user@tinycld.org' }],
+        To: opts.to ?? TEST_USER_MAILBOX,
+        ToFull: [{ Name: 'Test User', Email: opts.to ?? TEST_USER_MAILBOX }],
         CcFull: [],
         Subject: opts.subject,
         Date: new Date().toUTCString(),
@@ -202,5 +212,3 @@ export async function deliverInbound(
 export function uniqueSubject(label: string): string {
     return `${label} ${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
-
-export { ORG_SLUG }

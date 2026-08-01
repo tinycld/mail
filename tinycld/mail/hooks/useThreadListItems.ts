@@ -42,7 +42,7 @@ interface UseThreadListItemsOptions {
  *     for the current page's thread ids — small bounded queries.
  */
 export function useThreadListItems(
-    userOrgId: string,
+    currentUserId: string,
     filter: UseThreadListItemsFilter,
     { page }: UseThreadListItemsOptions = { page: 1 }
 ) {
@@ -66,18 +66,18 @@ export function useThreadListItems(
         query =>
             query
                 .from({ mail_thread_state: threadStateCollection })
-                .where(({ mail_thread_state }) => eq(mail_thread_state.user_org, userOrgId)),
-        [userOrgId]
+                .where(({ mail_thread_state }) => eq(mail_thread_state.user, currentUserId)),
+        [currentUserId]
     )
 
     const { data: allAssignments, isLoading: assignmentsLoading } = useOrgLiveQuery(
-        (query, { userOrgId }) =>
+        (query, { userId }) =>
             query
                 .from({ label_assignments: assignmentsCollection })
                 .where(({ label_assignments }) =>
                     and(
                         eq(label_assignments.collection, 'mail_thread_state'),
-                        eq(label_assignments.user_org, userOrgId)
+                        eq(label_assignments.user, userId)
                     )
                 )
     )
@@ -86,10 +86,10 @@ export function useThreadListItems(
         query.from({ mail_mailboxes: mailboxesCollection })
     )
 
-    const { data: userMemberships } = useOrgLiveQuery((query, { userOrgId }) =>
+    const { data: userMemberships } = useOrgLiveQuery((query, { userId }) =>
         query
             .from({ mail_mailbox_members: membersCollection })
-            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user_org, userOrgId))
+            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user, userId))
     )
 
     const isUnified = filter.mailboxId === UNIFIED_INBOX
@@ -133,31 +133,31 @@ export function useThreadListItems(
     }, [isUnified, filter.mailboxId, userMemberships])
 
     const _folderKey = filter.folder ?? 'inbox'
-    const userOrgIdsForFolder = useMemo(() => {
+    const userIdsForFolder = useMemo(() => {
         // For shared mailboxes' Sent / Drafts views, we widen to co-members
         // so the team sees each others' outbound activity. Personal folders
         // and inbox/starred/etc. always scope to the active user.
         const widenSharedTeam =
             mailboxType === 'shared' && (filter.folder === 'sent' || filter.folder === 'drafts')
-        if (!widenSharedTeam) return [userOrgId]
-        const ids = new Set<string>([userOrgId])
-        for (const m of coMembers ?? []) ids.add(m.user_org)
+        if (!widenSharedTeam) return [currentUserId]
+        const ids = new Set<string>([currentUserId])
+        for (const m of coMembers ?? []) ids.add(m.user)
         return [...ids]
-    }, [mailboxType, filter.folder, userOrgId, coMembers])
+    }, [mailboxType, filter.folder, currentUserId, coMembers])
 
     const pageQueryEnabled = visibleMailboxIds.length > 0 && (isUnified ? !!userMemberships : true)
 
     const pageQueryKey = useMemo(
         () => [
             'mail_threads_page',
-            userOrgId,
+            currentUserId,
             filter.mailboxId,
             filter.folder ?? 'inbox',
             visibleMailboxIds.slice().sort().join(','),
-            userOrgIdsForFolder.slice().sort().join(','),
+            userIdsForFolder.slice().sort().join(','),
             page,
         ],
-        [userOrgId, filter.mailboxId, filter.folder, visibleMailboxIds, userOrgIdsForFolder, page]
+        [currentUserId, filter.mailboxId, filter.folder, visibleMailboxIds, userIdsForFolder, page]
     )
 
     const { data: pageResult, isLoading: pageLoading } = useQuery({
@@ -166,7 +166,7 @@ export function useThreadListItems(
         queryFn: async () => {
             const filterStr = buildThreadsFilter({
                 mailboxIds: visibleMailboxIds,
-                userOrgIds: userOrgIdsForFolder,
+                userIds: userIdsForFolder,
                 folder: filter.folder,
             })
             // biome-ignore lint/plugin/pbtsdb-no-raw-pb-access: deliberate server-side pagination — fetches only the current page (see file header), which a whole-collection pbtsdb store read would defeat; cached per-page via React Query.
@@ -354,7 +354,7 @@ export function useThreadListItems(
 // server joins state and threads itself — no need to pre-fetch thread ids.
 function buildThreadsFilter(params: {
     mailboxIds: string[]
-    userOrgIds: string[]
+    userIds: string[]
     folder: string | null
 }): string {
     const clauses: string[] = []
@@ -366,17 +366,17 @@ function buildThreadsFilter(params: {
     }
 
     // Each thread must have a thread_state row owned by one of the relevant
-    // user_orgs (just the user normally; widened to co-members on shared
+    // users (just the current user normally; widened to co-members on shared
     // mailbox sent/drafts views).
-    if (params.userOrgIds.length === 1) {
-        clauses.push(`mail_thread_state_via_thread.user_org ?= ${quote(params.userOrgIds[0])}`)
+    if (params.userIds.length === 1) {
+        clauses.push(`mail_thread_state_via_thread.user ?= ${quote(params.userIds[0])}`)
     } else {
         clauses.push(
-            `(${params.userOrgIds.map(id => `mail_thread_state_via_thread.user_org ?= ${quote(id)}`).join(' || ')})`
+            `(${params.userIds.map(id => `mail_thread_state_via_thread.user ?= ${quote(id)}`).join(' || ')})`
         )
     }
 
-    // Folder semantics mirror computeMailboxFolderCounts:
+    // Folder semantics mirror the mail_folder_counts view:
     //   inbox    — folder='inbox' (no unread restriction; the row visibility
     //              isn't a count, the unread is a row-level visual)
     //   starred  — is_starred=true (any folder)

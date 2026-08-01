@@ -1,17 +1,19 @@
 package mail
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"time"
 
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"golang.org/x/crypto/acme/autocert"
+	"tinycld.org/core/mailproto"
 )
 
 // StartSMTPInboundServer starts the public-facing SMTP listener that accepts
@@ -32,7 +34,13 @@ import (
 // recipient through processInboundForMailbox, the same path the Postmark
 // webhook uses, so all downstream behavior (threading, FTS, notifications)
 // stays identical.
-func StartSMTPInboundServer(app *pocketbase.PocketBase, certManager *autocert.Manager) (func(), error) {
+//
+// Unlike the IMAP/submission listeners, this one keeps its own bind loop rather
+// than going through mailproto.StartSMTP: it is opt-in via env, always binds a
+// single plain listener (STARTTLS only), and derives its domain from the public
+// hostname. Forcing it through the shared options struct would distort both.
+// It does share the TLS resolution.
+func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func(), error) {
 	if os.Getenv("MAIL_INBOUND_SMTP_ENABLED") != "true" {
 		return func() {}, nil
 	}
@@ -42,7 +50,9 @@ func StartSMTPInboundServer(app *pocketbase.PocketBase, certManager *autocert.Ma
 		addr = ":25"
 	}
 
-	tlsConfig, err := resolveTLSConfig("SMTP_INBOUND_TLS_CERT", "SMTP_INBOUND_TLS_KEY", "SMTP_TLS_CERT", "SMTP_TLS_KEY", certManager)
+	tlsConfig, err := mailproto.ResolveTLSConfig(
+		"SMTP_INBOUND_TLS_CERT", "SMTP_INBOUND_TLS_KEY", "SMTP_TLS_CERT", "SMTP_TLS_KEY", certManager,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -52,18 +62,8 @@ func StartSMTPInboundServer(app *pocketbase.PocketBase, certManager *autocert.Ma
 		hostname = "localhost"
 	}
 
-	backend := &smtpInboundBackend{app: app, hostname: hostname}
-	server := smtp.NewServer(backend)
-	server.Domain = hostname
-	server.AllowInsecureAuth = false
-	server.MaxMessageBytes = 25 << 20
-	server.EnableSMTPUTF8 = true
-	server.ReadTimeout = 60 * time.Second
-	server.WriteTimeout = 60 * time.Second
+	server := newInboundSMTPServer(app, hostname, tlsConfig)
 	server.Addr = addr
-	if tlsConfig != nil {
-		server.TLSConfig = tlsConfig
-	}
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -84,6 +84,69 @@ func StartSMTPInboundServer(app *pocketbase.PocketBase, certManager *autocert.Ma
 	}, nil
 }
 
+// newInboundSMTPServer builds the inbound-MX server around the shared inbound
+// backend; both the host's TCP bind and the tenant's injected-listener path
+// serve exactly this instance.
+func newInboundSMTPServer(app core.App, hostname string, tlsConfig *tls.Config) *smtp.Server {
+	backend := &smtpInboundBackend{app: app, hostname: hostname}
+	server := smtp.NewServer(backend)
+	server.Domain = hostname
+	server.AllowInsecureAuth = false
+	server.MaxMessageBytes = 25 << 20
+	server.EnableSMTPUTF8 = true
+	server.ReadTimeout = 60 * time.Second
+	server.WriteTimeout = 60 * time.Second
+	if tlsConfig != nil {
+		server.TLSConfig = tlsConfig
+	}
+	return server
+}
+
+// startSMTPInboundOnListener serves the inbound-MX session on an injected
+// plaintext listener — the multi-org tenant path. The router owns :25: it
+// offers and terminates STARTTLS there, routes each transaction by RCPT TO
+// domain through the control-plane registry, and relays accepted messages
+// here over the org's private unix socket. There is no
+// MAIL_INBOUND_SMTP_ENABLED gate on this path: whether :25 is open is the
+// router operator's call, and a handed-down listener nothing dials costs
+// nothing.
+func startSMTPInboundOnListener(app core.App, listen mailproto.ListenFunc) (func(), error) {
+	hostname := inboundHostname(app)
+	server := newInboundSMTPServer(app, hostname, nil)
+
+	ln, err := listen(":25")
+	if err != nil {
+		return nil, fmt.Errorf("inbound SMTP listen: %w", err)
+	}
+	app.Logger().Info("inbound SMTP server listening (external TLS termination)", "hostname", hostname)
+
+	go func() {
+		if err := server.Serve(ln); err != nil {
+			app.Logger().Error("inbound SMTP server error", "error", err)
+		}
+	}()
+
+	return func() {
+		app.Logger().Info("shutting down inbound SMTP server")
+		ln.Close()
+		server.Close()
+	}, nil
+}
+
+// inboundHostname resolves the identity the MX greeting announces:
+// SMTP_PUBLIC_HOSTNAME when the operator set one, else the app's public host —
+// a tenant's allowlist env is empty, but its AppURL was adopted from the
+// router-materialized app config at boot, so this yields <slug>.<baseDomain>.
+func inboundHostname(app core.App) string {
+	if h := os.Getenv("SMTP_PUBLIC_HOSTNAME"); h != "" {
+		return h
+	}
+	if u, err := url.Parse(app.Settings().Meta.AppURL); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return "localhost"
+}
+
 type smtpInboundBackend struct {
 	app      core.App
 	hostname string
@@ -99,7 +162,7 @@ func (b *smtpInboundBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 // through processInboundForMailbox once per accepted recipient.
 //
 // The app field is typed as core.App (the minimal interface this code needs)
-// so production *pocketbase.PocketBase and the test *tests.TestApp both
+// so production core.App and the test *tests.TestApp both
 // satisfy it without conversion.
 type smtpInboundSession struct {
 	app      core.App

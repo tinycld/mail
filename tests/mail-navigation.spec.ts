@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { clickSidebarItem, login, navigateToPackage, ORG_SLUG } from '@tinycld/core/e2e-helpers'
+import { clickSidebarItem, login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 
 // These tests assert that each folder route mounts successfully — i.e.
 // clicking the sidebar entry navigates to the right URL. Asserting on
@@ -34,7 +34,9 @@ test.describe('Mail — Navigation', () => {
         await page.keyboard.press('j')
         await page.keyboard.press('Enter')
 
-        await page.waitForURL(new RegExp(`/a/${ORG_SLUG}/mail/[^/?]+`))
+        // The thread view rendered — a /mail/<id> URL is true the instant the
+        // router accepts the push, even if the detail screen never mounts.
+        await expect(page.getByTestId('mail-thread-detail')).toBeVisible()
     })
 
     test('navigate to Sent', async ({ page }) => {

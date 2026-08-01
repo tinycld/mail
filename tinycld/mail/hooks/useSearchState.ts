@@ -42,6 +42,7 @@ export interface SearchState {
     total: number
     isSearching: boolean
     isActive: boolean
+    error: string | null
     filters: AdvancedSearchFilters
 }
 
@@ -51,6 +52,7 @@ export const SearchContext = createContext<SearchState>({
     total: 0,
     isSearching: false,
     isActive: false,
+    error: null,
     filters: {},
 })
 
