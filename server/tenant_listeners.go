@@ -30,12 +30,11 @@ func (l TenantListeners) empty() bool {
 	return l.IMAP == nil && l.Submission == nil && l.InboundMX == nil
 }
 
-// RegisterTenantWithListeners composes the mail server for a multi-org tenant
-// that was handed router-managed mail sockets: the shared set plus the real
-// protocol servers on exactly those listeners, in external-TLS mode. With all
-// listeners nil it is RegisterTenant.
-func RegisterTenantWithListeners(app *pocketbase.PocketBase, listeners TenantListeners) {
-	registerShared(app)
+// registerInjectedListeners serves the protocol stack on router-managed mail
+// sockets, in external-TLS mode — the tenant half of Register's listener
+// branch. With no listeners injected it registers nothing (the org runs no
+// mail listeners; a degraded router binds no mail sockets at all).
+func registerInjectedListeners(app *pocketbase.PocketBase, listeners TenantListeners) {
 	if listeners.empty() {
 		return
 	}

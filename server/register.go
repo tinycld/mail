@@ -13,6 +13,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/audit"
+	"tinycld.org/core/coreserver"
 	"tinycld.org/core/quota"
 )
 
@@ -26,38 +27,31 @@ func appIsLive(app core.App) bool {
 	return app != nil && app.ConcurrentDB() != nil
 }
 
-// Register composes the mail server for the SINGLE-ORG app: the shared set
-// plus the host-only tail. The generator's package_extensions.go calls it.
+// Register composes the mail server — the package's single entry point,
+// called by the generator's package_extensions.go in BOTH the single-org app
+// and a multi-org tenant. Mail is the rare package whose composition genuinely
+// differs hosted, so it DETECTS tenancy (coreserver.GetTenantContext — the
+// single-Register contract) to pick where its protocol listeners come from:
+//
+//   - Single-org app: the process owns its ports, so the IMAP /
+//     SMTP-submission / inbound-SMTP listeners bind fixed TCP ports here.
+//   - Multi-org tenant: a tenant must NEVER bind a port — the router owns
+//     every listening socket. The router terminates TLS on :993/:465 (SNI
+//     demux) and fronts :25 (RCPT TO routing), forwarding plaintext over
+//     per-org unix sockets injected through the TenantContext
+//     (tenant_listeners.go serves exactly those; none injected = no
+//     listeners, e.g. a degraded router).
 func Register(app *pocketbase.PocketBase) {
 	registerShared(app)
-
-	// ---- Host-only ----
-	// The IMAP / SMTP-submission / inbound-SMTP listeners bind fixed TCP
-	// ports here, on the single-org app, where the process owns its ports. A
-	// multi-org TENANT must never bind a port — the router owns every
-	// listening socket — so its listeners are injected instead: the router
-	// terminates TLS on :993/:465 (SNI demux) and fronts :25 (RCPT TO
-	// routing), forwarding plaintext over per-org unix sockets that reach the
-	// same sessions via RegisterTenantWithListeners (tenant_listeners.go).
+	if tc, ok := coreserver.GetTenantContext(app); ok {
+		registerInjectedListeners(app, TenantListeners{
+			IMAP:       tc.Mail.IMAP,
+			Submission: tc.Mail.Submission,
+			InboundMX:  tc.Mail.InboundMX,
+		})
+		return
+	}
 	registerMailListeners(app)
-}
-
-// RegisterTenant composes the mail server for a multi-org TENANT process with
-// no router-managed mail sockets: the shared set only — record hooks,
-// endpoints, FTS sync, mailbox lifecycle, the outbound-dialing workers —
-// without the protocol listeners. When the router hands the tenant per-org
-// mail sockets, use RegisterTenantWithListeners instead, which additionally
-// serves IMAP/submission/inbound-MX on exactly those listeners
-// (tenant_listeners.go). The router's pinned package menu calls one of the
-// two, gated by the org's resolved package set
-// (multi-org/docs/SCOPE-tenant-feature-go.md).
-//
-// Do NOT hand-pick registrations here — add to registerShared so both
-// compositions get them, or to Register's host-only tail with a reason. A
-// hand-rolled subset is exactly the drift that produced
-// multi-org/docs/FINDING-tenant-composition-gap.md.
-func RegisterTenant(app *pocketbase.PocketBase) {
-	RegisterTenantWithListeners(app, TenantListeners{})
 }
 
 // registerShared is the single source of truth for what BOTH compositions run.

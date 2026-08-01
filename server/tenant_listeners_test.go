@@ -141,14 +141,17 @@ func TestStartTenantMailListeners_FailureIsLoudAndUnwindsPriorListeners(t *testi
 }
 
 // With router-managed listeners injected, the tenant composition matches the
-// host exactly — the OnServe divergence the plain RegisterTenant records exists
-// only because a listener-less tenant starts no mail servers at all.
+// host exactly. Composed directly from Register's two halves (registerShared +
+// registerInjectedListeners) because the tenant context that selects the
+// branch is stamped by coreserver.RegisterTenant, outside this package; the
+// detection branch itself is covered end-to-end by the orgmanager mail e2e.
 func TestTenantWithListenersCompositionMatchesHostExactly(t *testing.T) {
 	host := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
 	Register(host)
 
 	tenant := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
-	RegisterTenantWithListeners(tenant, TenantListeners{
+	registerShared(tenant)
+	registerInjectedListeners(tenant, TenantListeners{
 		IMAP: func(string) (net.Listener, error) { return nil, fmt.Errorf("never served in this test") },
 	})
 
