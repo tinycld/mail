@@ -7,7 +7,7 @@ order: 100
 
 ## Who can do this
 
-The mail provider is deployment-wide infrastructure — all mail goes through one provider account. A **super admin** (or the PocketBase superuser) configures it from the Setup dashboard's **Settings** tab (`/setup`). Mail **domains**, by contrast, are managed in-app at **Settings → Mail → Provider** by organization **owners** and **admins**.
+The mail provider is deployment-wide infrastructure — all mail goes through one provider account. An **owner or admin** (or the PocketBase superuser) configures it from the Admin console's **Settings** section. Mail **domains**, by contrast, are managed in-app at **Settings → Mail → Provider** by organization **owners** and **admins**.
 
 ## Picking a provider
 
@@ -87,7 +87,7 @@ DKIM **signing** of outbound mail is not yet implemented for self-hosted SMTP. T
 
 ## Where credentials are stored
 
-Provider settings live in the deployment-wide `system_settings` store (keys like `mail.provider`, `mail.postmark_server_token`), readable and writable only by super admins and the PocketBase superuser. Secrets (tokens, IMAP passwords) are masked in the settings UI.
+Provider settings live in the deployment-wide `system_settings` store (keys like `mail.provider`, `mail.postmark_server_token`), readable and writable only by owners, admins and the PocketBase superuser. Secrets (tokens, IMAP passwords) are masked in the settings UI.
 
 The IMAP fetcher reconciles automatically whenever a setting changes, so credential rotation takes effect without a restart. There is no environment-variable fallback — the Settings tab is the one place providers are configured. (The only env switch is the operator-level `MAIL_INBOUND_SMTP_ENABLED` guard for the built-in listener.)
 

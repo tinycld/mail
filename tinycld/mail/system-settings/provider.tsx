@@ -21,7 +21,7 @@ import { Text, View } from 'react-native'
 // fallback the mail server uses when an org hasn't set its own provider override
 // (see server/register.go providerForOrg). Stored in the shared system_settings
 // collection under `mail.*` keys (the exact keys smtpConfigFromSystem reads); the
-// console runs as a super-admin app user, so the writes are authorized.
+// console runs as an owner/admin app user, so the writes are authorized.
 //
 // The form mirrors the per-org mail settings: a provider select swaps between
 // Postmark (token credentials) and self-hosted SMTP (hostname + DKIM + an inbound
