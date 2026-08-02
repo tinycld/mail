@@ -7,7 +7,7 @@ order: 100
 
 ## Who can do this
 
-The mail provider is deployment-wide infrastructure — all mail goes through one provider account. An **owner or admin** (or the PocketBase superuser) configures it from the Admin console's **Settings** section. Mail **domains**, by contrast, are managed in-app at **Settings → Mail → Provider** by organization **owners** and **admins**.
+The mail provider is deployment-wide infrastructure — all mail goes through one provider account. An **owner or admin** (or the PocketBase superuser) configures it from the setup console's **Settings** section. Mail **domains**, by contrast, are managed in-app at **Settings → Mail → Provider** by organization **owners** and **admins**.
 
 ## Picking a provider
 
