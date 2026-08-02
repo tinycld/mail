@@ -93,7 +93,7 @@ Outbound messages are capped at **25 MB total** (including attachments). Larger 
 - **Auth failed** — wrong username/email or password. Same as IMAP — use the identity you sign in to TinyCld with.
 - **From address not owned** — see above; the From header has to match a mailbox or alias you have access to.
 - **Domain not verified** — the sending domain has to be fully verified (MX, SPF, DKIM, Return-Path). See [Custom domains](help://mail:custom-domains).
-- **Provider not configured** — the deployment has no mail provider yet; configuring one is a super-admin task. See [Provider setup](help://mail:provider-setup).
+- **Provider not configured** — the deployment has no mail provider yet; configuring one is an administrator task. See [Provider setup](help://mail:provider-setup).
 - **Message size too large** — 25 MB max.
 
 ## See also
