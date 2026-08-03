@@ -5,6 +5,7 @@ import { notify } from '@tinycld/core/lib/notify'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { captureMessageToSentry } from '@tinycld/core/lib/sentry'
 import { type Shortcut, useRegisterShortcut, useShortcutScope } from '@tinycld/core/lib/shortcuts'
+import { useSafeAreaInsets } from '@tinycld/core/lib/use-safe-area'
 import { FormErrorSummary, useForm, zodResolver } from '@tinycld/core/ui/form'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, View } from 'react-native'
@@ -38,6 +39,7 @@ interface ComposeWindowProps {
 export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const { mode, replyContext, draftContext, minimize, maximize, open, close } = useCompose()
     const breakpoint = useBreakpoint()
+    const insets = useSafeAreaInsets()
     const readiness = useMailSendReadiness()
     const mailboxId = readiness.mailboxId
     const aliasId = useComposeStore(s => s.aliasId)
@@ -233,7 +235,16 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         inline: { bottom: 0, right: 16, width: 500, height: 560 },
     }
 
-    const fullscreenStyle = { top: 0, left: 0, right: 0, bottom: 0 }
+    // Edge-to-edge on mobile/tablet, so nothing above insets it — in landscape
+    // the sensor housing sat over the header's close button, which is the only
+    // way out of compose. Inset the window itself rather than its contents: the
+    // rounded border then frames the usable area instead of being cut off.
+    const fullscreenStyle = {
+        top: 0,
+        bottom: 0,
+        left: insets.left,
+        right: insets.right,
+    }
     const windowStyle = isNotDesktop ? fullscreenStyle : modeStyles[mode]
 
     const onSend = handleSubmit(async data => {
