@@ -124,22 +124,66 @@ test.describe('Mail — Attachments', () => {
         await expect(inlineImg).toBeVisible()
         await expectImageLoaded(inlineImg)
 
-        // The attachment strip auto-expands on first render when the thread
-        // fits on screen (useScrolledToBottom flips false→true after layout,
-        // which fires AttachmentStrip's expand effect). On taller threads
-        // it stays collapsed and the user clicks the header to open it.
-        // Cover both: if the thumbnail isn't already visible, click the
-        // "N attachments" header to expand. Polling is bounded by the
-        // toBeVisible timeout below.
+        // At the default 1280x720 viewport the strip clears
+        // MIN_HEIGHT_FOR_AUTO_OPEN, so reaching the bottom of this short
+        // thread auto-expands it. No conditional expand needed.
         //
         // Attachment ribbon thumbnail: <img> served from PocketBase's files
         // endpoint. The filename gets a 10-char random suffix and the URL
         // carries a ?thumb= query, so match against the path prefix only.
         const thumb = page.locator('img[src*="/api/files/"][src*="hippo"]').first()
-        if (!(await thumb.isVisible().catch(() => false))) {
-            await page.getByText('2 attachments').click()
-        }
         await expect(thumb).toBeVisible()
         await expectImageLoaded(thumb)
+
+        // Bug regression: a manual collapse must survive scrolling. Before the
+        // userToggled gate, the next isAtBottom rising edge re-expanded the
+        // panel the moment the user scrolled the message body.
+        await page.getByText('2 attachments').click()
+        await expect(thumb).toBeHidden()
+        await page.mouse.wheel(0, -400)
+        await page.mouse.wheel(0, 400)
+        await expect(thumb).toBeHidden()
+    })
+
+    test('attachment strip stays closed on a short landscape viewport', async ({
+        page,
+        request,
+    }) => {
+        const { base64, byteLength } = loadHippoFixture()
+        const stamp = Date.now()
+        const subject = `Attachments landscape — hippo ${stamp}`
+        const messageId = `attachment-landscape-${stamp}@tinycld.test`
+
+        const inboundUrl = await getInboundWebhookUrl()
+        await deliverInbound(
+            request,
+            inboundUrl,
+            buildPostmarkPayload({ subject, messageId, base64, byteLength })
+        )
+
+        // Wide but short — the iOS-landscape geometry where a 280px panel
+        // would swallow the message. Set before login so the app lays out
+        // at this size from the start.
+        await page.setViewportSize({ width: 1024, height: 420 })
+
+        await login(page)
+        await navigateToPackage(page, 'mail', {
+            waitFor: page.getByTestId('package-sidebar-mounted'),
+        })
+
+        await expect(emailRow(page, subject)).toBeVisible()
+        await openThread(page, subject)
+
+        const header = page.getByText('2 attachments')
+        await expect(header).toBeVisible()
+
+        // The thread fits this viewport, so isAtBottom is true from first
+        // layout — the panel must still stay closed.
+        const thumb = page.locator('img[src*="/api/files/"][src*="hippo"]').first()
+        await expect(thumb).toBeHidden()
+
+        // A manual open on a short screen still works and sticks.
+        await header.click()
+        await expect(thumb).toBeVisible()
     })
 })
