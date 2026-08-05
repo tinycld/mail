@@ -1,3 +1,4 @@
+import { useWindowHeight } from '@tinycld/core/components/workspace/useBreakpoint'
 import { downloadFile } from '@tinycld/core/file-viewer/file-url'
 import { PreviewModal } from '@tinycld/core/file-viewer/PreviewModal'
 import { getPreviewActionFactories } from '@tinycld/core/file-viewer/preview-action-registry'
@@ -11,6 +12,7 @@ import { useAttachmentPreviewStore } from '../stores/attachment-preview-store'
 import { useAttachmentStripStore } from '../stores/attachment-strip-store'
 import { AttachmentThumbnail } from './AttachmentThumbnail'
 import { attachmentToSource } from './attachment-preview-source'
+import { canAutoOpenStrip } from './attachment-strip-auto-open'
 
 export interface AttachmentGroup {
     messageId: string
@@ -39,6 +41,8 @@ export function AttachmentStrip({
     const expanded = useAttachmentStripStore(s => s.expanded)
     const expand = useAttachmentStripStore(s => s.expand)
     const toggle = useAttachmentStripStore(s => s.toggle)
+    const userToggled = useAttachmentStripStore(s => s.userToggled)
+    const windowHeight = useWindowHeight()
     const active = useAttachmentPreviewStore(s => s.active)
     const closePreview = useAttachmentPreviewStore(s => s.close)
     const setActive = useAttachmentPreviewStore(s => s.setActive)
@@ -50,14 +54,20 @@ export function AttachmentStrip({
     // factory unconditionally here is safe under the rules of hooks.
     const previewActions = getPreviewActionFactories().map(factory => factory())
 
+    const canAutoOpen = canAutoOpenStrip(windowHeight, userToggled)
+
+    // The ref is written unconditionally, outside the canAutoOpen guard, so the
+    // rising-edge tracker stays in sync while auto-open is suppressed —
+    // otherwise rotating a short screen to a tall one would read a stale
+    // `false` and fire a spurious open.
     const wasAtBottomRef = useRef(false)
     useEffect(() => {
         const wasAtBottom = wasAtBottomRef.current
         wasAtBottomRef.current = isAtBottom
-        if (!wasAtBottom && isAtBottom && !expanded) {
+        if (canAutoOpen && !wasAtBottom && isAtBottom && !expanded) {
             expand()
         }
-    }, [isAtBottom, expanded, expand])
+    }, [isAtBottom, expanded, expand, canAutoOpen])
 
     // Flatten every attachment in the visible thread into a single ordered list
     // so the preview modal's prev/next can step across messages, not just within
