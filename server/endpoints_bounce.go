@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/packages/mail/api"
 )
 
 func handleBounce(app core.App, provider Provider, re *core.RequestEvent, secret string) error {
@@ -41,7 +42,7 @@ func handleBounce(app core.App, provider Provider, re *core.RequestEvent, secret
 	if err != nil || len(messages) == 0 {
 		app.Logger().Warn("bounce received for unknown message",
 			"message_id", event.MessageID, "email", event.Email)
-		return re.JSON(http.StatusOK, map[string]string{"status": "ignored"})
+		return re.JSON(http.StatusOK, api.WebhookAckResponse{Status: "ignored"})
 	}
 
 	record := messages[0]
@@ -66,5 +67,5 @@ func handleBounce(app core.App, provider Provider, re *core.RequestEvent, secret
 	app.Logger().Info("bounce processed",
 		"message_id", event.MessageID, "status", status, "email", event.Email)
 
-	return re.JSON(http.StatusOK, map[string]string{"status": "processed"})
+	return re.JSON(http.StatusOK, api.WebhookAckResponse{Status: "processed"})
 }

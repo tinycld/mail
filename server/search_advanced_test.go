@@ -4,6 +4,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"tinycld.org/packages/mail/api"
 )
 
 // The thread FTS index has no body_text column, so its query must carry ONLY
@@ -116,41 +118,41 @@ func TestFTSUnion(t *testing.T) {
 	})
 }
 
-// parseAdvancedFilters must ignore the removed not_words and size_* params even
+// parseSearchRequest must ignore the removed not_words and size_* params even
 // if a stale client still sends them — they have no struct fields to land in.
-func TestParseAdvancedFiltersIgnoresRemovedParams(t *testing.T) {
+func TestParseSearchRequestIgnoresRemovedParams(t *testing.T) {
 	req := httptest.NewRequest(
 		"GET",
 		"/api/mail/search?from=alice&has_words=invoice&not_words=spam&size_op=gt&size_bytes=1048576&folder=inbox&has_attachment=true",
 		nil,
 	)
-	f := parseAdvancedFilters(req)
+	f := parseSearchRequest(req)
 
-	if f.from != "alice" {
-		t.Errorf("from = %q, want alice", f.from)
+	if f.From != "alice" {
+		t.Errorf("From = %q, want alice", f.From)
 	}
-	if f.hasWords != "invoice" {
-		t.Errorf("hasWords = %q, want invoice", f.hasWords)
+	if f.HasWords != "invoice" {
+		t.Errorf("HasWords = %q, want invoice", f.HasWords)
 	}
-	if f.folder != "inbox" {
-		t.Errorf("folder = %q, want inbox", f.folder)
+	if f.Folder != "inbox" {
+		t.Errorf("Folder = %q, want inbox", f.Folder)
 	}
-	if !f.hasAttachment {
-		t.Error("hasAttachment = false, want true")
+	if !f.HasAttachment {
+		t.Error("HasAttachment = false, want true")
 	}
 	// The removed params are simply dropped — assert the filter set still
 	// reports the surviving structured filters correctly.
-	if !f.hasStructuredFilters() {
+	if !hasStructuredFilters(&f) {
 		t.Error("hasStructuredFilters() = false, want true (from/folder/attachment set)")
 	}
-	if !f.hasAnyFilter() {
+	if !hasAnyFilter(&f) {
 		t.Error("hasAnyFilter() = false, want true")
 	}
 }
 
 // buildMessageWhere must no longer emit a total_size clause.
 func TestBuildMessageWhereHasNoSizeClause(t *testing.T) {
-	f := advancedFilters{from: "alice", subject: "report", hasAttachment: true}
+	f := api.SearchRequest{From: "alice", Subject: "report", HasAttachment: true}
 	params := map[string]any{}
 	where := buildMessageWhere(&f, params)
 
@@ -168,7 +170,7 @@ func TestBuildMessageWhereHasNoSizeClause(t *testing.T) {
 
 // An empty filter set produces no WHERE fragment.
 func TestBuildMessageWhereEmpty(t *testing.T) {
-	f := advancedFilters{}
+	f := api.SearchRequest{}
 	if where := buildMessageWhere(&f, map[string]any{}); where != "" {
 		t.Errorf("expected empty WHERE, got %q", where)
 	}

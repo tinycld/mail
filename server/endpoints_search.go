@@ -10,25 +10,13 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
+	"tinycld.org/packages/mail/api"
 )
 
-type searchResultItem struct {
-	ThreadID         string `json:"thread_id"`
-	Subject          string `json:"subject"`
-	SubjectHighlight string `json:"subject_highlight"`
-	SnippetHighlight string `json:"snippet_highlight"`
-	LatestDate       string `json:"latest_date"`
-	Participants     string `json:"participants"`
-	MessageCount     int    `json:"message_count"`
-	MailboxID        string `json:"mailbox_id"`
-	HasAttachments   bool   `json:"has_attachments"`
-}
-
-type searchResponse struct {
-	Items []searchResultItem `json:"items"`
-	Total int                `json:"total"`
-}
-
+// searchResultRow is the SQL scan target for the search queries. It stays
+// separate from api.SearchResultItem — db tags serve the scan, json tags the
+// wire — and TestMapResults_CoversEveryAPIField pins the two field sets
+// together.
 type searchResultRow struct {
 	ThreadID         string `db:"thread_id"`
 	Subject          string `db:"subject"`
@@ -41,10 +29,10 @@ type searchResultRow struct {
 	HasAttachments   bool   `db:"has_attachments"`
 }
 
-func mapResults(rows []searchResultRow) []searchResultItem {
-	items := make([]searchResultItem, len(rows))
+func mapResults(rows []searchResultRow) []api.SearchResultItem {
+	items := make([]api.SearchResultItem, len(rows))
 	for i, r := range rows {
-		items[i] = searchResultItem{
+		items[i] = api.SearchResultItem{
 			ThreadID:         r.ThreadID,
 			Subject:          r.Subject,
 			SubjectHighlight: r.SubjectHighlight,
@@ -64,67 +52,69 @@ func mapResults(rows []searchResultRow) []searchResultItem {
 // indicator is correct regardless of which message matched the FTS query.
 const threadHasAttachmentsExpr = `EXISTS (SELECT 1 FROM mail_messages WHERE thread = t.id AND has_attachments = 1)`
 
-// advancedFilters holds parsed advanced search parameters.
-type advancedFilters struct {
-	from          string
-	to            string
-	subject       string
-	hasWords      string
-	dateAfter     string
-	dateBefore    string
-	folder        string
-	hasAttachment bool
+func hasStructuredFilters(f *api.SearchRequest) bool {
+	return f.From != "" || f.To != "" || f.Subject != "" ||
+		f.DateAfter != "" || f.DateBefore != "" ||
+		f.HasAttachment || f.Folder != ""
 }
 
-func (f *advancedFilters) hasStructuredFilters() bool {
-	return f.from != "" || f.to != "" || f.subject != "" ||
-		f.dateAfter != "" || f.dateBefore != "" ||
-		f.hasAttachment || f.folder != ""
+func hasAnyFilter(f *api.SearchRequest) bool {
+	return hasStructuredFilters(f) || f.HasWords != ""
 }
 
-func (f *advancedFilters) hasAnyFilter() bool {
-	return f.hasStructuredFilters() || f.hasWords != ""
-}
-
-func parseAdvancedFilters(r *http.Request) advancedFilters {
+// parseSearchRequest reads the api.SearchRequest contract off the query
+// string. Parameters outside the contract are deliberately ignored (removed
+// ones like not_words / size_* have no field to land in). Limit is clamped to
+// (0, 100] with a default of 25; Offset to >= 0.
+func parseSearchRequest(r *http.Request) api.SearchRequest {
 	query := r.URL.Query()
-	var f advancedFilters
-	f.from = strings.TrimSpace(query.Get("from"))
-	f.to = strings.TrimSpace(query.Get("to"))
-	f.subject = strings.TrimSpace(query.Get("subject"))
-	f.hasWords = strings.TrimSpace(query.Get("has_words"))
-	f.dateAfter = strings.TrimSpace(query.Get("date_after"))
-	f.dateBefore = strings.TrimSpace(query.Get("date_before"))
-	f.folder = strings.TrimSpace(query.Get("folder"))
-	f.hasAttachment = query.Get("has_attachment") == "true"
-	return f
+	req := api.SearchRequest{
+		Query:         query.Get("q"),
+		MailboxID:     query.Get("mailbox_id"),
+		Limit:         25,
+		From:          strings.TrimSpace(query.Get("from")),
+		To:            strings.TrimSpace(query.Get("to")),
+		Subject:       strings.TrimSpace(query.Get("subject")),
+		HasWords:      strings.TrimSpace(query.Get("has_words")),
+		DateAfter:     strings.TrimSpace(query.Get("date_after")),
+		DateBefore:    strings.TrimSpace(query.Get("date_before")),
+		Folder:        strings.TrimSpace(query.Get("folder")),
+		HasAttachment: query.Get("has_attachment") == "true",
+	}
+	if l, err := strconv.Atoi(query.Get("limit")); err == nil && l > 0 && l <= 100 {
+		req.Limit = l
+	}
+	if o, err := strconv.Atoi(query.Get("offset")); err == nil && o >= 0 {
+		req.Offset = o
+	}
+	return req
 }
 
 // buildMessageWhere builds additional WHERE clauses and params for mail_messages filters.
-func buildMessageWhere(f *advancedFilters, params map[string]any) string {
+func buildMessageWhere(f *api.SearchRequest, params map[string]any) string {
 	var clauses []string
 
-	if f.from != "" {
-		params["fromLike"] = "%" + f.from + "%"
+	if f.From != "" {
+		params["fromLike"] = "%" + f.From + "%"
 		clauses = append(clauses, "(m.sender_name LIKE {:fromLike} OR m.sender_email LIKE {:fromLike})")
 	}
-	if f.to != "" {
-		params["toLike"] = "%" + f.to + "%"
+	if f.To != "" {
+		params["toLike"] = "%" + f.To + "%"
 		clauses = append(clauses, "(m.recipients_to LIKE {:toLike} OR m.recipients_cc LIKE {:toLike})")
 	}
-	if f.subject != "" {
-		params["subjectLike"] = "%" + f.subject + "%"
+	if f.Subject != "" {
+		params["subjectLike"] = "%" + f.Subject + "%"
 		clauses = append(clauses, "m.subject LIKE {:subjectLike}")
 	}
-	if f.dateAfter != "" {
-		params["dateAfter"] = f.dateAfter
+	if f.DateAfter != "" {
+		params["dateAfter"] = f.DateAfter
 		clauses = append(clauses, "m.date >= {:dateAfter}")
 	}
-	if f.dateBefore != "" {
-		params["dateBefore"] = f.dateBefore
+	if f.DateBefore != "" {
+		params["dateBefore"] = f.DateBefore
 		clauses = append(clauses, "m.date <= {:dateBefore}")
 	}
-	if f.hasAttachment {
+	if f.HasAttachment {
 		clauses = append(clauses, "m.has_attachments = 1")
 	}
 
@@ -137,46 +127,37 @@ func buildMessageWhere(f *advancedFilters, params map[string]any) string {
 // buildFolderJoin builds an additional JOIN + WHERE clause for folder/starred
 // filtering. Single-org: thread state is keyed by the user directly, so this is
 // a single bound parameter rather than an IN over the caller's memberships.
-func buildFolderJoin(f *advancedFilters, userID string, params map[string]any) string {
-	if f.folder == "" || userID == "" {
+func buildFolderJoin(f *api.SearchRequest, userID string, params map[string]any) string {
+	if f.Folder == "" || userID == "" {
 		return ""
 	}
 
 	params["stateUser"] = userID
 
-	if f.folder == "starred" {
+	if f.Folder == "starred" {
 		return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.is_starred = 1"
 	}
 
-	params["folder"] = f.folder
+	params["folder"] = f.Folder
 	return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.folder = {:folder}"
 }
 
 func handleSearch(app core.App, re *core.RequestEvent) error {
 	userID := re.Auth.Id
-	q := re.Request.URL.Query().Get("q")
-	mailboxID := re.Request.URL.Query().Get("mailbox_id")
-	limitStr := re.Request.URL.Query().Get("limit")
-	offsetStr := re.Request.URL.Query().Get("offset")
+	filters := parseSearchRequest(re.Request)
+	q := filters.Query
+	mailboxID := filters.MailboxID
+	limit := filters.Limit
+	offset := filters.Offset
 
-	limit := 25
-	offset := 0
-	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
-		limit = l
-	}
-	if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-		offset = o
-	}
+	emptyResponse := api.SearchResponse{Items: []api.SearchResultItem{}, Total: 0}
 
-	emptyResponse := searchResponse{Items: []searchResultItem{}, Total: 0}
-
-	filters := parseAdvancedFilters(re.Request)
 	// FTS terms come from the main query OR the Body (hasWords) field. Without
 	// counting hasWords here, a body-only search (empty main box, Body filled)
 	// would skip the FTS path and fall through to a structured query that
 	// ignores hasWords — returning every thread instead of the body matches.
-	hasFTSTerms := len(q) >= 2 || filters.hasWords != ""
-	hasFilters := filters.hasAnyFilter()
+	hasFTSTerms := len(q) >= 2 || filters.HasWords != ""
+	hasFilters := hasAnyFilter(&filters)
 
 	if !hasFTSTerms && !hasFilters {
 		return re.JSON(http.StatusOK, emptyResponse)
@@ -223,9 +204,9 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 	// search therefore has an empty thread query — we drop that UNION arm rather
 	// than run an invalid empty MATCH.
 	ftsThreads := buildThreadFTSQuery(q)
-	ftsMessages := buildMessageFTSQuery(q, filters.hasWords)
+	ftsMessages := buildMessageFTSQuery(q, filters.HasWords)
 	if ftsThreads == "" && ftsMessages == "" {
-		if !filters.hasStructuredFilters() {
+		if !hasStructuredFilters(&filters) {
 			return re.JSON(http.StatusOK, emptyResponse)
 		}
 		return handleStructuredSearch(app, re, inClause, messageWhere, folderJoin, params, limit, offset)
@@ -362,7 +343,7 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 		total = offset + len(items)
 	}
 
-	return re.JSON(http.StatusOK, searchResponse{Items: items, Total: total})
+	return re.JSON(http.StatusOK, api.SearchResponse{Items: items, Total: total})
 }
 
 // handleStructuredSearch runs a SQL-only search (no FTS) when only structured filters are present.
@@ -423,7 +404,7 @@ func handleStructuredSearch(
 		total = offset + len(items)
 	}
 
-	return re.JSON(http.StatusOK, searchResponse{Items: items, Total: total})
+	return re.JSON(http.StatusOK, api.SearchResponse{Items: items, Total: total})
 }
 
 // getUserMailboxIDs returns the mailbox IDs the user has access to. If mailboxID

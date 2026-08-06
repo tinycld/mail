@@ -14,6 +14,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
 	"tinycld.org/core/coreserver"
+	"tinycld.org/packages/mail/api"
 )
 
 // demoMessageID returns a synthesized RFC-822-ish Message-ID for messages
@@ -25,22 +26,24 @@ func demoMessageID() string {
 	return "demo-" + hex.EncodeToString(buf) + "@tinycld.local"
 }
 
-type sendRequest struct {
-	MailboxID          string      `json:"mailbox_id"`
-	AliasID            string      `json:"alias_id"`
-	To                 []Recipient `json:"to"`
-	Cc                 []Recipient `json:"cc"`
-	Bcc                []Recipient `json:"bcc"`
-	Subject            string      `json:"subject"`
-	HTMLBody           string      `json:"html_body"`
-	TextBody           string      `json:"text_body"`
-	InReplyToMessageID string      `json:"in_reply_to_message_id"` // PB record ID of the message being replied to
+// toMailerRecipients converts the wire-contract recipient type to the
+// provider/store type. The shapes are identical, but api is deliberately
+// dependency-free so the generator and the CLI can consume it standalone.
+func toMailerRecipients(rs []api.Recipient) []Recipient {
+	if rs == nil {
+		return nil
+	}
+	out := make([]Recipient, len(rs))
+	for i, r := range rs {
+		out[i] = Recipient{Name: r.Name, Email: r.Email}
+	}
+	return out
 }
 
 func handleSend(app core.App, re *core.RequestEvent) error {
 	userID := re.Auth.Id
 
-	var req sendRequest
+	var req api.SendEmailRequest
 	var fileAttachments []Attachment
 
 	contentType := re.Request.Header.Get("Content-Type")
@@ -51,7 +54,7 @@ func handleSend(app core.App, re *core.RequestEvent) error {
 		if err := re.Request.ParseMultipartForm(25 << 20); err != nil {
 			return re.BadRequestError("Failed to parse multipart form", err)
 		}
-		jsonStr := re.Request.FormValue("json")
+		jsonStr := re.Request.FormValue(api.MultipartFieldJSON)
 		if err := json.Unmarshal([]byte(jsonStr), &req); err != nil {
 			return re.BadRequestError("Invalid JSON in form field", err)
 		}
@@ -136,9 +139,9 @@ func handleSend(app core.App, re *core.RequestEvent) error {
 	// Send via provider
 	sendReq := &SendRequest{
 		From:        fromAddr,
-		To:          req.To,
-		Cc:          req.Cc,
-		Bcc:         req.Bcc,
+		To:          toMailerRecipients(req.To),
+		Cc:          toMailerRecipients(req.Cc),
+		Bcc:         toMailerRecipients(req.Bcc),
 		Subject:     req.Subject,
 		HTMLBody:    req.HTMLBody,
 		TextBody:    req.TextBody,
@@ -187,9 +190,9 @@ func handleSend(app core.App, re *core.RequestEvent) error {
 		Alias:          req.AliasID,
 		SenderName:     displayName,
 		SenderEmail:    senderEmail,
-		To:             req.To,
-		Cc:             req.Cc,
-		Bcc:            req.Bcc,
+		To:             toMailerRecipients(req.To),
+		Cc:             toMailerRecipients(req.Cc),
+		Bcc:            toMailerRecipients(req.Bcc),
 		Date:           now,
 		Subject:        req.Subject,
 		HTMLBody:       req.HTMLBody,
@@ -213,9 +216,9 @@ func handleSend(app core.App, re *core.RequestEvent) error {
 		return re.InternalServerError("Failed to create thread state", err)
 	}
 
-	return re.JSON(http.StatusOK, map[string]string{
-		"message_id": record.Id,
-		"thread_id":  thread.Id,
+	return re.JSON(http.StatusOK, api.SendEmailResponse{
+		MessageID: record.Id,
+		ThreadID:  thread.Id,
 	})
 }
 
@@ -247,7 +250,7 @@ func parseFileAttachments(re *core.RequestEvent) ([]Attachment, error) {
 	if re.Request.MultipartForm == nil {
 		return nil, nil
 	}
-	fileHeaders := re.Request.MultipartForm.File["attachments"]
+	fileHeaders := re.Request.MultipartForm.File[api.MultipartFieldAttachments]
 	if len(fileHeaders) == 0 {
 		return nil, nil
 	}
