@@ -4,7 +4,11 @@ import type { createCollection } from 'pbtsdb/core'
 import { BasicIndex } from 'pbtsdb/core'
 import type { MailSchema } from './types'
 
-type MergedSchema = Schema & MailSchema
+// Replace (not intersect) the generated entries for mail's own collections:
+// `Schema & MailSchema` would field-wise intersect each overlapping entry, and
+// since the generated side types JSON columns as `any`, `any & Recipient[]`
+// absorbs back to `any` — silently discarding every override in types.ts.
+type MergedSchema = Omit<Schema, keyof MailSchema> & MailSchema
 
 export function registerCollections(
     newCollection: ReturnType<typeof createCollection<MergedSchema>>,
