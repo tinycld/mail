@@ -215,6 +215,12 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 	}
 	record.Set("recipients_cc", string(ccJSON))
 
+	bccJSON, err := json.Marshal(msg.Bcc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal recipients_bcc: %w", err)
+	}
+	record.Set("recipients_bcc", string(bccJSON))
+
 	// Mark as recently indexed so the record hook skips re-indexing
 	recentlyIndexed.Store(record.Id, true)
 
@@ -267,6 +273,7 @@ type storedMessage struct {
 	SenderEmail    string
 	To             []Recipient
 	Cc             []Recipient
+	Bcc            []Recipient // sender's own stored copy only — never in delivered headers
 	Date           string
 	Subject        string
 	HTMLBody       string

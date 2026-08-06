@@ -140,6 +140,7 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 		SenderEmail:    senderEmail,
 		To:             req.To,
 		Cc:             req.Cc,
+		Bcc:            req.Bcc,
 		Date:           now,
 		Subject:        subject,
 		HTMLBody:       req.HTMLBody,
