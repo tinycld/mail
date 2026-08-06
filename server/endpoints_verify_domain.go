@@ -30,7 +30,19 @@ func handleVerifyDomain(app core.App, re *core.RequestEvent) error {
 	}
 
 	details, saveErr := verifyDomainRecord(re.Request.Context(), app, record)
+	if saveErr != nil {
+		app.Logger().Warn("mail: failed to persist domain verification",
+			"domain", record.GetString("domain"), "error", saveErr)
+	}
 
+	return re.JSON(http.StatusOK, buildVerifyDomainResponse(record, details, saveErr))
+}
+
+// buildVerifyDomainResponse maps a verification run onto the wire contract.
+// The checks always ran by the time this is called; Saved reports whether
+// their outcome reached the database, and a client must treat Saved == false
+// as a failure (the record still holds the previous state).
+func buildVerifyDomainResponse(record *core.Record, details *api.VerificationDetails, saveErr error) api.VerifyDomainResponse {
 	body := api.VerifyDomainResponse{
 		ID:                    record.Id,
 		Verified:              record.GetBool("verified"),
@@ -44,10 +56,7 @@ func handleVerifyDomain(app core.App, re *core.RequestEvent) error {
 		Saved:                 saveErr == nil,
 	}
 	if saveErr != nil {
-		app.Logger().Warn("mail: failed to persist domain verification",
-			"domain", record.GetString("domain"), "error", saveErr)
 		body.SaveError = saveErr.Error()
 	}
-
-	return re.JSON(http.StatusOK, body)
+	return body
 }

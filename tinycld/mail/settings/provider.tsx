@@ -1,6 +1,10 @@
 import { useLiveQuery } from '@tanstack/react-db'
 import { useMutation as useReactQueryMutation } from '@tanstack/react-query'
-import type { VerificationDetails, WebhookURLsResponse } from '@tinycld/app-generated/mail-api'
+import type {
+    VerificationDetails,
+    VerifyDomainResponse,
+    WebhookURLsResponse,
+} from '@tinycld/app-generated/mail-api'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { errorToString, handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
@@ -21,6 +25,7 @@ import {
 import { newRecordId } from 'pbtsdb/core'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
+import { assertVerifySaved } from './verify-domain'
 
 const addDomainSchema = z.object({
     domain: z
@@ -149,7 +154,11 @@ function DomainRowItem({ domain, provider }: { domain: DomainRow; provider: 'pos
 
     const verifyMutation = useReactQueryMutation({
         mutationFn: async () => {
-            await pb.send(`/api/mail/domains/${domain.id}/verify`, { method: 'POST' })
+            const res: VerifyDomainResponse = await pb.send(
+                `/api/mail/domains/${domain.id}/verify`,
+                { method: 'POST' }
+            )
+            return assertVerifySaved(res)
         },
     })
 
