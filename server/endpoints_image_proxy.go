@@ -99,7 +99,10 @@ func handleImageProxyRequest(app core.App, re *core.RequestEvent) error {
 		return re.UnauthorizedError("missing token", nil)
 	}
 
-	_, err := app.FindAuthRecordByToken(token)
+	// Restrict to auth tokens explicitly. Without the type argument any
+	// PocketBase token — including a file or verification token, which are
+	// not identity assertions — is accepted as proof of who the caller is.
+	_, err := app.FindAuthRecordByToken(token, core.TokenTypeAuth)
 	if err != nil {
 		return re.UnauthorizedError("invalid token", nil)
 	}

@@ -1,10 +1,15 @@
 package mail
 
 import (
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tests"
+	"github.com/pocketbase/pocketbase/tools/router"
 )
 
 func TestIsPrivateIP(t *testing.T) {
@@ -117,5 +122,52 @@ func TestProxyFetchesExternalImage(t *testing.T) {
 	}
 	if cc := rr.Header().Get("Cache-Control"); cc == "" {
 		t.Error("expected Cache-Control header")
+	}
+}
+
+func TestImageProxyRequestRejectsNonAuthToken(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatalf("NewTestApp: %v", err)
+	}
+	defer app.Cleanup()
+
+	users, err := app.FindCollectionByNameOrId("users")
+	if err != nil {
+		t.Fatalf("find users: %v", err)
+	}
+	u := core.NewRecord(users)
+	u.Set("email", "proxy@example.com")
+	u.Set("password", "s3cret-password")
+	if err := app.Save(u); err != nil {
+		t.Fatalf("save user: %v", err)
+	}
+
+	// A verification token authorizes email verification, not identity.
+	// Before line 105's core.TokenTypeAuth constraint, the proxy accepted it.
+	verificationToken, err := u.NewVerificationToken()
+	if err != nil {
+		t.Fatalf("NewVerificationToken: %v", err)
+	}
+
+	req := httptest.NewRequest("GET",
+		"/api/mail/image-proxy?token="+verificationToken+"&url=http://example.com/x.png", nil)
+	rr := httptest.NewRecorder()
+
+	re := &core.RequestEvent{App: app}
+	re.Request = req
+	re.Response = rr
+
+	err = handleImageProxyRequest(app, re)
+	if err == nil {
+		t.Fatalf("handleImageProxyRequest should reject verification token, got no error")
+	}
+
+	var apiErr *router.ApiError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected ApiError, got %T: %v", err, err)
+	}
+	if apiErr.Status != http.StatusUnauthorized {
+		t.Errorf("expected 401 Unauthorized, got %d: %s", apiErr.Status, apiErr.Message)
 	}
 }
