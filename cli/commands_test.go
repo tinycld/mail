@@ -273,7 +273,10 @@ func TestMailboxesAndStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"team@acme.test", "Team", "member"} {
+	// Addresses are FULL addresses: the stored value is only a local part, so
+	// printing it bare would show something you cannot send to or pass to
+	// --from. Aliases are listed too, since they are also sendable.
+	for _, want := range []string{"team@acme.test", "billing@acme.test", "Team", "member", "alias"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("mailboxes output missing %q:\n%s", want, out)
 		}

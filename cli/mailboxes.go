@@ -7,16 +7,18 @@ import (
 	"tinycld.org/cli/output"
 )
 
-// mailboxRow is the JSON row `mail mailboxes` emits.
+// mailboxRow is the JSON row `mail mailboxes` emits: one line per address you
+// can send as, so aliases are visible alongside each mailbox's own address.
 type mailboxRow struct {
-	mailbox
+	identity
 	Role string `json:"role"`
+	Kind string `json:"kind"`
 }
 
 func newMailboxesCmd(c *client.Client) *cobra.Command {
 	return &cobra.Command{
 		Use:   "mailboxes",
-		Short: "List the mailboxes you are a member of",
+		Short: "List the addresses you can read and send as",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			o, _, err := output.FromCommand(cmd)
@@ -24,22 +26,33 @@ func newMailboxesCmd(c *client.Client) *cobra.Command {
 				return err
 			}
 			ctx := cmd.Context()
+			ids, err := sendableIdentities(ctx, c)
+			if err != nil {
+				return err
+			}
 			members, err := userMemberships(ctx, c)
 			if err != nil {
 				return err
 			}
-			raw := make([]mailboxRow, len(members))
-			rows := make([][]string, len(members))
-			for i, m := range members {
-				mb, err := client.GetRecord[mailbox](ctx, c, "mail_mailboxes", m.Mailbox)
-				if err != nil {
-					return err
+			roles := make(map[string]string, len(members))
+			for _, m := range members {
+				roles[m.Mailbox] = m.Role
+			}
+
+			raw := make([]mailboxRow, len(ids))
+			rows := make([][]string, len(ids))
+			for i, id := range ids {
+				kind := "alias"
+				if id.Primary {
+					kind = "mailbox"
 				}
-				raw[i] = mailboxRow{mailbox: mb, Role: m.Role}
-				rows[i] = []string{mb.Address, mb.DisplayName, mb.Type, m.Role, mb.ID}
+				raw[i] = mailboxRow{identity: id, Role: roles[id.MailboxID], Kind: kind}
+				rows[i] = []string{
+					id.Address, id.DisplayName, kind, roles[id.MailboxID], id.MailboxID,
+				}
 			}
 			return o.Write(cmd.OutOrStdout(),
-				[]string{"ADDRESS", "NAME", "TYPE", "ROLE", "ID"}, rows, raw)
+				[]string{"ADDRESS", "NAME", "KIND", "ROLE", "MAILBOX"}, rows, raw)
 		},
 	}
 }
