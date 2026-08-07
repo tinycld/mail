@@ -1,137 +1,60 @@
-import type { Users } from '@tinycld/core/types/pbSchema'
+import type { Recipient, VerificationDetails } from '@tinycld/app-generated/mail-api'
+import type {
+    MailDomains as GenMailDomains,
+    MailFolderCounts as GenMailFolderCounts,
+    MailImapMailboxState as GenMailImapMailboxState,
+    MailMailboxAliases as GenMailMailboxAliases,
+    MailMailboxes as GenMailMailboxes,
+    MailMailboxMembers as GenMailMailboxMembers,
+    MailMessages as GenMailMessages,
+    MailThreadState as GenMailThreadState,
+    MailThreads as GenMailThreads,
+    Users,
+} from '@tinycld/core/types/pbSchema'
 
-export interface MailDomainVerificationDetails {
-    mx?: {
-        ok: boolean
-        expected: string
-        actual?: string[]
-        error?: string
-    }
-    provider?: {
-        ok: boolean
-        expected_domain?: string
-        server_domain?: string
-        inbound_address?: string
-        error?: string
-    }
-    outbound?: {
-        spf: boolean
-        dkim: boolean
-        return_path: boolean
-        error?: string
-    }
-    provider_configured?: boolean
-    provider_name?: 'postmark' | 'smtp' | 'none'
+// The generated pbSchema interfaces are the source of truth for collection
+// fields, but PocketBase JSON columns carry no shape information and emit
+// `any`. Each interface here derives from its generated counterpart and
+// overrides only the JSON fields with their real shapes — taken from the
+// generated payload contract (@tinycld/app-generated/mail-api) where one
+// exists. Collections without JSON fields are plain re-exports, so a
+// migration-driven field change flows through on the next install instead of
+// silently drifting from a hand-written copy.
+
+export interface MailDomains extends Omit<GenMailDomains, 'verification_details'> {
+    verification_details: VerificationDetails | null
 }
 
-export interface MailDomains {
-    id: string
-    domain: string
-    verified: boolean
-    mx_verified: boolean
-    inbound_domain_verified: boolean
-    spf_verified: boolean
-    dkim_verified: boolean
-    return_path_verified: boolean
-    last_checked_at: string
-    verification_details: MailDomainVerificationDetails | null
-    webhook_secret: string
-    created: string
-    updated: string
+export type MailMailboxes = GenMailMailboxes
+export type MailMailboxMembers = GenMailMailboxMembers
+export type MailMailboxAliases = GenMailMailboxAliases
+export type MailThreadState = GenMailThreadState
+export type MailImapMailboxState = GenMailImapMailboxState
+
+export interface MailThreads extends Omit<GenMailThreads, 'participants'> {
+    participants: Recipient[]
 }
 
-export interface MailMailboxes {
-    id: string
-    address: string
-    domain: string
-    display_name: string
-    name: string
-    type: 'personal' | 'shared'
-    created: string
-    updated: string
-}
-
-export interface MailMailboxMembers {
-    id: string
-    mailbox: string
-    user: string
-    role: 'owner' | 'member'
-    created: string
-    updated: string
-}
-
-export interface MailMailboxAliases {
-    id: string
-    mailbox: string
-    address: string
-    created: string
-    updated: string
-}
-
-export interface MailThreads {
-    id: string
-    mailbox: string
-    subject: string
-    snippet: string
-    message_count: number
-    latest_date: string
-    participants: { name: string; email: string }[]
-    has_draft: boolean
-    has_attachments: boolean
-    created: string
-    updated: string
-}
-
-export interface MailMessages {
-    id: string
-    thread: string
-    message_id: string
-    in_reply_to: string
-    sender_name: string
-    sender_email: string
-    recipients_to: { name: string; email: string }[]
-    recipients_cc: { name: string; email: string }[]
-    alias: string
-    date: string
-    subject: string
-    snippet: string
-    has_attachments: boolean
-    total_size?: number
-    body_html: string
-    attachments: string[]
+export interface MailMessages
+    extends Omit<
+        GenMailMessages,
+        | 'recipients_to'
+        | 'recipients_cc'
+        | 'recipients_bcc'
+        | 'cid_map'
+        | 'attachment_thumbnail_map'
+    > {
+    recipients_to: Recipient[]
+    recipients_cc: Recipient[]
+    recipients_bcc: Recipient[]
     cid_map: Record<string, string> | null
-    delivery_status: 'sending' | 'sent' | 'delivered' | 'bounced' | 'spam_complaint' | 'draft'
-    bounce_reason: string
-    imap_uid: number
-    raw_headers: string
-    created: string
-    updated: string
+    attachment_thumbnail_map: Record<string, string> | null
 }
 
-export interface MailThreadState {
-    id: string
-    thread: string
-    user: string
-    folder: 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam' | 'archive'
-    is_read: boolean
-    is_starred: boolean
-    created: string
-    updated: string
-}
-
-export interface MailImapMailboxState {
-    id: string
-    mailbox: string
-    uid_validity: number
-    uid_next: number
-    created: string
-    updated: string
-}
-
-export interface MailFolderCounts {
-    id: string
-    user: string
-    mailbox: string
+// View collection: the aggregate count columns come back untyped from the
+// schema generator, but they are always numbers.
+export interface MailFolderCounts
+    extends Omit<GenMailFolderCounts, 'inbox' | 'drafts' | 'sent' | 'starred' | 'trash' | 'spam'> {
     inbox: number
     drafts: number
     sent: number

@@ -11,24 +11,13 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
+	"tinycld.org/packages/mail/api"
 )
-
-type draftRequest struct {
-	MailboxID string      `json:"mailbox_id"`
-	AliasID   string      `json:"alias_id"`
-	MessageID string      `json:"message_id"` // existing draft record ID to update
-	To        []Recipient `json:"to"`
-	Cc        []Recipient `json:"cc"`
-	Bcc       []Recipient `json:"bcc"`
-	Subject   string      `json:"subject"`
-	HTMLBody  string      `json:"html_body"`
-	TextBody  string      `json:"text_body"`
-}
 
 func handleDraft(app core.App, re *core.RequestEvent) error {
 	userID := re.Auth.Id
 
-	var req draftRequest
+	var req api.SaveDraftRequest
 	var uploadedFiles []*multipart.FileHeader
 
 	contentType := re.Request.Header.Get("Content-Type")
@@ -39,12 +28,12 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 		if err := re.Request.ParseMultipartForm(25 << 20); err != nil {
 			return re.BadRequestError("Failed to parse multipart form", err)
 		}
-		jsonStr := re.Request.FormValue("json")
+		jsonStr := re.Request.FormValue(api.MultipartFieldJSON)
 		if err := json.Unmarshal([]byte(jsonStr), &req); err != nil {
 			return re.BadRequestError("Invalid JSON in form field", err)
 		}
 		if re.Request.MultipartForm != nil {
-			uploadedFiles = re.Request.MultipartForm.File["attachments"]
+			uploadedFiles = re.Request.MultipartForm.File[api.MultipartFieldAttachments]
 		}
 	} else if strings.HasPrefix(contentType, "application/json") || contentType == "" {
 		if err := json.NewDecoder(re.Request.Body).Decode(&req); err != nil {
@@ -121,9 +110,9 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 			return re.InternalServerError("Failed to update thread", err)
 		}
 
-		return re.JSON(http.StatusOK, map[string]string{
-			"message_id": record.Id,
-			"thread_id":  thread.Id,
+		return re.JSON(http.StatusOK, api.SendEmailResponse{
+			MessageID: record.Id,
+			ThreadID:  thread.Id,
 		})
 	}
 
@@ -138,8 +127,9 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 		Alias:          req.AliasID,
 		SenderName:     displayName,
 		SenderEmail:    senderEmail,
-		To:             req.To,
-		Cc:             req.Cc,
+		To:             toMailerRecipients(req.To),
+		Cc:             toMailerRecipients(req.Cc),
+		Bcc:            toMailerRecipients(req.Bcc),
 		Date:           now,
 		Subject:        subject,
 		HTMLBody:       req.HTMLBody,
@@ -164,13 +154,13 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 		return re.InternalServerError("Failed to create thread state", err)
 	}
 
-	return re.JSON(http.StatusOK, map[string]string{
-		"message_id": record.Id,
-		"thread_id":  thread.Id,
+	return re.JSON(http.StatusOK, api.SendEmailResponse{
+		MessageID: record.Id,
+		ThreadID:  thread.Id,
 	})
 }
 
-func updateDraftRecord(app core.App, record *core.Record, req draftRequest, subject, senderEmail, date string, uploadedFiles []*multipart.FileHeader) error {
+func updateDraftRecord(app core.App, record *core.Record, req api.SaveDraftRequest, subject, senderEmail, date string, uploadedFiles []*multipart.FileHeader) error {
 	record.Set("subject", subject)
 	record.Set("date", date)
 	record.Set("sender_email", senderEmail)

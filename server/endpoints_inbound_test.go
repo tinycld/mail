@@ -174,6 +174,7 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 	messages.Fields.Add(&core.FileField{Name: "attachments", MaxSelect: 99})
 	messages.Fields.Add(&core.TextField{Name: "recipients_to"})
 	messages.Fields.Add(&core.TextField{Name: "recipients_cc"})
+	messages.Fields.Add(&core.TextField{Name: "recipients_bcc"})
 	if err := app.Save(messages); err != nil {
 		t.Fatalf("failed to save mail_messages: %v", err)
 	}

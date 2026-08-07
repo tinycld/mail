@@ -25,8 +25,12 @@ const manifest = {
     // sockets; Register discovers them via coreserver.GetTenantContext —
     // the router owns every port, a tenant never binds one.
     server: { package: 'server', module: 'tinycld.org/packages/mail', mailListeners: true },
+    // The API payload contract (server/api) generated into
+    // @tinycld/app-generated/mail-api — hooks import those types, so the
+    // peerVersions floor below must stay >= the core that ships the emitter.
+    payloads: { package: 'server/api' },
     repository: { url: 'https://github.com/tinycld/mail' },
-    peerVersions: { '@tinycld/core': '>=0.0.4 <0.1.0' },
+    peerVersions: { '@tinycld/core': '>=0.0.5 <0.1.0' },
 }
 
 export default manifest

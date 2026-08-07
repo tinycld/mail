@@ -1,25 +1,19 @@
+import type {
+    SearchRequest,
+    SearchResponse,
+    SearchResultItem,
+} from '@tinycld/app-generated/mail-api'
 import { captureException } from '@tinycld/core/lib/errors'
 import { pb } from '@tinycld/core/lib/pocketbase'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AdvancedSearchFilters } from './useSearchState'
 import { hasActiveFilters } from './useSearchState'
 
-export interface MailSearchResult {
-    thread_id: string
-    subject: string
-    subject_highlight: string
-    snippet_highlight: string
-    latest_date: string
-    participants: string
-    message_count: number
-    mailbox_id: string
-    has_attachments: boolean
-}
+export type MailSearchResult = SearchResultItem
 
-interface MailSearchResponse {
-    items: MailSearchResult[]
-    total: number
-}
+// Query params are string-serialized keys of the generated SearchRequest
+// contract, so a param the server drops becomes a compile error here.
+type SearchQueryParams = Partial<Record<keyof SearchRequest, string>>
 
 interface UseMailSearchReturn {
     results: MailSearchResult[]
@@ -31,14 +25,14 @@ interface UseMailSearchReturn {
 const DEBOUNCE_MS = 300
 const MIN_QUERY_LENGTH = 2
 
-const SIMPLE_FILTER_MAP: [keyof AdvancedSearchFilters, string][] = [
+const SIMPLE_FILTER_MAP: [keyof AdvancedSearchFilters, keyof SearchRequest][] = [
     ['from', 'from'],
     ['to', 'to'],
     ['subject', 'subject'],
     ['hasWords', 'has_words'],
 ]
 
-function addDateParams(filters: AdvancedSearchFilters, params: Record<string, string>) {
+function addDateParams(filters: AdvancedSearchFilters, params: SearchQueryParams) {
     if (!filters.dateWithin || !filters.dateAnchor) return
     const anchor = new Date(filters.dateAnchor)
     if (Number.isNaN(anchor.getTime())) return
@@ -48,8 +42,8 @@ function addDateParams(filters: AdvancedSearchFilters, params: Record<string, st
     params.date_before = new Date(anchor.getTime() + ms).toISOString()
 }
 
-function filtersToQueryParams(filters: AdvancedSearchFilters): Record<string, string> {
-    const params: Record<string, string> = {}
+function filtersToQueryParams(filters: AdvancedSearchFilters): SearchQueryParams {
+    const params: SearchQueryParams = {}
     for (const [filterKey, paramKey] of SIMPLE_FILTER_MAP) {
         const val = filters[filterKey]
         if (val && typeof val === 'string') params[paramKey] = val
@@ -104,14 +98,14 @@ export function useMailSearch(
         setError(null)
 
         try {
-            const queryParams: Record<string, string> = {
+            const queryParams: SearchQueryParams = {
                 ...filtersToQueryParams(f),
             }
             if (q.length >= MIN_QUERY_LENGTH) {
                 queryParams.q = q
             }
 
-            const response: MailSearchResponse = await pb.send('/api/mail/search', {
+            const response: SearchResponse = await pb.send('/api/mail/search', {
                 method: 'GET',
                 query: queryParams,
                 signal: controller.signal,

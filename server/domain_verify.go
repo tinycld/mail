@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/packages/mail/api"
 )
 
 // postmarkInboundMXHost is the target MX host Postmark requires for inbound
@@ -52,48 +53,14 @@ var verifyLocks sync.Map // recordID -> *sync.Mutex
 // the org has no mail provider credentials.
 var errProviderNotConfigured = errors.New("mail provider not configured")
 
-type mxCheckResult struct {
-	OK       bool     `json:"ok"`
-	Expected string   `json:"expected"`
-	Actual   []string `json:"actual,omitempty"`
-	Error    string   `json:"error,omitempty"`
-}
-
-// providerCheckResult records the provider-side inbound configuration check.
-// For Postmark this verifies the server's InboundDomain matches the domain;
-// for SMTP it verifies the operator's PublicHostname matches the domain (so
-// the MX record will resolve correctly back to us).
-type providerCheckResult struct {
-	OK             bool   `json:"ok"`
-	ExpectedDomain string `json:"expected_domain,omitempty"`
-	ServerDomain   string `json:"server_domain,omitempty"`
-	InboundAddress string `json:"inbound_address,omitempty"`
-	Error          string `json:"error,omitempty"`
-}
-
-type outboundCheckResult struct {
-	SPF        bool   `json:"spf"`
-	DKIM       bool   `json:"dkim"`
-	ReturnPath bool   `json:"return_path"`
-	Error      string `json:"error,omitempty"`
-}
-
-type verificationDetails struct {
-	MX                 mxCheckResult       `json:"mx"`
-	Provider           providerCheckResult `json:"provider"`
-	Outbound           outboundCheckResult `json:"outbound"`
-	ProviderConfigured bool                `json:"provider_configured"`
-	ProviderName       string              `json:"provider_name,omitempty"`
-}
-
 // checkMX resolves MX records for the domain and matches them against the
 // provider-specific expected inbound host. Returns OK=true if any MX record
 // points to the expected host. An empty expectedHost means the provider has
 // no MX requirement on our side (e.g. SMTP provider in IMAP-fetch mode) —
 // in that case we report OK=true with an explanatory hint and do not fetch
 // MX records (avoids a confusing "missing MX" error when none is required).
-func checkMX(ctx context.Context, domain, expectedHost string) mxCheckResult {
-	result := mxCheckResult{Expected: expectedHost}
+func checkMX(ctx context.Context, domain, expectedHost string) api.MXCheckResult {
+	result := api.MXCheckResult{Expected: expectedHost}
 	if expectedHost == "" {
 		result.OK = true
 		return result
@@ -131,15 +98,15 @@ func providerRequiresExactInboundMatch(provider Provider) bool {
 // and checks whether it satisfies the verifying domain. The strictness is
 // provider-dependent: see providerRequiresExactInboundMatch. For NoopProvider /
 // unconfigured providers we return an explicit "not configured" hint.
-func checkProviderInbound(ctx context.Context, provider Provider, domain string) providerCheckResult {
+func checkProviderInbound(ctx context.Context, provider Provider, domain string) api.ProviderCheckResult {
 	return checkProviderInboundStrict(ctx, provider, domain, providerRequiresExactInboundMatch(provider))
 }
 
 // checkProviderInboundStrict is the testable form — strict=true requires
 // exact match (Postmark semantics), strict=false accepts any non-empty
 // ServerInboundDomain (SMTP semantics).
-func checkProviderInboundStrict(ctx context.Context, provider Provider, domain string, strict bool) providerCheckResult {
-	result := providerCheckResult{ExpectedDomain: domain}
+func checkProviderInboundStrict(ctx context.Context, provider Provider, domain string, strict bool) api.ProviderCheckResult {
+	result := api.ProviderCheckResult{ExpectedDomain: domain}
 	info, err := provider.CheckInboundDomain(ctx)
 	if err != nil {
 		result.Error = err.Error()
@@ -163,8 +130,8 @@ func checkProviderInboundStrict(ctx context.Context, provider Provider, domain s
 
 // checkOutbound queries the provider for SPF/DKIM/Return-Path verification.
 // Failure is best-effort — missing outbound doesn't block the inbound verdict.
-func checkOutbound(ctx context.Context, provider Provider, domain string) outboundCheckResult {
-	result := outboundCheckResult{}
+func checkOutbound(ctx context.Context, provider Provider, domain string) api.OutboundCheckResult {
+	result := api.OutboundCheckResult{}
 	v, err := provider.CheckDomainVerification(ctx, domain)
 	if err != nil {
 		result.Error = err.Error()
@@ -204,7 +171,7 @@ func recordLock(recordID string) func() {
 // `verified` is derived from inbound-readiness only (MX + Postmark InboundDomain
 // match). Outbound checks are advisory. Concurrent calls on the same record
 // serialize via recordLock so writes don't interleave.
-func verifyDomainRecord(ctx context.Context, app core.App, record *core.Record) (*verificationDetails, error) {
+func verifyDomainRecord(ctx context.Context, app core.App, record *core.Record) (*api.VerificationDetails, error) {
 	unlock := recordLock(record.Id)
 	defer unlock()
 
@@ -213,7 +180,7 @@ func verifyDomainRecord(ctx context.Context, app core.App, record *core.Record) 
 	provider := newProviderFromSystem(app)
 	providerName, providerConfigured := describeProvider(provider)
 
-	details := &verificationDetails{
+	details := &api.VerificationDetails{
 		ProviderConfigured: providerConfigured,
 		ProviderName:       providerName,
 	}

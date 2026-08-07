@@ -15,6 +15,7 @@ import (
 	"tinycld.org/core/audit"
 	"tinycld.org/core/coreserver"
 	"tinycld.org/core/quota"
+	"tinycld.org/packages/mail/api"
 )
 
 // appIsLive reports whether the app still has an open database connection.
@@ -316,9 +317,9 @@ func registerShared(app *pocketbase.PocketBase) {
 			}
 			secret := domain.GetString("webhook_secret")
 			baseURL := app.Settings().Meta.AppURL
-			return re.JSON(http.StatusOK, map[string]string{
-				"inbound": fmt.Sprintf("%s/api/mail/inbound/%s", baseURL, secret),
-				"bounces": fmt.Sprintf("%s/api/mail/bounces/%s", baseURL, secret),
+			return re.JSON(http.StatusOK, api.WebhookURLsResponse{
+				Inbound: fmt.Sprintf("%s/api/mail/inbound/%s", baseURL, secret),
+				Bounces: fmt.Sprintf("%s/api/mail/bounces/%s", baseURL, secret),
 			})
 		}).BindFunc(requireAuth)
 

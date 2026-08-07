@@ -1,5 +1,10 @@
 import { useLiveQuery } from '@tanstack/react-db'
 import { useMutation as useReactQueryMutation } from '@tanstack/react-query'
+import type {
+    VerificationDetails,
+    VerifyDomainResponse,
+    WebhookURLsResponse,
+} from '@tinycld/app-generated/mail-api'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { errorToString, handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
@@ -20,7 +25,7 @@ import {
 import { newRecordId } from 'pbtsdb/core'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import type { MailDomainVerificationDetails } from '../types'
+import { assertVerifySaved } from './verify-domain'
 
 const addDomainSchema = z.object({
     domain: z
@@ -78,7 +83,7 @@ interface DomainRow {
     dkim_verified: boolean
     return_path_verified: boolean
     last_checked_at: string
-    verification_details: MailDomainVerificationDetails | null
+    verification_details: VerificationDetails | null
 }
 
 function DomainsSection({ provider }: { provider: 'postmark' | 'smtp' }) {
@@ -149,7 +154,11 @@ function DomainRowItem({ domain, provider }: { domain: DomainRow; provider: 'pos
 
     const verifyMutation = useReactQueryMutation({
         mutationFn: async () => {
-            await pb.send(`/api/mail/domains/${domain.id}/verify`, { method: 'POST' })
+            const res: VerifyDomainResponse = await pb.send(
+                `/api/mail/domains/${domain.id}/verify`,
+                { method: 'POST' }
+            )
+            return assertVerifySaved(res)
         },
     })
 
@@ -214,15 +223,16 @@ function WebhookURLs({ domainId }: { domainId: string }) {
     const foregroundColor = useThemeColor('foreground')
     const borderColor = useThemeColor('border')
     const surfaceColor = useThemeColor('surface')
-    const [urls, setUrls] = useState<{ inbound: string; bounces: string } | null>(null)
+    const [urls, setUrls] = useState<WebhookURLsResponse | null>(null)
     const [copied, setCopied] = useState<string | null>(null)
 
     const fetchUrls = useReactQueryMutation({
         mutationFn: async () => {
-            const res = await pb.send(`/api/mail/domains/${domainId}/webhook-urls`, {
-                method: 'GET',
-            })
-            return res as { inbound: string; bounces: string }
+            const res: WebhookURLsResponse = await pb.send(
+                `/api/mail/domains/${domainId}/webhook-urls`,
+                { method: 'GET' }
+            )
+            return res
         },
         onSuccess: setUrls,
     })
@@ -362,7 +372,7 @@ function LastCheckedLabel({
 
 function buildMXHint(
     verified: boolean,
-    details: MailDomainVerificationDetails | null,
+    details: VerificationDetails | null,
     provider: 'postmark' | 'smtp'
 ): string {
     const expected =
@@ -378,7 +388,7 @@ function buildMXHint(
 
 function buildProviderHint(
     verified: boolean,
-    details: MailDomainVerificationDetails | null,
+    details: VerificationDetails | null,
     provider: 'postmark' | 'smtp'
 ): string {
     const p = details?.provider
@@ -402,7 +412,7 @@ function buildProviderHint(
     return 'Set this domain as the server InboundDomain in Postmark'
 }
 
-function buildOutboundHint(details: MailDomainVerificationDetails | null): string {
+function buildOutboundHint(details: VerificationDetails | null): string {
     return details?.outbound?.error || 'outbound sending'
 }
 

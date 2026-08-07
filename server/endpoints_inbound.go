@@ -10,6 +10,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
+	"tinycld.org/packages/mail/api"
 )
 
 // routingResult aggregates the per-recipient outcomes of an inbound delivery.
@@ -158,7 +159,7 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 		return router.NewApiError(http.StatusUnprocessableEntity, "No valid recipients in To/Cc", nil)
 	}
 
-	return re.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	return re.JSON(http.StatusOK, api.WebhookAckResponse{Status: "ok"})
 }
 
 func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMessage) error {
