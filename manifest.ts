@@ -18,6 +18,7 @@ const manifest = {
     collections: { register: 'collections', types: 'types' },
     help: { directory: 'help' },
     seed: { script: 'seed' },
+    search: { endpoint: '/api/mail/search', adapter: 'search-adapter' },
     // Message bodies are real disk. No ownerField: a mailbox is shared by its
     // members, so these bytes count toward the ORG ceiling only.
     quota: [{ collection: 'mail_messages', sizeField: 'total_size' }],
