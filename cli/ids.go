@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"tinycld.org/cli/client"
 )
@@ -53,33 +54,36 @@ func resolveMailbox(ctx context.Context, c *client.Client, flag string) (string,
 			return m.Mailbox, nil
 		}
 	}
-	// Not an id — try to match an address among the user's mailboxes.
-	for _, m := range members {
-		mb, err := client.GetRecord[mailbox](ctx, c, "mail_mailboxes", m.Mailbox)
-		if err != nil {
-			return "", err
-		}
-		if mb.Address == flag {
-			return mb.ID, nil
+	// Not an id, so match on the address. mail_mailboxes.address holds only the
+	// LOCAL PART, so comparing against it directly would reject the full
+	// address every other surface shows; go through the identities, which join
+	// the mailbox's domain on.
+	ids, err := sendableIdentities(ctx, c)
+	if err != nil {
+		return "", err
+	}
+	want := strings.ToLower(strings.TrimSpace(flag))
+	for _, id := range ids {
+		if id.Primary && strings.ToLower(id.Address) == want {
+			return id.MailboxID, nil
 		}
 	}
 	return "", fmt.Errorf("no mailbox %q among your memberships", flag)
 }
 
-// mailboxAddresses maps the user's mailbox ids to their addresses, for
-// display columns.
+// mailboxAddresses maps the user's mailbox ids to their full addresses, for
+// display columns. The stored address is a local part, so the domain has to be
+// joined on — see sendableIdentities.
 func mailboxAddresses(ctx context.Context, c *client.Client) (map[string]string, error) {
-	members, err := userMemberships(ctx, c)
+	ids, err := sendableIdentities(ctx, c)
 	if err != nil {
 		return nil, err
 	}
 	addr := map[string]string{}
-	for _, m := range members {
-		mb, err := client.GetRecord[mailbox](ctx, c, "mail_mailboxes", m.Mailbox)
-		if err != nil {
-			return nil, err
+	for _, id := range ids {
+		if id.Primary {
+			addr[id.MailboxID] = id.Address
 		}
-		addr[mb.ID] = mb.Address
 	}
 	return addr, nil
 }

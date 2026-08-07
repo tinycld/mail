@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"html"
 	"io"
@@ -17,7 +18,7 @@ import (
 
 func newSendCmd(c *client.Client) *cobra.Command {
 	var to, cc, bcc, attach []string
-	var subject, body, bodyFile, mailboxFlag string
+	var subject, body, bodyFile, mailboxFlag, from string
 	cmd := &cobra.Command{
 		Use:   "send",
 		Short: "Send a message",
@@ -35,13 +36,14 @@ func newSendCmd(c *client.Client) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			mailboxID, err := resolveMailbox(ctx, c, mailboxFlag)
+			mailboxID, aliasID, err := resolveSender(ctx, c, from, mailboxFlag)
 			if err != nil {
 				return err
 			}
 
 			req := api.SendEmailRequest{
 				MailboxID: mailboxID,
+				AliasID:   aliasID,
 				To:        parseRecipients(to),
 				Cc:        parseRecipients(cc),
 				Bcc:       parseRecipients(bcc),
@@ -52,28 +54,9 @@ func newSendCmd(c *client.Client) *cobra.Command {
 				HTMLBody: textToHTML(text),
 			}
 
-			var resp api.SendEmailResponse
-			if len(attach) == 0 {
-				if err := c.PostJSON(ctx, "/api/mail/send", req, &resp); err != nil {
-					return err
-				}
-			} else {
-				parts := make([]client.FilePart, len(attach))
-				for i, p := range attach {
-					if _, err := os.Stat(p); err != nil {
-						return err
-					}
-					parts[i] = client.FilePart{
-						Field: api.MultipartFieldAttachments,
-						Name:  filepath.Base(p),
-						Path:  p,
-					}
-				}
-				resp, err = client.PostMultipart[api.SendEmailResponse](ctx, c,
-					"/api/mail/send", api.MultipartFieldJSON, req, parts, nil)
-				if err != nil {
-					return err
-				}
+			resp, err := postSend(ctx, c, req, attach)
+			if err != nil {
+				return err
 			}
 			o.Info(cmd.ErrOrStderr(), "sent (message %s, thread %s)", resp.MessageID, resp.ThreadID)
 			if o.Format != output.Table {
@@ -91,7 +74,55 @@ func newSendCmd(c *client.Client) *cobra.Command {
 	fl.StringVar(&bodyFile, "body-file", "", "read the message text from a file (- for stdin)")
 	fl.StringArrayVar(&attach, "attach", nil, "attach a local file; repeatable")
 	fl.StringVar(&mailboxFlag, "mailbox", "", "send from this mailbox (id or address); default your first")
+	fl.StringVar(&from, "from", "", "send from this full address, including an alias")
 	return cmd
+}
+
+// resolveSender turns --from / --mailbox into the (mailbox, alias) pair a send
+// needs. --from names a full address so it can select an alias; --mailbox names
+// a mailbox and always sends from its primary address.
+func resolveSender(ctx context.Context, c *client.Client, from, mailboxFlag string) (string, string, error) {
+	if from != "" && mailboxFlag != "" {
+		return "", "", fmt.Errorf("--from and --mailbox are mutually exclusive")
+	}
+	if from != "" {
+		return resolveFrom(ctx, c, from)
+	}
+	mailboxID, err := resolveMailbox(ctx, c, mailboxFlag)
+	return mailboxID, "", err
+}
+
+// postSend sends the request as JSON, or as multipart when files are attached
+// (the endpoint reads the JSON document from a named field alongside them).
+func postSend(ctx context.Context, c *client.Client, req api.SendEmailRequest, attach []string) (api.SendEmailResponse, error) {
+	var resp api.SendEmailResponse
+	if len(attach) == 0 {
+		err := c.PostJSON(ctx, "/api/mail/send", req, &resp)
+		return resp, err
+	}
+	parts, err := fileParts(attach)
+	if err != nil {
+		return resp, err
+	}
+	return client.PostMultipart[api.SendEmailResponse](ctx, c,
+		"/api/mail/send", api.MultipartFieldJSON, req, parts, nil)
+}
+
+// fileParts turns local paths into attachment parts, failing early on a path
+// that cannot be read.
+func fileParts(paths []string) ([]client.FilePart, error) {
+	parts := make([]client.FilePart, len(paths))
+	for i, p := range paths {
+		if _, err := os.Stat(p); err != nil {
+			return nil, err
+		}
+		parts[i] = client.FilePart{
+			Field: api.MultipartFieldAttachments,
+			Name:  filepath.Base(p),
+			Path:  p,
+		}
+	}
+	return parts, nil
 }
 
 func readBody(stdin io.Reader, body, bodyFile string) (string, error) {

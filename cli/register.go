@@ -21,8 +21,15 @@ func Register(root *cobra.Command, c *client.Client) {
 		newAttachmentsCmd(c),
 		newDownloadCmd(c),
 		newSendCmd(c),
+		newReplyCmd(c),
+		newDraftCmd(c),
+		newLabelsCmd(c),
+		newLabelCmd(c),
 		newMailboxesCmd(c),
 		newStatusCmd(c),
 	)
+	// The one-field state mutations (archive/trash/spam/star/move/mark) share
+	// an implementation, so they are built as a group.
+	mail.AddCommand(newStateCmds(c)...)
 	root.AddCommand(mail)
 }
