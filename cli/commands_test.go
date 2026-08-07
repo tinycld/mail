@@ -188,6 +188,15 @@ func TestDownloadWritesCleanName(t *testing.T) {
 	if _, _, err := runCmd(t, c, "mail", "download", "msg1", "--attachment", "7", "--out", dir); err == nil {
 		t.Fatal("out-of-range --attachment must error")
 	}
+
+	// --out creates the directory instead of failing on the temp file.
+	nested := filepath.Join(dir, "not", "yet", "here")
+	if _, _, err := runCmd(t, c, "mail", "download", "msg1", "--out", nested); err != nil {
+		t.Fatalf("download must create the --out directory: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(nested, "invoice.pdf")); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestSendJSONWhenNoAttachments(t *testing.T) {

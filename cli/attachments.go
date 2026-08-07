@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -75,6 +76,9 @@ func newDownloadCmd(c *client.Client) *cobra.Command {
 			}
 			if len(m.Attachments) == 0 {
 				return fmt.Errorf("%s: no attachments", args[0])
+			}
+			if err := os.MkdirAll(outDir, 0o755); err != nil {
+				return err
 			}
 			selected := m.Attachments
 			if pick != "all" {
