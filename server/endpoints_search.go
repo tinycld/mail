@@ -76,6 +76,7 @@ func parseSearchRequest(r *http.Request) api.SearchRequest {
 		To:            strings.TrimSpace(query.Get("to")),
 		Subject:       strings.TrimSpace(query.Get("subject")),
 		HasWords:      strings.TrimSpace(query.Get("has_words")),
+		Exclude:       strings.TrimSpace(query.Get("not")),
 		DateAfter:     strings.TrimSpace(query.Get("date_after")),
 		DateBefore:    strings.TrimSpace(query.Get("date_before")),
 		Folder:        strings.TrimSpace(query.Get("folder")),
@@ -203,8 +204,8 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 	// so the Body (hasWords) terms only go to the messages query. A body-only
 	// search therefore has an empty thread query — we drop that UNION arm rather
 	// than run an invalid empty MATCH.
-	ftsThreads := buildThreadFTSQuery(q)
-	ftsMessages := buildMessageFTSQuery(q, filters.HasWords)
+	ftsThreads := buildThreadFTSQuery(q, filters.Exclude)
+	ftsMessages := buildMessageFTSQuery(q, filters.HasWords, filters.Exclude)
 	if ftsThreads == "" && ftsMessages == "" {
 		if !hasStructuredFilters(&filters) {
 			return re.JSON(http.StatusOK, emptyResponse)

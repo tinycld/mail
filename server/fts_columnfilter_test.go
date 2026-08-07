@@ -125,11 +125,11 @@ func TestMessageFTSBodyOnlySearch(t *testing.T) {
 	seedMsg(t, db, mInvoice, mWelcome, mReport)
 
 	// "zeppelin" appears in two bodies (invoice, report) and no subjects.
-	assertMsgMatch(t, db, buildMessageFTSQuery("", "zeppelin"), "invoice", "report")
+	assertMsgMatch(t, db, buildMessageFTSQuery("", "zeppelin", ""), "invoice", "report")
 	// A unique body word.
-	assertMsgMatch(t, db, buildMessageFTSQuery("", "overdue"), "invoice")
+	assertMsgMatch(t, db, buildMessageFTSQuery("", "overdue", ""), "invoice")
 	// Absent term.
-	assertMsgMatch(t, db, buildMessageFTSQuery("", "absentxyz"))
+	assertMsgMatch(t, db, buildMessageFTSQuery("", "absentxyz", ""))
 }
 
 // body_text scoping must NOT match the same term sitting in another column.
@@ -139,9 +139,9 @@ func TestMessageFTSBodyScopeExcludesOtherColumns(t *testing.T) {
 	seedMsg(t, db, mWelcome)
 
 	// Plain (unscoped) search finds it via the subject column.
-	assertMsgMatch(t, db, buildMessageFTSQuery("welcome", ""), "welcome")
+	assertMsgMatch(t, db, buildMessageFTSQuery("welcome", "", ""), "welcome")
 	// Body-scoped search must NOT, because "welcome" isn't in body_text.
-	assertMsgMatch(t, db, buildMessageFTSQuery("", "welcome"))
+	assertMsgMatch(t, db, buildMessageFTSQuery("", "welcome", ""))
 }
 
 // Search-as-you-type: a prefix of a body word matches.
@@ -149,8 +149,8 @@ func TestMessageFTSBodyPrefixMatch(t *testing.T) {
 	db := newMessageFTS(t)
 	seedMsg(t, db, mInvoice, mReport)
 
-	assertMsgMatch(t, db, buildMessageFTSQuery("", "zep"), "invoice", "report")
-	assertMsgMatch(t, db, buildMessageFTSQuery("", "overd"), "invoice")
+	assertMsgMatch(t, db, buildMessageFTSQuery("", "zep", ""), "invoice", "report")
+	assertMsgMatch(t, db, buildMessageFTSQuery("", "overd", ""), "invoice")
 }
 
 // Multiple body terms are AND-ed (all must be present in the body).
@@ -159,11 +159,11 @@ func TestMessageFTSMultipleBodyTermsAreAnded(t *testing.T) {
 	seedMsg(t, db, mInvoice, mReport)
 
 	// "refund" AND "overdue" only co-occur in invoice.
-	assertMsgMatch(t, db, buildMessageFTSQuery("", "refund overdue"), "invoice")
+	assertMsgMatch(t, db, buildMessageFTSQuery("", "refund overdue", ""), "invoice")
 	// "zeppelin" AND "summary" only co-occur in report.
-	assertMsgMatch(t, db, buildMessageFTSQuery("", "zeppelin summary"), "report")
+	assertMsgMatch(t, db, buildMessageFTSQuery("", "zeppelin summary", ""), "report")
 	// Terms split across two different messages → no single message has both.
-	assertMsgMatch(t, db, buildMessageFTSQuery("", "overdue summary"))
+	assertMsgMatch(t, db, buildMessageFTSQuery("", "overdue summary", ""))
 }
 
 // Main query + body filter combine: main term matches any column, body term is
@@ -173,10 +173,10 @@ func TestMessageFTSMainQueryPlusBodyFilter(t *testing.T) {
 	seedMsg(t, db, mInvoice, mReport)
 
 	// main "invoice" (subject of invoice) AND body "zeppelin" → invoice only.
-	assertMsgMatch(t, db, buildMessageFTSQuery("invoice", "zeppelin"), "invoice")
+	assertMsgMatch(t, db, buildMessageFTSQuery("invoice", "zeppelin", ""), "invoice")
 	// main "report" (subject of report) AND body "refund" → report has no
 	// "refund" in body → no match.
-	assertMsgMatch(t, db, buildMessageFTSQuery("report", "refund"))
+	assertMsgMatch(t, db, buildMessageFTSQuery("report", "refund", ""))
 }
 
 // Matching is case-insensitive (unicode61 folds case).
@@ -184,8 +184,8 @@ func TestMessageFTSCaseInsensitive(t *testing.T) {
 	db := newMessageFTS(t)
 	seedMsg(t, db, mInvoice)
 
-	assertMsgMatch(t, db, buildMessageFTSQuery("", "ZEPPELIN"), "invoice")
-	assertMsgMatch(t, db, buildMessageFTSQuery("REVIEW", ""), "invoice")
+	assertMsgMatch(t, db, buildMessageFTSQuery("", "ZEPPELIN", ""), "invoice")
+	assertMsgMatch(t, db, buildMessageFTSQuery("REVIEW", "", ""), "invoice")
 }
 
 // The thread index has no body_text column; buildThreadFTSQuery must produce a
@@ -200,7 +200,7 @@ func TestThreadFTSQueryRunsAgainstThreadIndex(t *testing.T) {
 	}
 
 	var n int
-	q := buildThreadFTSQuery("invoice")
+	q := buildThreadFTSQuery("invoice", "")
 	if err := db.QueryRow(
 		`SELECT COUNT(*) FROM fts_mail_threads WHERE fts_mail_threads MATCH ?`, q,
 	).Scan(&n); err != nil {
@@ -236,7 +236,7 @@ func TestMessageOnlyUnionAllowsSnippet(t *testing.T) {
 		t.Helper()
 		sql := `SELECT thread_id, MAX(snippet_highlight) as sh FROM (` +
 			body + `) GROUP BY thread_id`
-		rows, err := db.Query(sql, buildMessageFTSQuery("", "zeppelin"))
+		rows, err := db.Query(sql, buildMessageFTSQuery("", "zeppelin", ""))
 		if err != nil {
 			return nil, err
 		}
@@ -282,7 +282,7 @@ func TestThreadIndexRejectsBodyTextScope(t *testing.T) {
 	}
 
 	// The OLD combined query shape: body_text scoping sent at the thread index.
-	bad := buildMessageFTSQuery("", "zeppelin") // contains `body_text : ...`
+	bad := buildMessageFTSQuery("", "zeppelin", "") // contains `body_text : ...`
 	var n int
 	err := db.QueryRow(
 		`SELECT COUNT(*) FROM fts_mail_threads WHERE fts_mail_threads MATCH ?`, bad,

@@ -79,6 +79,7 @@ type SearchRequest struct {
 	To            string `json:"to,omitempty"`
 	Subject       string `json:"subject,omitempty"`
 	HasWords      string `json:"has_words,omitempty"`
+	Exclude       string `json:"not,omitempty"`
 	DateAfter     string `json:"date_after,omitempty"`
 	DateBefore    string `json:"date_before,omitempty"`
 	Folder        string `json:"folder,omitempty"`
