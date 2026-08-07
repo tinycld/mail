@@ -29,6 +29,24 @@ const manifest = {
     // @tinycld/app-generated/mail-api — hooks import those types, so the
     // peerVersions floor below must stay >= the core that ships the emitter.
     payloads: { package: 'server/api' },
+    // `tinycld mail ...` commands, compiled into the per-org CLI binary by
+    // gen-cli.ts. commands is display metadata (Cobra owns --help); scopes
+    // feed the OAuth scope registry and consent screen.
+    cli: {
+        package: 'cli',
+        module: 'tinycld.org/packages/mail/cli',
+        commands: [
+            { name: 'search', summary: 'Search messages' },
+            { name: 'list', summary: 'List threads in a folder' },
+            { name: 'read', summary: 'Print a message or thread' },
+            { name: 'attachments', summary: 'List a message’s attachments' },
+            { name: 'download', summary: 'Download attachments' },
+            { name: 'send', summary: 'Send a message' },
+            { name: 'mailboxes', summary: 'List mailboxes' },
+            { name: 'status', summary: 'Per-folder unread counts' },
+        ],
+        scopes: ['mail:read', 'mail:send'],
+    },
     repository: { url: 'https://github.com/tinycld/mail' },
     peerVersions: { '@tinycld/core': '>=0.0.5 <0.1.0' },
 }

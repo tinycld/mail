@@ -31,8 +31,19 @@ export function emailRow(page: Page, subject: string): Locator {
 export async function expectRowVisible(page: Page, subject: string) {
     const row = emailRow(page, subject)
     await scrollUntilRowMounts(page, row)
-    await row.scrollIntoViewIfNeeded()
+    await scrollRowIntoView(row)
     await expect(row).toBeVisible()
+}
+
+// scrollIntoViewIfNeeded resolves the locator ONCE and throws "Element is
+// not attached to the DOM" if that node detaches mid-action — unlike click,
+// it never re-resolves. Live-query hydration after a reload rerenders the
+// FlashList rows at exactly that moment, so retry the whole resolve+scroll
+// until it lands on a node that stays attached.
+async function scrollRowIntoView(row: Locator) {
+    await expect(async () => {
+        await row.scrollIntoViewIfNeeded()
+    }).toPass({ timeout: 10_000 })
 }
 
 const SCROLL_STEPS_MAX = 30
@@ -79,7 +90,7 @@ async function scrollUntilRowMounts(page: Page, row: Locator) {
 export async function openThread(page: Page, subject: string) {
     const row = emailRow(page, subject)
     await scrollUntilRowMounts(page, row)
-    await row.scrollIntoViewIfNeeded()
+    await scrollRowIntoView(row)
     await row.click()
     await expect(page.getByTestId('mail-thread-detail')).toBeVisible({ timeout: 10_000 })
 }
