@@ -39,7 +39,7 @@ const manifest = {
         scopes: ['mail:read', 'mail:send'],
     },
     repository: { url: 'https://github.com/tinycld/mail' },
-    peerVersions: { '@tinycld/core': '>=0.0.5 <0.1.0' },
+    peerVersions: { '@tinycld/core': '>=0.0.6 <0.1.0' },
 }
 
 export default manifest
