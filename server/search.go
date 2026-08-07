@@ -50,19 +50,45 @@ func ftsUnion(includeThreads bool, threadQuery string, includeMessages bool, mes
 	return strings.Join(arms, "\n\t\t\tUNION ALL\n\t\t\t")
 }
 
+// appendExclusions adds a NOT clause per excluded term. Applied to EVERY arm of
+// the search UNION: an exclusion missing from one arm lets that arm return the
+// rows the user asked to exclude.
+//
+// THE POSITIVE-TERM GATE: never emit a NOT unless `base` already carries at
+// least one positive term. FTS5 errors on a NOT-only MATCH expression — there
+// is no result set to subtract from. Mail shipped a "doesn't have" filter once
+// and had to remove it for exactly this reason (commit dc988fd, 2026-06-04,
+// "FTS5 NOT-only queries error without a positive term"), leaving behind the
+// regression guard in search_advanced_test.go. Returning `base` unchanged when
+// it is empty is what makes reintroducing exclusion safe. Do not "simplify"
+// this guard away.
+func appendExclusions(base, exclude string) string {
+	if base == "" {
+		return ""
+	}
+	cleaned := fts5SpecialChars.ReplaceAllString(exclude, " ")
+	for _, term := range strings.Fields(cleaned) {
+		term = strings.ReplaceAll(term, `"`, `""`)
+		base += ` NOT "` + term + `"*`
+	}
+	return base
+}
+
 // buildThreadFTSQuery builds the FTS5 query for the fts_mail_threads index,
 // which has subject/snippet/participants columns but NO body_text column. Only
 // the sanitized main query applies here — the Body (hasWords) field is scoped to
 // body_text, a column this index doesn't have, so it must be excluded or FTS5
-// errors on the whole UNION.
-func buildThreadFTSQuery(q string) string {
-	return sanitizeFTSQuery(q)
+// errors on the whole UNION. exclude terms are appended as NOT clauses, gated
+// on a positive term existing (see appendExclusions).
+func buildThreadFTSQuery(q, exclude string) string {
+	return appendExclusions(sanitizeFTSQuery(q), exclude)
 }
 
 // buildMessageFTSQuery builds the FTS5 query for the fts_mail_messages index,
 // which DOES have a body_text column. The main query terms match any column;
-// the Body (hasWords) terms are scoped to body_text.
-func buildMessageFTSQuery(q, hasWords string) string {
+// the Body (hasWords) terms are scoped to body_text. exclude terms are appended
+// as NOT clauses, gated on a positive term existing (see appendExclusions).
+func buildMessageFTSQuery(q, hasWords, exclude string) string {
 	base := sanitizeFTSQuery(q)
 
 	if hw := strings.TrimSpace(hasWords); hw != "" {
@@ -74,7 +100,7 @@ func buildMessageFTSQuery(q, hasWords string) string {
 		}
 	}
 
-	return strings.TrimSpace(base)
+	return appendExclusions(strings.TrimSpace(base), exclude)
 }
 
 // sanitizeFTSQuery escapes special FTS5 characters and wraps each term in quotes

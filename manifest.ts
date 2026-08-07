@@ -18,6 +18,7 @@ const manifest = {
     collections: { register: 'collections', types: 'types' },
     help: { directory: 'help' },
     seed: { script: 'seed' },
+    search: { endpoint: '/api/mail/search', adapter: 'search-adapter' },
     // Message bodies are real disk. No ownerField: a mailbox is shared by its
     // members, so these bytes count toward the ORG ceiling only.
     quota: [{ collection: 'mail_messages', sizeField: 'total_size' }],
@@ -38,7 +39,7 @@ const manifest = {
         scopes: ['mail:read', 'mail:send'],
     },
     repository: { url: 'https://github.com/tinycld/mail' },
-    peerVersions: { '@tinycld/core': '>=0.0.5 <0.1.0' },
+    peerVersions: { '@tinycld/core': '>=0.0.6 <0.1.0' },
 }
 
 export default manifest
