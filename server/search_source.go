@@ -32,21 +32,16 @@ func searchSource() search.Source {
 }
 
 func searchMailRows(app core.App, userID string, q search.Query) (search.Result, error) {
-	// KNOWN GAP: q.Exclude is not applied. Mail's FTS query builder has no NOT
-	// support — the "doesn't have" filter was removed precisely because FTS5
-	// errors on a NOT-only MATCH (commit dc988fd) — so honoring `-term` here
-	// means teaching that builder exclusions, which is a change to the query
-	// mail's own advanced search shares and not something to smuggle in behind
-	// a federated call. Filtering the returned page on visible text instead
-	// would be worse than doing nothing: it would drop rows whose subject
-	// mentions the term while keeping rows that match it only in the body, so
-	// `-term` would appear to work while being wrong in a way nobody could see.
-	// Until then a mail row may match an excluded term; every other package
-	// honors exclusion, so this asymmetry is deliberate and visible here.
 	resp, err := SearchMail(app, userID, api.SearchRequest{
-		Query:  strings.Join(q.Include, " "),
-		Limit:  q.Limit,
-		Offset: q.Offset,
+		Query: strings.Join(q.Include, " "),
+		// Mail's own search honors exclusions across both its FTS arms, so a
+		// `-term` from the palette reaches SQL rather than being approximated
+		// client-side. The positive-term gate lives in the aggregator: an
+		// exclude-only query never gets here, because FTS5 errors on a NOT-only
+		// MATCH.
+		Exclude: strings.Join(q.Exclude, " "),
+		Limit:   q.Limit,
+		Offset:  q.Offset,
 	})
 	if err != nil {
 		return search.Result{}, err

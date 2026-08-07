@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -195,6 +196,23 @@ func (f *fakeMail) serve() (*httptest.Server, *client.Client) {
 			if msg.Thread == unquoter.Replace(m[1]) {
 				out = append(out, *msg)
 			}
+		}
+		// Honor the requested sort. f.messages is a map, and Go randomizes map
+		// iteration deliberately — without this the fake returns an arbitrary
+		// order, so a test asserting oldest-first passes or fails by luck. That
+		// is exactly how it behaved: green locally, red in CI.
+		if srt := r.URL.Query().Get("sort"); srt != "" {
+			desc := strings.HasPrefix(srt, "-")
+			field := strings.TrimPrefix(srt, "-")
+			if field != "date" {
+				f.t.Errorf("unsupported messages sort: %q", srt)
+			}
+			sort.SliceStable(out, func(i, j int) bool {
+				if desc {
+					return out[i].Date > out[j].Date
+				}
+				return out[i].Date < out[j].Date
+			})
 		}
 		listOut(w, out, 1, 1, len(out))
 	})
