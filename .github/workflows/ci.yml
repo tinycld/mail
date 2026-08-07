@@ -62,12 +62,28 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: ws/.node-version
+      # cache-dependency-path matters more than it looks: the install below runs a
+      # postinstall that regenerates the PB schema, which shells out to Go and
+      # pulls core's module graph. That download — not package fetching — is the
+      # bulk of the install step's runtime.
       - uses: actions/setup-go@v6
         with:
           go-version-file: ws/.go-version
+          cache-dependency-path: |
+            ws/mail/server/go.sum
+            ws/mail/cli/go.sum
+      # Cache pnpm's content-addressable store. setup-node's built-in `cache: pnpm`
+      # can't be used: it keys on a lockfile hash, and the workspace root here is
+      # bootstrap-GENERATED, so no lockfile exists until the install produces one.
+      - name: Cache pnpm store
+        uses: actions/cache@v6
+        with:
+          path: ws/.pnpm-store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('ws/package.json', 'ws/pnpm-workspace.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
       - name: Install (workspace root)
         working-directory: ws
-        run: corepack enable && pnpm install --no-frozen-lockfile
+        run: corepack enable && pnpm install --no-frozen-lockfile --store-dir=.pnpm-store
       - name: Typecheck + unit
         working-directory: ws/${{ env.PACKAGE }}
         run: pnpm exec tinycld-pkg check
@@ -125,12 +141,28 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: ws/.node-version
+      # cache-dependency-path matters more than it looks: the install below runs a
+      # postinstall that regenerates the PB schema, which shells out to Go and
+      # pulls core's module graph. That download — not package fetching — is the
+      # bulk of the install step's runtime.
       - uses: actions/setup-go@v6
         with:
           go-version-file: ws/.go-version
+          cache-dependency-path: |
+            ws/mail/server/go.sum
+            ws/mail/cli/go.sum
+      # Cache pnpm's content-addressable store. setup-node's built-in `cache: pnpm`
+      # can't be used: it keys on a lockfile hash, and the workspace root here is
+      # bootstrap-GENERATED, so no lockfile exists until the install produces one.
+      - name: Cache pnpm store
+        uses: actions/cache@v6
+        with:
+          path: ws/.pnpm-store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('ws/package.json', 'ws/pnpm-workspace.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
       - name: Install (workspace root)
         working-directory: ws
-        run: corepack enable && pnpm install --no-frozen-lockfile
+        run: corepack enable && pnpm install --no-frozen-lockfile --store-dir=.pnpm-store
       # Installs watchman so Metro's file watcher doesn't fall back to
       # polling — see tinycld/app#21 for the trace evidence and the
       # blank-page-after-reload flake it fixed. The composite action lives in
