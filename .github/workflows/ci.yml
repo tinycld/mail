@@ -71,6 +71,18 @@ jobs:
       - name: Typecheck + unit
         working-directory: ws/${{ env.PACKAGE }}
         run: pnpm exec tinycld-pkg check
+      # cli/ is a second Go module (tinycld.org/packages/mail/cli) that
+      # tinycld-pkg does not cover. Its go.work — which resolves
+      # tinycld.org/cli against the assembled app shell — is emitted by the
+      # generator during the install above, so these steps must follow it.
+      # go mod download warms go.work.sum, which is gitignored and so never
+      # restored from cache.
+      - name: Go mod download (cli)
+        working-directory: ws/${{ env.PACKAGE }}/cli
+        run: go mod download
+      - name: Go build & test (cli)
+        working-directory: ws/${{ env.PACKAGE }}/cli
+        run: go build ./... && go test ./...
 
   e2e:
     name: E2E

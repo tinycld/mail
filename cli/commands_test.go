@@ -295,3 +295,363 @@ func TestMailboxesAndStatus(t *testing.T) {
 		t.Fatalf("counts = %+v", rows[0])
 	}
 }
+
+func TestStateVerbsPatchOneField(t *testing.T) {
+	cases := []struct {
+		args  []string
+		field string
+		want  any
+	}{
+		{[]string{"archive", "thr1"}, "folder", "archive"},
+		{[]string{"trash", "thr1"}, "folder", "trash"},
+		{[]string{"spam", "thr1"}, "folder", "spam"},
+		{[]string{"star", "thr1"}, "is_starred", true},
+		{[]string{"unstar", "thr1"}, "is_starred", false},
+		{[]string{"move", "inbox", "thr1"}, "folder", "inbox"},
+		{[]string{"mark", "read", "thr1"}, "is_read", true},
+		{[]string{"mark", "unread", "thr1"}, "is_read", false},
+	}
+	for _, tc := range cases {
+		f := mailFixture(t)
+		_, c := f.serve()
+		if _, _, err := runCmd(t, c, append([]string{"mail"}, tc.args...)...); err != nil {
+			t.Fatalf("%v: %v", tc.args, err)
+		}
+		if len(f.statePatches) != 1 {
+			t.Fatalf("%v: patches = %v", tc.args, f.statePatches)
+		}
+		patch := f.statePatches[0]
+		// Exactly one field: the app's actions never touch anything else.
+		if len(patch) != 1 {
+			t.Errorf("%v: patch must set one field, got %v", tc.args, patch)
+		}
+		if patch[tc.field] != tc.want {
+			t.Errorf("%v: patch[%s] = %v, want %v", tc.args, tc.field, patch[tc.field], tc.want)
+		}
+	}
+}
+
+func TestStateVerbsRejectBadInput(t *testing.T) {
+	f := mailFixture(t)
+	_, c := f.serve()
+
+	if _, _, err := runCmd(t, c, "mail", "move", "nowhere", "thr1"); err == nil {
+		t.Fatal("an unknown folder must be refused")
+	}
+	if _, _, err := runCmd(t, c, "mail", "mark", "sideways", "thr1"); err == nil {
+		t.Fatal("mark takes read or unread only")
+	}
+	// A thread with no state row for the caller is not their mail.
+	if _, _, err := runCmd(t, c, "mail", "archive", "thrNotMine"); err == nil {
+		t.Fatal("a thread with no state row must error")
+	}
+	if len(f.statePatches) != 0 {
+		t.Fatalf("no patch should have been sent: %v", f.statePatches)
+	}
+}
+
+func TestStateVerbsAcceptSeveralThreads(t *testing.T) {
+	f := mailFixture(t)
+	f.threads["thr2"] = &thread{ID: "thr2", Mailbox: "mbx1", Subject: "Second"}
+	f.states["st2"] = &threadState{ID: "st2", Thread: "thr2", User: "user1", Folder: "inbox"}
+	_, c := f.serve()
+
+	if _, _, err := runCmd(t, c, "mail", "archive", "thr1", "thr2"); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.statePatches) != 2 {
+		t.Fatalf("patches = %v", f.statePatches)
+	}
+	if f.states["st1"].Folder != "archive" || f.states["st2"].Folder != "archive" {
+		t.Fatalf("both threads must be archived: %+v %+v", f.states["st1"], f.states["st2"])
+	}
+}
+
+func TestLabelsListShowsSharedAndOwn(t *testing.T) {
+	f := mailFixture(t)
+	_, c := f.serve()
+
+	out, _, err := runCmd(t, c, "mail", "labels")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Work") || !strings.Contains(out, "Mine") {
+		t.Fatalf("shared and own labels must both list:\n%s", out)
+	}
+	if strings.Contains(out, "Other") {
+		t.Fatalf("another user's private label must not list:\n%s", out)
+	}
+}
+
+func TestLabelAddIsIdempotentAndRemoveWorks(t *testing.T) {
+	f := mailFixture(t)
+	_, c := f.serve()
+
+	if _, _, err := runCmd(t, c, "mail", "label", "add", "thr1", "Work"); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.assignments) != 1 {
+		t.Fatalf("assignments = %v", f.assignments)
+	}
+	for _, a := range f.assignments {
+		// The assignment points at the caller's STATE row, not the thread.
+		if a.RecordID != "st1" || a.Collection != "mail_thread_state" || a.Label != "lblWork" || a.User != "user1" {
+			t.Fatalf("assignment = %+v", a)
+		}
+	}
+
+	// The web insert has no dedup guard; the CLI must not create a second row.
+	if _, _, err := runCmd(t, c, "mail", "label", "add", "thr1", "Work"); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.assignments) != 1 {
+		t.Fatalf("a repeated add must not duplicate: %v", f.assignments)
+	}
+
+	if _, _, err := runCmd(t, c, "mail", "label", "remove", "thr1", "Work"); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.assignments) != 0 {
+		t.Fatalf("remove must delete the assignment: %v", f.assignments)
+	}
+	// Removing an absent label is a no-op, not an error.
+	if _, _, err := runCmd(t, c, "mail", "label", "remove", "thr1", "Work"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := runCmd(t, c, "mail", "label", "add", "thr1", "Nonexistent"); err == nil {
+		t.Fatal("an unknown label must error")
+	}
+}
+
+func TestSendFromResolvesAliasAddress(t *testing.T) {
+	f := mailFixture(t)
+	_, c := f.serve()
+
+	// An alias stores only its local part; the full address is built with the
+	// mailbox's domain.
+	_, _, err := runCmd(t, c, "mail", "send", "--to", "a@b.c",
+		"--subject", "s", "--body", "b", "--from", "billing@acme.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.sendJSON.MailboxID != "mbx1" || f.sendJSON.AliasID != "als1" {
+		t.Fatalf("send request = %+v", f.sendJSON)
+	}
+
+	f.sendJSON = nil
+	_, _, err = runCmd(t, c, "mail", "send", "--to", "a@b.c",
+		"--subject", "s", "--body", "b", "--from", "team@acme.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.sendJSON.AliasID != "" {
+		t.Fatalf("the mailbox's own address must carry no alias: %+v", f.sendJSON)
+	}
+
+	if _, _, err := runCmd(t, c, "mail", "send", "--to", "a@b.c", "--body", "b",
+		"--from", "stranger@example.com"); err == nil {
+		t.Fatal("an address that is not yours must be refused")
+	}
+	if _, _, err := runCmd(t, c, "mail", "send", "--to", "a@b.c", "--body", "b",
+		"--from", "team@acme.test", "--mailbox", "mbx1"); err == nil {
+		t.Fatal("--from with --mailbox must be refused")
+	}
+}
+
+func TestReplyRecipientsAndSubject(t *testing.T) {
+	f := mailFixture(t)
+	// A message addressed to the mailbox with another person in Cc.
+	f.messages["msg1"].RecipientsCc = []map[string]string{
+		{"name": "Cara", "email": "cara@acme.test"},
+	}
+	_, c := f.serve()
+
+	if _, _, err := runCmd(t, c, "mail", "reply", "msg1", "--body", "thanks"); err != nil {
+		t.Fatal(err)
+	}
+	req := f.sendJSON
+	if req.Subject != "Re: Quarterly invoice" {
+		t.Fatalf("subject = %q", req.Subject)
+	}
+	// Plain reply: the sender alone.
+	if len(req.To) != 1 || req.To[0].Email != "ada@acme.test" {
+		t.Fatalf("reply recipients = %+v", req.To)
+	}
+	// in_reply_to carries the record id; the server derives the RFC header.
+	if req.InReplyToMessageID != "msg1" {
+		t.Fatalf("in_reply_to = %q", req.InReplyToMessageID)
+	}
+
+	f.sendJSON = nil
+	if _, _, err := runCmd(t, c, "mail", "reply", "msg1", "--all", "--body", "thanks"); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, r := range f.sendJSON.To {
+		got[r.Email] = true
+	}
+	// Sender + To + Cc, minus our own address, all in To (the app does the same).
+	if !got["ada@acme.test"] || !got["cara@acme.test"] {
+		t.Fatalf("reply-all recipients = %+v", f.sendJSON.To)
+	}
+	if got["team@acme.test"] {
+		t.Fatalf("reply-all must drop our own address: %+v", f.sendJSON.To)
+	}
+	if len(f.sendJSON.Cc) != 0 {
+		t.Fatalf("reply-all puts everyone in To, not Cc: %+v", f.sendJSON.Cc)
+	}
+
+	// An already-prefixed subject is not double-prefixed.
+	f.messages["msg1"].Subject = "Re: Quarterly invoice"
+	f.sendJSON = nil
+	if _, _, err := runCmd(t, c, "mail", "reply", "msg1", "--body", "x"); err != nil {
+		t.Fatal(err)
+	}
+	if f.sendJSON.Subject != "Re: Quarterly invoice" {
+		t.Fatalf("subject = %q", f.sendJSON.Subject)
+	}
+}
+
+func TestReplyToThreadAnswersLatestMessage(t *testing.T) {
+	f := mailFixture(t)
+	_, c := f.serve()
+
+	if _, _, err := runCmd(t, c, "mail", "reply", "thr1", "--body", "ok"); err != nil {
+		t.Fatal(err)
+	}
+	// msg2 is the newest in the fixture thread.
+	if f.sendJSON.InReplyToMessageID != "msg2" {
+		t.Fatalf("in_reply_to = %q, want the thread's latest message", f.sendJSON.InReplyToMessageID)
+	}
+	if f.sendJSON.To[0].Email != "bob@acme.test" {
+		t.Fatalf("recipients = %+v", f.sendJSON.To)
+	}
+}
+
+func TestDraftCreateAndUpdate(t *testing.T) {
+	f := mailFixture(t)
+	_, c := f.serve()
+
+	if _, _, err := runCmd(t, c, "mail", "draft", "--to", "a@b.c",
+		"--subject", "later", "--body", "wip"); err != nil {
+		t.Fatal(err)
+	}
+	if f.draftJSON == nil || f.draftJSON.Subject != "later" || f.draftJSON.MessageID != "" {
+		t.Fatalf("draft request = %+v", f.draftJSON)
+	}
+
+	f.draftJSON = nil
+	if _, _, err := runCmd(t, c, "mail", "draft", "--message-id", "msgDraft",
+		"--subject", "revised", "--body", "more"); err != nil {
+		t.Fatal(err)
+	}
+	if f.draftJSON.MessageID != "msgDraft" || f.draftJSON.Subject != "revised" {
+		t.Fatalf("draft update = %+v", f.draftJSON)
+	}
+}
+
+func TestDraftSendSendsThenDeletes(t *testing.T) {
+	f := mailFixture(t)
+	f.threads["thrD"] = &thread{ID: "thrD", Mailbox: "mbx1", Subject: "Ready to go"}
+	f.states["stD"] = &threadState{ID: "stD", Thread: "thrD", User: "user1", Folder: "drafts"}
+	f.messages["msgD"] = &message{
+		ID: "msgD", Thread: "thrD", Subject: "Ready to go", DeliveryStatus: "draft",
+		BodyHTML: "bodyD_abcdef1234.html", Alias: "als1",
+		RecipientsTo:  []map[string]string{{"name": "Ada", "email": "ada@acme.test"}},
+		RecipientsCc:  []map[string]string{},
+		RecipientsBcc: []map[string]string{},
+		Attachments:   []string{"draft-notes_xyzabc1234.txt"},
+	}
+	f.bodies["msgD"] = "<p>the body</p>"
+	f.attachData["draft-notes_xyzabc1234.txt"] = "draft attachment bytes"
+	_, c := f.serve()
+
+	if _, _, err := runCmd(t, c, "mail", "draft", "send", "msgD"); err != nil {
+		t.Fatal(err)
+	}
+	// Attachments cannot be referenced by id on send, so they round-trip.
+	if f.sendMultipart == nil {
+		t.Fatal("a draft with attachments must be sent as multipart")
+	}
+	req := f.sendMultipart
+	if req.MailboxID != "mbx1" || req.AliasID != "als1" {
+		t.Fatalf("send request = %+v", req)
+	}
+	if len(req.To) != 1 || req.To[0].Email != "ada@acme.test" {
+		t.Fatalf("recipients = %+v", req.To)
+	}
+	if !strings.Contains(req.TextBody, "the body") {
+		t.Fatalf("body = %q", req.TextBody)
+	}
+	if f.sendFiles["draft-notes.txt"] != "draft attachment bytes" {
+		t.Fatalf("attachment bytes = %q", f.sendFiles["draft-notes.txt"])
+	}
+	// The draft is removed, or the thread would show both copies.
+	if len(f.deletedMessages) != 1 || f.deletedMessages[0] != "msgD" {
+		t.Fatalf("deleted = %v", f.deletedMessages)
+	}
+
+	// A sent message is not a draft, and the endpoint does not check.
+	if _, _, err := runCmd(t, c, "mail", "draft", "send", "msg1"); err == nil {
+		t.Fatal("draft send must refuse a non-draft message")
+	}
+}
+
+func TestReadMarksThreadReadUnlessNoMark(t *testing.T) {
+	f := mailFixture(t)
+	_, c := f.serve()
+
+	if _, _, err := runCmd(t, c, "mail", "read", "msg1"); err != nil {
+		t.Fatal(err)
+	}
+	if !f.states["st1"].IsRead {
+		t.Fatal("read must mark the thread read, as opening it in the app does")
+	}
+
+	f.states["st1"].IsRead = false
+	f.statePatches = nil
+	if _, _, err := runCmd(t, c, "mail", "read", "msg1", "--no-mark"); err != nil {
+		t.Fatal(err)
+	}
+	if f.states["st1"].IsRead || len(f.statePatches) != 0 {
+		t.Fatalf("--no-mark must leave unread state alone (patches: %v)", f.statePatches)
+	}
+
+	// Already-read threads need no write at all.
+	f.states["st1"].IsRead = true
+	f.statePatches = nil
+	if _, _, err := runCmd(t, c, "mail", "read", "msg1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.statePatches) != 0 {
+		t.Fatalf("an already-read thread must not be patched: %v", f.statePatches)
+	}
+}
+
+func TestReadRawHeaders(t *testing.T) {
+	f := mailFixture(t)
+	f.messages["msg1"].RawHeaders = "headers_abcdef1234.txt"
+	f.attachData["headers_abcdef1234.txt"] = "Subject: Quarterly invoice\r\nFrom: ada@acme.test\r\n"
+	_, c := f.serve()
+
+	out, _, err := runCmd(t, c, "mail", "read", "msg1", "--raw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "From: ada@acme.test") {
+		t.Fatalf("raw headers not printed:\n%s", out)
+	}
+
+	// Only IMAP-appended messages carry them; say so rather than print nothing.
+	f.messages["msg1"].RawHeaders = ""
+	out, stderr, err := runCmd(t, c, "mail", "read", "msg1", "--raw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "" {
+		t.Fatalf("stdout = %q, want empty", out)
+	}
+	if !strings.Contains(stderr, "no stored raw headers") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+}
