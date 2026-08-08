@@ -143,9 +143,25 @@ func buildFolderJoin(f *api.SearchRequest, userID string, params map[string]any)
 	return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.folder = {:folder}"
 }
 
+// handleSearch serves GET /api/mail/search — the in-app advanced search, whose
+// structured filters (from, to, subject, has_words, dates, has_attachment,
+// folder) the federated palette does not offer.
 func handleSearch(app core.App, re *core.RequestEvent) error {
-	userID := re.Auth.Id
-	filters := parseSearchRequest(re.Request)
+	resp, err := SearchMail(app, re.Auth.Id, parseSearchRequest(re.Request))
+	if err != nil {
+		return err
+	}
+	return re.JSON(http.StatusOK, resp)
+}
+
+// SearchMail runs a mail search for one user and returns the response value.
+//
+// Split from the HTTP handler so the federated search source (search_source.go)
+// can call it in-process: the aggregator has no RequestEvent, and duplicating
+// this query to serve it would mean two implementations of mail search that
+// drift. Parsing and JSON encoding stay in handleSearch, so the route's
+// behavior — and endpoints_search_contract_test.go — are untouched.
+func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.SearchResponse, error) {
 	q := filters.Query
 	mailboxID := filters.MailboxID
 	limit := filters.Limit
@@ -161,7 +177,7 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 	hasFilters := hasAnyFilter(&filters)
 
 	if !hasFTSTerms && !hasFilters {
-		return re.JSON(http.StatusOK, emptyResponse)
+		return emptyResponse, nil
 	}
 
 	// A lookup FAILURE must not read as an empty result set — that swallow is
@@ -170,10 +186,10 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 	accessibleMailboxIDs, err := getUserMailboxIDs(app, userID, mailboxID)
 	if err != nil {
 		app.Logger().Error("search: mailbox lookup failed", "error", err, "user", userID)
-		return router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
+		return emptyResponse, router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
 	}
 	if len(accessibleMailboxIDs) == 0 {
-		return re.JSON(http.StatusOK, emptyResponse)
+		return emptyResponse, nil
 	}
 
 	mailboxParams := make(map[string]any)
@@ -196,7 +212,7 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 
 	// SQL-only path: no FTS terms, only structured filters
 	if !hasFTSTerms {
-		return handleStructuredSearch(app, re, inClause, messageWhere, folderJoin, params, limit, offset)
+		return structuredSearch(app, inClause, messageWhere, folderJoin, params, limit, offset)
 	}
 
 	// FTS path (possibly with additional structured filters). The two FTS
@@ -208,9 +224,9 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 	ftsMessages := buildMessageFTSQuery(q, filters.HasWords, filters.Exclude)
 	if ftsThreads == "" && ftsMessages == "" {
 		if !hasStructuredFilters(&filters) {
-			return re.JSON(http.StatusOK, emptyResponse)
+			return emptyResponse, nil
 		}
-		return handleStructuredSearch(app, re, inClause, messageWhere, folderJoin, params, limit, offset)
+		return structuredSearch(app, inClause, messageWhere, folderJoin, params, limit, offset)
 	}
 
 	// Only bind a param when its UNION arm is actually present in the SQL — dbx
@@ -287,7 +303,7 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 	err = app.DB().NewQuery(combinedQuery).Bind(dbx.Params(params)).All(&results)
 	if err != nil {
 		app.Logger().Error("FTS: search query failed", "error", err, "query", q)
-		return router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
+		return emptyResponse, router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
 	}
 
 	items := mapResults(results)
@@ -344,17 +360,19 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 		total = offset + len(items)
 	}
 
-	return re.JSON(http.StatusOK, api.SearchResponse{Items: items, Total: total})
+	return api.SearchResponse{Items: items, Total: total}, nil
 }
 
-// handleStructuredSearch runs a SQL-only search (no FTS) when only structured filters are present.
-func handleStructuredSearch(
+// structuredSearch runs a SQL-only search (no FTS) when only structured filters
+// are present. Returns a value rather than writing a response so SearchMail can
+// call it on both the HTTP and in-process paths.
+func structuredSearch(
 	app core.App,
-	re *core.RequestEvent,
 	inClause, messageWhere, folderJoin string,
 	params map[string]any,
 	limit, offset int,
-) error {
+) (api.SearchResponse, error) {
+	emptyResponse := api.SearchResponse{Items: []api.SearchResultItem{}, Total: 0}
 	query := `
 		SELECT DISTINCT
 			t.id as thread_id,
@@ -377,7 +395,7 @@ func handleStructuredSearch(
 	err := app.DB().NewQuery(query).Bind(dbx.Params(params)).All(&results)
 	if err != nil {
 		app.Logger().Error("Structured search failed", "error", err)
-		return router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
+		return emptyResponse, router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
 	}
 
 	items := mapResults(results)
@@ -405,7 +423,7 @@ func handleStructuredSearch(
 		total = offset + len(items)
 	}
 
-	return re.JSON(http.StatusOK, api.SearchResponse{Items: items, Total: total})
+	return api.SearchResponse{Items: items, Total: total}, nil
 }
 
 // getUserMailboxIDs returns the mailbox IDs the user has access to. If mailboxID

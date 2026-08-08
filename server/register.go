@@ -15,6 +15,7 @@ import (
 	"tinycld.org/core/audit"
 	"tinycld.org/core/coreserver"
 	"tinycld.org/core/quota"
+	"tinycld.org/core/search"
 	"tinycld.org/packages/mail/api"
 )
 
@@ -61,6 +62,9 @@ func registerShared(app *pocketbase.PocketBase) {
 	// a mailbox is shared by its members, so a message is not chargeable to
 	// any one of them — which means these bytes count toward the ORG total
 	// only, never a per-user one. core/quota binds the enforcement.
+	// Mail's contribution to the federated GET /api/search.
+	search.RegisterSources(searchSource())
+
 	quota.RegisterSources(quota.Source{
 		Slug:       "mail",
 		Collection: "mail_messages",

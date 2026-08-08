@@ -19,7 +19,7 @@ func TestSearchQueryCoversEveryRequestField(t *testing.T) {
 	req := api.SearchRequest{
 		Query: "q", MailboxID: "m", Limit: 1, Offset: 2, From: "f", To: "t",
 		Subject: "s", HasWords: "w", DateAfter: "2026-01-01", DateBefore: "2026-02-01",
-		Folder: "inbox", HasAttachment: true,
+		Folder: "inbox", HasAttachment: true, Exclude: "spam",
 	}
 	got := searchQuery(req)
 

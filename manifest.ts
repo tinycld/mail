@@ -18,7 +18,11 @@ const manifest = {
     collections: { register: 'collections', types: 'types' },
     help: { directory: 'help' },
     seed: { script: 'seed' },
-    search: { endpoint: '/api/mail/search', adapter: 'search-adapter' },
+    // Mail is searchable through core's federated /api/search, which reads the
+    // Go source registered in server/. The in-app advanced search keeps its own
+    // /api/mail/search route — that is a different feature, with structured
+    // filters the palette does not offer.
+    search: { adapter: 'search-adapter' },
     // Message bodies are real disk. No ownerField: a mailbox is shared by its
     // members, so these bytes count toward the ORG ceiling only.
     quota: [{ collection: 'mail_messages', sizeField: 'total_size' }],

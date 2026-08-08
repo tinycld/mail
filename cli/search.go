@@ -25,6 +25,7 @@ type searchFlags struct {
 	dateBefore    string
 	folder        string
 	hasAttachment bool
+	exclude       string
 }
 
 func newSearchCmd(c *client.Client) *cobra.Command {
@@ -63,6 +64,7 @@ func newSearchCmd(c *client.Client) *cobra.Command {
 				DateBefore:    f.dateBefore,
 				Folder:        f.folder,
 				HasAttachment: f.hasAttachment,
+				Exclude:       f.exclude,
 			}
 			var resp api.SearchResponse
 			if err := c.GetJSON(ctx, "/api/mail/search?"+searchQuery(req).Encode(), &resp); err != nil {
@@ -95,6 +97,7 @@ func newSearchCmd(c *client.Client) *cobra.Command {
 	fl.StringVar(&f.dateBefore, "date-before", "", "only messages before (YYYY-MM-DD)")
 	fl.StringVar(&f.folder, "folder", "", "restrict to a folder (inbox, sent, ...)")
 	fl.BoolVar(&f.hasAttachment, "has-attachment", false, "only messages with attachments")
+	fl.StringVar(&f.exclude, "not", "", "exclude messages matching these terms")
 	return cmd
 }
 
@@ -122,6 +125,7 @@ func searchQuery(r api.SearchRequest) url.Values {
 	set("date_after", r.DateAfter)
 	set("date_before", r.DateBefore)
 	set("folder", r.Folder)
+	set("not", r.Exclude)
 	if r.HasAttachment {
 		q.Set("has_attachment", "true")
 	}
