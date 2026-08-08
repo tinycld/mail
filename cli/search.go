@@ -2,7 +2,6 @@ package cli
 
 import (
 	"net/url"
-	"regexp"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -73,8 +72,8 @@ func newSearchCmd(c *client.Client) *cobra.Command {
 			rows := make([][]string, len(resp.Items))
 			for i, it := range resp.Items {
 				rows[i] = []string{
-					it.LatestDate, stripMarks(it.SubjectHighlight),
-					stripMarks(it.SnippetHighlight), strconv.Itoa(it.MessageCount), it.ThreadID,
+					it.LatestDate, output.StripMarks(it.SubjectHighlight),
+					output.StripMarks(it.SnippetHighlight), strconv.Itoa(it.MessageCount), it.ThreadID,
 				}
 			}
 			if err := o.Write(cmd.OutOrStdout(),
@@ -130,10 +129,4 @@ func searchQuery(r api.SearchRequest) url.Values {
 		q.Set("has_attachment", "true")
 	}
 	return q
-}
-
-var markTags = regexp.MustCompile(`</?mark>`)
-
-func stripMarks(s string) string {
-	return markTags.ReplaceAllString(s, "")
 }
