@@ -59,7 +59,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
         defaultValues: { to: toValue, cc: '', bcc: '', subject: subjectValue },
     })
 
-    const { send, isPending } = useSendEmail({
+    const { send, isPending, uploadProgress } = useSendEmail({
         onSuccess: () => {
             editor.clear()
             clearAttachments()
@@ -126,6 +126,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
                     isVisible={attachments.length > 0}
                     attachments={attachments}
                     onRemove={removeFile}
+                    uploadProgress={uploadProgress}
                 />
                 <ComposeToolbar
                     commands={commands}

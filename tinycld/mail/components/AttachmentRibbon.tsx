@@ -8,9 +8,20 @@ interface AttachmentRibbonProps {
     isVisible: boolean
     attachments: AttachmentFile[]
     onRemove: (id: string) => void
+    /**
+     * [0,1] while the attachments are being uploaded, null otherwise. Sending
+     * a few MB used to leave the compose window silent until the request
+     * either finished or failed.
+     */
+    uploadProgress?: number | null
 }
 
-export function AttachmentRibbon({ isVisible, attachments, onRemove }: AttachmentRibbonProps) {
+export function AttachmentRibbon({
+    isVisible,
+    attachments,
+    onRemove,
+    uploadProgress = null,
+}: AttachmentRibbonProps) {
     const borderColor = useThemeColor('border')
 
     if (!isVisible) return null
@@ -35,6 +46,24 @@ export function AttachmentRibbon({ isVisible, attachments, onRemove }: Attachmen
                     ))}
                 </View>
             </ScrollView>
+            {uploadProgress !== null ? (
+                <View
+                    className="h-1 rounded-sm bg-foreground/[0.06] mt-1.5 overflow-hidden"
+                    accessibilityRole="progressbar"
+                    accessibilityLabel="Uploading attachments"
+                    accessibilityValue={{
+                        now: Math.round(uploadProgress * 100),
+                        min: 0,
+                        max: 100,
+                    }}
+                    testID="mail-attachment-upload-progress"
+                >
+                    <View
+                        className="h-full rounded-sm bg-primary"
+                        style={{ width: `${uploadProgress * 100}%` }}
+                    />
+                </View>
+            ) : null}
         </View>
     )
 }

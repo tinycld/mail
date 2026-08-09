@@ -156,7 +156,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         })
     }
 
-    const { send, isPending } = useSendEmail({
+    const { send, isPending, uploadProgress } = useSendEmail({
         onSuccess: async () => {
             await deleteDraftMessage()
             editor.clear()
@@ -306,6 +306,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                     isVisible={attachments.length > 0}
                     attachments={attachments}
                     onRemove={removeFile}
+                    uploadProgress={uploadProgress}
                 />
                 <ComposeToolbar
                     commands={commands}
