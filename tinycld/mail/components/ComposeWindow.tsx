@@ -343,7 +343,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 }
 
 function ComposeShortcuts({ onSend }: { onSend: () => void }) {
-    useShortcutScope('compose')
+    const scopeOwner = useShortcutScope('compose')
     const sendRef = useRef(onSend)
     sendRef.current = onSend
     const shortcut = useMemo<Shortcut>(
@@ -358,7 +358,7 @@ function ComposeShortcuts({ onSend }: { onSend: () => void }) {
         }),
         []
     )
-    useRegisterShortcut(shortcut)
+    useRegisterShortcut(shortcut, scopeOwner)
     return null
 }
 

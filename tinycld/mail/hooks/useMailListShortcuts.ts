@@ -36,7 +36,11 @@ export function useMailListShortcuts({
     const clearFocus = useThreadListStore(s => s.clearFocus)
     const orgHref = useOrgHref()
 
-    useShortcutScope('list')
+    // Captured, not re-derived at registration: this hook's shortcut array is
+    // memoised on live-query data, so it re-registers whenever a thread lands —
+    // including while the screen is blurred but still mounted, where the stack
+    // top belongs to another package.
+    const scopeOwner = useShortcutScope('list')
 
     // Reset focus when the folder/label scope changes so we don't carry over
     // a stale position. Done in an effect so the store update doesn't fire
@@ -160,7 +164,7 @@ export function useMailListShortcuts({
         onFocusIndex,
     ])
 
-    useRegisterShortcuts(shortcuts)
+    useRegisterShortcuts(shortcuts, scopeOwner)
 
     return { focusedIndex, focusedId }
 }
