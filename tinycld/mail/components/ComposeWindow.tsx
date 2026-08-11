@@ -1,5 +1,6 @@
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { usePickFiles } from '@tinycld/core/file-viewer/use-pick-files'
+import { useFileDrop } from '@tinycld/core/lib/file-drop/use-file-drop'
 import { performMutations } from '@tinycld/core/lib/mutations'
 import { notify } from '@tinycld/core/lib/notify'
 import { useStore } from '@tinycld/core/lib/pocketbase'
@@ -12,7 +13,6 @@ import { Platform, View } from 'react-native'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
 import { useCompose } from '../hooks/useComposeState'
-import { useFileDrop } from '../hooks/useFileDrop'
 import { setContentWhenReady, useMailEditor } from '../hooks/useMailEditor'
 import { useMailSendReadiness } from '../hooks/useMailSendReadiness'
 import { useSaveDraft } from '../hooks/useSaveDraft'
@@ -173,7 +173,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         isEnabled: !!mailboxId,
     })
 
-    const { pickFiles, ActionSheetElement: PickerActionSheet } = usePickFiles()
+    const { pickFiles } = usePickFiles()
     const handleAttach = useCallback(async () => {
         const picked = await pickFiles({
             sources: ['photoLibrary', 'camera', 'documents'],
@@ -337,7 +337,6 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         >
             <ComposeShortcuts onSend={onSend} />
             {composeWindow}
-            {PickerActionSheet}
         </View>
     )
 }
