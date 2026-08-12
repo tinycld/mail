@@ -23,6 +23,7 @@ const manifest = {
     // /api/mail/search route — that is a different feature, with structured
     // filters the palette does not offer.
     search: { adapter: 'search-adapter' },
+    automation: { definitions: 'automation' },
     // Message bodies are real disk. No ownerField: a mailbox is shared by its
     // members, so these bytes count toward the ORG ceiling only.
     quota: [{ collection: 'mail_messages', sizeField: 'total_size' }],

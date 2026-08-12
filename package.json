@@ -10,6 +10,7 @@
         "./collections": "./tinycld/mail/collections.ts",
         "./screens/*": "./tinycld/mail/screens/*.tsx",
         "./seed": "./tinycld/mail/seed.ts",
+        "./automation": "./tinycld/mail/automation.ts",
         "./sidebar": "./tinycld/mail/sidebar.tsx",
         "./settings/*": "./tinycld/mail/settings/*.tsx",
         "./system-settings/*": "./tinycld/mail/system-settings/*.tsx",
