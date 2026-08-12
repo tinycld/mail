@@ -522,6 +522,41 @@ func requireAuth(re *core.RequestEvent) error {
 	return re.Next()
 }
 
+// mailboxMembersForMessage resolves the mail_mailbox_members rows for the
+// mailbox an arriving message belongs to, via thread -> mailbox. Shared by
+// bufferMailNotification (notification recipients) and messageOwnerResolver
+// (automation rule owners) — both need the same "who does this message
+// belong to" traversal. Returns nil (not an error) on any missing link.
+func mailboxMembersForMessage(app core.App, msgRecord *core.Record) []*core.Record {
+	threadID := msgRecord.GetString("thread")
+	if threadID == "" {
+		return nil
+	}
+
+	thread, err := app.FindRecordById("mail_threads", threadID)
+	if err != nil {
+		return nil
+	}
+
+	mailboxID := thread.GetString("mailbox")
+	if mailboxID == "" {
+		return nil
+	}
+
+	members, err := app.FindRecordsByFilter(
+		"mail_mailbox_members",
+		"mailbox = {:mailboxId}",
+		"",
+		0,
+		0,
+		map[string]any{"mailboxId": mailboxID},
+	)
+	if err != nil || len(members) == 0 {
+		return nil
+	}
+	return members
+}
+
 // bufferMailNotification queues a mail notification for batched delivery.
 func bufferMailNotification(app core.App, msgRecord *core.Record) {
 	if !appIsLive(app) {
@@ -534,31 +569,8 @@ func bufferMailNotification(app core.App, msgRecord *core.Record) {
 		return
 	}
 
-	threadID := msgRecord.GetString("thread")
-	if threadID == "" {
-		return
-	}
-
-	thread, err := app.FindRecordById("mail_threads", threadID)
-	if err != nil {
-		return
-	}
-
-	mailboxID := thread.GetString("mailbox")
-	if mailboxID == "" {
-		return
-	}
-
-	// Find mailbox members to notify
-	members, err := app.FindRecordsByFilter(
-		"mail_mailbox_members",
-		"mailbox = {:mailboxId}",
-		"",
-		0,
-		0,
-		map[string]any{"mailboxId": mailboxID},
-	)
-	if err != nil || len(members) == 0 {
+	members := mailboxMembersForMessage(app, msgRecord)
+	if len(members) == 0 {
 		return
 	}
 

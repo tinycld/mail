@@ -6,10 +6,16 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
-// automation_test.go proves messageOwnerResolver maps an arriving
-// mail_messages record to the mailbox members who own it, reusing the same
-// thread -> mailbox -> mail_mailbox_members resolution bufferMailNotification
-// already relies on for notification delivery.
+// automation_test.go proves:
+//   - messageOwnerResolver maps an arriving mail_messages record to the
+//     mailbox members who own it, reusing the same thread -> mailbox ->
+//     mail_mailbox_members resolution bufferMailNotification already relies
+//     on for notification delivery (mailboxMembersForMessage, register.go).
+//   - messageIsInbound (the "mail:message-received" TriggerFilter) admits
+//     genuinely received messages and rejects drafts/outbound sends, so the
+//     mail_messages create hook firing for every kind of message row doesn't
+//     turn every draft keystroke or outbound send into a "message-received"
+//     automation run.
 
 func newTestThread(t *testing.T, app core.App, mailboxID, subject string) *core.Record {
 	t.Helper()
@@ -28,6 +34,11 @@ func newTestThread(t *testing.T, app core.App, mailboxID, subject string) *core.
 
 func newTestMessage(t *testing.T, app core.App, threadID, subject string) *core.Record {
 	t.Helper()
+	return newTestMessageWithStatus(t, app, threadID, subject, "")
+}
+
+func newTestMessageWithStatus(t *testing.T, app core.App, threadID, subject, deliveryStatus string) *core.Record {
+	t.Helper()
 	messages, err := app.FindCollectionByNameOrId("mail_messages")
 	if err != nil {
 		t.Fatalf("mail_messages collection missing: %v", err)
@@ -35,6 +46,9 @@ func newTestMessage(t *testing.T, app core.App, threadID, subject string) *core.
 	msg := core.NewRecord(messages)
 	msg.Set("thread", threadID)
 	msg.Set("subject", subject)
+	if deliveryStatus != "" {
+		msg.Set("delivery_status", deliveryStatus)
+	}
 	if err := app.Save(msg); err != nil {
 		t.Fatalf("failed to save message: %v", err)
 	}
@@ -76,5 +90,37 @@ func TestMessageOwnerResolution_DanglingThreadResolvesNil(t *testing.T) {
 
 	if owners := messageOwnerResolver(app, msg); owners != nil {
 		t.Fatalf("owners = %v, want nil for a dangling thread reference", owners)
+	}
+}
+
+func TestMessageIsInbound_AdmitsReceivedMail(t *testing.T) {
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "inbound-filter.test", "alice", "mb_inbound_filtr1")
+	thread := newTestThread(t, app, padID("mb_inbound_filtr1"), "hello")
+
+	// The inbound webhook never sets delivery_status; storeMessage defaults
+	// it to "sending". IMAP APPEND-to-inbox sets "delivered". Both are
+	// genuinely received mail and must pass the filter.
+	unset := newTestMessage(t, app, thread.Id, "webhook delivery")
+	if !messageIsInbound(app, unset) {
+		t.Fatal("a message with no delivery_status must be admitted (inbound webhook default)")
+	}
+
+	delivered := newTestMessageWithStatus(t, app, thread.Id, "imap append", "delivered")
+	if !messageIsInbound(app, delivered) {
+		t.Fatal("a delivered message must be admitted")
+	}
+}
+
+func TestMessageIsInbound_RejectsOutboundAndDrafts(t *testing.T) {
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "outbound-filter.test", "alice", "mb_outbound_fltr1")
+	thread := newTestThread(t, app, padID("mb_outbound_fltr1"), "hello")
+
+	for _, status := range []string{"draft", "sent", "bounced", "spam_complaint"} {
+		msg := newTestMessageWithStatus(t, app, thread.Id, "subject-"+status, status)
+		if messageIsInbound(app, msg) {
+			t.Errorf("delivery_status %q must be rejected by the message-received filter", status)
+		}
 	}
 }
