@@ -18,6 +18,11 @@ export function rewriteCidReferences(
             const normalized = cid.trim().toLowerCase().replace(/^<|>$/g, '')
             const filename = cidMap[normalized]
             if (!filename) return match
+            // mail_messages' viewRule is member-scoped, not public — PB's
+            // file endpoint 404s a plain getURL() (browsers can't attach an
+            // Authorization header to an <img src>) unless it carries a
+            // short-lived `?token=` from pb.files.getToken(). Mirrors
+            // core/file-viewer/use-authed-file-url.ts's pattern.
             const url = pb.files.getURL(
                 { collectionId, id: recordId },
                 filename,

@@ -36,6 +36,7 @@ function useEmailHtml(
             token: fileToken,
         })
         setFailed(false)
+
         fetch(url)
             .then(res => {
                 if (!res.ok) throw new Error(`body fetch: HTTP ${res.status}`)
