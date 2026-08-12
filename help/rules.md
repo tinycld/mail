@@ -9,6 +9,17 @@ Mail rules are filters: they watch for arriving mail and act on it without you
 opening the message. See [Automation rules](help://core:rules) for how the
 builder works — this topic covers what mail itself contributes.
 
+## Where to find mail rules
+
+Click **Rules** in the mail sidebar. This opens the same rule builder as
+Settings → Rules, but filtered to rules whose trigger belongs to mail — so
+you only see, and only create, mail-flavored automation from here.
+
+A rule you create from this screen is a normal personal rule: it also shows
+up in **Settings → Rules → My rules**, listed alongside every other rule you
+own. There's only one set of rules — the mail sidebar is a filtered view into
+it, not a separate system.
+
 ## When a message arrives
 
 Mail provides one trigger, **A message arrives**. It fires for genuinely
@@ -91,6 +102,16 @@ A rule also can't send to the mailbox it's sending from. Both the mailbox's own
 address and any of its aliases are refused, so a forward rule pointed at itself
 can't feed itself. Forwarding or replying to any other address, including
 `{{sender_email}}`, works normally.
+
+## Testing before you rely on it
+
+The builder's **Test against recent items** button works the same way here as
+anywhere else — see [Automation rules](help://core:rules) for the general
+behavior. One thing specific to mail: because a shared mailbox's messages
+aren't scoped to any single member, a personal rule on the "A message arrives"
+trigger usually can't be dry-run tested by a non-admin — you'll see a message
+explaining that an organization admin needs to test it instead. This doesn't
+affect whether the rule actually runs; it only affects the preview.
 
 ## What rules can't do yet
 
