@@ -26,10 +26,22 @@ runs on every arriving message.
 | **Move to folder** | Files the thread in Archive, Trash, Spam, or Inbox |
 | **Mark as read** | Clears the unread state |
 | **Forward the message** | Sends a copy to another address |
+| **Star the message** | Stars the thread |
 | **Send a message** | Sends new mail, with a subject and body you write |
 
-Moving a message does not change whether it's read, and marking it read does
-not move it — the two actions are independent, so you can combine them.
+Moving a message does not change whether it's read, marking it read does not
+move it, and starring does neither — the actions are independent, so you can
+combine them.
+
+## When a message bounces
+
+The trigger **A message bounces** fires when something you sent doesn't reach
+its recipient — a hard bounce, or the recipient marking it as spam. It does not
+fire on ordinary successful sends.
+
+You can filter on the subject, the reason the delivery failed, and which
+address it was sent from. Pair it with a notification if you send anything that
+matters going unnoticed.
 
 ## Recipes
 

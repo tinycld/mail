@@ -322,3 +322,51 @@ func TestCheckSendRateLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestActionStarMessage_StarsForTheAudienceOnly(t *testing.T) {
+	env := setupActionEnv(t, "star-personal.test", "mb_star_personal")
+	rule := newTestRule(t, env.app, env.alice, "personal")
+
+	err := actionStarMessage(env.app, automation.ActionRequest{
+		Rule: rule, OwnerID: env.alice, Record: env.msg,
+	})
+	if err != nil {
+		t.Fatalf("actionStarMessage: %v", err)
+	}
+
+	if !threadStateFor(t, env.app, env.threadID, env.alice).GetBool("is_starred") {
+		t.Error("alice's thread state is not starred")
+	}
+	if state := findThreadState(env.app, env.threadID, env.bob); state != nil {
+		t.Errorf("bob got thread state from alice's personal rule: starred=%v",
+			state.GetBool("is_starred"))
+	}
+}
+
+// Starring must not refile the thread or mark it read — the same
+// independence move-to-folder and mark-as-read hold between them.
+func TestActionStarMessage_PreservesFolderAndReadState(t *testing.T) {
+	env := setupActionEnv(t, "star-preserves.test", "mb_star_preserve")
+	rule := newTestRule(t, env.app, env.alice, "personal")
+
+	if err := ensureThreadState(env.app, env.threadID, env.alice, "archive", true); err != nil {
+		t.Fatalf("seed thread state: %v", err)
+	}
+
+	if err := actionStarMessage(env.app, automation.ActionRequest{
+		Rule: rule, OwnerID: env.alice, Record: env.msg,
+	}); err != nil {
+		t.Fatalf("actionStarMessage: %v", err)
+	}
+
+	state := threadStateFor(t, env.app, env.threadID, env.alice)
+	if !state.GetBool("is_starred") {
+		t.Error("is_starred = false, want true")
+	}
+	if folder := state.GetString("folder"); folder != "archive" {
+		t.Errorf("folder = %q, want archive — starring must not refile", folder)
+	}
+	if !state.GetBool("is_read") {
+		t.Error("starring cleared is_read")
+	}
+}

@@ -410,6 +410,22 @@ func setThreadRead(app core.App, threadID, userID string, isRead bool) error {
 	return app.Save(record)
 }
 
+// setThreadStarred sets a thread's starred state for one user, preserving the
+// folder and read state (see setThreadFolder for the same reasoning).
+func setThreadStarred(app core.App, threadID, userID string, isStarred bool) error {
+	if record := findThreadState(app, threadID, userID); record != nil {
+		record.Set("is_starred", isStarred)
+		return app.Save(record)
+	}
+
+	record, err := newThreadState(app, threadID, userID)
+	if err != nil {
+		return err
+	}
+	record.Set("is_starred", isStarred)
+	return app.Save(record)
+}
+
 // resolveMailboxByAddress finds a mailbox matching a local part and domain.
 // It first checks primary addresses on mail_mailboxes, then falls back to
 // mail_mailbox_aliases. When a match is via an alias, the alias record is

@@ -124,3 +124,32 @@ func TestMessageIsInbound_RejectsOutboundAndDrafts(t *testing.T) {
 		}
 	}
 }
+
+// messageDidBounce gates "mail:message-bounced". The declaration watches
+// delivery_status, so the hook fires on every transition of that column —
+// including the sending → sent path every successful send takes.
+func TestMessageDidBounce_AdmitsOnlyDeliveryFailures(t *testing.T) {
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "bounce-filter.test", "alice", "mb_bounce_filter")
+	thread := newTestThread(t, app, padID("mb_bounce_filter"), "hello")
+
+	for _, status := range []string{"bounced", "spam_complaint"} {
+		msg := newTestMessageWithStatus(t, app, thread.Id, "subject-"+status, status)
+		if !messageDidBounce(app, msg) {
+			t.Errorf("delivery_status %q must be admitted as a bounce", status)
+		}
+	}
+
+	// "sent" is the one that matters: every successful send passes through it,
+	// and admitting it would run a bounce rule on all outbound mail.
+	for _, status := range []string{"sending", "sent", "delivered", "draft", ""} {
+		msg := newTestMessageWithStatus(t, app, thread.Id, "ok-"+status, status)
+		if messageDidBounce(app, msg) {
+			t.Errorf("delivery_status %q must NOT be treated as a bounce", status)
+		}
+	}
+
+	if messageDidBounce(app, nil) {
+		t.Error("a nil record must not be treated as a bounce")
+	}
+}

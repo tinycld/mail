@@ -23,6 +23,7 @@ import (
 func registerAutomationActions() {
 	automation.RegisterAction("mail:move-to-folder", actionMoveToFolder)
 	automation.RegisterAction("mail:mark-as-read", actionMarkAsRead)
+	automation.RegisterAction("mail:star-message", actionStarMessage)
 	automation.RegisterAction("mail:forward-message", actionForwardMessage)
 	automation.RegisterAction("mail:send-message", actionSendMessage)
 }
@@ -125,6 +126,22 @@ func actionMarkAsRead(app core.App, req automation.ActionRequest) error {
 	for _, userID := range actionAudience(app, req) {
 		if err := setThreadRead(app, threadID, userID, true); err != nil {
 			return fmt.Errorf("mail:mark-as-read: %w", err)
+		}
+	}
+	return nil
+}
+
+// actionStarMessage stars the triggering message's thread for each user in
+// the audience, leaving their folder and read state alone.
+func actionStarMessage(app core.App, req automation.ActionRequest) error {
+	threadID, err := threadIDForAction(req)
+	if err != nil {
+		return err
+	}
+
+	for _, userID := range actionAudience(app, req) {
+		if err := setThreadStarred(app, threadID, userID, true); err != nil {
+			return fmt.Errorf("mail:star-message: %w", err)
 		}
 	}
 	return nil

@@ -19,6 +19,25 @@ const automation = {
                 { key: 'alias', label: 'Received via alias' },
             ],
         },
+        {
+            // A delivery failure is a different event from "a message
+            // arrives", even though both are mail_messages rows: the message
+            // is one YOU sent, and the interesting fields are the failure. A
+            // Go filter (server/automation.go) gates it to the two statuses
+            // that actually mean failure, so an ordinary send transitioning
+            // sending → sent never fires this.
+            id: 'message-bounced',
+            label: 'A message bounces',
+            collection: 'mail_messages',
+            on: 'update',
+            watch: ['delivery_status'],
+            fields: [
+                'subject',
+                { key: 'bounce_reason', label: 'Reason' },
+                { key: 'delivery_status', label: 'Delivery status' },
+                { key: 'sender_email', label: 'Sent from' },
+            ],
+        },
     ],
     // All four actions are native. Folder and read state live per-user on
     // mail_thread_state, not on the mail_messages row the trigger fires for,
@@ -47,6 +66,11 @@ const automation = {
         {
             id: 'mark-as-read',
             label: 'Mark as read',
+            kind: 'native',
+        },
+        {
+            id: 'star-message',
+            label: 'Star the message',
             kind: 'native',
         },
         {
