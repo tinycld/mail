@@ -207,28 +207,16 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 		Attachments:   msg.Attachments,
 	}
 
-	if _, err := storeMessage(app, thread.Id, stored); err != nil {
-		if threadWasNew {
-			if delErr := app.Delete(thread); delErr != nil {
-				app.Logger().Error("inbound: failed to clean up empty thread after storage error",
-					"threadID", thread.Id, "error", delErr)
-			}
-		}
-		return fmt.Errorf("storeMessage: %w", err)
-	}
-
-	// Use stripped reply for snippet when available (just the new content, no quoted history)
-	snippet := msg.StrippedReply
-	if snippet == "" {
-		snippet = msg.TextBody
-	}
-	if snippet == "" {
-		snippet = msg.Subject
-	}
-	if err := updateThreadMetadata(app, thread, msg.From.Name, msg.From.Email, snippet, msg.Date); err != nil {
-		return fmt.Errorf("updateThreadMetadata: %w", err)
-	}
-
+	// Deliver to each member BEFORE storing the message.
+	//
+	// Storing is what fires the mail_messages create hook, and that hook is
+	// what dispatches automation rules. A rule action that files the thread
+	// (mail:move-to-folder) writes mail_thread_state — so if delivery ran
+	// afterwards, its "inbox" write would race the action and usually land
+	// last, silently undoing the move while the run still logged "ok".
+	// Seeding the state first means the action updates a row that already
+	// exists and nothing overwrites it.
+	//
 	// Member lookup failure means we can't deliver to any user — propagate so
 	// the caller returns 500 and Postmark retries.
 	members, err := getMailboxMembers(app, mailboxID)
@@ -250,6 +238,28 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 			app.Logger().Error("inbound: failed to create thread state",
 				"threadID", thread.Id, "userID", userID, "error", err)
 		}
+	}
+
+	if _, err := storeMessage(app, thread.Id, stored); err != nil {
+		if threadWasNew {
+			if delErr := app.Delete(thread); delErr != nil {
+				app.Logger().Error("inbound: failed to clean up empty thread after storage error",
+					"threadID", thread.Id, "error", delErr)
+			}
+		}
+		return fmt.Errorf("storeMessage: %w", err)
+	}
+
+	// Use stripped reply for snippet when available (just the new content, no quoted history)
+	snippet := msg.StrippedReply
+	if snippet == "" {
+		snippet = msg.TextBody
+	}
+	if snippet == "" {
+		snippet = msg.Subject
+	}
+	if err := updateThreadMetadata(app, thread, msg.From.Name, msg.From.Email, snippet, msg.Date); err != nil {
+		return fmt.Errorf("updateThreadMetadata: %w", err)
 	}
 
 	return nil
