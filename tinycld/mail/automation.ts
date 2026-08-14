@@ -20,6 +20,52 @@ const automation = {
             ],
         },
     ],
+    // All four actions are native. Folder and read state live per-user on
+    // mail_thread_state, not on the mail_messages row the trigger fires for,
+    // so a record-op (which can only target the trigger record) cannot
+    // express them; sending runs through the provider + persistence path.
+    //
+    // Scope: an org rule acts for every member of the message's mailbox, a
+    // personal rule only for its owner. See server/automation.go.
+    actions: [
+        {
+            id: 'move-to-folder',
+            label: 'Move to folder',
+            kind: 'native',
+            params: [
+                {
+                    key: 'folder',
+                    type: 'select',
+                    label: 'Folder',
+                    // Deliberately narrower than mail_thread_state.folder,
+                    // which also allows sent/drafts — neither is a sensible
+                    // destination for a rule.
+                    options: ['archive', 'trash', 'spam', 'inbox'],
+                },
+            ],
+        },
+        {
+            id: 'mark-as-read',
+            label: 'Mark as read',
+            kind: 'native',
+        },
+        {
+            id: 'forward-message',
+            label: 'Forward the message',
+            kind: 'native',
+            params: [{ key: 'to', type: 'text', label: 'Forward to' }],
+        },
+        {
+            id: 'send-message',
+            label: 'Send a message',
+            kind: 'native',
+            params: [
+                { key: 'to', type: 'text', label: 'To' },
+                { key: 'subject', type: 'text', label: 'Subject' },
+                { key: 'body', type: 'text', label: 'Body' },
+            ],
+        },
+    ],
 } satisfies AutomationDefinitions<MailSchema>
 
 export default automation
