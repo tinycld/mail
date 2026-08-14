@@ -79,10 +79,18 @@ want a rule that affects only you, make it a personal rule.
 ## Auto-replies won't loop
 
 A rule that sends mail in response to arriving mail can, in principle, answer
-another auto-responder forever. Mail caps how often a single rule will send
-within an hour, so an exchange between two auto-responders stops on its own.
-If you notice a reply rule going quiet, check its run history — hitting the cap
-is recorded there.
+another auto-responder forever. Two things stop that.
+
+Mail caps how much a mailbox sends within an hour. Only outgoing mail counts —
+messages you receive never use up the allowance. The cap is shared by all of
+that mailbox's rules, so adding more reply rules doesn't raise it, and an
+exchange between two auto-responders stops on its own. If you notice a reply
+rule going quiet, check its run history: hitting the cap is recorded there.
+
+A rule also can't send to the mailbox it's sending from. Both the mailbox's own
+address and any of its aliases are refused, so a forward rule pointed at itself
+can't feed itself. Forwarding or replying to any other address, including
+`{{sender_email}}`, works normally.
 
 ## What rules can't do yet
 

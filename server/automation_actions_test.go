@@ -1,15 +1,17 @@
 package mail
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/pocketbase/pocketbase/tools/types"
 	"tinycld.org/core/automation"
 )
 
-// automation_actions_test.go covers the four native actions mail registers:
+// automation_actions_test.go covers the five native actions mail registers:
 //
 //   - the audience rule that decides who an action acts for — an org rule
 //     applies to every mailbox member, a personal rule only to its owner, and
@@ -17,10 +19,19 @@ import (
 //   - move-to-folder and mark-as-read each changing only their own field, so
 //     filing a message doesn't silently mark it read (or vice versa);
 //   - the folder allow-list rejecting destinations the UI has no view for;
-//   - the per-rule hourly send cap that bounds an auto-reply loop.
+//   - the hourly send cap that bounds an auto-reply loop, including the three
+//     properties that make it a real bound: it counts messages rather than
+//     matched runs, it is shared across every rule on a mailbox, and it fails
+//     closed when the count is unavailable;
+//   - recipient validation — the "to" param arrives after template
+//     substitution, so {{sender_email}} lets whoever mails the mailbox choose
+//     it; malformed addresses and the mailbox's own address are refused;
+//   - forwarding sending the stored body rather than the 200-char snippet.
 //
-// Sending itself is not exercised here: sendMessage needs a configured
-// provider, which the endpoint tests already cover.
+// The provider handoff itself is not exercised here: sendMessage needs a
+// configured provider, which the endpoint tests already cover. Everything
+// upstream of that handoff — the limiter, recipient validation, and body
+// rendering — is covered above, since that is where a loop or a leak starts.
 
 // newRulesCollections adds the two core automation collections the handlers
 // read. The mail test app builds its collections synthetically (see
@@ -284,35 +295,77 @@ func TestActionMarkAsRead_PreservesFolder(t *testing.T) {
 	}
 }
 
+// newTestMessageWithBody stores a message with a real body_html file, so the
+// forward path exercises the actual file read rather than the snippet.
+func newTestMessageWithBody(t *testing.T, app core.App, threadID, subject, html string) *core.Record {
+	t.Helper()
+	messages, err := app.FindCollectionByNameOrId("mail_messages")
+	if err != nil {
+		t.Fatalf("mail_messages collection missing: %v", err)
+	}
+	msg := core.NewRecord(messages)
+	msg.Set("thread", threadID)
+	msg.Set("subject", subject)
+	msg.Set("snippet", truncateSnippet(stripHTMLToText(html), 200))
+
+	file, err := filesystem.NewFileFromBytes([]byte(html), "body.html")
+	if err != nil {
+		t.Fatalf("failed to build body file: %v", err)
+	}
+	msg.Set("body_html", file)
+
+	if err := app.Save(msg); err != nil {
+		t.Fatalf("failed to save message: %v", err)
+	}
+	return msg
+}
+
+// seedSentMessage writes a message the mailbox has already sent, aged by the
+// given offset — what the rate limiter counts.
+func seedSentMessage(t *testing.T, app core.App, threadID string, age time.Duration) {
+	t.Helper()
+	messages, err := app.FindCollectionByNameOrId("mail_messages")
+	if err != nil {
+		t.Fatalf("mail_messages collection missing: %v", err)
+	}
+	msg := core.NewRecord(messages)
+	msg.Set("thread", threadID)
+	msg.Set("subject", "already sent")
+	msg.Set("delivery_status", "sent")
+	msg.Set("date", types.NowDateTime().Add(-age))
+	if err := app.Save(msg); err != nil {
+		t.Fatalf("failed to save sent message: %v", err)
+	}
+}
+
 func TestCheckSendRateLimit(t *testing.T) {
 	tests := []struct {
-		name       string
-		recentRuns int
-		age        time.Duration
-		wantErr    bool
+		name      string
+		sentCount int
+		age       time.Duration
+		wantErr   bool
 	}{
-		{name: "no history sends", recentRuns: 0, age: time.Minute, wantErr: false},
-		{name: "under the cap sends", recentRuns: maxSendsPerRulePerHour - 1, age: time.Minute, wantErr: false},
-		{name: "at the cap is blocked", recentRuns: maxSendsPerRulePerHour, age: time.Minute, wantErr: true},
+		{name: "no history sends", sentCount: 0, age: time.Minute, wantErr: false},
+		{name: "under the cap sends", sentCount: maxSendsPerMailboxPerHour - 2, age: time.Minute, wantErr: false},
+		{name: "at the cap is blocked", sentCount: maxSendsPerMailboxPerHour, age: time.Minute, wantErr: true},
 		{
 			// The cap is a rolling hour, not a lifetime total: yesterday's
 			// burst must not stop today's mail.
-			name: "old runs fall outside the window", recentRuns: maxSendsPerRulePerHour + 5,
+			name: "old sends fall outside the window", sentCount: maxSendsPerMailboxPerHour + 5,
 			age: 2 * time.Hour, wantErr: false,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			app := setupInboundTestApp(t)
-			newRulesCollections(t, app)
-			rule := newTestRule(t, app, "user_alice_0000", "personal")
+			env := setupActionEnv(t, "ratelimit.test", "mb_ratelimit_001")
+			rule := newTestRule(t, env.app, env.alice, "personal")
 
-			for range tc.recentRuns {
-				seedRun(t, app, rule.Id, tc.age)
+			for range tc.sentCount {
+				seedSentMessage(t, env.app, env.threadID, tc.age)
 			}
 
-			err := checkSendRateLimit(app, automation.ActionRequest{Rule: rule})
+			err := checkSendRateLimit(env.app, automation.ActionRequest{Rule: rule, Record: env.msg})
 			if tc.wantErr && err == nil {
 				t.Error("expected the send to be blocked, got nil")
 			}
@@ -320,6 +373,246 @@ func TestCheckSendRateLimit(t *testing.T) {
 				t.Errorf("expected the send to be allowed, got %v", err)
 			}
 		})
+	}
+}
+
+// The limiter counts messages, not matched runs. A rule with several send
+// actions writes ONE rule_runs row per dispatch but emits one message per
+// action, so a run-based count bounded len(actions) × the ceiling instead of
+// the ceiling. Runs alone must not move the limiter at all.
+func TestCheckSendRateLimit_CountsMessagesNotRuns(t *testing.T) {
+	env := setupActionEnv(t, "ratelimit-runs.test", "mb_ratelimit_runs")
+	rule := newTestRule(t, env.app, env.alice, "personal")
+
+	for range maxSendsPerMailboxPerHour * 3 {
+		seedRun(t, env.app, rule.Id, time.Minute)
+	}
+
+	if err := checkSendRateLimit(env.app, automation.ActionRequest{Rule: rule, Record: env.msg}); err != nil {
+		t.Errorf("matched runs must not consume send budget, got %v", err)
+	}
+}
+
+// The ceiling is per mailbox, not per rule. Two rules on one mailbox share
+// one budget — a per-rule cap let N rules multiply the mailbox's real ceiling
+// by N, which is precisely the loop the cap exists to bound.
+func TestCheckSendRateLimit_IsSharedAcrossRulesOnAMailbox(t *testing.T) {
+	env := setupActionEnv(t, "ratelimit-shared.test", "mb_ratelimit_shar")
+	first := newTestRule(t, env.app, env.alice, "personal")
+	second := newTestRule(t, env.app, env.alice, "personal")
+
+	for range maxSendsPerMailboxPerHour {
+		seedSentMessage(t, env.app, env.threadID, time.Minute)
+	}
+
+	if err := checkSendRateLimit(env.app, automation.ActionRequest{Rule: first, Record: env.msg}); err == nil {
+		t.Error("the rule that exhausted the budget should be blocked")
+	}
+	if err := checkSendRateLimit(env.app, automation.ActionRequest{Rule: second, Record: env.msg}); err == nil {
+		t.Error("a second rule on the same mailbox must not get a fresh budget")
+	}
+}
+
+// Fails CLOSED. This is the only control that bounds a cross-dispatch loop —
+// the depth cap cannot see a hop through an external autoresponder, which
+// returns as new inbound mail at depth 0. An unreadable count means we cannot
+// know whether we are mid-loop, so the send is refused.
+func TestCheckSendRateLimit_BlocksWhenTheMailboxCannotBeResolved(t *testing.T) {
+	env := setupActionEnv(t, "ratelimit-closed.test", "mb_ratelimit_clos")
+	rule := newTestRule(t, env.app, env.alice, "personal")
+
+	// A record whose thread cannot be resolved: mailboxIDForMessage fails, so
+	// there is no mailbox to count sends against.
+	messages, err := env.app.FindCollectionByNameOrId("mail_messages")
+	if err != nil {
+		t.Fatalf("mail_messages collection missing: %v", err)
+	}
+	orphan := core.NewRecord(messages)
+	orphan.Set("subject", "no thread")
+
+	if err := checkSendRateLimit(env.app, automation.ActionRequest{Rule: rule, Record: orphan}); err == nil {
+		t.Error("an unresolvable mailbox must block the send, not allow it")
+	}
+}
+
+func TestRuleRecipient_RejectsTheMailboxsOwnAddress(t *testing.T) {
+	env := setupActionEnv(t, "selfsend.test", "mb_selfsend_00001")
+
+	// {{sender_email}} is a documented forward target, so an attacker who can
+	// mail the mailbox chooses this string. Addressing the mailbox itself is a
+	// direct loop the depth cap cannot see: the message re-enters as new
+	// inbound mail at depth 0.
+	if _, err := ruleRecipient(env.app, "alice@selfsend.test", env.mailboxID); err == nil {
+		t.Error("sending to the mailbox's own address must be refused")
+	}
+
+	// Case must not be a way around it.
+	if _, err := ruleRecipient(env.app, "ALICE@SelfSend.test", env.mailboxID); err == nil {
+		t.Error("the self-send check must be case-insensitive")
+	}
+
+	// A different address on the same domain is legitimate.
+	if _, err := ruleRecipient(env.app, "accounting@selfsend.test", env.mailboxID); err != nil {
+		t.Errorf("a different address must be allowed, got %v", err)
+	}
+}
+
+// Received mail must not consume the send budget. storeMessage defaults an
+// unset delivery_status to "sending", so every inbound message carries it —
+// counting that status charged arriving mail against the mailbox's ability to
+// reply. Combined with fail-closed, a mailbox receiving 20 messages an hour
+// would have gone silent with no signal beyond its run history.
+func TestCheckSendRateLimit_InboundMailDoesNotConsumeTheBudget(t *testing.T) {
+	env := setupActionEnv(t, "ratelimit-inbound.test", "mb_ratelimit_inbd")
+	rule := newTestRule(t, env.app, env.alice, "personal")
+
+	messages, err := env.app.FindCollectionByNameOrId("mail_messages")
+	if err != nil {
+		t.Fatalf("mail_messages collection missing: %v", err)
+	}
+	for range maxSendsPerMailboxPerHour * 2 {
+		msg := core.NewRecord(messages)
+		msg.Set("thread", env.threadID)
+		msg.Set("subject", "arrived")
+		msg.Set("date", types.NowDateTime())
+		// storeMessage's default for inbound mail — deliberately not set here,
+		// mirroring what the inbound webhook produces.
+		msg.Set("delivery_status", "sending")
+		if err := env.app.Save(msg); err != nil {
+			t.Fatalf("failed to save inbound message: %v", err)
+		}
+	}
+
+	if err := checkSendRateLimit(env.app, automation.ActionRequest{Rule: rule, Record: env.msg}); err != nil {
+		t.Errorf("received mail must not consume send budget, got %v", err)
+	}
+}
+
+// A bounce still consumed a send, so it counts toward the ceiling.
+func TestCheckSendRateLimit_BouncedSendsCount(t *testing.T) {
+	env := setupActionEnv(t, "ratelimit-bounced.test", "mb_ratelimit_bnc")
+	rule := newTestRule(t, env.app, env.alice, "personal")
+
+	messages, err := env.app.FindCollectionByNameOrId("mail_messages")
+	if err != nil {
+		t.Fatalf("mail_messages collection missing: %v", err)
+	}
+	for range maxSendsPerMailboxPerHour {
+		msg := core.NewRecord(messages)
+		msg.Set("thread", env.threadID)
+		msg.Set("subject", "bounced")
+		msg.Set("date", types.NowDateTime())
+		msg.Set("delivery_status", "bounced")
+		if err := env.app.Save(msg); err != nil {
+			t.Fatalf("failed to save bounced message: %v", err)
+		}
+	}
+
+	if err := checkSendRateLimit(env.app, automation.ActionRequest{Rule: rule, Record: env.msg}); err == nil {
+		t.Error("bounced sends must count toward the ceiling")
+	}
+}
+
+// Mail to an alias is delivered to the same mailbox (findMailboxViaAlias), so
+// forwarding to one of the mailbox's own aliases is a self-loop — just a
+// less obvious one than using the primary address.
+func TestRuleRecipient_RejectsTheMailboxsAliases(t *testing.T) {
+	env := setupActionEnv(t, "alias-loop.test", "mb_alias_loop0001")
+
+	aliasCol, err := env.app.FindCollectionByNameOrId("mail_mailbox_aliases")
+	if err != nil {
+		t.Fatalf("mail_mailbox_aliases collection missing: %v", err)
+	}
+	alias := core.NewRecord(aliasCol)
+	alias.Set("mailbox", env.mailboxID)
+	alias.Set("address", "sales")
+	if err := env.app.Save(alias); err != nil {
+		t.Fatalf("failed to save alias: %v", err)
+	}
+
+	if _, err := ruleRecipient(env.app, "sales@alias-loop.test", env.mailboxID); err == nil {
+		t.Error("sending to the mailbox's own alias must be refused")
+	}
+	if _, err := ruleRecipient(env.app, "SALES@Alias-Loop.test", env.mailboxID); err == nil {
+		t.Error("the alias self-send check must be case-insensitive")
+	}
+
+	// An address that is neither the primary nor an alias stays allowed.
+	if _, err := ruleRecipient(env.app, "accounting@alias-loop.test", env.mailboxID); err != nil {
+		t.Errorf("an unrelated address must be allowed, got %v", err)
+	}
+}
+
+func TestHTMLToForwardText_SeparatesTableCells(t *testing.T) {
+	// Invoices are commonly tables, and "forward invoices to accounting" is
+	// the documented recipe — cells running together corrupts the amounts.
+	got := htmlToForwardText("<table><tr><td>Widget</td><td>12.00</td></tr></table>")
+
+	if !strings.Contains(got, "Widget 12.00") {
+		t.Errorf("htmlToForwardText = %q, want the cells separated", got)
+	}
+}
+
+func TestRuleRecipient_RejectsMalformedAddresses(t *testing.T) {
+	env := setupActionEnv(t, "recipient.test", "mb_recipient_0001")
+
+	for _, tc := range []struct {
+		name string
+		to   string
+	}{
+		{name: "empty", to: ""},
+		{name: "whitespace only", to: "   "},
+		{name: "not an address", to: "not-an-address"},
+		{name: "header injection via newline", to: "a@b.test\nBcc: victim@c.test"},
+		{name: "comma list", to: "a@b.test, c@d.test"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := ruleRecipient(env.app, tc.to, env.mailboxID); err == nil {
+				t.Errorf("recipient %q must be rejected", tc.to)
+			}
+		})
+	}
+
+	// A display-name form is valid and should yield the bare address.
+	got, err := ruleRecipient(env.app, "Accounting <accounting@elsewhere.test>", env.mailboxID)
+	if err != nil {
+		t.Fatalf("a display-name address must be accepted, got %v", err)
+	}
+	if got != "accounting@elsewhere.test" {
+		t.Errorf("recipient = %q, want the bare address", got)
+	}
+}
+
+func TestForwardedBody_SendsTheFullBodyNotTheSnippet(t *testing.T) {
+	env := setupActionEnv(t, "forward-body.test", "mb_forward_body01")
+
+	// Longer than the 200-char snippet truncation, so a snippet-based forward
+	// is visibly short. This is the "forward invoices to accounting" case: the
+	// old implementation delivered the first two lines of the invoice.
+	long := strings.Repeat("Invoice line item. ", 40)
+	msg := newTestMessageWithBody(t, env.app, env.threadID, "Invoice", "<p>"+long+"</p>")
+
+	body := forwardedBody(env.app, msg)
+
+	if len(body) < len(long) {
+		t.Errorf("forwarded body is %d chars, want at least the %d-char message — the snippet truncation leaked back in",
+			len(body), len(long))
+	}
+	if !strings.Contains(body, "---------- Forwarded message ----------") {
+		t.Error("forwarded body is missing its header block")
+	}
+	if !strings.Contains(body, "Invoice line item.") {
+		t.Error("forwarded body does not contain the message text")
+	}
+}
+
+func TestHTMLToForwardText_PreservesLineStructure(t *testing.T) {
+	got := htmlToForwardText("<p>First line.</p><p>Second line.</p>")
+
+	// stripHTMLToText alone collapses every whitespace run to one space, which
+	// would deliver the forward as a single paragraph.
+	if !strings.Contains(got, "First line.\nSecond line.") {
+		t.Errorf("htmlToForwardText = %q, want the two paragraphs on separate lines", got)
 	}
 }
 

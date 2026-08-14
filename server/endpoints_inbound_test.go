@@ -164,7 +164,11 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 	messages.Fields.Add(&core.TextField{Name: "alias"})
 	messages.Fields.Add(&core.TextField{Name: "sender_name"})
 	messages.Fields.Add(&core.TextField{Name: "sender_email"})
-	messages.Fields.Add(&core.TextField{Name: "date"})
+	// A real DateField, matching migration 1713000000 — not TextField. The
+	// send rate limiter filters on `date >= {:since}`, and PocketBase compares
+	// a date column differently from a text one; a TextField fixture would let
+	// a broken comparison pass here and fail in production.
+	messages.Fields.Add(&core.DateField{Name: "date"})
 	messages.Fields.Add(&core.TextField{Name: "subject"})
 	messages.Fields.Add(&core.TextField{Name: "snippet"})
 	messages.Fields.Add(&core.BoolField{Name: "has_attachments"})
