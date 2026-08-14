@@ -19,13 +19,31 @@ export function useMailSendReadiness(): MailSendReadiness {
         'mail_domains'
     )
 
+    // Joined so the mailbox's type is available for the choice below —
+    // membership rows alone can't distinguish personal from shared.
     const { data: members } = useOrgLiveQuery((query, { userId }) =>
         query
             .from({ mail_mailbox_members: membersCollection })
+            .join(
+                { mail_mailboxes: mailboxesCollection },
+                ({ mail_mailbox_members, mail_mailboxes }) =>
+                    eq(mail_mailbox_members.mailbox, mail_mailboxes.id)
+            )
             .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user, userId))
+            .select(({ mail_mailbox_members, mail_mailboxes }) => ({
+                mailbox: mail_mailbox_members.mailbox,
+                type: mail_mailboxes.type,
+            }))
     )
 
-    const mailboxId = members?.[0]?.mailbox ?? null
+    // Compose writes to the user's PERSONAL mailbox. Taking members[0] picked
+    // whichever membership happened to sort first, so a user who also belongs
+    // to a shared mailbox could have their draft saved into the shared one —
+    // where their own Drafts view (scoped to the personal mailbox) never shows
+    // it. Fall back to the first membership only when there is no personal
+    // mailbox at all, which keeps the existing "no-mailbox" blocker honest.
+    const mailboxId =
+        members?.find(m => m.type === 'personal')?.mailbox ?? members?.[0]?.mailbox ?? null
 
     const { data: mailboxes } = useOrgLiveQuery(
         query =>
