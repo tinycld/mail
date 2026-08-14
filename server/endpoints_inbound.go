@@ -184,14 +184,6 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 		}
 	}
 
-	// Find or create thread. Track whether we created a new one so we can
-	// roll it back if storeMessage fails.
-	thread, err := findOrCreateThread(app, mailboxID, msg.Subject, msg.InReplyTo, msg.References)
-	if err != nil {
-		return fmt.Errorf("findOrCreateThread: %w", err)
-	}
-	threadWasNew := thread.GetInt("message_count") == 0
-
 	stored := &storedMessage{
 		MessageID:     msg.MessageID,
 		InReplyTo:     msg.InReplyTo,
@@ -207,62 +199,70 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 		Attachments:   msg.Attachments,
 	}
 
-	// Deliver to each member BEFORE storing the message.
+	// One transaction around the whole delivery.
 	//
-	// Storing is what fires the mail_messages create hook, and that hook is
-	// what dispatches automation rules. A rule action that files the thread
-	// (mail:move-to-folder) writes mail_thread_state — so if delivery ran
-	// afterwards, its "inbox" write would race the action and usually land
-	// last, silently undoing the move while the run still logged "ok".
-	// Seeding the state first means the action updates a row that already
-	// exists and nothing overwrites it.
+	// Storing the message fires the mail_messages create hook, which is what
+	// dispatches automation rules. PocketBase delays
+	// OnModelAfterCreateSuccess until the surrounding transaction COMMITS (and
+	// skips it entirely on rollback), so wrapping delivery means rules see the
+	// message exactly once, after every row it depends on is settled.
 	//
-	// Member lookup failure means we can't deliver to any user — propagate so
-	// the caller returns 500 and Postmark retries.
-	members, err := getMailboxMembers(app, mailboxID)
-	if err != nil {
-		return fmt.Errorf("getMailboxMembers: %w", err)
-	}
-	// Deliberately no users.disabled check here (decided 2026-07-28; this is
-	// the delivery path both the webhook and inbound-SMTP routes converge on).
-	// Disable is a reversible suspension: mail keeps accumulating so it is
-	// waiting when an admin re-enables the account, and senders learn nothing
-	// about the account's state — bouncing or deferring would leak it. The
-	// suspended user still can't READ any of it: sign-in, token refresh, IMAP
-	// and the collection rules are all closed by the disabled guards.
-	for _, member := range members {
-		userID := member.GetString("user")
-		if err := ensureThreadState(app, thread.Id, userID, "inbox", false); err != nil {
-			// Per-member state failure is non-fatal: the message is stored,
-			// the affected user's thread state can be reconciled later.
-			app.Logger().Error("inbound: failed to create thread state",
-				"threadID", thread.Id, "userID", userID, "error", err)
+	// Without the transaction the hook fires on the save itself, mid-function:
+	// a mail:move-to-folder action would archive the thread and the
+	// ensureThreadState("inbox") below would then overwrite it, silently
+	// undoing the move while the run still logged "ok". It also means a
+	// failure partway through no longer leaves rules to fire against a
+	// half-written message — the rollback suppresses them.
+	//
+	// Rollback also removes a thread this call created, which is why there is
+	// no manual thread cleanup on the storeMessage error path any more.
+	return app.RunInTransaction(func(txApp core.App) error {
+		thread, err := findOrCreateThread(txApp, mailboxID, msg.Subject, msg.InReplyTo, msg.References)
+		if err != nil {
+			return fmt.Errorf("findOrCreateThread: %w", err)
 		}
-	}
 
-	if _, err := storeMessage(app, thread.Id, stored); err != nil {
-		if threadWasNew {
-			if delErr := app.Delete(thread); delErr != nil {
-				app.Logger().Error("inbound: failed to clean up empty thread after storage error",
-					"threadID", thread.Id, "error", delErr)
+		// Member lookup failure means we can't deliver to any user — propagate
+		// so the caller returns 500 and Postmark retries.
+		members, err := getMailboxMembers(txApp, mailboxID)
+		if err != nil {
+			return fmt.Errorf("getMailboxMembers: %w", err)
+		}
+		// Deliberately no users.disabled check here (decided 2026-07-28; this is
+		// the delivery path both the webhook and inbound-SMTP routes converge on).
+		// Disable is a reversible suspension: mail keeps accumulating so it is
+		// waiting when an admin re-enables the account, and senders learn nothing
+		// about the account's state — bouncing or deferring would leak it. The
+		// suspended user still can't READ any of it: sign-in, token refresh, IMAP
+		// and the collection rules are all closed by the disabled guards.
+		for _, member := range members {
+			userID := member.GetString("user")
+			if err := ensureThreadState(txApp, thread.Id, userID, "inbox", false); err != nil {
+				// Per-member state failure is non-fatal: the message is stored,
+				// the affected user's thread state can be reconciled later.
+				txApp.Logger().Error("inbound: failed to create thread state",
+					"threadID", thread.Id, "userID", userID, "error", err)
 			}
 		}
-		return fmt.Errorf("storeMessage: %w", err)
-	}
 
-	// Use stripped reply for snippet when available (just the new content, no quoted history)
-	snippet := msg.StrippedReply
-	if snippet == "" {
-		snippet = msg.TextBody
-	}
-	if snippet == "" {
-		snippet = msg.Subject
-	}
-	if err := updateThreadMetadata(app, thread, msg.From.Name, msg.From.Email, snippet, msg.Date); err != nil {
-		return fmt.Errorf("updateThreadMetadata: %w", err)
-	}
+		if _, err := storeMessage(txApp, thread.Id, stored); err != nil {
+			return fmt.Errorf("storeMessage: %w", err)
+		}
 
-	return nil
+		// Use stripped reply for snippet when available (just the new content, no quoted history)
+		snippet := msg.StrippedReply
+		if snippet == "" {
+			snippet = msg.TextBody
+		}
+		if snippet == "" {
+			snippet = msg.Subject
+		}
+		if err := updateThreadMetadata(txApp, thread, msg.From.Name, msg.From.Email, snippet, msg.Date); err != nil {
+			return fmt.Errorf("updateThreadMetadata: %w", err)
+		}
+
+		return nil
+	})
 }
 
 func splitAddress(email string) (localPart, domain string) {
