@@ -1,3 +1,4 @@
+import { useFileToken } from '@tinycld/core/file-viewer/use-authed-file-url'
 import { captureException } from '@tinycld/core/lib/errors'
 import { pb } from '@tinycld/core/lib/pocketbase'
 import { proxyImageUrls } from '@tinycld/core/lib/proxy-image-urls'
@@ -21,12 +22,19 @@ function useEmailHtml(
 ) {
     const [html, setHtml] = useState('')
     const [failed, setFailed] = useState(false)
+    // mail_messages files sit behind the record's viewRule (mailbox
+    // membership). The SDK carries auth on its own requests, but this is a
+    // raw fetch outside that pipeline, so the URL needs an explicit
+    // ?token= — exactly what core's file viewer does for the same reason.
+    const { data: fileToken } = useFileToken()
 
     useEffect(() => {
-        if (!filename) return
+        if (!filename || !fileToken) return
 
         const token = pb.authStore.token
-        const url = pb.files.getURL({ collectionId, id: recordId }, filename)
+        const url = pb.files.getURL({ collectionId, id: recordId }, filename, {
+            token: fileToken,
+        })
         setFailed(false)
         fetch(url)
             .then(res => {
@@ -42,7 +50,7 @@ function useEmailHtml(
                 // from the PB host, breaking under any cross-origin dev
                 // setup (Expo on a different port from PB).
                 const proxied = proxyImageUrls(raw, token)
-                setHtml(rewriteCidReferences(proxied, collectionId, recordId, cidMap))
+                setHtml(rewriteCidReferences(proxied, collectionId, recordId, cidMap, fileToken))
             })
             .catch((err: unknown) => {
                 // A failed fetch must not render as an EMPTY email — the user
@@ -52,7 +60,7 @@ function useEmailHtml(
                 setHtml('')
                 setFailed(true)
             })
-    }, [collectionId, recordId, filename, cidMap])
+    }, [collectionId, recordId, filename, cidMap, fileToken])
 
     return { html, failed }
 }
