@@ -64,7 +64,13 @@ export function ComposeHeader({
                 >
                     <HelpCircle size={14} color={backgroundColor} />
                 </Pressable>
-                <Pressable className="rounded" style={{ padding: 6 }} onPress={onClose}>
+                <Pressable
+                    className="rounded"
+                    style={{ padding: 6 }}
+                    onPress={onClose}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close compose"
+                >
                     <X size={14} color={backgroundColor} />
                 </Pressable>
             </View>

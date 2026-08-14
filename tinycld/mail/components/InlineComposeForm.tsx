@@ -1,4 +1,5 @@
 import { usePickFiles } from '@tinycld/core/file-viewer/use-pick-files'
+import { useFileDrop } from '@tinycld/core/lib/file-drop/use-file-drop'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useForm, zodResolver } from '@tinycld/core/ui/form'
 import { useCallback, useEffect } from 'react'
@@ -7,7 +8,6 @@ import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
 import type { useCompose } from '../hooks/useComposeState'
 import { useDefaultMailbox } from '../hooks/useDefaultMailbox'
-import { useFileDrop } from '../hooks/useFileDrop'
 import { useMailEditor } from '../hooks/useMailEditor'
 import { useSendEmail } from '../hooks/useSendEmail'
 import { useComposeStore } from '../stores/compose-store'
@@ -59,7 +59,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
         defaultValues: { to: toValue, cc: '', bcc: '', subject: subjectValue },
     })
 
-    const { send, isPending } = useSendEmail({
+    const { send, isPending, uploadProgress } = useSendEmail({
         onSuccess: () => {
             editor.clear()
             clearAttachments()
@@ -99,7 +99,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
         isEnabled: !!mailboxId,
     })
 
-    const { pickFiles, ActionSheetElement: PickerActionSheet } = usePickFiles()
+    const { pickFiles } = usePickFiles()
     const handleAttach = useCallback(async () => {
         const picked = await pickFiles({
             sources: ['photoLibrary', 'camera', 'documents'],
@@ -126,6 +126,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
                     isVisible={attachments.length > 0}
                     attachments={attachments}
                     onRemove={removeFile}
+                    uploadProgress={uploadProgress}
                 />
                 <ComposeToolbar
                     commands={commands}
@@ -137,7 +138,6 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
                 />
                 <DropOverlay isVisible={isDragging} />
             </View>
-            {PickerActionSheet}
         </View>
     )
 }

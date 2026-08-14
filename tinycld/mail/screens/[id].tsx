@@ -124,7 +124,7 @@ export default function MailDetailScreen() {
         orgHref('mail', { folder: initialFolderRef.current ?? 'inbox' })
     )
 
-    useShortcutScope('thread')
+    const scopeOwner = useShortcutScope('thread')
     const closeShortcut = useMemo<Shortcut>(
         () => ({
             id: 'mail.thread.close',
@@ -136,7 +136,7 @@ export default function MailDetailScreen() {
         }),
         [navigateBack]
     )
-    useRegisterShortcut(closeShortcut)
+    useRegisterShortcut(closeShortcut, scopeOwner)
 
     const {
         archiveThread,

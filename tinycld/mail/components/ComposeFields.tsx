@@ -32,6 +32,10 @@ function ComposeFieldInput({
 
     return (
         <PlainInput
+            // The label is a sibling Text, not a bound <label>, so these
+            // inputs are otherwise unaddressable from a test.
+            testID={`mail-compose-${name}`}
+            accessibilityLabel={name}
             style={{ flex: 1, fontSize: 13, paddingHorizontal: 4, color: foregroundColor }}
             placeholderTextColor={placeholderColor}
             value={field.value}

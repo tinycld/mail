@@ -4,6 +4,7 @@ import {
     type SaveDraftRequest,
     type SendEmailResponse,
 } from '@tinycld/app-generated/mail-api'
+import { uploadFormDataWithProgress } from '@tinycld/core/file-viewer/upload-file'
 import { captureException, errorToString } from '@tinycld/core/lib/errors'
 import { useMutation } from '@tinycld/core/lib/mutations'
 import { PB_SERVER_ADDR, pb } from '@tinycld/core/lib/pocketbase'
@@ -28,16 +29,14 @@ export function useSaveDraft({ onSuccess, onError }: UseSaveDraftOptions = {}) {
                 for (const file of attachments) {
                     formData.append(MultipartFieldAttachments, file, file.name)
                 }
-                const res = await fetch(`${PB_SERVER_ADDR}/api/mail/draft`, {
-                    method: 'POST',
-                    headers: { Authorization: pb.authStore.token },
-                    body: formData,
-                })
-                if (!res.ok) {
-                    const data = await res.json().catch(() => ({}))
-                    throw new Error(data.message || `Draft save failed: ${res.status}`)
-                }
-                return await res.json()
+                // Shares the send path's XHR transport. No progress callback:
+                // a draft save is a background autosave with no surface to
+                // report into, so it only wants the one code path, not a bar.
+                return (await uploadFormDataWithProgress({
+                    url: `${PB_SERVER_ADDR}/api/mail/draft`,
+                    formData,
+                    authToken: pb.authStore.token,
+                })) as SendEmailResponse
             }
 
             return await pb.send('/api/mail/draft', {
