@@ -320,9 +320,9 @@ func updateThreadMetadata(app core.App, thread *core.Record, senderName, senderE
 	return nil
 }
 
-// ensureThreadState creates or updates a mail_thread_state record for a user.
-func ensureThreadState(app core.App, threadID, userID, folder string, isRead bool) error {
-	// Check for existing thread state
+// findThreadState returns the per-user mail_thread_state row for a thread, or
+// nil when the user has none yet.
+func findThreadState(app core.App, threadID, userID string) *core.Record {
 	records, err := app.FindRecordsByFilter(
 		"mail_thread_state",
 		"thread = {:thread} && user = {:user}",
@@ -331,26 +331,98 @@ func ensureThreadState(app core.App, threadID, userID, folder string, isRead boo
 		0,
 		map[string]any{"thread": threadID, "user": userID},
 	)
-	if err == nil && len(records) > 0 {
-		// Update existing
-		record := records[0]
+	if err != nil || len(records) == 0 {
+		return nil
+	}
+	return records[0]
+}
+
+// newThreadState builds an unsaved mail_thread_state row with the defaults a
+// freshly-tracked thread starts from. Callers set the fields they care about
+// before saving.
+func newThreadState(app core.App, threadID, userID string) (*core.Record, error) {
+	collection, err := app.FindCollectionByNameOrId("mail_thread_state")
+	if err != nil {
+		return nil, fmt.Errorf("mail_thread_state collection not found: %w", err)
+	}
+	record := core.NewRecord(collection)
+	record.Set("thread", threadID)
+	record.Set("user", userID)
+	record.Set("folder", "inbox")
+	record.Set("is_read", false)
+	record.Set("is_starred", false)
+	return record, nil
+}
+
+// ensureThreadState creates or updates a mail_thread_state record for a user,
+// setting folder and read state together.
+//
+// Callers that mean to change only one of the two must not use this — see
+// setThreadFolder / setThreadRead, which leave the other field alone.
+func ensureThreadState(app core.App, threadID, userID, folder string, isRead bool) error {
+	if record := findThreadState(app, threadID, userID); record != nil {
 		record.Set("folder", folder)
 		record.Set("is_read", isRead)
 		return app.Save(record)
 	}
 
-	// Create new
-	collection, err := app.FindCollectionByNameOrId("mail_thread_state")
+	record, err := newThreadState(app, threadID, userID)
 	if err != nil {
-		return fmt.Errorf("mail_thread_state collection not found: %w", err)
+		return err
 	}
-	record := core.NewRecord(collection)
-	record.Set("thread", threadID)
-	record.Set("user", userID)
 	record.Set("folder", folder)
 	record.Set("is_read", isRead)
-	record.Set("is_starred", false)
-	record.Set("labels", "[]")
+	return app.Save(record)
+}
+
+// setThreadFolder moves a thread into a folder for one user, preserving that
+// user's read/starred state.
+//
+// ensureThreadState would reset is_read as a side effect, which is wrong for
+// a move: filing a message somewhere says nothing about whether it was read.
+func setThreadFolder(app core.App, threadID, userID, folder string) error {
+	if record := findThreadState(app, threadID, userID); record != nil {
+		record.Set("folder", folder)
+		return app.Save(record)
+	}
+
+	record, err := newThreadState(app, threadID, userID)
+	if err != nil {
+		return err
+	}
+	record.Set("folder", folder)
+	return app.Save(record)
+}
+
+// setThreadRead sets a thread's read state for one user, preserving the
+// folder that user has it filed under (see setThreadFolder for the converse).
+func setThreadRead(app core.App, threadID, userID string, isRead bool) error {
+	if record := findThreadState(app, threadID, userID); record != nil {
+		record.Set("is_read", isRead)
+		return app.Save(record)
+	}
+
+	record, err := newThreadState(app, threadID, userID)
+	if err != nil {
+		return err
+	}
+	record.Set("is_read", isRead)
+	return app.Save(record)
+}
+
+// setThreadStarred sets a thread's starred state for one user, preserving the
+// folder and read state (see setThreadFolder for the same reasoning).
+func setThreadStarred(app core.App, threadID, userID string, isStarred bool) error {
+	if record := findThreadState(app, threadID, userID); record != nil {
+		record.Set("is_starred", isStarred)
+		return app.Save(record)
+	}
+
+	record, err := newThreadState(app, threadID, userID)
+	if err != nil {
+		return err
+	}
+	record.Set("is_starred", isStarred)
 	return app.Save(record)
 }
 

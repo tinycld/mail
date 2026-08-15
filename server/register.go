@@ -91,6 +91,7 @@ func registerShared(app *pocketbase.PocketBase) {
 	// belongs to; mail_messages has no direct user FK so the generic
 	// owner-detection can't resolve it without this.
 	registerAutomationResolver()
+	registerAutomationActions()
 
 	audit.RegisterCollection(app, "mail_messages", &audit.CollectionConfig{
 		ExtractLabel: audit.LabelFromField("subject"),

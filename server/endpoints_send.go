@@ -1,10 +1,12 @@
 package mail
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,6 +42,245 @@ func toMailerRecipients(rs []api.Recipient) []Recipient {
 	return out
 }
 
+// sendErrKind classifies a send failure so an HTTP caller can map it back to
+// the status code that path returned before sendMessage was extracted, while
+// a non-HTTP caller (an automation action) can just treat it as an error.
+type sendErrKind int
+
+const (
+	sendErrBadRequest sendErrKind = iota
+	sendErrNotFound
+	sendErrForbidden
+	sendErrUpstream
+	sendErrInternal
+)
+
+// sendError is a transport-free send failure: a message, a classification,
+// and the underlying cause.
+type sendError struct {
+	kind sendErrKind
+	msg  string
+	err  error
+}
+
+func (e *sendError) Error() string {
+	if e.err != nil {
+		return e.msg + ": " + e.err.Error()
+	}
+	return e.msg
+}
+
+func (e *sendError) Unwrap() error { return e.err }
+
+// asAPIError maps a send failure onto the router error the /send endpoint
+// used to construct inline, preserving its original status codes.
+func (e *sendError) asAPIError(re *core.RequestEvent) error {
+	switch e.kind {
+	case sendErrBadRequest:
+		return re.BadRequestError(e.msg, e.err)
+	case sendErrNotFound:
+		return re.NotFoundError(e.msg, e.err)
+	case sendErrForbidden:
+		return re.ForbiddenError(e.msg, e.err)
+	case sendErrUpstream:
+		return router.NewApiError(http.StatusBadGateway, e.msg, e.err)
+	default:
+		return re.InternalServerError(e.msg, e.err)
+	}
+}
+
+// sendParams is the transport-free input to sendMessage — everything the
+// send path needs once a caller has produced it, whether that caller is the
+// HTTP endpoint or an automation action handler.
+//
+// Context carries the send's cancellation scope: the request context for
+// handleSend, a background context for rule-driven sends (no request to
+// inherit from).
+type sendParams struct {
+	Ctx                context.Context
+	UserID             string
+	MailboxID          string
+	AliasID            string
+	Subject            string
+	HTMLBody           string
+	TextBody           string
+	To                 []api.Recipient
+	Cc                 []api.Recipient
+	Bcc                []api.Recipient
+	InReplyToMessageID string
+	Attachments        []Attachment
+}
+
+// sendResultRecord is what a completed send produces: the stored message and
+// the thread it landed in.
+type sendResultRecord struct {
+	MessageRecordID string
+	ThreadID        string
+}
+
+// sendMessage performs a send end-to-end with no HTTP dependency: verifies
+// mailbox membership, builds the From address, hands the message to the
+// configured provider, then persists it (message row, thread metadata, and
+// the sender's "sent" thread state).
+//
+// It is the shared core behind both the /send endpoint (handleSend) and
+// mail's native automation actions (send-message, forward-message), so a
+// rule-sent message goes through exactly the same provider and persistence
+// path as a user-composed one.
+//
+// Errors are plain values, never router API errors — callers map them onto
+// their own transport. sendError carries the classification (which HTTP
+// status the endpoint should report) so handleSend keeps its existing
+// response codes unchanged.
+func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
+	if p.MailboxID == "" {
+		return nil, &sendError{kind: sendErrBadRequest, msg: "mailbox_id is required"}
+	}
+	if len(p.To) == 0 {
+		return nil, &sendError{kind: sendErrBadRequest, msg: "at least one recipient is required"}
+	}
+
+	mailbox, err := app.FindRecordById("mail_mailboxes", p.MailboxID)
+	if err != nil {
+		return nil, &sendError{kind: sendErrNotFound, msg: "Mailbox not found", err: err}
+	}
+
+	domainRecord, err := app.FindRecordById("mail_domains", mailbox.GetString("domain"))
+	if err != nil {
+		return nil, &sendError{kind: sendErrNotFound, msg: "Domain not found", err: err}
+	}
+
+	// Resolve the deployment-wide provider from system settings
+	provider := newProviderFromSystem(app)
+
+	// Verify the user has access to this mailbox
+	if _, err := verifyMailboxMembership(app, p.MailboxID, p.UserID); err != nil {
+		return nil, &sendError{kind: sendErrForbidden, msg: "Not a member of this mailbox", err: err}
+	}
+
+	// Reject before doing any send work if the provider has no
+	// credentials — otherwise provider.Send fails deep in the API call with an
+	// opaque error after we've already built the message.
+	if !provider.Configured() {
+		return nil, &sendError{
+			kind: sendErrBadRequest,
+			msg:  "configure the mail provider in settings before sending",
+			err:  errProviderNotConfigured,
+		}
+	}
+
+	var alias *core.Record
+	if p.AliasID != "" {
+		alias, err = app.FindRecordById("mail_mailbox_aliases", p.AliasID)
+		if err != nil {
+			return nil, &sendError{kind: sendErrNotFound, msg: "Alias not found", err: err}
+		}
+		if err := verifyAliasBelongsToMailbox(alias, p.MailboxID); err != nil {
+			return nil, &sendError{kind: sendErrForbidden, msg: "Alias does not belong to this mailbox", err: err}
+		}
+	}
+
+	// Build From address
+	displayName := mailbox.GetString("display_name")
+	domain := domainRecord.GetString("domain")
+	fromAddr := buildFromAddress(mailbox, domainRecord, alias)
+
+	senderAddress := resolveSenderAddressRecords(mailbox, alias)
+	senderEmail := fmt.Sprintf("%s@%s", senderAddress, domain)
+
+	// Build threading headers if replying
+	var inReplyToHeader, referencesHeader string
+	if p.InReplyToMessageID != "" {
+		originalMsg, err := app.FindRecordById("mail_messages", p.InReplyToMessageID)
+		if err == nil {
+			inReplyToHeader = originalMsg.GetString("message_id")
+			referencesHeader = inReplyToHeader
+		}
+	}
+
+	// Send via provider
+	sendReq := &SendRequest{
+		From:        fromAddr,
+		To:          toMailerRecipients(p.To),
+		Cc:          toMailerRecipients(p.Cc),
+		Bcc:         toMailerRecipients(p.Bcc),
+		Subject:     p.Subject,
+		HTMLBody:    p.HTMLBody,
+		TextBody:    p.TextBody,
+		InReplyTo:   inReplyToHeader,
+		References:  referencesHeader,
+		Attachments: p.Attachments,
+	}
+
+	var result *SendResult
+	if coreserver.IsDemoUser(app, p.UserID) {
+		// Demo accounts: skip the provider call but synthesize a result so
+		// the rest of the persistence path runs unchanged. Message lands in
+		// the user's Sent folder; nothing leaves the box.
+		result = &SendResult{MessageID: demoMessageID()}
+	} else {
+		var sendErr error
+		result, sendErr = provider.Send(p.Ctx, sendReq)
+		if sendErr != nil {
+			return nil, &sendError{kind: sendErrUpstream, msg: "Failed to send email", err: sendErr}
+		}
+	}
+
+	// Store in database
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	thread, err := findOrCreateThread(app, p.MailboxID, p.Subject, inReplyToHeader, referencesHeader)
+	if err != nil {
+		return nil, &sendError{kind: sendErrInternal, msg: "Failed to create thread", err: err}
+	}
+
+	// Convert Attachment (base64) → InboundAttachment for storage
+	var storedAttachments []InboundAttachment
+	for _, att := range p.Attachments {
+		storedAttachments = append(storedAttachments, InboundAttachment{
+			Name:        att.Name,
+			ContentType: att.ContentType,
+			Content:     att.Content,
+		})
+	}
+
+	deliveryStatus, bounceReason := deliveryStatusForResult(result, len(p.To)+len(p.Cc)+len(p.Bcc))
+
+	msg := &storedMessage{
+		MessageID:      result.MessageID,
+		InReplyTo:      inReplyToHeader,
+		Alias:          p.AliasID,
+		SenderName:     displayName,
+		SenderEmail:    senderEmail,
+		To:             toMailerRecipients(p.To),
+		Cc:             toMailerRecipients(p.Cc),
+		Bcc:            toMailerRecipients(p.Bcc),
+		Date:           now,
+		Subject:        p.Subject,
+		HTMLBody:       p.HTMLBody,
+		TextBody:       p.TextBody,
+		DeliveryStatus: deliveryStatus,
+		BounceReason:   bounceReason,
+		Attachments:    storedAttachments,
+	}
+
+	record, err := storeMessage(app, thread.Id, msg)
+	if err != nil {
+		return nil, &sendError{kind: sendErrInternal, msg: "Failed to store message", err: err}
+	}
+
+	if err := updateThreadMetadata(app, thread, displayName, msg.SenderEmail, msg.TextBody, now); err != nil {
+		return nil, &sendError{kind: sendErrInternal, msg: "Failed to update thread", err: err}
+	}
+
+	// Create thread state for the sender
+	if err := ensureThreadState(app, thread.Id, p.UserID, "sent", true); err != nil {
+		return nil, &sendError{kind: sendErrInternal, msg: "Failed to create thread state", err: err}
+	}
+
+	return &sendResultRecord{MessageRecordID: record.Id, ThreadID: thread.Id}, nil
+}
+
 func handleSend(app core.App, re *core.RequestEvent) error {
 	userID := re.Auth.Id
 
@@ -71,154 +312,31 @@ func handleSend(app core.App, re *core.RequestEvent) error {
 		return re.BadRequestError("Unsupported Content-Type: "+contentType, nil)
 	}
 
-	if req.MailboxID == "" {
-		return re.BadRequestError("mailbox_id is required", nil)
-	}
-	if len(req.To) == 0 {
-		return re.BadRequestError("at least one recipient is required", nil)
-	}
-
-	// Load mailbox and build From address
-	mailbox, err := app.FindRecordById("mail_mailboxes", req.MailboxID)
+	result, err := sendMessage(app, sendParams{
+		Ctx:                re.Request.Context(),
+		UserID:             userID,
+		MailboxID:          req.MailboxID,
+		AliasID:            req.AliasID,
+		Subject:            req.Subject,
+		HTMLBody:           req.HTMLBody,
+		TextBody:           req.TextBody,
+		To:                 req.To,
+		Cc:                 req.Cc,
+		Bcc:                req.Bcc,
+		InReplyToMessageID: req.InReplyToMessageID,
+		Attachments:        fileAttachments,
+	})
 	if err != nil {
-		return re.NotFoundError("Mailbox not found", err)
-	}
-
-	domainRecord, err := app.FindRecordById("mail_domains", mailbox.GetString("domain"))
-	if err != nil {
-		return re.NotFoundError("Domain not found", err)
-	}
-
-	// Resolve the deployment-wide provider from system settings
-	provider := newProviderFromSystem(app)
-
-	// Verify the user has access to this mailbox
-	if _, err := verifyMailboxMembership(app, req.MailboxID, userID); err != nil {
-		return re.ForbiddenError("Not a member of this mailbox", err)
-	}
-
-	// Reject before doing any send work if the provider has no
-	// credentials — otherwise provider.Send fails deep in the API call with an
-	// opaque error after we've already built the message.
-	if !provider.Configured() {
-		return re.BadRequestError(
-			"configure the mail provider in settings before sending",
-			errProviderNotConfigured,
-		)
-	}
-
-	var alias *core.Record
-	if req.AliasID != "" {
-		alias, err = app.FindRecordById("mail_mailbox_aliases", req.AliasID)
-		if err != nil {
-			return re.NotFoundError("Alias not found", err)
+		var sendErr *sendError
+		if errors.As(err, &sendErr) {
+			return sendErr.asAPIError(re)
 		}
-		if err := verifyAliasBelongsToMailbox(alias, req.MailboxID); err != nil {
-			return re.ForbiddenError("Alias does not belong to this mailbox", err)
-		}
-	}
-
-	// Build From address
-	displayName := mailbox.GetString("display_name")
-	domain := domainRecord.GetString("domain")
-	fromAddr := buildFromAddress(mailbox, domainRecord, alias)
-
-	senderAddress := resolveSenderAddressRecords(mailbox, alias)
-	senderEmail := fmt.Sprintf("%s@%s", senderAddress, domain)
-
-	// Build threading headers if replying
-	var inReplyToHeader, referencesHeader string
-	if req.InReplyToMessageID != "" {
-		originalMsg, err := app.FindRecordById("mail_messages", req.InReplyToMessageID)
-		if err == nil {
-			inReplyToHeader = originalMsg.GetString("message_id")
-			referencesHeader = inReplyToHeader
-		}
-	}
-
-	// Send via provider
-	sendReq := &SendRequest{
-		From:        fromAddr,
-		To:          toMailerRecipients(req.To),
-		Cc:          toMailerRecipients(req.Cc),
-		Bcc:         toMailerRecipients(req.Bcc),
-		Subject:     req.Subject,
-		HTMLBody:    req.HTMLBody,
-		TextBody:    req.TextBody,
-		InReplyTo:   inReplyToHeader,
-		References:  referencesHeader,
-		Attachments: fileAttachments,
-	}
-
-	var result *SendResult
-	if coreserver.IsDemoUser(app, userID) {
-		// Demo accounts: skip the provider call but synthesize a result so
-		// the rest of the persistence path runs unchanged. Message lands in
-		// the user's Sent folder; nothing leaves the box.
-		result = &SendResult{MessageID: demoMessageID()}
-	} else {
-		var sendErr error
-		result, sendErr = provider.Send(re.Request.Context(), sendReq)
-		if sendErr != nil {
-			return router.NewApiError(http.StatusBadGateway, "Failed to send email", sendErr)
-		}
-	}
-
-	// Store in database
-	now := time.Now().UTC().Format(time.RFC3339)
-
-	thread, err := findOrCreateThread(app, req.MailboxID, req.Subject, inReplyToHeader, referencesHeader)
-	if err != nil {
-		return re.InternalServerError("Failed to create thread", err)
-	}
-
-	// Convert Attachment (base64) → InboundAttachment for storage
-	var storedAttachments []InboundAttachment
-	for _, att := range fileAttachments {
-		storedAttachments = append(storedAttachments, InboundAttachment{
-			Name:        att.Name,
-			ContentType: att.ContentType,
-			Content:     att.Content,
-		})
-	}
-
-	deliveryStatus, bounceReason := deliveryStatusForResult(result, len(req.To)+len(req.Cc)+len(req.Bcc))
-
-	msg := &storedMessage{
-		MessageID:      result.MessageID,
-		InReplyTo:      inReplyToHeader,
-		Alias:          req.AliasID,
-		SenderName:     displayName,
-		SenderEmail:    senderEmail,
-		To:             toMailerRecipients(req.To),
-		Cc:             toMailerRecipients(req.Cc),
-		Bcc:            toMailerRecipients(req.Bcc),
-		Date:           now,
-		Subject:        req.Subject,
-		HTMLBody:       req.HTMLBody,
-		TextBody:       req.TextBody,
-		DeliveryStatus: deliveryStatus,
-		BounceReason:   bounceReason,
-		Attachments:    storedAttachments,
-	}
-
-	record, err := storeMessage(app, thread.Id, msg)
-	if err != nil {
-		return re.InternalServerError("Failed to store message", err)
-	}
-
-	if err := updateThreadMetadata(app, thread, displayName, msg.SenderEmail, msg.TextBody, now); err != nil {
-		return re.InternalServerError("Failed to update thread", err)
-	}
-
-	// Create thread state for the sender
-	if err := ensureThreadState(app, thread.Id, userID, "sent", true); err != nil {
-		return re.InternalServerError("Failed to create thread state", err)
+		return re.InternalServerError("Failed to send email", err)
 	}
 
 	return re.JSON(http.StatusOK, api.SendEmailResponse{
-		MessageID: record.Id,
-		ThreadID:  thread.Id,
+		MessageID: result.MessageRecordID,
+		ThreadID:  result.ThreadID,
 	})
 }
 

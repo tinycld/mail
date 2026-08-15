@@ -21,6 +21,32 @@ import (
 func registerAutomationResolver() {
 	automation.RegisterOwnerResolver("mail:message-received", messageOwnerResolver)
 	automation.RegisterTriggerFilter("mail:message-received", messageIsInbound)
+
+	// A bounce is a message YOU sent coming back, so it belongs to the same
+	// mailbox members the received-message resolver serves.
+	automation.RegisterOwnerResolver("mail:message-bounced", messageOwnerResolver)
+	automation.RegisterTriggerFilter("mail:message-bounced", messageDidBounce)
+}
+
+// deliveryFailureStatuses are the two delivery_status values that mean the
+// message did not reach its recipient: a hard bounce, and a recipient marking
+// it as spam.
+var deliveryFailureStatuses = map[string]bool{
+	"bounced":        true,
+	"spam_complaint": true,
+}
+
+// messageDidBounce is the TriggerFilter for "mail:message-bounced".
+//
+// The declaration watches delivery_status, so the hook fires on every
+// transition of that column — including the ordinary sending → sent path that
+// every successful send takes. Without this gate a rule meant for failures
+// would run on all outbound mail.
+func messageDidBounce(app core.App, record *core.Record) bool {
+	if record == nil {
+		return false
+	}
+	return deliveryFailureStatuses[record.GetString("delivery_status")]
 }
 
 // messageOwnerResolver maps an arriving mail_messages record to the user ids
