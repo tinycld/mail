@@ -351,13 +351,23 @@ export default function MailListScreen() {
             const draft = draftByThread.get(item.threadId)
             if (!draft) return
 
+            // mail_messages' viewRule is member-scoped (not public) — a
+            // plain getURL() 404s in the browser (no Authorization header on
+            // a bare fetch), so the draft body needs the short-lived
+            // `?token=` from pb.files.getToken() (mirrors EmailBody.tsx and
+            // core/file-viewer/use-authed-file-url.ts).
             const htmlBody = draft.body_html
-                ? await fetch(
-                      pb.files.getURL(
-                          { collectionId: 'mail_messages', id: draft.id },
-                          draft.body_html
+                ? await pb.files
+                      .getToken()
+                      .then(fileToken =>
+                          fetch(
+                              pb.files.getURL(
+                                  { collectionId: 'mail_messages', id: draft.id },
+                                  draft.body_html,
+                                  { token: fileToken }
+                              )
+                          )
                       )
-                  )
                       .then(r => r.text())
                       .catch(err => {
                           captureException('mail.openDraft.fetchBody', err, { messageId: draft.id })

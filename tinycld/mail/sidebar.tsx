@@ -11,7 +11,7 @@ import { openHelpPackage } from '@tinycld/core/lib/help/open-help'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
-import { HelpCircle, Pencil, Settings } from 'lucide-react-native'
+import { HelpCircle, Pencil, Settings, Workflow } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { Pressable } from 'react-native'
 import { MailboxSidebarSection } from './components/MailboxSidebarSection'
@@ -54,6 +54,7 @@ const EMPTY_COUNTS = { inbox: 0, drafts: 0, sent: 0, starred: 0, trash: 0, spam:
 
 export default function MailSidebar(_props: MailSidebarProps) {
     const router = useRouter()
+    const pathname = usePathname()
     const mutedColor = useThemeColor('muted-foreground')
     const { folder: activeFolder, activeLabels, activeMailbox, isDefaultView } = useActiveView()
     const orgHref = useOrgHref()
@@ -172,6 +173,15 @@ export default function MailSidebar(_props: MailSidebarProps) {
             <SidebarDivider />
 
             <SidebarSlot target="mail" slot="sidebar.after-labels" />
+
+            <SidebarItem
+                label="Rules"
+                icon={Workflow}
+                testID="mail-sidebar-rules"
+                isActive={pathname.includes('/mail/rules')}
+                closesDrawer
+                onPress={() => router.push(orgHref('mail/rules'))}
+            />
 
             <SidebarItem
                 label="Help"
