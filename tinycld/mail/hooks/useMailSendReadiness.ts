@@ -96,7 +96,7 @@ export function useMailSendReadiness(): MailSendReadiness {
         const key = which.join(',')
         if (key === lastSuppressionRef.current) return
         lastSuppressionRef.current = key
-        captureMessageToSentry('mail-send-readiness', 'blocker-suppressed-loading', {
+        captureMessageToSentry('mail-send-readiness', 'info', 'blocker-suppressed-loading', {
             loading: which,
             mailboxId,
             domainId,
