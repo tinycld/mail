@@ -58,7 +58,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             // If this fires a lot it means readiness keeps re-flapping into the
             // same blocker; that's worth investigating regardless of the dedupe
             // doing its job.
-            captureMessageToSentry('compose-window', 'duplicate-blocker-suppressed', {
+            captureMessageToSentry('compose-window', 'info', 'duplicate-blocker-suppressed', {
                 blocker: readiness.blocker,
                 mailboxId: readiness.mailboxId,
                 isVisible,
