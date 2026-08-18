@@ -30,6 +30,31 @@ User-facing features:
 - **Audit logging** — `mail_domains`, `mail_mailboxes`, `mail_mailbox_members`, `mail_mailbox_aliases`, `mail_messages`, and `mail_thread_state` all register with `core/audit`, with per-collection `ResolveOrg` callbacks walking up through `mailbox → domain → org`.
 - **Notifications** — new-message arrivals are buffered per-user and dispatched in batched core-notify pings every two minutes, so users get one summary notification per cycle instead of one per message.
 
+## Automation rules
+
+Mail contributes triggers and actions to the workflow-rules engine, so users can build "when this happens, do that" rules without writing code. Definitions live in `tinycld/mail/automation.ts`, declared via `automation: { definitions: 'automation' }` in `manifest.ts` plus a `"./automation"` entry in the package's exports map; the Go-side trigger filters, owner resolvers, and action handlers live in `server/automation.go`.
+
+**Triggers**
+
+- **`mail:message-received`** — "A message arrives". Fires on genuinely inbound mail only; drafts, outbound sends, and bounce records never fire it (enforced server-side by a Go trigger filter, `messageIsInbound`). Exposed fields: `subject`, `sender_email` (labelled "Sender"), `sender_name`, `has_attachments`, `alias`.
+- **`mail:message-bounced`** — "A message bounces". A `mail_messages` update watching `delivery_status`. Exposed fields: `subject`, `bounce_reason`, `delivery_status`, `sender_email`.
+
+**Actions** (all `kind: 'native'`)
+
+| Action | Label | Params |
+|--------|-------|--------|
+| `move-to-folder` | Move to folder | `folder` — archive / trash / spam / inbox |
+| `mark-as-read` | Mark as read | — |
+| `star-message` | Star the message | — |
+| `forward-message` | Forward the message | `to` |
+| `send-message` | Send a message | `to`, `subject`, `body` |
+
+All five are native rather than record-ops because folder / read / star state lives per-user on `mail_thread_state`, not on the `mail_messages` row — there is no single field on the triggering record for a generic record-op to set.
+
+A shared mailbox has no direct user FK, so `mail/server/automation.go` registers `messageOwnerResolver` to fan a match out to the mailbox's members: a personal rule acts only on the owner's own view of the thread, while an org rule acts for every mailbox member. A rule may not send to its own mailbox's address or aliases — `ruleRecipient` rejects that as a self-feeding loop.
+
+The user-facing help topic is `help/rules.md`; see [Automation rules](https://tinycld.org/docs/automation-rules) for the end-user guide, and [package automation](https://tinycld.org/docs/anatomy/automation) for the package-author contract.
+
 ## Mounting with IMAP and SMTP
 
 For users connecting Apple Mail, Thunderbird, DAVx5, mutt, or any other standard mail client:
@@ -336,6 +361,22 @@ tinycld/mail/
         thread-list-store     zustand: list selection, focus, scroll
 ```
 
+## Command line
+
+Mail contributes a `mail` command group to the `tinycld` binary — a Go CLI the server cross-compiles and hands out from **Settings → Personal → About**. The source lives in this repo at `cli/`, declared through a `cli` block in `manifest.ts` naming the Go module and the OAuth scopes it requests: `mail:read` and `mail:send`.
+
+| Group | Commands |
+|-------|----------|
+| Reading | `search`, `list`, `read`, `attachments`, `download` |
+| Sending | `send`, `reply`, `draft`, `draft send` |
+| Labels | `labels`, `label add`, `label remove` |
+| Mailboxes | `mailboxes`, `status` |
+| Thread state | `archive`, `trash`, `spam`, `star`, `unstar`, `move`, `mark` |
+
+Folder, label, star, and read changes write the caller's own per-user thread state, so they never affect other members of a shared mailbox.
+
+See [the command line tool](https://tinycld.org/docs/command-line-tool) for setup and authentication, the [full CLI reference](https://tinycld.org/docs/reference/cli-reference) for every flag, and the in-app help topic `help/command-line.md`.
+
 ## Development
 
 ```sh
@@ -389,6 +430,8 @@ Other packages can target this slot via `sidebarContributions` in their manifest
 - `tsconfig.json` — typecheck config (lint config lives in the app shell's `biome.json`)
 - `pb-migrations/` — PocketBase migrations (symlinked into the app shell's server on `packages:generate`)
 - `server/` — Go server module, registered by the generator
+- `server/automation.go` — Go trigger filters, owner resolvers, and action handlers for the workflow-rules engine
+- `cli/` — Go module contributing this package's `tinycld` command group
 - `help/` — in-app help topics (markdown + frontmatter)
 - `tests/` — vitest unit tests (sibling tests run from the app shell)
-- `tinycld/mail/` — TypeScript source
+- `tinycld/mail/` — TypeScript source, including `automation.ts` (workflow-rules trigger and action definitions)
