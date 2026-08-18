@@ -81,11 +81,10 @@ func newReplyCmd(c *client.Client) *cobra.Command {
 // original was addressed to.
 func replyFromIdentity(ctx context.Context, c *client.Client, target message, from string) (identity, error) {
 	if from != "" {
-		mailboxID, aliasID, err := resolveFrom(ctx, c, from)
-		if err != nil {
-			return identity{}, err
-		}
-		return identity{MailboxID: mailboxID, AliasID: aliasID}, nil
+		// The whole identity, not just its ids: replyRecipients drops the
+		// caller's own address by comparing against identity.Address, so a
+		// partial identity here means --all mails the caller themselves.
+		return resolveFromIdentity(ctx, c, from)
 	}
 	addressed := append(recipientAddresses(target.RecipientsTo), recipientAddresses(target.RecipientsCc)...)
 	return replyIdentity(ctx, c, addressed)

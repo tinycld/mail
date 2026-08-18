@@ -607,39 +607,55 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 	existingMsg, existingThread, _ := findMessageInMailbox(s.app, mailboxID, msg.MessageID)
 
 	var thread, record *core.Record
-	if existingMsg != nil {
-		thread = existingThread
-		record = existingMsg
-	} else {
-		thread, err = findOrCreateThread(s.app, mailboxID, msg.Subject, msg.InReplyTo, "")
-		if err != nil {
-			return nil, err
-		}
-
-		record, err = storeMessage(s.app, thread.Id, msg)
-		if err != nil {
-			return nil, err
-		}
-
-		// Store raw headers
-		if len(raw) > 0 {
-			headerEnd := bytes.Index(raw, []byte("\r\n\r\n"))
-			if headerEnd < 0 {
-				headerEnd = bytes.Index(raw, []byte("\n\n"))
+	// One transaction for the whole ingress, mirroring the inbound endpoint.
+	// The message create fires the automation engine's record hook, so a
+	// move-to-folder rule can write this thread's state row the moment the
+	// message is visible. Committing the message before ensureThreadState ran
+	// let the rule's write land first and then be overwritten by the default
+	// folder here — the user's filter silently undone.
+	//
+	// A rollback also removes a thread this call created, so there is no
+	// partial ingress to clean up.
+	err = s.app.RunInTransaction(func(txApp core.App) error {
+		if existingMsg != nil {
+			thread = existingThread
+			record = existingMsg
+		} else {
+			var err error
+			thread, err = findOrCreateThread(txApp, mailboxID, msg.Subject, msg.InReplyTo, "")
+			if err != nil {
+				return err
 			}
-			if headerEnd > 0 {
-				storeRawHeaders(s.app, record, raw[:headerEnd])
+
+			record, err = storeMessage(txApp, thread.Id, msg)
+			if err != nil {
+				return err
 			}
+
+			// Store raw headers
+			if len(raw) > 0 {
+				headerEnd := bytes.Index(raw, []byte("\r\n\r\n"))
+				if headerEnd < 0 {
+					headerEnd = bytes.Index(raw, []byte("\n\n"))
+				}
+				if headerEnd > 0 {
+					storeRawHeaders(txApp, record, raw[:headerEnd])
+				}
+			}
+
+			snippet := msg.TextBody
+			if snippet == "" {
+				snippet = msg.Subject
+			}
+			updateThreadMetadata(txApp, thread, msg.SenderName, msg.SenderEmail, snippet, msg.Date)
 		}
 
-		snippet := msg.TextBody
-		if snippet == "" {
-			snippet = msg.Subject
-		}
-		updateThreadMetadata(s.app, thread, msg.SenderName, msg.SenderEmail, snippet, msg.Date)
+		ensureThreadState(txApp, thread.Id, s.user.Id, folder, false)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	ensureThreadState(s.app, thread.Id, s.user.Id, folder, false)
 
 	// Apply flags from APPEND options
 	if options != nil && len(options.Flags) > 0 {

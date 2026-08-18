@@ -55,7 +55,11 @@ func newReadCmd(c *client.Client) *cobra.Command {
 				return err
 			}
 			if o.Format == output.JSON {
-				if err := o.Write(cmd.OutOrStdout(), nil, nil, msgs); err != nil {
+				withBodies, err := messagesWithBodies(ctx, c, msgs)
+				if err != nil {
+					return err
+				}
+				if err := o.Write(cmd.OutOrStdout(), nil, nil, withBodies); err != nil {
 					return err
 				}
 			} else if asRaw {
@@ -146,6 +150,39 @@ func resolveMessages(ctx context.Context, c *client.Client, id string) ([]messag
 		return nil, fmt.Errorf("%s: no message or thread found", id)
 	}
 	return msgs, nil
+}
+
+// messageWithBody is the JSON shape of `mail read`: the record plus the body
+// the table output prints. `body_html` on the record is only the stored FILE
+// NAME, so without this a JSON consumer could see every header and no content —
+// and had no way to fetch it, since the file URL needs the record's collection.
+//
+// Both forms are emitted: `body` is the html2text rendering the table shows,
+// `body_html` the raw markup `--html` shows. A message with no stored body
+// falls back to its snippet, exactly as printMessage does.
+type messageWithBody struct {
+	message
+	Body     string `json:"body"`
+	BodyHTML string `json:"body_html"`
+}
+
+func messagesWithBodies(ctx context.Context, c *client.Client, msgs []message) ([]messageWithBody, error) {
+	out := make([]messageWithBody, 0, len(msgs))
+	for _, m := range msgs {
+		html, err := fetchBody(ctx, c, m)
+		if err != nil {
+			return nil, err
+		}
+		text := m.Snippet
+		if html != "" {
+			text = html
+			if converted, err := html2text.FromString(html, html2text.Options{TextOnly: false}); err == nil {
+				text = converted
+			}
+		}
+		out = append(out, messageWithBody{message: m, Body: text, BodyHTML: html})
+	}
+	return out, nil
 }
 
 func printMessage(ctx context.Context, c *client.Client, w io.Writer, m message, asHTML bool) error {

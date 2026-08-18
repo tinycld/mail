@@ -65,7 +65,7 @@ func newDownloadCmd(c *client.Client) *cobra.Command {
 		Short: "Download attachments",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			o, _, err := output.FromCommand(cmd)
+			o, yes, err := output.FromCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -89,7 +89,13 @@ func newDownloadCmd(c *client.Client) *cobra.Command {
 				selected = m.Attachments[n-1 : n]
 			}
 			for _, stored := range selected {
-				dest := filepath.Join(outDir, displayName(stored))
+				// The stored name arrives over the wire, so it is reduced to a
+				// bare filename: joining it verbatim would let an attachment
+				// named "../../.ssh/authorized_keys" write outside --out.
+				dest := filepath.Join(outDir, client.LocalFileName(displayName(stored)))
+				if err := ui.ConfirmOverwrite(o, yes, cmd.InOrStdin(), cmd.OutOrStdout(), dest); err != nil {
+					return err
+				}
 				prog := ui.NewProgress(o, cmd.ErrOrStderr(), displayName(stored))
 				err := client.DownloadToFile(ctx, c,
 					client.FileURL("mail_messages", m.ID, stored), dest, prog.Func())

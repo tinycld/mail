@@ -471,6 +471,26 @@ func mailFixture(t *testing.T) *fakeMail {
 		Date: "2026-08-01 10:00:00Z", Subject: "Re: Quarterly invoice",
 		Snippet: "thanks", BodyHTML: "",
 	}
+	// An existing draft, so `mail draft --message-id` has something to update.
+	// The save endpoint replaces rather than patches, so the CLI reads this
+	// record back to resend the fields the user didn't name.
+	f.threads["thrDraft"] = &thread{
+		ID: "thrDraft", Mailbox: "mbx1", Subject: "later", LatestDate: "2026-08-02 09:00:00Z",
+	}
+	f.states["stDraft"] = &threadState{
+		ID: "stDraft", Thread: "thrDraft", User: "user1", Folder: "drafts",
+	}
+	f.messages["msgDraft"] = &message{
+		ID: "msgDraft", Thread: "thrDraft", SenderEmail: "team@acme.test",
+		Date: "2026-08-02 09:00:00Z", Subject: "later", Snippet: "wip",
+		DeliveryStatus: "draft",
+		RecipientsTo: []map[string]string{
+			{"name": "", "email": "a@b.c"},
+		},
+		RecipientsCc: []map[string]string{
+			{"name": "Cee", "email": "cee@acme.test"},
+		},
+	}
 	return f
 }
 

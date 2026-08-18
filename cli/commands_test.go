@@ -553,6 +553,56 @@ func TestDraftCreateAndUpdate(t *testing.T) {
 	}
 }
 
+// The save endpoint replaces the whole draft rather than patching it, so an
+// update that names only one field must resend the rest — otherwise
+// `--subject x` silently drops the recipients and body already on the draft.
+func TestDraftUpdateKeepsUnspecifiedFields(t *testing.T) {
+	f := mailFixture(t)
+	_, c := f.serve()
+	if _, _, err := runCmd(t, c, "mail", "draft",
+		"--message-id", "msgDraft", "--subject", "revised"); err != nil {
+		t.Fatal(err)
+	}
+	if f.draftJSON.Subject != "revised" {
+		t.Fatalf("subject = %q, want the new one", f.draftJSON.Subject)
+	}
+	if len(f.draftJSON.To) != 1 || f.draftJSON.To[0].Email != "a@b.c" {
+		t.Fatalf("unspecified --to must be preserved, got %+v", f.draftJSON.To)
+	}
+	if len(f.draftJSON.Cc) != 1 || f.draftJSON.Cc[0].Email != "cee@acme.test" {
+		t.Fatalf("unspecified --cc must be preserved, got %+v", f.draftJSON.Cc)
+	}
+	// An empty TextBody is how the endpoint is told to keep the stored body.
+	if f.draftJSON.TextBody != "" {
+		t.Fatalf("an untouched body must not be resent, got %q", f.draftJSON.TextBody)
+	}
+	// The recipients are replaceable — Changed(), not emptiness, is the test.
+	f.draftJSON = nil
+	if _, _, err := runCmd(t, c, "mail", "draft",
+		"--message-id", "msgDraft", "--to", "new@acme.test"); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.draftJSON.To) != 1 || f.draftJSON.To[0].Email != "new@acme.test" {
+		t.Fatalf("an explicit --to must win, got %+v", f.draftJSON.To)
+	}
+	if f.draftJSON.Subject != "later" {
+		t.Fatalf("unspecified --subject must be preserved, got %q", f.draftJSON.Subject)
+	}
+}
+
+// Clearing a body isn't expressible through the save endpoint (an empty
+// TextBody means "keep what's stored"), so it must be refused rather than
+// reported as an update that did nothing.
+func TestDraftUpdateRefusesToClearBody(t *testing.T) {
+	f := mailFixture(t)
+	_, c := f.serve()
+
+	if _, _, err := runCmd(t, c, "mail", "draft",
+		"--message-id", "msgDraft", "--body", ""); err == nil {
+		t.Fatal("clearing a body must be refused, not silently ignored")
+	}
+}
+
 func TestDraftSendSendsThenDeletes(t *testing.T) {
 	f := mailFixture(t)
 	f.threads["thrD"] = &thread{ID: "thrD", Mailbox: "mbx1", Subject: "Ready to go"}
@@ -656,5 +706,137 @@ func TestReadRawHeaders(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "no stored raw headers") {
 		t.Fatalf("stderr = %q", stderr)
+	}
+}
+
+// `mail read --json` emitted the record verbatim, whose `body_html` is only the
+// stored FILE NAME — so a JSON consumer saw every header and no content, with
+// no way to fetch it. The JSON now carries the body the table output prints.
+func TestReadJSONIncludesTheBody(t *testing.T) {
+	f := mailFixture(t)
+	_, c := f.serve()
+
+	out, _, err := runCmd(t, c, "mail", "read", "msg1", "--output", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var msgs []map[string]any
+	if err := json.Unmarshal([]byte(out), &msgs); err != nil {
+		t.Fatalf("--json must emit a JSON array: %v\n%s", err, out)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("messages = %d", len(msgs))
+	}
+
+	body, _ := msgs[0]["body"].(string)
+	if !strings.Contains(body, "Hello") {
+		t.Errorf("body must carry the converted text, got %q", body)
+	}
+	if strings.Contains(body, "<p>") {
+		t.Errorf("body must be the text rendering, not raw markup: %q", body)
+	}
+	html, _ := msgs[0]["body_html"].(string)
+	if !strings.Contains(html, "<p>Hello") {
+		t.Errorf("body_html must carry the raw markup, got %q", html)
+	}
+	// The stored filename is an internal detail and must not be what a caller
+	// reads out of body_html.
+	if strings.Contains(html, "body_abcdef1234.html") {
+		t.Error("body_html leaked the stored file name instead of the content")
+	}
+}
+
+// A message with no stored body falls back to its snippet, matching the table
+// path — an empty string would read as "this message has no content".
+func TestReadJSONFallsBackToSnippet(t *testing.T) {
+	f := mailFixture(t)
+	_, c := f.serve()
+
+	out, _, err := runCmd(t, c, "mail", "read", "msg2", "--output", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var msgs []map[string]any
+	if err := json.Unmarshal([]byte(out), &msgs); err != nil {
+		t.Fatal(err)
+	}
+	if body, _ := msgs[0]["body"].(string); body != "thanks" {
+		t.Errorf("body = %q, want the snippet fallback", body)
+	}
+}
+
+// `reply --all --from <addr>` mailed the caller. The --from branch built a
+// partial identity carrying only the mailbox/alias ids, so the self-dedup —
+// which compares against identity.Address — had an empty string to match on.
+func TestReplyAllWithExplicitFromDropsOurOwnAddress(t *testing.T) {
+	f := mailFixture(t)
+	// The mailbox address is in To, so a correct reply-all must drop it.
+	f.messages["msg1"].RecipientsCc = []map[string]string{
+		{"name": "Cara", "email": "cara@acme.test"},
+	}
+	_, c := f.serve()
+
+	if _, _, err := runCmd(t, c, "mail", "reply", "msg1", "--all",
+		"--from", "team@acme.test", "--body", "thanks"); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, r := range f.sendJSON.To {
+		got[r.Email] = true
+	}
+	if got["team@acme.test"] {
+		t.Errorf("reply-all --from must still drop our own address: %+v", f.sendJSON.To)
+	}
+	// The real recipients are untouched.
+	if !got["ada@acme.test"] || !got["cara@acme.test"] {
+		t.Errorf("reply-all --from dropped a real recipient: %+v", f.sendJSON.To)
+	}
+	// And the explicit --from is still honored as the sending identity.
+	if f.sendJSON.MailboxID != "mbx1" {
+		t.Errorf("mailbox_id = %q, want the --from mailbox", f.sendJSON.MailboxID)
+	}
+}
+
+// An alias --from drops the ALIAS address, not the mailbox's primary.
+func TestReplyAllWithAliasFromDropsTheAliasAddress(t *testing.T) {
+	f := mailFixture(t)
+	f.messages["msg1"].RecipientsTo = []map[string]string{
+		{"name": "", "email": "billing@acme.test"},
+	}
+	_, c := f.serve()
+
+	if _, _, err := runCmd(t, c, "mail", "reply", "msg1", "--all",
+		"--from", "billing@acme.test", "--body", "thanks"); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range f.sendJSON.To {
+		if r.Email == "billing@acme.test" {
+			t.Fatalf("reply-all must drop the alias we are sending as: %+v", f.sendJSON.To)
+		}
+	}
+	if f.sendJSON.AliasID != "als1" {
+		t.Errorf("alias_id = %q, want the --from alias", f.sendJSON.AliasID)
+	}
+}
+
+// --mailbox says "id or address" but matched only PRIMARY addresses, so an
+// alias — an address the user sees on every other surface — was rejected.
+func TestMailboxFlagAcceptsAliasAddresses(t *testing.T) {
+	f := mailFixture(t)
+	_, c := f.serve()
+
+	for _, ref := range []string{"mbx1", "team@acme.test", "billing@acme.test"} {
+		if _, _, err := runCmd(t, c, "mail", "list", "--mailbox", ref); err != nil {
+			t.Errorf("--mailbox %q must resolve: %v", ref, err)
+			continue
+		}
+		if !strings.Contains(f.lastThreadsFilter, `mailbox = "mbx1"`) {
+			t.Errorf("--mailbox %q resolved to the wrong mailbox: %q", ref, f.lastThreadsFilter)
+		}
+	}
+
+	// An address that is nobody's still fails, with a message naming the flag.
+	if _, _, err := runCmd(t, c, "mail", "list", "--mailbox", "nope@acme.test"); err == nil {
+		t.Error("an unknown mailbox address must be refused")
 	}
 }
