@@ -86,24 +86,39 @@ type mailboxWithDomain struct {
 // resolveFrom turns a --from value into the mailbox and alias ids a send needs.
 // Accepts a full address, and (for convenience) a mailbox id.
 func resolveFrom(ctx context.Context, c *client.Client, from string) (mailboxID, aliasID string, err error) {
-	ids, err := sendableIdentities(ctx, c)
+	id, err := resolveFromIdentity(ctx, c, from)
 	if err != nil {
 		return "", "", err
 	}
+	return id.MailboxID, id.AliasID, nil
+}
+
+// resolveFromIdentity is resolveFrom's whole answer, including Address.
+//
+// A caller that only needs the two ids should use resolveFrom; a caller that
+// needs to know WHICH ADDRESS it is sending as needs this. `reply --all` is the
+// motivating case: it drops the caller's own address from the recipient list by
+// comparing against identity.Address, so being handed an identity with that
+// field empty silently made the caller mail themselves.
+func resolveFromIdentity(ctx context.Context, c *client.Client, from string) (identity, error) {
+	ids, err := sendableIdentities(ctx, c)
+	if err != nil {
+		return identity{}, err
+	}
 	if from == "" {
-		return ids[0].MailboxID, ids[0].AliasID, nil
+		return ids[0], nil
 	}
 	want := strings.ToLower(strings.TrimSpace(from))
 	for _, id := range ids {
 		if strings.ToLower(id.Address) == want || id.MailboxID == from {
-			return id.MailboxID, id.AliasID, nil
+			return id, nil
 		}
 	}
 	addrs := make([]string, len(ids))
 	for i, id := range ids {
 		addrs[i] = id.Address
 	}
-	return "", "", fmt.Errorf("--from %q is not one of your addresses (%s)",
+	return identity{}, fmt.Errorf("--from %q is not one of your addresses (%s)",
 		from, strings.Join(addrs, ", "))
 }
 

@@ -50,6 +50,15 @@ func newDraftCmd(c *client.Client) *cobra.Command {
 				TextBody:  text,
 				HTMLBody:  textToHTML(text),
 			}
+			// The save endpoint replaces the whole draft rather than patching
+			// it, so an update has to resend the fields the user didn't name —
+			// otherwise `--subject x` alone silently drops the recipients and
+			// body already on the draft.
+			if messageID != "" {
+				if err := fillUnsetDraftFields(ctx, c, cmd, &req); err != nil {
+					return err
+				}
+			}
 			resp, err := postDraft(ctx, c, req, attach)
 			if err != nil {
 				return err
@@ -184,6 +193,46 @@ func resolveDraft(ctx context.Context, c *client.Client, ref string) (message, e
 		return message{}, fmt.Errorf("%s: no draft found", ref)
 	}
 	return msgs[0], nil
+}
+
+// fillUnsetDraftFields merges the stored draft into an update request for every
+// field the user did not name on the command line.
+//
+// Flags.Changed rather than emptiness is the point: `--subject ""` must be able
+// to clear the subject, while an unmentioned --subject must keep what the draft
+// already has. Attachments are not touched here — they live on the record and
+// the save endpoint leaves them alone unless new files are uploaded.
+func fillUnsetDraftFields(
+	ctx context.Context,
+	c *client.Client,
+	cmd *cobra.Command,
+	req *api.SaveDraftRequest,
+) error {
+	existing, err := resolveDraft(ctx, c, req.MessageID)
+	if err != nil {
+		return err
+	}
+	fl := cmd.Flags()
+	if !fl.Changed("to") {
+		req.To = parsedRecipients(existing.RecipientsTo)
+	}
+	if !fl.Changed("cc") {
+		req.Cc = parsedRecipients(existing.RecipientsCc)
+	}
+	if !fl.Changed("bcc") {
+		req.Bcc = parsedRecipients(existing.RecipientsBcc)
+	}
+	if !fl.Changed("subject") {
+		req.Subject = existing.Subject
+	}
+	// The body needs no merge: the save endpoint keeps the stored body when
+	// TextBody is empty, which is exactly the "user didn't mention it" case.
+	// The flip side is that `--body ""` cannot blank a body through this
+	// endpoint — say so rather than reporting a no-op as an update.
+	if (fl.Changed("body") || fl.Changed("body-file")) && req.TextBody == "" {
+		return fmt.Errorf("--body \"\" cannot clear a draft's body; edit it in the app")
+	}
+	return nil
 }
 
 // draftText recovers the draft's plain text from its stored HTML body.

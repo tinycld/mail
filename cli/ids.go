@@ -63,8 +63,17 @@ func resolveMailbox(ctx context.Context, c *client.Client, flag string) (string,
 		return "", err
 	}
 	want := strings.ToLower(strings.TrimSpace(flag))
+	// Primary addresses first, then aliases. An alias names exactly one
+	// mailbox, so `--mailbox billing@acme.test` is unambiguous and is what the
+	// flag's own help ("id or address") promises — matching only primaries
+	// rejected an address the user can see on every other surface.
 	for _, id := range ids {
 		if id.Primary && strings.ToLower(id.Address) == want {
+			return id.MailboxID, nil
+		}
+	}
+	for _, id := range ids {
+		if !id.Primary && strings.ToLower(id.Address) == want {
 			return id.MailboxID, nil
 		}
 	}
