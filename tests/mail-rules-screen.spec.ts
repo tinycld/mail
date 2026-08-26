@@ -59,8 +59,10 @@ async function buildMessageArrivesRule(
         'A message arrives'
     )
 
-    await page.getByText('add OR group', { exact: true }).click()
-    await page.getByText('add condition', { exact: true }).click()
+    // Choosing a record trigger offers a ready condition row, so the field
+    // picker is already there — clicking "add OR group" then "add condition"
+    // would build a SECOND row and make this locator ambiguous.
+    //
     // The field menu defaults to no selection; picking "Subject" also seeds
     // the operator to its first legal op, which for a text field is
     // "contains" — no separate operator click needed.
