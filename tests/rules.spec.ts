@@ -65,11 +65,9 @@ test.describe('Mail — Rules', () => {
             'A message arrives'
         )
 
-        // Narrow to this test's message: subject contains the marker. The IF
-        // card starts with no groups, so the first click creates one and the
-        // "add condition" affordance only exists inside it.
-        await page.getByText('add OR group', { exact: true }).click()
-        await page.getByText('add condition', { exact: true }).click()
+        // Narrow to this test's message: subject contains the marker. Choosing a
+        // record trigger offers a ready condition row, so the field picker is
+        // there immediately — no "add OR group" then "add condition" first.
         await selectFromMenu(page, page.getByText('Field…', { exact: true }), 'Subject')
         // "contains" is the default op for a text field, so only the value is
         // left to fill. The row's textbox is the sole input in the IF card.
