@@ -8,13 +8,22 @@ import (
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/approutes"
 	"tinycld.org/core/notify"
 )
 
 // mailNotificationURL is the in-app deep link for mail notifications.
-// Single-org: routes no longer carry an [orgSlug] segment (the app route tree
-// collapsed to app/(app)/), so this is a fixed path.
-const mailNotificationURL = "/mail"
+//
+// Built from approutes.Href so the /a app-route prefix has one definition:
+// NotificationDrawer pushes a stored url at the router verbatim, so a value
+// minted without the prefix lands the reader on +not-found. The migration in
+// core (pb_migrations/2010000000_prefix_notification_urls.js) only rewrote
+// rows that already existed — every row written from here has to be correct
+// on its own.
+//
+// Single-org: routes carry no [orgSlug] segment, so nothing interpolates into
+// this and it stays a fixed path.
+var mailNotificationURL = approutes.Href("mail")
 
 type pendingMail struct {
 	sender  string
