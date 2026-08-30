@@ -28,8 +28,15 @@ function mimeFromName(name: string): string {
     return MIME_BY_EXT[ext] ?? 'application/octet-stream'
 }
 
+// Structural mirror of core's SeedContext (core/lib/packages/config-types.ts).
+// Declared locally rather than imported so this package stays decoupled — the
+// seed is handed a plain object by the seed runner, not a core type.
 interface SeedContext {
     user: { id: string; username: string; email: string; name: string }
+    // The seeded collaborator. Mail derives mailbox addresses from `username`
+    // (never the email local-part — see deriveAddress), so the companion needs
+    // one too or it gets an address the server would never have provisioned.
+    companion?: { id: string; username: string; email: string; name: string }
 }
 
 interface SeedMessage {
@@ -1688,6 +1695,44 @@ async function findUniqueAddress(pb: PocketBase, base: string, domainId: string)
     }
 }
 
+// Grant a user membership in a mailbox, idempotently. Separated out because the
+// shared mailbox outlives any single seed run: the mailbox may already exist
+// while THIS user still needs a membership row.
+async function ensureMailboxMember(
+    pb: PocketBase,
+    mailboxId: string,
+    userId: string,
+    role: 'owner' | 'member'
+) {
+    try {
+        await pb.collection('mail_mailbox_members').getFirstListItem(
+            pb.filter('mailbox = {:mailbox} && user = {:uid}', {
+                mailbox: mailboxId,
+                uid: userId,
+            })
+        )
+        return
+    } catch {
+        // Not a member yet — fall through and create.
+    }
+
+    await pb.collection('mail_mailbox_members').create({
+        mailbox: mailboxId,
+        user: userId,
+        role,
+    })
+}
+
+async function createPersonalMailbox(pb: PocketBase, base: string, name: string, domainId: string) {
+    const address = await findUniqueAddress(pb, base, domainId)
+    return pb.collection('mail_mailboxes').create({
+        address,
+        domain: domainId,
+        display_name: name || address,
+        type: 'personal',
+    })
+}
+
 async function findOrCreatePersonalMailbox(
     pb: PocketBase,
     username: string,
@@ -1697,34 +1742,29 @@ async function findOrCreatePersonalMailbox(
 ) {
     const base = deriveAddress(username)
 
-    // Check if mailbox already exists
+    // Check if mailbox already exists. The lookup is the ONLY thing inside the
+    // try — widening it to cover the membership call would turn a membership
+    // failure into a "not found" and create a duplicate mailbox.
+    let existing: { id: string } | null = null
     try {
-        const existing = await pb
+        existing = await pb
             .collection('mail_mailboxes')
             .getFirstListItem(`address = "${base}" && domain = "${domainId}"`)
-        return existing
     } catch {
-        // Not found, create it
+        // Not found, create it below.
     }
 
-    const address = await findUniqueAddress(pb, base, domainId)
-    const mailbox = await pb.collection('mail_mailboxes').create({
-        address,
-        domain: domainId,
-        display_name: name || address,
-        type: 'personal',
-    })
+    const mailbox = existing ?? (await createPersonalMailbox(pb, base, name, domainId))
 
-    await pb.collection('mail_mailbox_members').create({
-        mailbox: mailbox.id,
-        user: userId,
-        role: 'owner',
-    })
+    // Ensured on both paths: the demo reset deletes the membership row with the
+    // user's data but may leave the mailbox standing, so a re-seed has to
+    // re-grant access rather than assume the found mailbox is still reachable.
+    await ensureMailboxMember(pb, mailbox.id, userId, 'owner')
 
     return mailbox
 }
 
-export default async function seed(pb: PocketBase, { user }: SeedContext) {
+export default async function seed(pb: PocketBase, { user, companion }: SeedContext) {
     let domain: { id: string }
     try {
         domain = await pb.collection('mail_domains').getFirstListItem(`domain = "tinycld.org"`)
@@ -1760,25 +1800,29 @@ export default async function seed(pb: PocketBase, { user }: SeedContext) {
             display_name: 'Support',
             type: 'shared',
         })
-
-        await pb.collection('mail_mailbox_members').create({
-            mailbox: sharedMailbox.id,
-            user: user.id,
-            role: 'owner',
-        })
     }
 
-    // Create personal mailboxes for the other users. Single-org: the deployment
-    // IS the org, so every other user is a fellow member.
-    const otherUsers = await pb.collection('users').getFullList({
-        filter: `id != "${user.id}"`,
-    })
-    if (otherUsers.length > 0) {
-        log(`Setting up mailboxes for ${otherUsers.length} other user(s)`)
-    }
-    for (const member of otherUsers) {
-        if (!member.username) continue
-        await findOrCreatePersonalMailbox(pb, member.username, member.name, domain.id, member.id)
+    // Membership is ensured OUTSIDE the create branch. It used to live inside
+    // the catch, so only the very first user to seed ever became a member —
+    // everyone seeded afterwards found the existing mailbox and silently got no
+    // membership row, leaving them unable to see the shared mailbox at all (and
+    // invisible to a membership-keyed reset).
+    await ensureMailboxMember(pb, sharedMailbox.id, user.id, 'owner')
+
+    // The seeded companion is the only other person who gets a mailbox. This
+    // used to provision one for EVERY other account in the deployment, which
+    // attached demo-owned mailboxes and memberships to real users — rows a
+    // user-scoped reset can never reclaim, accumulating on every nightly run.
+    if (companion?.username) {
+        log('Setting up mailbox for companion', companion.username)
+        await findOrCreatePersonalMailbox(
+            pb,
+            companion.username,
+            companion.name,
+            domain.id,
+            companion.id
+        )
+        await ensureMailboxMember(pb, sharedMailbox.id, companion.id, 'member')
     }
 
     // Create labels (find or create) — uses core 'labels' collection.
@@ -1810,11 +1854,19 @@ async function seedThreadsForMailbox(
     labelMap: Record<string, string>,
     label: string
 ) {
-    const existing = await pb.collection('mail_threads').getList(1, 1, {
-        filter: `mailbox = "${mailboxId}"`,
+    // Guard on THIS user's per-thread state, not on the mailbox having threads
+    // at all. A shared mailbox outlives any one user's reset (other members
+    // still need it), so a mailbox-keyed guard reports "already seeded" and the
+    // reset user silently gets no shared threads back — their thread state,
+    // which is what actually renders the list, was wiped with them.
+    const existing = await pb.collection('mail_thread_state').getList(1, 1, {
+        filter: pb.filter('user = {:uid} && thread.mailbox = {:mailbox}', {
+            uid: userId,
+            mailbox: mailboxId,
+        }),
     })
     if (existing.totalItems > 0) {
-        log(`Skipping ${label} threads (${existing.totalItems} already exist)`)
+        log(`Skipping ${label} threads (${existing.totalItems} already visible to this user)`)
         return
     }
 
