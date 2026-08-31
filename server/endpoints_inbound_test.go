@@ -392,7 +392,7 @@ func TestHandleInbound_KnownRecipientStoresMessage(t *testing.T) {
 }
 
 // TestHandleInbound_DisabledUserMailboxStillReceives pins a deliberate policy
-// decision (multi-org HANDOFF §6, resolved 2026-07-28): delivery does NOT
+// decision (hosting HANDOFF §6, resolved 2026-07-28): delivery does NOT
 // consult users.disabled. Disable is a reversible suspension — mail keeps
 // accumulating so it is waiting when the account is re-enabled, and senders
 // learn nothing about the account's state (a bounce would leak it). The

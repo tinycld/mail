@@ -9,7 +9,7 @@ import (
 	"tinycld.org/core/mailproto"
 )
 
-// TenantListeners are the injected mail sockets a multi-org tenant serves on.
+// TenantListeners are the injected mail sockets a hosting tenant serves on.
 // The router owns the public ports (:993/:465/:25): it terminates TLS with the
 // wildcard cert (a tenant must never hold that key), demuxes each connection
 // to an org, and forwards plaintext over private per-org unix sockets — these

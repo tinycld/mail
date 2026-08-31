@@ -734,7 +734,7 @@ const THREADS: {
                 subject: 'Your weekly digest — TinyCld Community',
                 snippet: 'This week: 12 new discussions, 3 resolved issues.',
                 body_html:
-                    '<p><strong>Your weekly digest</strong></p><p>This week in the TinyCld Community:</p><ul><li>12 new discussions</li><li>3 resolved issues</li><li>New guide: "Integrating with Zapier"</li><li>Most discussed: "Best practices for multi-org setups"</li></ul>',
+                    '<p><strong>Your weekly digest</strong></p><p>This week in the TinyCld Community:</p><ul><li>12 new discussions</li><li>3 resolved issues</li><li>New guide: "Integrating with Zapier"</li><li>Most discussed: "Best practices for hosting setups"</li></ul>',
             },
         ],
     },

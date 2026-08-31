@@ -27,7 +27,7 @@ const manifest = {
     // Message bodies are real disk. No ownerField: a mailbox is shared by its
     // members, so these bytes count toward the ORG ceiling only.
     quota: [{ collection: 'mail_messages', sizeField: 'total_size' }],
-    // mailListeners: tells the multi-org router to create per-org mail
+    // mailListeners: tells the hosting router to create per-org mail
     // sockets; Register discovers them via coreserver.GetTenantContext —
     // the router owns every port, a tenant never binds one.
     server: { package: 'server', module: 'tinycld.org/packages/mail', mailListeners: true },

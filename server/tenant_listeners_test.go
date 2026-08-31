@@ -14,7 +14,7 @@ import (
 	"tinycld.org/core/rlstest"
 )
 
-// The multi-org tenant seam these tests pin: when the router hands a tenant
+// The hosting tenant seam these tests pin: when the router hands a tenant
 // per-org mail sockets, mail serves the real IMAP / submission / inbound-MX
 // sessions on exactly those listeners in external-TLS mode (the router holds
 // the wildcard cert and forwards plaintext), and a listener that cannot start

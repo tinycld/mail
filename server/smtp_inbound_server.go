@@ -103,7 +103,7 @@ func newInboundSMTPServer(app core.App, hostname string, tlsConfig *tls.Config) 
 }
 
 // startSMTPInboundOnListener serves the inbound-MX session on an injected
-// plaintext listener — the multi-org tenant path. The router owns :25: it
+// plaintext listener — the hosting tenant path. The router owns :25: it
 // offers and terminates STARTTLS there, routes each transaction by RCPT TO
 // domain through the control-plane registry, and relays accepted messages
 // here over the org's private unix socket. There is no
