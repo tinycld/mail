@@ -41,7 +41,7 @@ func TestMimeForAttachment(t *testing.T) {
 }
 
 // Legacy binary Office formats are intentionally unsupported after the
-// doctaculous migration: mimeForAttachment must not map them to anything
+// omnidoc migration: mimeForAttachment must not map them to anything
 // the core pipeline would accept.
 func TestMimeForAttachmentLegacyOfficeRejected(t *testing.T) {
 	for _, filename := range []string{"old.doc", "old.xls", "old.ppt", "old_abc123XYZ0.doc"} {
