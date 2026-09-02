@@ -95,8 +95,6 @@ github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/jaytaylor/html2text v0.0.0-20260303211410-1a4bdc82ecec h1:DrV+GDNKHeHyfqEZaoxQoHlWcgTBiaJ8ZUyNyd5vvkY=
 github.com/jaytaylor/html2text v0.0.0-20260303211410-1a4bdc82ecec/go.mod h1:CVKlgaMiht+LXvHG173ujK6JUhZXKb2u/BQtjPDIvyk=
-github.com/jdeng/goheif v0.0.0-20260407171156-9bf5264f67af h1:fK0V59Ldoj/3VctvFfNPEFmpaUhv8Hjw9I7gEPkY3IA=
-github.com/jdeng/goheif v0.0.0-20260407171156-9bf5264f67af/go.mod h1:whEdtAJfm8ia675sbmIATUVAT/P9gnb7zHpR3hzqst0=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
 github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
 github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=

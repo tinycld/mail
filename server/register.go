@@ -31,7 +31,7 @@ func appIsLive(app core.App) bool {
 
 // Register composes the mail server — the package's single entry point,
 // called by the generator's package_extensions.go in BOTH the single-org app
-// and a multi-org tenant. Mail is the rare package whose composition genuinely
+// and a hosting tenant. Mail is the rare package whose composition genuinely
 // differs hosted, so it DETECTS tenancy (coreserver.GetTenantContext — the
 // single-Register contract) to pick where its protocol listeners come from:
 //

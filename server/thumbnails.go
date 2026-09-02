@@ -16,7 +16,7 @@ import (
 	"tinycld.org/core/thumbnails"
 )
 
-// thumbnailTimeout bounds the doctaculous render of a single attachment. It
+// thumbnailTimeout bounds the omnidoc render of a single attachment. It
 // only covers the document render: the storage-blob read and core's HEIF
 // decode are not context-aware, so a hang there is not cut off by this.
 const thumbnailTimeout = 60 * time.Second
@@ -222,6 +222,10 @@ func mimeForAttachment(filename string) string {
 	// Legacy binary Office formats (.doc/.xls/.ppt) are intentionally unsupported.
 	case ".heic", ".heif":
 		return "image/heic"
+	case ".webp":
+		return "image/webp"
+	case ".svg":
+		return "image/svg+xml"
 	}
 	return ""
 }
