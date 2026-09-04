@@ -204,7 +204,7 @@ test.describe('Mail — Rules screen', () => {
         // would exist as automation-owning packages in the ecosystem, it
         // doesn't require any of them to actually be installed.
         await expect(page.getByText('mail', { exact: true })).toBeVisible()
-        const otherPackageSlugs = ['calendar', 'drive', 'contacts', 'calc', 'text', 'cards']
+        const otherPackageSlugs = ['calendar', 'drive', 'contacts', 'calc', 'text', 'boards']
         for (const slug of otherPackageSlugs) {
             await expect(page.getByText(slug, { exact: true })).not.toBeVisible()
         }
