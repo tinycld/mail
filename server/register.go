@@ -14,6 +14,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/audit"
 	"tinycld.org/core/coreserver"
+	"tinycld.org/core/oauth"
 	"tinycld.org/core/quota"
 	"tinycld.org/core/search"
 	"tinycld.org/packages/mail/api"
@@ -58,6 +59,10 @@ func Register(app *pocketbase.PocketBase) {
 
 // registerShared is the single source of truth for what BOTH compositions run.
 func registerShared(app *pocketbase.PocketBase) {
+	// What an OAuth token may reach in this package. Core knows nothing about
+	// it until this runs; see oauth.Package for the shape.
+	oauth.RegisterPackage(oauthPackage())
+
 	// Storage ceilings: message bodies are real disk. No owner field —
 	// a mailbox is shared by its members, so a message is not chargeable to
 	// any one of them — which means these bytes count toward the ORG total
