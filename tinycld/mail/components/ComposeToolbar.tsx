@@ -113,9 +113,7 @@ export function ComposeToolbar({
                         activeColor={activeColor}
                     />
                 ),
-                overflowLabel: 'Bold',
-                overflowIcon: Bold,
-                overflowPress: () => commands.toggleBold(),
+                overflow: { label: 'Bold', icon: Bold, onPress: () => commands.toggleBold() },
             },
             {
                 type: 'custom',
@@ -129,9 +127,7 @@ export function ComposeToolbar({
                         activeColor={activeColor}
                     />
                 ),
-                overflowLabel: 'Italic',
-                overflowIcon: Italic,
-                overflowPress: () => commands.toggleItalic(),
+                overflow: { label: 'Italic', icon: Italic, onPress: () => commands.toggleItalic() },
             },
             {
                 type: 'custom',
@@ -145,9 +141,11 @@ export function ComposeToolbar({
                         activeColor={activeColor}
                     />
                 ),
-                overflowLabel: 'Underline',
-                overflowIcon: Underline,
-                overflowPress: () => commands.toggleUnderline(),
+                overflow: {
+                    label: 'Underline',
+                    icon: Underline,
+                    onPress: () => commands.toggleUnderline(),
+                },
             },
             { type: 'separator' },
             {
@@ -162,9 +160,11 @@ export function ComposeToolbar({
                         activeColor={activeColor}
                     />
                 ),
-                overflowLabel: 'Bullet list',
-                overflowIcon: List,
-                overflowPress: () => commands.toggleBulletList(),
+                overflow: {
+                    label: 'Bullet list',
+                    icon: List,
+                    onPress: () => commands.toggleBulletList(),
+                },
             },
             {
                 type: 'custom',
@@ -178,9 +178,11 @@ export function ComposeToolbar({
                         activeColor={activeColor}
                     />
                 ),
-                overflowLabel: 'Numbered list',
-                overflowIcon: ListOrdered,
-                overflowPress: () => commands.toggleOrderedList(),
+                overflow: {
+                    label: 'Numbered list',
+                    icon: ListOrdered,
+                    onPress: () => commands.toggleOrderedList(),
+                },
             },
             { type: 'separator' },
             {
@@ -195,9 +197,11 @@ export function ComposeToolbar({
                         activeColor={activeColor}
                     />
                 ),
-                overflowLabel: 'Blockquote',
-                overflowIcon: Quote,
-                overflowPress: () => commands.toggleBlockquote(),
+                overflow: {
+                    label: 'Blockquote',
+                    icon: Quote,
+                    onPress: () => commands.toggleBlockquote(),
+                },
             },
             {
                 type: 'custom',
@@ -211,9 +215,7 @@ export function ComposeToolbar({
                         activeColor={activeColor}
                     />
                 ),
-                overflowLabel: 'Link',
-                overflowIcon: Link2,
-                overflowPress: handleLink,
+                overflow: { label: 'Link', icon: Link2, onPress: handleLink },
             },
             { type: 'separator' },
             {
