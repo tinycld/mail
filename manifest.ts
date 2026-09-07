@@ -36,12 +36,12 @@ const manifest = {
     // peerVersions floor below must stay >= the core that ships the emitter.
     payloads: { package: 'server/api' },
     // `tinycld mail ...` commands, compiled into the per-org CLI binary by
-    // gen-cli.ts. scopes feed the OAuth scope registry and consent screen;
+    // gen-cli.ts. The OAuth scopes the commands need are registered by
+    // server/oauth_scopes.go, never declared here.
     // Cobra is the source of truth for the command list and --help.
     cli: {
         package: 'cli',
         module: 'tinycld.org/packages/mail/cli',
-        scopes: ['mail:read', 'mail:send'],
     },
     repository: { url: 'https://github.com/tinycld/mail' },
     peerVersions: { '@tinycld/core': '>=0.0.6 <0.1.0' },
