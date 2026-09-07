@@ -5,9 +5,9 @@ import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { hexToRgba } from '@tinycld/core/lib/color-utils'
 import { formatRelativeDate } from '@tinycld/core/lib/format-utils'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { Menu } from '@tinycld/core/ui/menu'
 import { ChevronDown, ChevronUp, Forward, MoreVertical, Reply, ReplyAll } from 'lucide-react-native'
 import { Platform, Pressable, Text, View } from 'react-native'
-import { MenuActionItem, ToolbarMenu } from './DropdownMenu'
 
 function Tooltip({ title, children }: { title: string; children: React.ReactNode }) {
     if (Platform.OS !== 'web') return <>{children}</>
@@ -220,23 +220,15 @@ export function MessageHeader({
                             )}
                         </Pressable>
                     </Tooltip>
-                    <ToolbarMenu icon={MoreVertical} label="More options">
-                        <MenuActionItem
-                            label="Reply"
-                            icon={Reply}
-                            onPress={onReply ?? (() => {})}
-                        />
-                        <MenuActionItem
-                            label="Reply all"
-                            icon={ReplyAll}
-                            onPress={onReplyAll ?? (() => {})}
-                        />
-                        <MenuActionItem
-                            label="Forward"
-                            icon={Forward}
-                            onPress={onForward ?? (() => {})}
-                        />
-                    </ToolbarMenu>
+                    <Menu
+                        trigger={<ToolbarIconButton icon={MoreVertical} label="More options" />}
+                        placement="bottom-end"
+                        title="More options"
+                    >
+                        <Menu.Item label="Reply" icon={Reply} onSelect={onReply} />
+                        <Menu.Item label="Reply all" icon={ReplyAll} onSelect={onReplyAll} />
+                        <Menu.Item label="Forward" icon={Forward} onSelect={onForward} />
+                    </Menu>
                 </View>
             </Pressable>
         </View>

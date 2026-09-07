@@ -3,6 +3,7 @@ import { ResponsiveToolbar, type ToolbarItem } from '@tinycld/core/components/Re
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import type { HelpTopicId } from '@tinycld/core/lib/help/types'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { Menu } from '@tinycld/core/ui/menu'
 import {
     Archive,
     ChevronLeft,
@@ -22,7 +23,6 @@ import {
 import { useMemo } from 'react'
 import { Pressable, Text } from 'react-native'
 import type { MailThreadState } from '../types'
-import { MenuActionItem } from './DropdownMenu'
 
 interface LabelInfo {
     id: string
@@ -215,7 +215,7 @@ function BulkActionsToolbar({
                 icon: FolderInput,
                 label: 'Move to',
                 children: MOVE_FOLDERS.map(({ label, folder }) => (
-                    <MenuActionItem key={folder} label={label} onPress={() => onMove(folder)} />
+                    <Menu.Item key={folder} label={label} onSelect={() => onMove(folder)} />
                 )),
             },
             {
@@ -226,12 +226,12 @@ function BulkActionsToolbar({
                 children: labels.map(lbl => {
                     const isActive = selectedItemLabelIds.has(lbl.id)
                     return (
-                        <MenuActionItem
+                        <Menu.Item
                             key={lbl.id}
                             label={lbl.name}
                             colorDot={lbl.color}
-                            isActive={isActive}
-                            onPress={() => onUpdateLabel(lbl.id, !isActive)}
+                            isSelected={isActive}
+                            onSelect={() => onUpdateLabel(lbl.id, !isActive)}
                         />
                     )
                 }),
