@@ -100,7 +100,9 @@ test.describe('Mail — Rules screen', () => {
         await expect(page.getByText('Matched', { exact: true }).first()).toBeVisible({
             timeout: 20_000,
         })
-        await page.getByLabel('Close').click()
+        // Scope to the run-history dialog: the overlay engine also labels the
+        // backdrop "Close", so a bare getByLabel resolves to two elements.
+        await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click()
 
         // The action actually firing is the real proof the rule ran end to
         // end (not just "matched" in the abstract) — the notification bell

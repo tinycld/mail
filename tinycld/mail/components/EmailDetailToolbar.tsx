@@ -1,4 +1,5 @@
 import { ResponsiveToolbar, type ToolbarItem } from '@tinycld/core/components/ResponsiveToolbar'
+import { Menu } from '@tinycld/core/ui/menu'
 import {
     Archive,
     ArrowLeft,
@@ -16,7 +17,6 @@ import {
 } from 'lucide-react-native'
 import { useMemo } from 'react'
 import type { MailThreadState } from '../types'
-import { MenuActionItem } from './DropdownMenu'
 
 interface LabelInfo {
     id: string
@@ -95,7 +95,7 @@ export function EmailDetailToolbar({
                 icon: FolderInput,
                 label: 'Move to',
                 children: MOVE_FOLDERS.map(({ label, folder }) => (
-                    <MenuActionItem key={folder} label={label} onPress={() => onMove(folder)} />
+                    <Menu.Item key={folder} label={label} onSelect={() => onMove(folder)} />
                 )),
             },
             {
@@ -106,12 +106,12 @@ export function EmailDetailToolbar({
                 children: labels.map(lbl => {
                     const isActive = threadLabelIds.has(lbl.id)
                     return (
-                        <MenuActionItem
+                        <Menu.Item
                             key={lbl.id}
                             label={lbl.name}
                             colorDot={lbl.color}
-                            isActive={isActive}
-                            onPress={() => onUpdateLabel(lbl.id, !isActive)}
+                            isSelected={isActive}
+                            onSelect={() => onUpdateLabel(lbl.id, !isActive)}
                         />
                     )
                 }),
