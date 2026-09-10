@@ -44,11 +44,15 @@ Search is scoped to every mailbox you have access to — your personal mailbox p
 
 Results show a snippet from the matched message with `<mark>` highlights on the matched terms. The thread row in the result list shows the subject and a one-line preview of the match.
 
-## What's NOT searched
+## Trash, Spam, drafts, and labels
 
-- **Trashed and Spam threads** are included by default. Add a folder filter (or browse the Trash / Spam views directly) to scope.
-- **Drafts** are indexed — typing a search term you wrote into a draft will find that draft.
-- **Labels** — to filter by label, use the sidebar label rows, not the search box. (Combining the two narrows the result set further.)
+- **Trash and Spam threads** are included by default. Add a folder filter (or browse the Trash / Spam views directly) to narrow.
+- **Drafts** are indexed — a term you typed into a draft finds that draft.
+- **Labels** are the one thing the search box can't filter on. To filter by label, click a label row in the sidebar; combining a label row with a search narrows the results further.
+
+## Searching from anywhere in the app
+
+Mail results also appear in the app-wide search palette. Press **/** from any package, type, and matching threads show up alongside results from other packages; pick the `pkg:mail` chip to limit the palette to mail. The palette runs the same full-text search (including `-term` exclusions) but not the structured filters above — for those, use the search box in Mail.
 
 ## See also
 

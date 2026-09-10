@@ -27,7 +27,7 @@ IMAP is **read + state**, not send. To also send from your client, set up [SMTP]
 | **Password** | your TinyCld password |
 | **Authentication** | Normal password |
 
-> **The server is your TinyCld web address** — the hostname in your browser's address bar, shown above. It is *not* your mail domain: even if your address is `you@yourdomain.com`, the server to enter is `{{server-host}}`, never `mail.yourdomain.com`. TinyCld identifies your organization by the hostname your client connects with, so any other name (or an IP address) is refused with "service unavailable".
+> **The server is your TinyCld web address** — the hostname in your browser's address bar, shown above. It is *not* your mail domain: even if your address is `you@yourdomain.com`, the server to enter is `{{server-host}}`, never `mail.yourdomain.com`. TinyCld identifies your workspace by the hostname your client connects with, so any other name (or an IP address) is refused with "service unavailable".
 
 There is no separate "IMAP password" — use your regular TinyCld login.
 
@@ -93,10 +93,11 @@ When you have multiple mailboxes, IMAP namespaces them — typically as separate
 
 ## Troubleshooting
 
-- **Connects, then immediately disconnects ("service unavailable" / BYE)** — the server name in your client is wrong. It must be `{{server-host}}` exactly (your TinyCld web address); a `mail.` name, your mail domain, or an IP address all reach the server but don't identify your organization, so it hangs up.
+- **Connects, then immediately disconnects ("service unavailable" / BYE)** — the server name in your client is wrong. It must be `{{server-host}}` exactly (your TinyCld web address); a `mail.` name, your mail domain, or an IP address all reach the server but don't identify your workspace, so it hangs up.
 - **Auth failed** — use the username or email you *sign in to TinyCld with*, not your mail address. Your `you@yourdomain.com` mail address and your TinyCld sign-in identity are not necessarily the same thing.
 - **Connection refused / timeout** — verify your TinyCld instance is reachable on port 993. Try `openssl s_client -connect {{server-host}}:993 -servername {{server-host}}` from a terminal to test.
 - **TLS certificate error** — Mail's IMAP server uses the same TLS certificate as your web UI. If your web UI works, IMAP should too. If not, check the cert hostname matches what you put in the client.
+- **Flagging, moving, or deleting fails with `Your mail access is read-only`** — your account has read-only access to Mail on this server. Reading and syncing still work, but any change your client tries to make (mark read, star, move, delete, save a draft) is refused. Ask an administrator to grant full access if you need to make changes.
 - **Folders don't sync** — IMAP IDLE should push new messages within a second, but some clients only check every 5–15 minutes by default. Look for a "check for new mail every N minutes" setting.
 
 ## See also

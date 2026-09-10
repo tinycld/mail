@@ -20,7 +20,7 @@ Every mailbox has the same set of folders:
 
 ## What folder placement actually is
 
-Folders are **not** physical locations — they're a piece of state on `mail_thread_state`, which is per-user-org. So:
+Folders are **not** physical locations — they're a piece of state on `mail_thread_state`, which is per user. So:
 
 - *You* archive a thread → it leaves *your* Inbox view but stays visible to other shared-mailbox members.
 - A thread can only be in one folder for you at a time (Inbox vs Trash vs Archive — but Starred is independent, it's a separate flag).
@@ -31,7 +31,7 @@ The "All Mail" view ignores folder state entirely and shows everything the mailb
 
 Three ways:
 
-- **Toolbar** in an open thread: archive, move to trash, move to spam.
+- **Toolbar** in an open thread: archive, move to trash, move to spam. On a narrow window some of these sit under **More** at the end of the toolbar.
 - **Row actions** in the list (hover or right-click): same set.
 - **Bulk select** in the list (checkbox or **x** key), then use the toolbar at the top of the list. See [Keyboard shortcuts](help://mail:keyboard-shortcuts).
 

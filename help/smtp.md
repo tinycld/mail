@@ -24,7 +24,7 @@ This is **not** the same as the SMTP your mail provider uses to deliver mail acr
 | **Password** | your TinyCld password |
 | **Authentication** | Normal password |
 
-> **The server is your TinyCld web address** — the hostname in your browser's address bar, shown above. It is *not* your mail domain: even if you send as `you@yourdomain.com`, the server to enter is `{{server-host}}`, never `mail.yourdomain.com`. TinyCld identifies your organization by the hostname your client connects with, so any other name (or an IP address) is refused with "service unavailable".
+> **The server is your TinyCld web address** — the hostname in your browser's address bar, shown above. It is *not* your mail domain: even if you send as `you@yourdomain.com`, the server to enter is `{{server-host}}`, never `mail.yourdomain.com`. TinyCld identifies your workspace by the hostname your client connects with, so any other name (or an IP address) is refused with "service unavailable".
 
 The same credentials as [IMAP](help://mail:imap) — your regular TinyCld login.
 
@@ -89,12 +89,14 @@ Outbound messages are capped at **25 MB total** (including attachments). Larger 
 
 ## Why messages might be rejected
 
-- **Connects, then immediately disconnects ("service unavailable")** — the server name in your client is wrong. It must be `{{server-host}}` exactly (your TinyCld web address); a `mail.` name, your mail domain, or an IP address all reach the server but don't identify your organization, so it hangs up.
+- **Connects, then immediately disconnects ("service unavailable")** — the server name in your client is wrong. It must be `{{server-host}}` exactly (your TinyCld web address); a `mail.` name, your mail domain, or an IP address all reach the server but don't identify your workspace, so it hangs up.
 - **Auth failed** — wrong username/email or password. Same as IMAP — use the identity you sign in to TinyCld with.
+- **Auth fails with `Your mail access is read-only; sending is not permitted`** — your account has read-only access to Mail on this server. You can still read over [IMAP](help://mail:imap); sending needs an administrator to grant full access.
 - **From address not owned** — see above; the From header has to match a mailbox or alias you have access to.
 - **Domain not verified** — the sending domain has to be fully verified (MX, SPF, DKIM, Return-Path). See [Custom domains](help://mail:custom-domains).
 - **Provider not configured** — the deployment has no mail provider yet; configuring one is an administrator task. See [Provider setup](help://mail:provider-setup).
 - **Message size too large** — 25 MB max.
+- **Storage limit exceeded** — storing your Sent copy would push this server over its storage limit. Free space by deleting large threads, or ask an administrator to raise the limit.
 
 ## See also
 

@@ -55,7 +55,7 @@ So a 1×1 tracking pixel still loads visually (your message looks the same as in
 
 ### Outbound limits
 
-Outbound submission via SMTP or the web composer has a 25 MB total message size limit (set on the SMTP server). Larger messages need a different transport — typically a link to a [Drive](help://drive:getting-started) file instead.
+Outbound submission via SMTP or the web composer has a 25 MB total message size limit (set on the SMTP server). Larger messages need a different transport — typically a link to a [Drive](help://drive:getting-started) file instead. Stored messages also count toward this server's storage limit — see [Composing](help://mail:composing).
 
 ## What Mail doesn't (yet) do
 
