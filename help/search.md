@@ -52,7 +52,7 @@ Results show a snippet from the matched message with `<mark>` highlights on the 
 
 ## Searching from anywhere in the app
 
-Mail results also appear in the app-wide search palette. Press **/** from any package, type, and matching threads show up alongside results from other packages; pick the `pkg:mail` chip to limit the palette to mail. The palette runs the same full-text search (including `-term` exclusions) but not the structured filters above — for those, use the search box in Mail.
+Mail results also appear in the app-wide search palette. Press **/** from any package, type, and matching threads show up alongside results from other packages; pick the `mail:` chip to limit the palette to mail. The palette runs the same full-text search (including `-term` exclusions) but not the structured filters above — for those, use the search box in Mail.
 
 ## See also
 
