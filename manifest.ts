@@ -2,7 +2,7 @@ const manifest = {
     name: 'Mail',
     slug: 'mail',
     version: '0.3.1',
-    description: 'Gmail-style email client for your organization',
+    description: 'Gmail-style email for your server',
     routes: { directory: 'screens' },
     nav: { label: 'Mail', icon: 'mail', order: 5, shortcut: 'm' },
     sidebar: { component: 'sidebar' },
@@ -25,7 +25,7 @@ const manifest = {
     search: { adapter: 'search-adapter' },
     automation: { definitions: 'automation' },
     // Message bodies are real disk. No ownerField: a mailbox is shared by its
-    // members, so these bytes count toward the ORG ceiling only.
+    // members, so these bytes count toward the deployment-wide ceiling only.
     quota: [{ collection: 'mail_messages', sizeField: 'total_size' }],
     // mailListeners: tells the hosting router to create per-org mail
     // sockets; Register discovers them via coreserver.GetTenantContext —
