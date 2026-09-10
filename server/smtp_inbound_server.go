@@ -85,7 +85,7 @@ func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func()
 }
 
 // newInboundSMTPServer builds the inbound-MX server around the shared inbound
-// backend; both the host's TCP bind and the tenant's injected-listener path
+// backend; both the own-ports TCP bind and the injected-listener path
 // serve exactly this instance.
 func newInboundSMTPServer(app core.App, hostname string, tlsConfig *tls.Config) *smtp.Server {
 	backend := &smtpInboundBackend{app: app, hostname: hostname}
@@ -103,7 +103,7 @@ func newInboundSMTPServer(app core.App, hostname string, tlsConfig *tls.Config) 
 }
 
 // startSMTPInboundOnListener serves the inbound-MX session on an injected
-// plaintext listener — the hosting tenant path. The router owns :25: it
+// plaintext listener — the injected path. The supervisor owns :25: it
 // offers and terminates STARTTLS there, routes each transaction by RCPT TO
 // domain through the control-plane registry, and relays accepted messages
 // here over the org's private unix socket. There is no

@@ -14,11 +14,12 @@ import (
 	"tinycld.org/core/rlstest"
 )
 
-// The hosting tenant seam these tests pin: when the router hands a tenant
-// per-org mail sockets, mail serves the real IMAP / submission / inbound-MX
-// sessions on exactly those listeners in external-TLS mode (the router holds
-// the wildcard cert and forwards plaintext), and a listener that cannot start
-// fails the boot loudly instead of leaving the org quietly mail-less.
+// The injected-listener seam these tests pin: when a supervisor hands this
+// process pre-bound mail sockets, mail serves the real IMAP / submission /
+// inbound-MX sessions on exactly those listeners in external-TLS mode (the
+// supervisor holds the certificate and forwards plaintext), and a listener
+// that cannot start fails the boot loudly instead of leaving the deployment
+// quietly mail-less.
 
 func dialMailListener(t *testing.T, ln net.Listener) (net.Conn, *bufio.Reader) {
 	t.Helper()
@@ -49,7 +50,7 @@ func readEHLO(t *testing.T, conn net.Conn, r *bufio.Reader) string {
 	}
 }
 
-func TestStartTenantMailListeners_ServesAllThreeInjectedListeners(t *testing.T) {
+func TestStartInjectedMailListeners_ServesAllThreeInjectedListeners(t *testing.T) {
 	app, err := tests.NewTestApp()
 	if err != nil {
 		t.Fatal(err)
@@ -65,13 +66,13 @@ func TestStartTenantMailListeners_ServesAllThreeInjectedListeners(t *testing.T) 
 	}
 	imapLn, subLn, mxLn := mkListener(), mkListener(), mkListener()
 
-	shutdown, err := startTenantMailListeners(app, TenantListeners{
+	shutdown, err := startInjectedMailListeners(app, InjectedListeners{
 		IMAP:       func(string) (net.Listener, error) { return imapLn, nil },
 		Submission: func(string) (net.Listener, error) { return subLn, nil },
 		InboundMX:  func(string) (net.Listener, error) { return mxLn, nil },
 	})
 	if err != nil {
-		t.Fatalf("startTenantMailListeners: %v", err)
+		t.Fatalf("startInjectedMailListeners: %v", err)
 	}
 	t.Cleanup(shutdown)
 
@@ -108,7 +109,7 @@ func TestStartTenantMailListeners_ServesAllThreeInjectedListeners(t *testing.T) 
 	}
 }
 
-func TestStartTenantMailListeners_FailureIsLoudAndUnwindsPriorListeners(t *testing.T) {
+func TestStartInjectedMailListeners_FailureIsLoudAndUnwindsPriorListeners(t *testing.T) {
 	app, err := tests.NewTestApp()
 	if err != nil {
 		t.Fatal(err)
@@ -120,12 +121,12 @@ func TestStartTenantMailListeners_FailureIsLoudAndUnwindsPriorListeners(t *testi
 		t.Fatal(err)
 	}
 
-	_, err = startTenantMailListeners(app, TenantListeners{
+	_, err = startInjectedMailListeners(app, InjectedListeners{
 		IMAP:       func(string) (net.Listener, error) { return imapLn, nil },
 		Submission: func(string) (net.Listener, error) { return nil, fmt.Errorf("socket gone") },
 	})
 	if err == nil {
-		t.Fatal("a mail listener that cannot start must fail the tenant boot, not proceed silently")
+		t.Fatal("a mail listener that cannot start must fail the boot, not proceed silently")
 	}
 
 	// The already-started IMAP listener must have been unwound: accepting is
@@ -140,23 +141,23 @@ func TestStartTenantMailListeners_FailureIsLoudAndUnwindsPriorListeners(t *testi
 	}
 }
 
-// With router-managed listeners injected, the tenant composition matches the
+// With supervisor-managed listeners injected, the composition matches the
 // host exactly. Composed directly from Register's two halves (registerShared +
-// registerInjectedListeners) because the tenant context that selects the
-// branch is stamped by coreserver.RegisterTenant, outside this package; the
-// detection branch itself is covered end-to-end by the orgmanager mail e2e.
-func TestTenantWithListenersCompositionMatchesHostExactly(t *testing.T) {
+// registerInjectedListeners) because the embedded context that selects the
+// branch is stamped outside this package; the detection branch itself is
+// covered end-to-end by the orgmanager mail e2e.
+func TestInjectedListenersCompositionMatchesOwnPortsExactly(t *testing.T) {
 	host := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
 	Register(host)
 
-	tenant := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
-	registerShared(tenant)
-	registerInjectedListeners(tenant, TenantListeners{
+	injected := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
+	registerShared(injected)
+	registerInjectedListeners(injected, InjectedListeners{
 		IMAP: func(string) (net.Listener, error) { return nil, fmt.Errorf("never served in this test") },
 	})
 
 	rlstest.AssertCompositionDiff(t,
 		rlstest.HookHandlerCounts(t, host),
-		rlstest.HookHandlerCounts(t, tenant),
+		rlstest.HookHandlerCounts(t, injected),
 		map[string]int{})
 }
