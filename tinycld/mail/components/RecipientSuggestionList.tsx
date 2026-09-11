@@ -1,4 +1,4 @@
-import { NameAvatar as ContactAvatar } from '@tinycld/core/components/NameAvatar'
+import { Avatar as ContactAvatar } from '@tinycld/core/components/Avatar'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native'
 
@@ -113,11 +113,7 @@ export function RecipientSuggestionList({
                                 cursor: 'pointer' as 'auto',
                             })}
                         >
-                            <ContactAvatar
-                                firstName={contact.first_name}
-                                lastName={contact.last_name}
-                                size={32}
-                            />
+                            <ContactAvatar name={fullName} email={contact.email} size={32} />
                             <View className="flex-1" style={{ gap: 2 }}>
                                 <HighlightText text={fullName} query={query} bold />
                                 <HighlightText text={contact.email ?? ''} query={query} />
