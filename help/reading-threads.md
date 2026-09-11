@@ -40,7 +40,7 @@ The toolbar above an open thread has:
 - **Labels** — assign / unassign labels. See [Labels](help://mail:labels).
 - **Mark as unread** — flips read state for the thread.
 
-All of these are per-user — they don't affect what other members of a shared mailbox see.
+All of these are per-user — they don't affect what other members of a shared mailbox see. On a narrow window some of these buttons fold into a **More** menu at the end of the toolbar.
 
 ## Reply, Reply all, Forward
 

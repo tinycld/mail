@@ -9,7 +9,7 @@ order: 60
 
 Labels are colored, named tags you can attach to threads. Unlike folders (where a thread is in exactly one), a thread can have any number of labels, and a label can be on any number of threads.
 
-Labels are **per-user-org** — what you label as "Urgent" doesn't appear that way for other members of a shared mailbox. They use the same label system as [Contacts](help://contacts:labels), so a label called "Clients" works consistently across packages.
+Labels are **per user** — what you label as "Urgent" doesn't appear that way for other members of a shared mailbox. They use the same label system as [Contacts](help://contacts:labels), so a label called "Clients" works consistently across packages.
 
 ## Managing labels
 
@@ -23,13 +23,13 @@ Deleting a label removes it from every thread (and every contact, etc.) that had
 
 ## Assigning labels to a thread
 
-Open the thread and click the **Labels** icon in the toolbar. A picker appears — check labels to add, uncheck to remove. Changes commit immediately.
+Open the thread and click the **Labels** icon in the toolbar (on a narrow window it may sit under **More**). A picker appears — check labels to add, uncheck to remove. Changes commit immediately.
 
 In the list view, labels appear as small colored chips next to the subject.
 
 ## Filtering by label
 
-Each label is a clickable row under **Labels** in the sidebar. Clicking shows only threads with that label, across every mailbox you have access to. You can select **multiple** labels at once (Cmd/Ctrl-click) — the result is the union (threads matching *any* selected label).
+Each label is a clickable row under **Labels** in the sidebar. Clicking shows only threads with that label, across every mailbox you have access to. You can select **multiple** labels at once (⌘-click) — the result is the union (threads matching *any* selected label).
 
 ## Cross-package
 

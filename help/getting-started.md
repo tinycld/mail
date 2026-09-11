@@ -11,7 +11,7 @@ A full email client backed by a mail provider like Postmark for actual delivery.
 
 - Read and write email in the web / iPad UI.
 - Connect any standard mail client (Apple Mail, Thunderbird, mutt) via [IMAP](help://mail:imap) and [SMTP](help://mail:smtp).
-- Use your org's custom domain — set up MX, SPF, DKIM, and inbound routing once and Mail handles the rest.
+- Use your own custom domain — set up MX, SPF, DKIM, and inbound routing once and Mail handles the rest.
 
 ## Mailboxes vs folders
 

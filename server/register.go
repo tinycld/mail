@@ -31,26 +31,25 @@ func appIsLive(app core.App) bool {
 }
 
 // Register composes the mail server — the package's single entry point,
-// called by the generator's package_extensions.go in BOTH the single-org app
-// and a hosting tenant. Mail is the rare package whose composition genuinely
-// differs hosted, so it DETECTS tenancy (coreserver.GetTenantContext — the
-// single-Register contract) to pick where its protocol listeners come from:
+// called by the generator's package_extensions.go in EVERY composition. Mail
+// is the rare package whose composition genuinely differs when it does not own
+// its own runtime wiring, so it DETECTS that (coreserver.GetEmbeddedContext —
+// the single-Register contract) to pick where its protocol listeners come from:
 //
-//   - Single-org app: the process owns its ports, so the IMAP /
-//     SMTP-submission / inbound-SMTP listeners bind fixed TCP ports here.
-//   - Multi-org tenant: a tenant must NEVER bind a port — the router owns
-//     every listening socket. The router terminates TLS on :993/:465 (SNI
-//     demux) and fronts :25 (RCPT TO routing), forwarding plaintext over
-//     per-org unix sockets injected through the TenantContext
-//     (tenant_listeners.go serves exactly those; none injected = no
-//     listeners, e.g. a degraded router).
+//   - The process owns its ports: the IMAP / SMTP-submission / inbound-SMTP
+//     listeners bind fixed TCP ports here.
+//   - A supervisor owns them: this process must NEVER bind a port. The
+//     supervisor terminates TLS on :993/:465 and fronts :25, forwarding
+//     plaintext over pre-bound sockets injected through the EmbeddedContext
+//     (injected_listeners.go serves exactly those; none injected = no
+//     listeners, e.g. a supervisor running no mail at all).
 func Register(app *pocketbase.PocketBase) {
 	registerShared(app)
-	if tc, ok := coreserver.GetTenantContext(app); ok {
-		registerInjectedListeners(app, TenantListeners{
-			IMAP:       tc.Mail.IMAP,
-			Submission: tc.Mail.Submission,
-			InboundMX:  tc.Mail.InboundMX,
+	if ec, ok := coreserver.GetEmbeddedContext(app); ok {
+		registerInjectedListeners(app, InjectedListeners{
+			IMAP:       ec.Mail.IMAP,
+			Submission: ec.Mail.Submission,
+			InboundMX:  ec.Mail.InboundMX,
 		})
 		return
 	}
@@ -352,7 +351,8 @@ func registerShared(app *pocketbase.PocketBase) {
 }
 
 // registerMailListeners starts the port-binding mail protocol servers on
-// OnServe. Host-only: see the tail of Register for why a tenant must not run
+// OnServe. Own-ports only: see the tail of Register for why a supervised
+// process must not run
 // these.
 func registerMailListeners(app *pocketbase.PocketBase) {
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
