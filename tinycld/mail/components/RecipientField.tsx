@@ -1,4 +1,4 @@
-import { NameAvatar as ContactAvatar } from '@tinycld/core/components/NameAvatar'
+import { Avatar as ContactAvatar } from '@tinycld/core/components/Avatar'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { PlainInput } from '@tinycld/core/ui/PlainInput'
 import { type Control, type Path, useController } from 'react-hook-form'
@@ -28,8 +28,6 @@ function RecipientChip({
     const surfaceColor = useThemeColor('surface-secondary')
     const borderColor = useThemeColor('border')
     const displayName = name || email
-    const firstName = name.split(' ')[0] || email.split('@')[0]
-    const lastName = name.split(' ').slice(1).join(' ')
 
     return (
         <View
@@ -39,7 +37,7 @@ function RecipientChip({
                 borderColor,
             }}
         >
-            <ContactAvatar firstName={firstName} lastName={lastName} size={18} />
+            <ContactAvatar name={name} email={email} size={18} />
             <Text style={{ fontSize: 12, maxWidth: 140, color: foregroundColor }} numberOfLines={1}>
                 {displayName}
             </Text>
