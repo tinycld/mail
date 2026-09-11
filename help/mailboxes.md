@@ -7,9 +7,9 @@ order: 20
 
 ## Personal mailboxes
 
-When you join an org that has Mail installed, a personal mailbox is created automatically. The address is derived from your **username**; you can rename it from **Settings → Mailboxes**. You're the **owner** of your personal mailbox and you're the only member — no other org member can read it.
+When your account is created on a server that has Mail installed, a personal mailbox is created automatically. The address is derived from your **username**; you can rename it from **Settings → Mailboxes**. You're the **owner** of your personal mailbox and you're the only member — nobody else on the server can read it.
 
-If your account is removed from the org, your personal mailbox and all its messages are cleaned up automatically.
+If your account is deleted, your personal mailbox and all its messages are cleaned up automatically.
 
 ## Shared mailboxes
 

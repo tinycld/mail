@@ -20,7 +20,7 @@ The domain is created in TinyCld, and Postmark is asked to create a matching ser
 
 ## The verification checklist
 
-Each domain has four checks, all four green is required for full send + receive. The exact targets depend on which [provider](help://mail:provider-setup) your org uses:
+Each domain has four checks, all four green is required for full send + receive. The exact targets depend on which [provider](help://mail:provider-setup) this server uses:
 
 - **Inbound MX** — DNS MX records pointing at your provider's inbound host.
   - **Postmark**: `inbound.postmarkapp.com`.
@@ -47,7 +47,7 @@ Mail also re-verifies any not-yet-fully-verified domain automatically once per h
 
 ## Inbound routing
 
-When a message arrives at `someone@yourdomain.com`, what happens next depends on which provider your org uses.
+When a message arrives at `someone@yourdomain.com`, what happens next depends on which provider this server uses.
 
 **Postmark**:
 
@@ -57,7 +57,7 @@ When a message arrives at `someone@yourdomain.com`, what happens next depends on
 4. If a match is found, the message is delivered to that mailbox's Inbox and replicated to every member.
 5. If no match is found, TinyCld returns a 403 and Postmark generates a bounce back to the sender.
 
-The webhook secret is a per-domain random 32-character hex string, auto-generated when the domain is created. URLs containing this secret are visible to org admins at **Settings → Mail → Provider → Webhook URLs** (Postmark only — self-hosted SMTP doesn't use webhooks).
+The webhook secret is a per-domain random 32-character hex string, auto-generated when the domain is created. URLs containing this secret are visible to owners and admins at **Settings → Mail → Provider → Webhook URLs** (Postmark only — self-hosted SMTP doesn't use webhooks).
 
 **Self-hosted SMTP (built-in listener)**:
 
@@ -69,7 +69,7 @@ The webhook secret is a per-domain random 32-character hex string, auto-generate
 
 1. The fetcher logs in to your configured IMAP server every poll interval.
 2. Unseen messages are pulled and parsed.
-3. Each recipient on the message is resolved against the mailbox + alias tables, **scoped to this org** (so a fetcher polling an IMAP account that receives mail for many domains only routes mail for domains this org owns).
+3. Each recipient on the message is resolved against the mailbox + alias tables, **scoped to the domains added here** (so a fetcher polling an IMAP account that receives mail for many domains only routes mail for domains this server owns).
 4. Successfully ingested messages are marked `\Seen` so the next poll skips them.
 
 ## Removing a domain

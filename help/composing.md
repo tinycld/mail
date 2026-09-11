@@ -19,13 +19,13 @@ The compose window opens in the bottom-right corner. You can move it, minimize i
 
 - **From** — which address to send as. The picker lists your personal mailbox, every shared mailbox you're a member of, and every alias of each. The default picks something sensible based on context (replying to `support@` defaults to `support@`).
 - **To** — primary recipients. Type and tab/comma to add multiple. Recipients auto-suggest from [Contacts](help://contacts:getting-started) if you have it installed.
-- **Cc / Bcc** — secondary recipients. Hidden by default; click **Cc Bcc** in the header to reveal.
+- **Cc / Bcc** — secondary recipients. Hidden by default; click **Cc Bcc** in the header to reveal. Bcc recipients are saved with the draft and kept on your Sent copy, so you can see later who was blind-copied (the recipients themselves never see the Bcc list).
 - **Subject** — required.
 - **Body** — rich-text editor with bold, italic, lists, links, and inline images.
 
 ## Attachments
 
-Drag files onto the compose window or click the paperclip icon. Attachments:
+Drag files onto the compose window or click the paperclip icon (on a narrow compose window it may sit under **More** in the toolbar). Attachments:
 
 - Are uploaded as part of the message — no separate upload step.
 - Are limited to 25 MB total per message (SMTP submission limit).
@@ -41,12 +41,16 @@ Drafts auto-save every few seconds while you type. They live in the **Drafts** f
 
 ## Sending
 
-Click **Send**. The message goes through your org's mail provider (typically Postmark), and:
+Click **Send**. The message goes through this server's mail provider (Postmark or self-hosted SMTP — see [Provider setup](help://mail:provider-setup)), and:
 
 - Immediately appears in **Sent** for the sending mailbox.
 - Gets a `delivery_status` of `sending`, updated to `sent` once the provider accepts it, then to `delivered`, `bounced`, or `spam_complaint` based on provider callbacks. See [Delivery tracking](help://mail:delivery-tracking).
 
 If the deployment has no mail provider configured, sending fails with a clear error. Configuring one is an administrator task — see [Provider setup](help://mail:provider-setup).
+
+### Storage limit
+
+Stored messages — bodies and attachments — count toward this server's storage limit. If saving a draft or sending would push the total over the limit, the server refuses it with a `storage limit exceeded` error that shows how much is used, the limit, and how much the message needed. Free space by deleting large threads from Trash, or ask an administrator to raise the limit.
 
 ## Inline replies
 
@@ -58,10 +62,10 @@ In the compose window:
 
 | Shortcut | Action |
 |---|---|
-| **Cmd/Ctrl + Enter** | Send |
+| ⌘⏎ | Send |
 | **Esc** | Close (drafts stay saved) |
-| **Cmd/Ctrl + B / I / U** | Bold / italic / underline |
-| **Cmd/Ctrl + K** | Add a link |
+| ⌘B / ⌘I / ⌘U | Bold / italic / underline |
+| ⌘K | Add a link |
 
 ## See also
 
