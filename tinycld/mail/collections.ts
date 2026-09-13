@@ -15,7 +15,7 @@ export function registerCollections(
     coreStores: CoreStores
 ) {
     // Hoisted, not inlined per-call: an inline `collectionOptions` object literal
-    // defeats pbtsdb 0.8.0's inference of `alwaysExpand` against `relations`,
+    // defeats pbtsdb's inference of `alwaysFetchRelations` against `relations`,
     // making the expand keys resolve to `never`.
     const indexing = { autoIndex: 'eager' as const, defaultIndexType: BasicIndex }
 
@@ -27,14 +27,12 @@ export function registerCollections(
     const mail_mailboxes = newCollection('mail_mailboxes', {
         omitOnInsert: ['created', 'updated'] as const,
         relations: { domain: mail_domains },
-        alwaysExpand: ['domain'],
         collectionOptions: indexing,
     })
 
     const mail_mailbox_members = newCollection('mail_mailbox_members', {
         omitOnInsert: ['created', 'updated'] as const,
         relations: { mailbox: mail_mailboxes, user: coreStores.users },
-        alwaysExpand: ['mailbox', 'user'],
         collectionOptions: indexing,
     })
 
@@ -55,7 +53,6 @@ export function registerCollections(
     const mail_mailbox_aliases = newCollection('mail_mailbox_aliases', {
         omitOnInsert: ['created', 'updated'] as const,
         relations: { mailbox: mail_mailboxes },
-        alwaysExpand: ['mailbox'],
         collectionOptions: indexing,
     })
 
@@ -89,7 +86,6 @@ export function registerCollections(
     const mail_imap_mailbox_state = newCollection('mail_imap_mailbox_state', {
         omitOnInsert: ['created', 'updated'] as const,
         relations: { mailbox: mail_mailboxes },
-        alwaysExpand: ['mailbox'],
         collectionOptions: indexing,
     })
 
@@ -102,7 +98,6 @@ export function registerCollections(
             user: coreStores.users,
             mailbox: mail_mailboxes,
         },
-        alwaysExpand: ['user', 'mailbox'],
         collectionOptions: indexing,
     })
 
