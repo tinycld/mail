@@ -1,11 +1,11 @@
 import { and, eq, not } from '@tanstack/db'
+import { useLiveQuery } from '@tanstack/react-db'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { useAuth } from '@tinycld/core/lib/auth'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
-import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { Link } from 'expo-router'
 import { Plus } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
@@ -51,13 +51,11 @@ function useMailboxData(currentUserId: string) {
 
     // Standalone: gates the whole screen and feeds the create-form's domain
     // options, both of which must work with zero mailboxes.
-    const { data: domains } = useOrgLiveQuery(query =>
-        query.from({ mail_domains: domainsCollection })
-    )
+    const { data: domains } = useLiveQuery(query => query.from({ mail_domains: domainsCollection }))
 
     // Each mailbox resolves its domain in the same expression; one whose
     // domain is gone drops out via the inner join.
-    const { data: mailboxRows } = useOrgLiveQuery(query =>
+    const { data: mailboxRows } = useLiveQuery(query =>
         query
             .from({ mailbox: mailboxesCollection })
             .innerJoin({ domain: domainsCollection }, ({ mailbox, domain }) =>
@@ -67,13 +65,13 @@ function useMailboxData(currentUserId: string) {
 
     // Membership rows carry their user in the same expression; a row whose
     // user is gone drops out via the inner join.
-    const { data: memberRows } = useOrgLiveQuery(query =>
+    const { data: memberRows } = useLiveQuery(query =>
         query
             .from({ member: membersCollection })
             .innerJoin({ user: usersCollection }, ({ member, user }) => eq(member.user, user.id))
     )
 
-    const { data: aliases } = useOrgLiveQuery(query =>
+    const { data: aliases } = useLiveQuery(query =>
         query.from({ mail_mailbox_aliases: aliasesCollection })
     )
 
@@ -82,7 +80,7 @@ function useMailboxData(currentUserId: string) {
     // derive from the membership join. Guests and disabled accounts are
     // excluded: guests never get mail infra (see the 1830000002/3 rules) and a
     // suspended account must not be granted new access.
-    const { data: orgUsers } = useOrgLiveQuery(query =>
+    const { data: orgUsers } = useLiveQuery(query =>
         query
             .from({ users: usersCollection })
             .where(({ users }) => and(not(eq(users.role, 'guest')), not(eq(users.disabled, true))))

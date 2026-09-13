@@ -1,12 +1,13 @@
 import { and, eq } from '@tanstack/db'
+import { useLiveQuery } from '@tanstack/react-db'
 import { DocumentTitle } from '@tinycld/core/components/DocumentTitle'
 import { ScreenHeader } from '@tinycld/core/components/ScreenHeader'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { type Shortcut, useRegisterShortcut, useShortcutScope } from '@tinycld/core/lib/shortcuts'
+import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { useNavigateBack } from '@tinycld/core/lib/use-navigate-back'
-import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -63,7 +64,7 @@ export default function MailDetailScreen() {
         'mail_threads'
     )
 
-    const { data: threadStates } = useOrgLiveQuery(
+    const { data: threadStates } = useMyLiveQuery(
         (query, { userId }) =>
             query
                 .from({ mail_thread_state: threadStateCollection })
@@ -75,7 +76,7 @@ export default function MailDetailScreen() {
 
     const threadState = threadStates?.[0]
 
-    const { data: threads } = useOrgLiveQuery(
+    const { data: threads } = useLiveQuery(
         query =>
             query
                 .from({ mail_threads: threadsCollection })
@@ -99,7 +100,7 @@ export default function MailDetailScreen() {
         for (const a of id.aliases) ownAddresses.add(a.address.toLowerCase())
     }
 
-    const { data: messages } = useOrgLiveQuery(
+    const { data: messages } = useLiveQuery(
         query =>
             query
                 .from({ mail_messages: messagesCollection })

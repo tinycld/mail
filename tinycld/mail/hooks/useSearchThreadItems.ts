@@ -1,6 +1,7 @@
 import { and, eq, inArray } from '@tanstack/db'
+import { useLiveQuery } from '@tanstack/react-db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
-import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
+import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { useMemo } from 'react'
 import type { ThreadListItem } from '../components/thread-list-item'
 import type { MailThreadState } from '../types'
@@ -38,7 +39,7 @@ export function useSearchThreadItems(
     const resultThreadIds = useMemo(() => results.map(result => result.thread_id), [results])
     const resultThreadIdsKey = resultThreadIds.join(',')
 
-    const { data: threadStates } = useOrgLiveQuery(
+    const { data: threadStates } = useLiveQuery(
         query =>
             resultThreadIds.length === 0
                 ? undefined
@@ -53,7 +54,7 @@ export function useSearchThreadItems(
         [currentUserId, resultThreadIdsKey]
     )
 
-    const { data: allAssignments } = useOrgLiveQuery((query, { userId }) =>
+    const { data: allAssignments } = useMyLiveQuery((query, { userId }) =>
         query
             .from({ label_assignments: assignmentsCollection })
             .where(({ label_assignments }) =>

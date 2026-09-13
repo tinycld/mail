@@ -1,6 +1,6 @@
 import { eq } from '@tanstack/db'
 import { queryClient, useStore } from '@tinycld/core/lib/pocketbase'
-import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
+import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { useEffect, useMemo } from 'react'
 
 export interface FolderCounts {
@@ -27,7 +27,7 @@ export function useMailboxFolderCounts(): Map<string, FolderCounts> {
         'mail_thread_state'
     )
 
-    const { data: rows } = useOrgLiveQuery((query, { userId }) =>
+    const { data: rows } = useMyLiveQuery((query, { userId }) =>
         query.from({ counts: countsCollection }).where(({ counts }) => eq(counts.user, userId))
     )
 

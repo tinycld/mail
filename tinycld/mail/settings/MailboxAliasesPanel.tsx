@@ -1,8 +1,8 @@
 import { eq } from '@tanstack/db'
+import { useLiveQuery } from '@tanstack/react-db'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { Plus, Tag, X } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
@@ -21,7 +21,7 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
     const [aliasesCollection] = useStore('mail_mailbox_aliases')
     const [showForm, setShowForm] = useState(false)
 
-    const { data: aliases } = useOrgLiveQuery(
+    const { data: aliases } = useLiveQuery(
         query =>
             query
                 .from({ mail_mailbox_aliases: aliasesCollection })
