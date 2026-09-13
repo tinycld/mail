@@ -1,7 +1,8 @@
 import { and, eq, inArray } from '@tanstack/db'
+import { useLiveQuery } from '@tanstack/react-db'
 import { useQuery } from '@tanstack/react-query'
 import { pb, queryClient, useStore } from '@tinycld/core/lib/pocketbase'
-import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
+import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { useEffect, useMemo, useRef } from 'react'
 import type { ThreadListItem } from '../components/thread-list-item'
 import { toThreadListItem } from '../components/thread-list-item'
@@ -64,7 +65,7 @@ export function useThreadListItems(
 
     const { labels, labelMap } = useLabels()
 
-    const { data: allAssignments, isLoading: assignmentsLoading } = useOrgLiveQuery(
+    const { data: allAssignments, isLoading: assignmentsLoading } = useMyLiveQuery(
         (query, { userId }) =>
             query
                 .from({ label_assignments: assignmentsCollection })
@@ -76,11 +77,11 @@ export function useThreadListItems(
                 )
     )
 
-    const { data: allMailboxes } = useOrgLiveQuery(query =>
+    const { data: allMailboxes } = useLiveQuery(query =>
         query.from({ mail_mailboxes: mailboxesCollection })
     )
 
-    const { data: userMemberships } = useOrgLiveQuery((query, { userId }) =>
+    const { data: userMemberships } = useMyLiveQuery((query, { userId }) =>
         query
             .from({ mail_mailbox_members: membersCollection })
             .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user, userId))
@@ -94,7 +95,7 @@ export function useThreadListItems(
     // coMembers is never consulted). Return undefined from the queryFn so the
     // hook skips the subscription entirely instead of opening two dead live
     // queries on every unified-inbox mount.
-    const { data: targetMailbox } = useOrgLiveQuery(
+    const { data: targetMailbox } = useLiveQuery(
         query =>
             isUnified
                 ? undefined
@@ -105,7 +106,7 @@ export function useThreadListItems(
     )
     const mailboxType = targetMailbox?.[0]?.type ?? 'personal'
 
-    const { data: coMembers } = useOrgLiveQuery(
+    const { data: coMembers } = useLiveQuery(
         query =>
             isUnified
                 ? undefined
@@ -181,7 +182,7 @@ export function useThreadListItems(
     const pageThreadIds = useMemo(() => pageThreads.map(thread => thread.id), [pageThreads])
     const pageThreadIdsKey = pageThreadIds.join(',')
 
-    const { data: threadStates, isLoading: threadStatesLoading } = useOrgLiveQuery(
+    const { data: threadStates, isLoading: threadStatesLoading } = useLiveQuery(
         query =>
             pageThreadIds.length === 0
                 ? undefined

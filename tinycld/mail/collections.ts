@@ -14,30 +14,26 @@ export function registerCollections(
     newCollection: ReturnType<typeof createCollection<MergedSchema>>,
     coreStores: CoreStores
 ) {
+    // Hoisted, not inlined per-call: an inline `collectionOptions` object literal
+    // defeats pbtsdb's inference of `alwaysFetchRelations` against `relations`,
+    // making the expand keys resolve to `never`.
+    const indexing = { autoIndex: 'eager' as const, defaultIndexType: BasicIndex }
+
     const mail_domains = newCollection('mail_domains', {
         omitOnInsert: ['created', 'updated', 'webhook_secret'] as const,
-        collectionOptions: {
-            autoIndex: 'eager' as const,
-            defaultIndexType: BasicIndex,
-        },
+        collectionOptions: indexing,
     })
 
     const mail_mailboxes = newCollection('mail_mailboxes', {
         omitOnInsert: ['created', 'updated'] as const,
-        expand: { domain: mail_domains },
-        collectionOptions: {
-            autoIndex: 'eager' as const,
-            defaultIndexType: BasicIndex,
-        },
+        relations: { domain: mail_domains },
+        collectionOptions: indexing,
     })
 
     const mail_mailbox_members = newCollection('mail_mailbox_members', {
         omitOnInsert: ['created', 'updated'] as const,
-        expand: { mailbox: mail_mailboxes, user: coreStores.users },
-        collectionOptions: {
-            autoIndex: 'eager' as const,
-            defaultIndexType: BasicIndex,
-        },
+        relations: { mailbox: mail_mailboxes, user: coreStores.users },
+        collectionOptions: indexing,
     })
 
     const mail_threads = newCollection('mail_threads', {
@@ -51,19 +47,13 @@ export function registerCollections(
         // into a PocketBase filter and runs server-side, so a folder view loads
         // only its visible page instead of the entire org's history.
         syncMode: 'on-demand' as const,
-        collectionOptions: {
-            autoIndex: 'eager' as const,
-            defaultIndexType: BasicIndex,
-        },
+        collectionOptions: indexing,
     })
 
     const mail_mailbox_aliases = newCollection('mail_mailbox_aliases', {
         omitOnInsert: ['created', 'updated'] as const,
-        expand: { mailbox: mail_mailboxes },
-        collectionOptions: {
-            autoIndex: 'eager' as const,
-            defaultIndexType: BasicIndex,
-        },
+        relations: { mailbox: mail_mailboxes },
+        collectionOptions: indexing,
     })
 
     const mail_messages = newCollection('mail_messages', {
@@ -76,10 +66,7 @@ export function registerCollections(
         // hundreds of thousands of message rows. Each useLiveQuery now runs
         // server-side filtered, e.g. messages for a single open thread.
         syncMode: 'on-demand' as const,
-        collectionOptions: {
-            autoIndex: 'eager' as const,
-            defaultIndexType: BasicIndex,
-        },
+        collectionOptions: indexing,
     })
 
     const mail_thread_state = newCollection('mail_thread_state', {
@@ -93,19 +80,13 @@ export function registerCollections(
         // syncs tens of thousands of rows into the tab and eagerly indexes
         // them. Consumers now query only the thread ids they are rendering.
         syncMode: 'on-demand' as const,
-        collectionOptions: {
-            autoIndex: 'eager' as const,
-            defaultIndexType: BasicIndex,
-        },
+        collectionOptions: indexing,
     })
 
     const mail_imap_mailbox_state = newCollection('mail_imap_mailbox_state', {
         omitOnInsert: ['created', 'updated'] as const,
-        expand: { mailbox: mail_mailboxes },
-        collectionOptions: {
-            autoIndex: 'eager' as const,
-            defaultIndexType: BasicIndex,
-        },
+        relations: { mailbox: mail_mailboxes },
+        collectionOptions: indexing,
     })
 
     // Server-side aggregation of (user, mailbox) → folder counts. Backed by
@@ -113,14 +94,11 @@ export function registerCollections(
     // most one row per mailbox per user, used everywhere the sidebar renders.
     // No omitOnInsert — view collections are read-only.
     const mail_folder_counts = newCollection('mail_folder_counts', {
-        expand: {
+        relations: {
             user: coreStores.users,
             mailbox: mail_mailboxes,
         },
-        collectionOptions: {
-            autoIndex: 'eager' as const,
-            defaultIndexType: BasicIndex,
-        },
+        collectionOptions: indexing,
     })
 
     return {

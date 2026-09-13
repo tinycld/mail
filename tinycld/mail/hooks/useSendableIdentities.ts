@@ -1,6 +1,6 @@
 import { eq } from '@tanstack/db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
-import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
+import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { useMemo } from 'react'
 import { groupSendableIdentities } from './groupSendableIdentities'
 
@@ -17,7 +17,7 @@ export function useSendableIdentities() {
     // One query: membership → mailbox → domain resolve in the same expression
     // (a mailbox whose domain is gone drops out, as before), with aliases
     // left-joined so a mailbox without any still yields an identity.
-    const { data: rows } = useOrgLiveQuery((query, { userId }) =>
+    const { data: rows } = useMyLiveQuery((query, { userId }) =>
         query
             .from({ member: membersCollection })
             .innerJoin({ mailbox: mailboxesCollection }, ({ member, mailbox }) =>

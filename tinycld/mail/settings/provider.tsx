@@ -10,7 +10,6 @@ import { errorToString, handleMutationErrorsWithForm } from '@tinycld/core/lib/e
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { FormErrorSummary, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
 import {
     CheckCircle,
@@ -89,7 +88,7 @@ interface DomainRow {
 function DomainsSection({ provider }: { provider: 'postmark' | 'smtp' }) {
     const [domainsCollection] = useStore('mail_domains')
 
-    const { data: domains } = useOrgLiveQuery(query =>
+    const { data: domains } = useLiveQuery(query =>
         query
             .from({ mail_domains: domainsCollection })
             .orderBy(({ mail_domains }) => mail_domains.created, 'asc')

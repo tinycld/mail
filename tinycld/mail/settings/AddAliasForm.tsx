@@ -1,9 +1,9 @@
 import { eq } from '@tanstack/db'
+import { useLiveQuery } from '@tanstack/react-db'
 import { handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { useOrgLiveQuery } from '@tinycld/core/lib/use-org-live-query'
 import { FormErrorSummary, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
 import { Plus } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb/core'
@@ -32,14 +32,14 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
         'mail_mailboxes'
     )
 
-    const { data: mailboxesInDomain } = useOrgLiveQuery(
+    const { data: mailboxesInDomain } = useLiveQuery(
         query =>
             query
                 .from({ mail_mailboxes: mailboxesCollection })
                 .where(({ mail_mailboxes }) => eq(mail_mailboxes.domain, mailboxDomainId)),
         [mailboxDomainId]
     )
-    const { data: aliasesAll } = useOrgLiveQuery(query =>
+    const { data: aliasesAll } = useLiveQuery(query =>
         query.from({ mail_mailbox_aliases: aliasesCollection })
     )
 
