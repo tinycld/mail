@@ -11,7 +11,7 @@ Out of the box, Mail can send through whatever address your provider gives you. 
 
 ## Adding a domain
 
-1. **Settings → Mail → Provider**.
+1. **Settings → Mail → Domains**.
 2. Scroll to **Domains** and click **+ Add domain**.
 3. Enter the bare domain (e.g. `example.com`, not `@example.com` or `https://example.com`).
 4. Click **Add**.
@@ -57,7 +57,7 @@ When a message arrives at `someone@yourdomain.com`, what happens next depends on
 4. If a match is found, the message is delivered to that mailbox's Inbox and replicated to every member.
 5. If no match is found, TinyCld returns a 403 and Postmark generates a bounce back to the sender.
 
-The webhook secret is a per-domain random 32-character hex string, auto-generated when the domain is created. URLs containing this secret are visible to owners and admins at **Settings → Mail → Provider → Webhook URLs** (Postmark only — self-hosted SMTP doesn't use webhooks).
+The webhook secret is a per-domain random 32-character hex string, auto-generated when the domain is created. URLs containing this secret are visible to owners and admins at **Settings → Mail → Domains → Webhook URLs** (Postmark only — self-hosted SMTP doesn't use webhooks).
 
 **Self-hosted SMTP (built-in listener)**:
 

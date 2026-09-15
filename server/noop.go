@@ -5,7 +5,7 @@ import (
 	"errors"
 )
 
-var errNoProvider = errors.New("no mail provider configured — configure one in the Setup dashboard's Settings tab (/setup)")
+var errNoProvider = errors.New("no mail provider configured — configure one in Settings › System › Mail — Provider")
 
 // NoopProvider returns descriptive errors for all operations.
 // Used when no provider is configured so the server still boots.
