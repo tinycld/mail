@@ -16,12 +16,13 @@ import { newRecordId } from 'pbtsdb/core'
 import { useWatch } from 'react-hook-form'
 import { Text, View } from 'react-native'
 
-// System-wide (deployment-default) mail provider config, contributed to the
-// /admin Settings console via the manifest `systemSettings`. These values are the
-// fallback the mail server uses when an org hasn't set its own provider override
-// (see server/register.go providerForOrg). Stored in the shared system_settings
-// collection under `mail.*` keys (the exact keys smtpConfigFromSystem reads); the
-// console runs as an owner/admin app user, so the writes are authorized.
+// System-wide mail provider config, contributed to the in-app Settings area's
+// System group via the manifest `systemSettings`. These values are
+// deployment-wide: newProviderFromSystem (server/register.go) reads them and
+// nothing else, so there is no per-org override — an earlier version of this
+// comment claimed one existed. Stored in the shared system_settings collection
+// under `mail.*` keys (the exact keys smtpConfigFromSystem reads); the screen is
+// owner-gated and the collection rules authorize owner/admin writes.
 //
 // The form mirrors the per-org mail settings: a provider select swaps between
 // Postmark (token credentials) and self-hosted SMTP (hostname + DKIM + an inbound
@@ -163,8 +164,8 @@ export default function MailSystemProvider() {
     return (
         <View className="gap-4">
             <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
-                Default mail provider for this deployment. An organization can override these in its
-                own mail settings; this is the fallback when it doesn't.
+                The mail provider for this deployment. Applies server-wide — outbound sending and
+                inbound delivery both use it.
             </Text>
             <SelectInput
                 control={control}

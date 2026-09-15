@@ -8,7 +8,10 @@ const manifest = {
     sidebar: { component: 'sidebar' },
     slots: ['sidebar.after-labels'],
     settings: [
-        { slug: 'provider', label: 'Provider', component: 'settings/provider' },
+        // 'Domains' — matches the screen's own heading, and keeps this
+        // distinct from the systemSettings 'Provider' panel below, which is
+        // where the provider itself is chosen.
+        { slug: 'provider', label: 'Domains', component: 'settings/provider' },
         { slug: 'mailboxes', label: 'Mailboxes', component: 'settings/mailboxes' },
     ],
     systemSettings: [

@@ -7,7 +7,7 @@ order: 100
 
 ## Who can do this
 
-The mail provider is deployment-wide infrastructure — all mail goes through one provider account. An **owner or admin** (or the PocketBase superuser) configures it from the setup console's **Settings** section. Mail **domains**, by contrast, are managed in-app at **Settings → Mail → Provider** by **owners** and **admins**.
+The mail provider is deployment-wide infrastructure — all mail goes through one provider account. An **owner** configures it at **Settings → System → Mail — Provider**. Mail **domains**, by contrast, are managed at **Settings → Mail → Domains** by **owners** and **admins**.
 
 ## Picking a provider
 
@@ -29,7 +29,7 @@ Postmark has a free tier suitable for testing; production use needs a paid plan.
 
 ### Connecting
 
-1. Open the Setup dashboard's **Settings** tab and find the **Mail Provider** panel.
+1. Go to **Settings → System → Mail — Provider**.
 2. Pick **Postmark** as the provider.
 3. Paste your **server token** and **account token**.
 4. Click **Save**.
@@ -49,7 +49,7 @@ This provider does the SMTP work itself. Outbound mail goes straight to the reci
 
 ### Connecting
 
-1. Open the Setup dashboard's **Settings** tab and find the **Mail Provider** panel.
+1. Go to **Settings → System → Mail — Provider**.
 2. Pick **Self-hosted SMTP**.
 3. Fill in:
    - **Public hostname** — the host that mail receivers will see (matches your rDNS). This is also the MX target operators will publish if they use inbound MX mode.
@@ -95,7 +95,7 @@ The IMAP fetcher reconciles automatically whenever a setting changes, so credent
 
 After saving credentials:
 
-1. Go to **Settings → Mail → Provider** and add a domain (see [Custom domains](help://mail:custom-domains)).
+1. Go to **Settings → Mail → Domains** and add a domain (see [Custom domains](help://mail:custom-domains)).
 2. Once the domain shows green checkmarks for MX / SPF / DKIM / Return-Path, send yourself a test message.
 3. If the message goes through, you're set. If not, the error in the Sent folder's status indicator will point you at the failing piece.
 
