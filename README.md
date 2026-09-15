@@ -450,7 +450,7 @@ Mail exposes one sidebar slot for other packages to extend:
 - `sidebar.after-labels` — rendered below the Labels group, above the Help link.
 
 Other packages can target this slot via `sidebarContributions` in their manifest. See [Sidebar slots](https://tinycld.org/docs/anatomy/sidebar-slots) for the full contract.
-- `package.json` — name, exports map, peer deps
+- `package.json` — name and exports map; framework deps come from the workspace root, and the `@tinycld/core` pin lives in `manifest.ts` as `peerVersions`
 - `tsconfig.json` — typecheck config (lint config lives in the app shell's `biome.json`)
 - `pb-migrations/` — PocketBase migrations (symlinked into the app shell's server on `packages:generate`)
 - `server/` — Go server module, registered by the generator
