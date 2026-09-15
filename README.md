@@ -31,7 +31,7 @@ User-facing features:
 - **Notifications** — new-message arrivals are buffered per-user and dispatched in batched core-notify pings every two minutes, so users get one summary notification per cycle instead of one per message.
 - **Storage quota** — `manifest.ts` declares `quota: [{ collection: 'mail_messages', sizeField: 'total_size' }]` and `registerShared` registers the same source with `core/quota`. A mailbox is shared, so there is no `ownerField`: message bytes count toward the deployment-wide ceiling only. A create or growth that would cross it is refused with HTTP 413 `storage limit exceeded`.
 - **Read-only package access** — a user whose mail access level is below full (`pkgaccess.CanWrite`) is enforced over the protocol servers as well as REST: SMTP submission refuses at AUTH with `535 Your mail access is read-only; sending is not permitted` (`smtp_session.go`), and IMAP answers STORE / APPEND / EXPUNGE / COPY / MOVE with `NO Your mail access is read-only` (`requireWritable` in `imap_session.go`).
-- **Hosted listeners** — `server: { mailListeners: true }` in the manifest tells the hosting router to create per-org mail sockets. `Register` detects tenancy via `coreserver.GetTenantContext`: a single-org process binds :993 / :465 / :25 itself, while a hosted tenant never binds a port and serves the sockets the router injects (`server/tenant_listeners.go`).
+- **Hosted listeners** — `server: { mailListeners: true }` in the manifest tells the hosting router to create per-org mail sockets. `Register` detects tenancy via `coreserver.GetTenantContext`: a single-org process binds :993 / :465 / :25 itself, while a hosted tenant never binds a port and serves the sockets the router injects (`server/injected_listeners.go`).
 
 ## Automation rules
 
@@ -67,7 +67,7 @@ For users connecting Apple Mail, Thunderbird, DAVx5, mutt, or any other standard
 | **IMAP** | **993**     | implicit TLS | TinyCld email + password |
 | **SMTP** | **465**     | implicit TLS | TinyCld email + password |
 
-There's also a `/.well-known/webdav` style discovery for IMAP via the standard `_imaps._tcp` SRV record if you set one up; no equivalent for SMTP. Most clients prompt for the hostname and port directly.
+The package does not implement any client autodiscovery; an operator may optionally publish a standard `_imaps._tcp` SRV record in DNS, but most clients prompt for the hostname and port directly.
 
 Per-client connection walkthroughs (Apple Mail macOS / iOS, Thunderbird, mutt) live in the in-app help topics `mail:imap` and `mail:smtp` — they live there rather than in this README so they stay in sync with what users actually see in those clients.
 
@@ -171,7 +171,7 @@ mail_folder_counts
   starred / trash / spam counts
 ```
 
-The folder-counts view (`1830000000_create_mail_folder_counts_view.js`) is what the sidebar's per-folder badge numbers query — a single aggregated row per user × mailbox, so the sidebar doesn't run six separate filtered counts per mailbox.
+The folder-counts view (`1830000000_create_mail_folder_counts_view.js`) is what the sidebar's per-folder badge numbers query — a single aggregated row per user × mailbox, so the sidebar doesn't run six separate filtered counts per mailbox. Archive has no column in the view (nor in `useMailboxFolderCounts`), so it shows no badge count.
 
 ### Threading
 
@@ -211,7 +211,7 @@ Composing a message in the web UI:
 
 ### SMTP submission server
 
-`server/smtp_server.go` is a thin wrapper around `github.com/emersion/go-smtp`. The session backend (`smtp_session.go`):
+`server/smtp_server.go` drives core's `tinycld.org/core/mailproto` transport (`mailproto.StartSMTP` owns the TLS policy, bind, and `go-smtp` server); mail supplies only the backend. The session backend (`smtp_session.go`):
 
 - **AUTH** validates username / email + password via core's `davauth.VerifyCredentials`, then refuses a user whose mail access is read-only with `535 Your mail access is read-only; sending is not permitted`.
 - **MAIL FROM** records the sender address.
@@ -219,11 +219,11 @@ Composing a message in the web UI:
 - **DATA** parses the incoming RFC 5322 message, **validates** the `From:` header is one of the authenticated user's mailbox primaries or aliases — if not, return `550 You don't own this address`.
 - Hands the message off to the same `provider.Send` path as the web UI.
 
-The 25 MB limit is enforced via `smtp.Server.MaxMessageBytes`. UTF-8 (`SMTPUTF8`) and 60-second read / write timeouts are set.
+The 25 MB limit on submission is `mailproto.StartSMTP`'s default `MaxMessageBytes` (mail passes no override); `smtp_inbound_server.go` sets the same `smtp.Server.MaxMessageBytes = 25 << 20` on the port-25 inbound listener, and the REST paths bound it via `ParseMultipartForm(25 << 20)` in `endpoints_send.go` and `endpoints_draft.go`. UTF-8 (`SMTPUTF8`) and 60-second read / write timeouts are set by `mailproto`.
 
 ### IMAP server
 
-`server/imap_server.go` wraps `github.com/emersion/go-imap/v2/imapserver`. Per-session state lives in `imapSession` (`imap_session.go`):
+`server/imap_server.go` drives core's `tinycld.org/core/mailproto` transport (`mailproto.StartIMAP` owns TLS, bind, serve, and shutdown); mail supplies only the session factory, touching `imapserver` just for the session type. Per-session state lives in `imapSession` (`imap_session.go`):
 
 - **LOGIN** — same auth as SMTP. Loads the user's `mail_mailbox_members` rows (membership points at `users` directly, so this is one query), resolves the user's read-only verdict once per session, then materializes a per-mailbox namespace prefixed with the mailbox's friendly name (its `name`, falling back to `display_name`, then `address@domain`) — e.g. `Acme Corp/INBOX`.
 - **LIST** — returns the standard set: `INBOX`, `Sent`, `Drafts`, `Trash`, `Spam`, `Archive`, `Starred`, `All Mail`, with the appropriate `\Sent` / `\Drafts` / `\Trash` / `\Junk` / `\Archive` / `\Flagged` / `\All` special-use flags.
@@ -295,7 +295,7 @@ iPhone (small phone screens) isn't supported yet.
 ```
 server/
     register.go                Register(app) — registries, hooks, endpoints, listener selection
-    tenant_listeners.go        hosted mode: serve the router-injected IMAP / submission / MX sockets
+    injected_listeners.go      hosted mode: serve the supervisor-injected IMAP / submission / MX sockets (external TLS)
     lifecycle.go               auto-create / reap personal mailboxes
     mailbox_owner_guard.go     a shared mailbox never loses its last owner
     oauth_scopes.go            mail:read / mail:send via oauth.RegisterPackage
@@ -347,7 +347,7 @@ manifest.ts                package manifest (repo root — routes, nav, sidebar,
                            automation, quota, payloads, cli, server)
 tinycld/mail/
     sidebar.tsx            All Inboxes + per-mailbox sections + labels
-    collections.ts         mail_* + label_assignments pbtsdb registration
+    collections.ts         pbtsdb registration for the nine mail_* collections (labels come from core's useLabels)
     types.ts               MailSchema (merged into MergedSchema)
     seed.ts                sample data
     search-adapter.ts      federated-search adapter (manifest `search.adapter`)
@@ -437,7 +437,7 @@ cd server && go test ./...        # Go server tests
 
 ## CI
 
-`.github/workflows/ci.yml` runs lint, typecheck, and vitest on every push to `main` and every PR. It assembles a workspace with `tinycld/tinycld@main` as a sibling, runs `pnpm install` at the workspace root, and runs the checks — exactly what a developer does locally.
+`.github/workflows/ci.yml` runs two jobs on every push to `main` and every PR: **Typecheck & Unit** (`pnpm exec tinycld-pkg check` — biome lint, tsc, vitest — followed by `go build ./... && go test ./...` in `cli/`, the second Go module `tinycld-pkg` does not cover) and **E2E** (`pnpm exec tinycld-pkg test:e2e` via Playwright, uploading trace / screenshot artifacts on failure). Each job assembles a workspace with `tinycld/tinycld` as a sibling (a branch matching the PR's when one exists, else `main`), runs `pnpm install` at the workspace root, and runs the checks — exactly what a developer does locally.
 
 ## Package anatomy
 
