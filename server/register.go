@@ -14,6 +14,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/audit"
 	"tinycld.org/core/coreserver"
+	"tinycld.org/core/maildomains"
 	"tinycld.org/core/oauth"
 	"tinycld.org/core/offboard"
 	"tinycld.org/core/outboundstats"
@@ -453,11 +454,22 @@ func newProviderFromSystem(app core.App) Provider {
 	if name == "" {
 		name = "postmark"
 	}
+	smtpCfg := smtpConfigFromSystem(app)
+
+	// A hosted composition has already claimed the maildomains seam with its
+	// delegating registrar; SetResolver is a no-op there by design. Only an
+	// SMTP deployment needs its own registrar installed — Postmark's is wired
+	// centrally in core (wireMailDomains), since it needs the account token
+	// core alone is trusted to hold.
+	if name == "smtp" {
+		maildomains.SetResolver(NewSMTPRegistrar(smtpCfg))
+	}
+
 	return newProviderByName(
 		name,
 		systemSetting(app, "mail.postmark_server_token"),
 		systemSetting(app, "mail.postmark_account_token"),
-		smtpConfigFromSystem(app),
+		smtpCfg,
 	)
 }
 
