@@ -5,6 +5,10 @@ import (
 	"errors"
 	"net"
 	"testing"
+
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tests"
+	"tinycld.org/core/maildomains"
 )
 
 func withMXLookup(t *testing.T, fn func(ctx context.Context, name string) ([]*net.MX, error)) {
@@ -112,10 +116,6 @@ type fakeProvider struct {
 	inboundDomain  string
 	inboundAddress string
 	inboundErr     error
-	outboundSPF    bool
-	outboundDKIM   bool
-	outboundRP     bool
-	outboundErr    error
 }
 
 func (f *fakeProvider) Configured() bool { return true }
@@ -129,19 +129,6 @@ func (f *fakeProvider) ParseBounce([]byte) (*BounceEvent, error) {
 	return nil, errors.New("not implemented")
 }
 func (f *fakeProvider) VerifyWebhookSignature(map[string]string, []byte) error { return nil }
-func (f *fakeProvider) AddDomain(context.Context, string) (*DomainVerification, error) {
-	return nil, errors.New("not implemented")
-}
-func (f *fakeProvider) CheckDomainVerification(_ context.Context, _ string) (*DomainVerification, error) {
-	if f.outboundErr != nil {
-		return nil, f.outboundErr
-	}
-	return &DomainVerification{
-		SPFVerified:        f.outboundSPF,
-		DKIMVerified:       f.outboundDKIM,
-		ReturnPathVerified: f.outboundRP,
-	}, nil
-}
 func (f *fakeProvider) CheckInboundDomain(context.Context) (*InboundVerification, error) {
 	if f.inboundErr != nil {
 		return nil, f.inboundErr
@@ -212,21 +199,192 @@ func TestCheckProviderInboundStrict_ProviderError(t *testing.T) {
 	}
 }
 
-func TestCheckOutbound_AllTrue(t *testing.T) {
-	p := &fakeProvider{outboundSPF: true, outboundDKIM: true, outboundRP: true}
-	got := checkOutbound(context.Background(), p, "example.com")
-	if !(got.SPF && got.DKIM && got.ReturnPath) {
-		t.Fatalf("expected all outbound true; got %+v", got)
+// --- checkOutbound tests (the maildomains seam, not a Provider) ---
+
+// stubRegistrar is a maildomains.Registrar test double. GetDomain ignores the
+// providerDomainID it's passed except to record it, so tests can assert
+// checkOutbound forwarded the id it read off the record.
+type stubRegistrar struct {
+	rec         *maildomains.DomainRecords
+	err         error
+	gotDomainID int64
+}
+
+func (s *stubRegistrar) AddDomain(context.Context, string) (*maildomains.DomainRecords, error) {
+	return s.rec, s.err
+}
+func (s *stubRegistrar) GetDomain(_ context.Context, _ string, providerDomainID int64) (*maildomains.DomainRecords, error) {
+	s.gotDomainID = providerDomainID
+	return s.rec, s.err
+}
+
+// newOutboundTestApp builds a minimal in-memory app with a mail_domains
+// collection carrying just the two fields checkOutbound touches: domain and
+// provider_domain_metadata. Pure unit test — no migrations, no HTTP.
+func newOutboundTestApp(t *testing.T) *tests.TestApp {
+	t.Helper()
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatalf("failed to create test app: %v", err)
+	}
+	t.Cleanup(func() { app.Cleanup() })
+
+	col := core.NewBaseCollection("mail_domains")
+	col.Fields.Add(&core.TextField{Name: "domain", Required: true})
+	col.Fields.Add(&core.JSONField{Name: "provider_domain_metadata", MaxSize: 2000})
+	if err := app.Save(col); err != nil {
+		t.Fatalf("save mail_domains collection: %v", err)
+	}
+	return app
+}
+
+func newOutboundTestRecord(t *testing.T, app core.App, domain string, providerDomainID int64) *core.Record {
+	t.Helper()
+	col, err := app.FindCollectionByNameOrId("mail_domains")
+	if err != nil {
+		t.Fatalf("find mail_domains: %v", err)
+	}
+	rec := core.NewRecord(col)
+	rec.Set("domain", domain)
+	if providerDomainID != 0 {
+		rec.Set("provider_domain_metadata", map[string]any{
+			"postmark": map[string]any{"domain_id": providerDomainID},
+		})
+	}
+	if err := app.Save(rec); err != nil {
+		t.Fatalf("save record: %v", err)
+	}
+	return rec
+}
+
+// The record values must survive into the wire type — they are what the admin
+// publishes in DNS, and the old code fetched and discarded them.
+func TestCheckOutboundCarriesRecords(t *testing.T) {
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	maildomains.SetResolver(&stubRegistrar{rec: &maildomains.DomainRecords{
+		Domain: "acme.com", ID: 12345, SPFVerified: true, DKIMVerified: true,
+		DKIMHost: "sel._domainkey.acme.com", DKIMTextValue: "k=rsa;p=X",
+		ReturnPathDomain: "pm-bounces.acme.com", ReturnPathCNAMEValue: "pm.mtasv.net",
+	}})
+
+	app := newOutboundTestApp(t)
+	record := newOutboundTestRecord(t, app, "acme.com", 0)
+
+	got := checkOutbound(context.Background(), record)
+
+	if !got.SPF || !got.DKIM {
+		t.Errorf("got = %+v, want SPF and DKIM true", got)
+	}
+	if got.DKIMHost != "sel._domainkey.acme.com" || got.DKIMTextValue != "k=rsa;p=X" {
+		t.Errorf("DKIM record values missing: %+v", got)
+	}
+	if got.ReturnPathDomain != "pm-bounces.acme.com" || got.ReturnPathCNAMEValue != "pm.mtasv.net" {
+		t.Errorf("return-path record values missing: %+v", got)
+	}
+	if got.Enrolled != "yes" {
+		t.Errorf("Enrolled = %q, want %q", got.Enrolled, "yes")
 	}
 }
 
-func TestCheckOutbound_ProviderError(t *testing.T) {
-	p := &fakeProvider{outboundErr: errors.New("domain not found")}
-	got := checkOutbound(context.Background(), p, "example.com")
-	if got.SPF || got.DKIM || got.ReturnPath {
-		t.Fatalf("expected all outbound false on error; got %+v", got)
+// A domain the provider has never heard of is reported as not enrolled, which
+// is actionable, rather than as a generic error.
+func TestCheckOutboundNotEnrolled(t *testing.T) {
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	maildomains.SetResolver(&stubRegistrar{err: maildomains.ErrDomainNotEnrolled})
+
+	app := newOutboundTestApp(t)
+	record := newOutboundTestRecord(t, app, "acme.com", 0)
+
+	got := checkOutbound(context.Background(), record)
+
+	if got.Enrolled != "no" {
+		t.Fatalf("Enrolled = %q, want %q", got.Enrolled, "no")
 	}
-	if got.Error != "domain not found" {
-		t.Fatalf("expected error passthrough; got %q", got.Error)
+	if got.SPF || got.DKIM || got.ReturnPath {
+		t.Error("an unenrolled domain must not report verified checks")
+	}
+}
+
+// A transport or provider failure is UNKNOWN, not "no": the router being
+// restarted must not make a working domain look unenrolled.
+func TestCheckOutboundTransportFailureIsUnknown(t *testing.T) {
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	maildomains.SetResolver(&stubRegistrar{err: errors.New("socket closed")})
+
+	app := newOutboundTestApp(t)
+	record := newOutboundTestRecord(t, app, "acme.com", 0)
+
+	got := checkOutbound(context.Background(), record)
+
+	if got.Enrolled != "unknown" {
+		t.Fatalf("Enrolled = %q, want %q", got.Enrolled, "unknown")
+	}
+	if got.Error == "" {
+		t.Error("the failure reason must be carried")
+	}
+}
+
+// AMENDMENT 1: checkOutbound must read the stored provider id off the record
+// and pass it to the seam, so a by-name scan happens at most once per domain.
+func TestCheckOutboundPassesStoredProviderID(t *testing.T) {
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	registrar := &stubRegistrar{rec: &maildomains.DomainRecords{Domain: "acme.com", ID: 999}}
+	maildomains.SetResolver(registrar)
+
+	app := newOutboundTestApp(t)
+	record := newOutboundTestRecord(t, app, "acme.com", 999)
+
+	checkOutbound(context.Background(), record)
+
+	if registrar.gotDomainID != 999 {
+		t.Fatalf("gotDomainID = %d, want 999 (the id stored on the record)", registrar.gotDomainID)
+	}
+}
+
+// AMENDMENT 1: when the stored id was 0 and the lookup succeeded (a by-name
+// scan fallback), checkOutbound persists the id it learned so the scan runs
+// at most once per domain thereafter.
+func TestCheckOutboundPersistsLearnedProviderID(t *testing.T) {
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	maildomains.SetResolver(&stubRegistrar{rec: &maildomains.DomainRecords{Domain: "acme.com", ID: 4242}})
+
+	app := newOutboundTestApp(t)
+	record := newOutboundTestRecord(t, app, "acme.com", 0)
+
+	checkOutbound(context.Background(), record)
+
+	meta := readProviderDomainMetadata(record)
+	if meta.Postmark == nil || meta.Postmark.DomainID != 4242 {
+		t.Fatalf("provider_domain_metadata.postmark.domain_id not persisted: %+v", meta)
+	}
+}
+
+// AMENDMENT 1: the provider's reported verification state and a checked_at
+// stamp are written into provider_domain_metadata on every call — success or
+// failure — so "asked and told no" is distinguishable from "never asked".
+func TestCheckOutboundStampsMetadataOnFailure(t *testing.T) {
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	maildomains.SetResolver(&stubRegistrar{err: maildomains.ErrDomainNotEnrolled})
+
+	app := newOutboundTestApp(t)
+	record := newOutboundTestRecord(t, app, "acme.com", 0)
+
+	checkOutbound(context.Background(), record)
+
+	meta := readProviderDomainMetadata(record)
+	if meta.Postmark == nil {
+		t.Fatal("expected postmark metadata to be stamped even on failure")
+	}
+	if meta.Postmark.Enrolled == nil || *meta.Postmark.Enrolled != false {
+		t.Errorf("Enrolled = %+v, want a pointer to false", meta.Postmark.Enrolled)
+	}
+	if meta.Postmark.CheckedAt == "" {
+		t.Error("expected checked_at to be stamped even on failure")
 	}
 }

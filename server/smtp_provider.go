@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
@@ -181,61 +180,6 @@ func (p *SMTPProvider) ParseBounce(_ []byte) (*BounceEvent, error) {
 // signed payload to verify.
 func (p *SMTPProvider) VerifyWebhookSignature(_ map[string]string, _ []byte) error {
 	return nil
-}
-
-// AddDomain is a no-op for SMTP. The operator publishes their own DNS records;
-// there's no provider-side enrollment. We return a zero-valued DomainVerification
-// so callers persist consistent state and surface the operator-action via the
-// per-check booleans set by CheckDomainVerification.
-func (p *SMTPProvider) AddDomain(_ context.Context, domain string) (*DomainVerification, error) {
-	return &DomainVerification{Domain: domain}, nil
-}
-
-// CheckDomainVerification runs pure-DNS checks against the domain — SPF (TXT
-// at the apex), DKIM (TXT at <selector>._domainkey.<domain>), and DMARC (TXT
-// at _dmarc.<domain>) as a proxy for Return-Path alignment. Failure of any
-// individual check sets its respective flag to false; an error from DNS
-// resolution surfaces in the result fields' textual hints (left empty here —
-// the calling layer logs failures separately).
-func (p *SMTPProvider) CheckDomainVerification(ctx context.Context, domain string) (*DomainVerification, error) {
-	v := &DomainVerification{
-		Domain:   domain,
-		DKIMHost: p.cfg.DKIMSelector + "._domainkey." + domain,
-	}
-
-	resolver := net.DefaultResolver
-
-	if txts, err := resolver.LookupTXT(ctx, domain); err == nil {
-		for _, txt := range txts {
-			if strings.HasPrefix(strings.ToLower(txt), "v=spf1") {
-				v.SPFVerified = true
-				break
-			}
-		}
-	}
-
-	if txts, err := resolver.LookupTXT(ctx, v.DKIMHost); err == nil {
-		for _, txt := range txts {
-			if strings.Contains(strings.ToLower(txt), "v=dkim1") {
-				v.DKIMVerified = true
-				v.DKIMTextValue = txt
-				break
-			}
-		}
-	}
-
-	if txts, err := resolver.LookupTXT(ctx, "_dmarc."+domain); err == nil {
-		for _, txt := range txts {
-			if strings.HasPrefix(strings.ToLower(txt), "v=dmarc1") {
-				v.ReturnPathVerified = true
-				v.ReturnPathDomain = "_dmarc." + domain
-				v.ReturnPathCNAMEValue = txt
-				break
-			}
-		}
-	}
-
-	return v, nil
 }
 
 // CheckInboundDomain returns a synthetic InboundVerification reflecting the
