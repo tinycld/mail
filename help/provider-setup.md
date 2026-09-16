@@ -3,6 +3,7 @@ title: Setting up a mail provider
 summary: Choose Postmark or run your own SMTP — either way mail flows through your provider
 tags: [provider, postmark, smtp, setup, settings]
 order: 100
+keyPrefix: mail.
 ---
 
 ## Who can do this

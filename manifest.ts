@@ -14,8 +14,18 @@ const manifest = {
         { slug: 'provider', label: 'Domains', component: 'settings/provider' },
         { slug: 'mailboxes', label: 'Mailboxes', component: 'settings/mailboxes' },
     ],
+    // keyPrefix: these are deployment-wide credentials. Where a hosting provider
+    // owns them, this panel is hidden — it could not save there, because the
+    // values live in the provider's memory and never reach this deployment's
+    // database. The org-scoped 'provider' panel above (Domains) is unaffected
+    // and stays editable everywhere.
     systemSettings: [
-        { slug: 'provider', label: 'Provider', component: 'system-settings/provider' },
+        {
+            slug: 'provider',
+            label: 'Provider',
+            component: 'system-settings/provider',
+            keyPrefix: 'mail.',
+        },
     ],
     migrations: { directory: 'pb-migrations' },
     collections: { register: 'collections', types: 'types' },

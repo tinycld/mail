@@ -11,7 +11,7 @@ SMTP submission lets your desktop or phone mail client *send* through TinyCld �
 
 This is **not** the same as the SMTP your mail provider uses to deliver mail across the internet. This is the *submission* endpoint — you authenticate as a TinyCld user, TinyCld validates the sender address is one you have access to, and then forwards the message through your configured provider with all the right SPF / DKIM signing.
 
-> **Note**: this page is about connecting *your client* to TinyCld over SMTP. It is unrelated to the **self-hosted SMTP provider** option in [Provider setup](help://mail:provider-setup), which controls how TinyCld delivers and receives mail on the wire.
+> **Note**: this page is about connecting *your client* to TinyCld over SMTP. It is unrelated to the **self-hosted SMTP provider** option, which controls how TinyCld delivers and receives mail on the wire.
 
 ## Connection settings
 
@@ -94,7 +94,7 @@ Outbound messages are capped at **25 MB total** (including attachments). Larger 
 - **Auth fails with `Your mail access is read-only; sending is not permitted`** — your account has read-only access to Mail on this server. You can still read over [IMAP](help://mail:imap); sending needs an administrator to grant full access.
 - **From address not owned** — see above; the From header has to match a mailbox or alias you have access to.
 - **Domain not verified** — the sending domain has to be fully verified (MX, SPF, DKIM, Return-Path). See [Custom domains](help://mail:custom-domains).
-- **Provider not configured** — the deployment has no mail provider yet; configuring one is an administrator task. See [Provider setup](help://mail:provider-setup).
+- **Provider not configured** — the deployment has no mail provider yet; configuring one is an administrator task.
 - **Message size too large** — 25 MB max.
 - **Storage limit exceeded** — storing your Sent copy would push this server over its storage limit. Free space by deleting large threads, or ask an administrator to raise the limit.
 

@@ -63,7 +63,7 @@ function ProviderHeader({ primaryColor }: { primaryColor: string }) {
                 <Text className="text-foreground" style={{ fontSize: 20, fontWeight: 'bold' }}>
                     Mail Domains
                 </Text>
-                <HelpIcon topic="mail:provider-setup" size={18} />
+                <HelpIcon topic="mail:custom-domains" size={18} />
             </View>
             <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
                 Manage the domains your organization can send and receive email on.

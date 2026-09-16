@@ -20,7 +20,7 @@ The domain is created in TinyCld, and Postmark is asked to create a matching ser
 
 ## The verification checklist
 
-Each domain has four checks, all four green is required for full send + receive. The exact targets depend on which [provider](help://mail:provider-setup) this server uses:
+Each domain has four checks, all four green is required for full send + receive. The exact targets depend on which provider this server uses:
 
 - **Inbound MX** — DNS MX records pointing at your provider's inbound host.
   - **Postmark**: `inbound.postmarkapp.com`.
@@ -80,6 +80,5 @@ Mailboxes and aliases on the deleted domain are also removed (cascade), so be su
 
 ## See also
 
-- [Provider setup](help://mail:provider-setup)
 - [Mailboxes and aliases](help://mail:mailboxes)
 - [Delivery tracking](help://mail:delivery-tracking)

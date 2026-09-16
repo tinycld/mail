@@ -17,6 +17,7 @@ import (
 	"tinycld.org/core/oauth"
 	"tinycld.org/core/quota"
 	"tinycld.org/core/search"
+	"tinycld.org/core/syscfg"
 	"tinycld.org/packages/mail/api"
 )
 
@@ -411,16 +412,20 @@ func registerMailListeners(app *pocketbase.PocketBase) {
 	})
 }
 
-// systemSetting reads a value from the system_settings collection — the
-// system-wide config store core owns. Mail reads it directly from the app (not
-// via a core import) to stay decoupled, mirroring the per-org `settings` reads.
-// Returns "" when the key is unset (or the collection is absent).
-func systemSetting(app core.App, key string) string {
-	rec, err := app.FindFirstRecordByFilter("system_settings", "key = {:key}", map[string]any{"key": key})
-	if err != nil {
-		return ""
-	}
-	return rec.GetString("value")
+// systemSetting reads a deployment-wide config value through core's syscfg
+// seam, which resolves the system_settings collection on a deployment that
+// administers its own mail, and a supervising composition's in-memory config on
+// one whose operator does.
+//
+// It must NOT query the collection directly. Where an operator owns these
+// values they are never written to this deployment's database, so a direct
+// lookup finds nothing and mail silently falls back to an unconfigured provider
+// — the failure mode being a deployment that cannot send and cannot say why.
+//
+// The app argument is retained so every call site keeps its shape; the seam is
+// process-wide and needs no app.
+func systemSetting(_ core.App, key string) string {
+	return syscfg.Get(key)
 }
 
 // newProviderFromSystem builds the provider from system settings. The provider
