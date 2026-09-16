@@ -21,8 +21,25 @@ import type {
 // migration-driven field change flows through on the next install instead of
 // silently drifting from a hand-written copy.
 
-export interface MailDomains extends Omit<GenMailDomains, 'verification_details'> {
+// The provider's own id for this domain plus the verification answer it last
+// gave, stamped with when. Kept for reporting; the row's *_verified columns are
+// what render this domain's UI. Keyed by provider so a second one needs no
+// migration.
+export interface ProviderDomainMetadata {
+    postmark?: {
+        domain_id?: number
+        checked_at?: string
+        enrolled?: boolean
+        spf_verified?: boolean
+        dkim_verified?: boolean
+        return_path_verified?: boolean
+    }
+}
+
+export interface MailDomains
+    extends Omit<GenMailDomains, 'verification_details' | 'provider_domain_metadata'> {
     verification_details: VerificationDetails | null
+    provider_domain_metadata: ProviderDomainMetadata | null
 }
 
 export type MailMailboxes = GenMailMailboxes
