@@ -46,7 +46,7 @@ Click **Send**. The message goes through this server's mail provider (Postmark o
 - Immediately appears in **Sent** for the sending mailbox.
 - Gets a `delivery_status` of `sending`, updated to `sent` once the provider accepts it, then to `delivered`, `bounced`, or `spam_complaint` based on provider callbacks. See [Delivery tracking](help://mail:delivery-tracking).
 
-If the deployment has no mail provider configured, sending fails with a clear error. Configuring one is an administrator task — see [Provider setup](help://mail:provider-setup).
+If the deployment has no mail provider configured, sending fails with a clear error. Configuring one is an administrator task; on a deployment run by a hosting provider it is already done for you.
 
 ### Storage limit
 

@@ -45,5 +45,5 @@ Delivery status changes arrive via Postmark webhooks at `/api/mail/bounces/{toke
 
 ## See also
 
-- [Custom domains](help://mail:custom-domains)
 - [Provider setup](help://mail:provider-setup)
+- [Custom domains](help://mail:custom-domains)

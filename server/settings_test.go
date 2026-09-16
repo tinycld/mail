@@ -5,6 +5,8 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
+
+	"tinycld.org/core/syscfg"
 )
 
 // setupSettingsTestApp builds a test app with the `settings` and
@@ -37,6 +39,21 @@ func setupSettingsTestApp(t *testing.T) *tests.TestApp {
 	if err := app.Save(sys); err != nil {
 		t.Fatalf("failed to save system_settings collection: %v", err)
 	}
+
+	// Mail reads deployment-wide config through core's syscfg seam, not by
+	// querying the collection. In the app this is wired by coreserver; here,
+	// point it at this test app's rows so saveSystemSetting still drives what
+	// the code under test reads.
+	syscfg.SetResolver(func(key string) string {
+		rec, err := app.FindFirstRecordByFilter(
+			"system_settings", "key = {:key}", map[string]any{"key": key})
+		if err != nil {
+			return ""
+		}
+		return rec.GetString("value")
+	})
+	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
+
 	return app
 }
 
