@@ -61,5 +61,6 @@ So if Alice and Bob both have access to `support@`, Alice can star a thread with
 
 ## See also
 
+- [Provider setup](help://mail:provider-setup)
 - [Custom domains](help://mail:custom-domains)
 - [Folders](help://mail:folders)

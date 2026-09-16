@@ -20,13 +20,13 @@ The domain is created in TinyCld, and Postmark is asked to create a matching ser
 
 ## The verification checklist
 
-Each domain has four checks, all four green is required for full send + receive. The exact targets depend on which provider this server uses:
+Each domain has four checks, all four green is required for full send + receive. The exact targets depend on which [provider](help://mail:provider-setup) this server uses:
 
 - **Inbound MX** — DNS MX records pointing at your provider's inbound host.
   - **Postmark**: `inbound.postmarkapp.com`.
   - **Self-hosted SMTP, "Built-in listener" inbound mode**: your TinyCld host's **Public hostname**.
   - **Self-hosted SMTP, "Poll IMAP" inbound mode**: not checked — mail arrives via IMAP polling instead of MX.
-- **Provider** — for Postmark, the Postmark API confirms your domain's inbound forwarding is configured. For self-hosted SMTP, this confirms the provider's public hostname is set.
+- **Provider** — for Postmark, the Postmark API confirms your domain's inbound forwarding is configured. For self-hosted SMTP, this confirms the public hostname is set. Either way the provider itself is set up once for the whole deployment, not per domain.
 - **SPF** — DNS TXT record authorizing the sending host. Required so recipient servers don't mark your mail as spam.
 - **DKIM** — DNS CNAME / TXT records for cryptographic signing of outgoing mail. Required for deliverability. Postmark generates the keys; self-hosted SMTP expects a record at `<selector>._domainkey.<domain>` where the selector comes from your provider settings (defaults to `tinycld`).
 - **Return-Path** — DNS CNAME for bounce handling. Postmark provides the target; for self-hosted SMTP we use the presence of a DMARC record at `_dmarc.<domain>` as the indicator.
@@ -80,5 +80,6 @@ Mailboxes and aliases on the deleted domain are also removed (cascade), so be su
 
 ## See also
 
+- [Provider setup](help://mail:provider-setup)
 - [Mailboxes and aliases](help://mail:mailboxes)
 - [Delivery tracking](help://mail:delivery-tracking)

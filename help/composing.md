@@ -41,7 +41,7 @@ Drafts auto-save every few seconds while you type. They live in the **Drafts** f
 
 ## Sending
 
-Click **Send**. The message goes through this server's mail provider (Postmark or self-hosted SMTP), and:
+Click **Send**. The message goes through this server's mail provider (Postmark or self-hosted SMTP — see [Provider setup](help://mail:provider-setup)), and:
 
 - Immediately appears in **Sent** for the sending mailbox.
 - Gets a `delivery_status` of `sending`, updated to `sent` once the provider accepts it, then to `delivered`, `bounced`, or `spam_complaint` based on provider callbacks. See [Delivery tracking](help://mail:delivery-tracking).
