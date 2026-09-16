@@ -41,15 +41,14 @@ export default function ProviderSettings() {
     const [systemSettings] = useStore('system_settings')
 
     const { data: sysRows = [] } = useLiveQuery(query => query.from({ s: systemSettings }))
-    const provider =
-        (sysRows.find(r => r.key === 'mail.provider')?.value as 'postmark' | 'smtp') || 'postmark'
+    const storedProvider = sysRows.find(r => r.key === 'mail.provider')?.value
 
     return (
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="bg-background">
             <View className="flex-1 gap-5 p-5" style={{ maxWidth: 600 }}>
                 <ProviderHeader primaryColor={primaryColor} />
 
-                <DomainsSection provider={provider} />
+                <DomainsSection storedProvider={storedProvider} />
             </View>
         </ScrollView>
     )
@@ -85,7 +84,27 @@ interface DomainRow {
     verification_details: VerificationDetails | null
 }
 
-function DomainsSection({ provider }: { provider: 'postmark' | 'smtp' }) {
+// The provider these DNS instructions must describe.
+//
+// The server's own answer wins: verification_details.provider_name is computed
+// from whatever provider the deployment actually sends through, which on a
+// deployment whose operator owns mail is the OPERATOR's choice and was never
+// written to this deployment's system_settings. Reading the stored row alone
+// defaulted such a deployment to Postmark and printed Postmark's MX target and
+// webhook URLs — DNS a user would act on, for a provider they are not using.
+//
+// The stored row is the fallback for a self-hosted deployment that has not
+// verified a domain yet, so there is no server answer to read.
+export function resolveProvider(
+    details: VerificationDetails | null,
+    storedProvider: string | undefined
+): 'postmark' | 'smtp' {
+    const reported = details?.provider_name
+    if (reported === 'postmark' || reported === 'smtp') return reported
+    return storedProvider === 'smtp' ? 'smtp' : 'postmark'
+}
+
+function DomainsSection({ storedProvider }: { storedProvider: string | undefined }) {
     const [domainsCollection] = useStore('mail_domains')
 
     const { data: domains } = useLiveQuery(query =>
@@ -120,7 +139,11 @@ function DomainsSection({ provider }: { provider: 'postmark' | 'smtp' }) {
             <NoDomainsBanner isVisible={domainRows.length === 0} />
 
             {domainRows.map(d => (
-                <DomainRowItem key={d.id} domain={d} provider={provider} />
+                <DomainRowItem
+                    key={d.id}
+                    domain={d}
+                    provider={resolveProvider(d.verification_details, storedProvider)}
+                />
             ))}
 
             <AddDomainForm />
