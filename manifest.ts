@@ -57,7 +57,7 @@ const manifest = {
         module: 'tinycld.org/packages/mail/cli',
     },
     repository: { url: 'https://github.com/tinycld/mail' },
-    peerVersions: { '@tinycld/core': '>=0.1.0 <0.2.0' },
+    peerVersions: { '@tinycld/core': '>=0.5.1 <0.6.0' },
 }
 
 export default manifest
