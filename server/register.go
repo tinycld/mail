@@ -127,11 +127,15 @@ func registerShared(app *pocketbase.PocketBase) {
 	}
 
 	// A settings change to the mail app may toggle provider or inbound mode —
-	// reconcile the IMAP fetcher. (The former per-org settings cache is gone;
+	// reconcile the IMAP fetcher and, when the provider is SMTP, the
+	// maildomains registrar. (The former per-org settings cache is gone;
 	// provider config is deployment-wide in system_settings.)
 	reconcileOnMailSettings := func(e *core.RecordEvent) error {
-		if e.Record.GetString("app") == "mail" && globalIMAPManager != nil {
-			globalIMAPManager.onSettingsChanged()
+		if e.Record.GetString("app") == "mail" {
+			if globalIMAPManager != nil {
+				globalIMAPManager.onSettingsChanged()
+			}
+			reconcileMailDomainsRegistrar(app)
 		}
 		return e.Next()
 	}
@@ -167,12 +171,15 @@ func registerShared(app *pocketbase.PocketBase) {
 	app.OnRecordAfterDeleteSuccess("settings").BindFunc(reconcileOnMailSettings)
 
 	// The mail provider + IMAP config are SYSTEM-WIDE (system_settings), so a
-	// system-settings change to a mail.* key may toggle the IMAP fetcher on/off.
-	// Reconcile on those changes too (filtered so sentry.*/vapid.* edits don't
-	// churn the fetcher).
+	// system-settings change to a mail.* key may toggle the IMAP fetcher on/off
+	// and may switch the provider to or from SMTP. Reconcile on those changes
+	// too (filtered so sentry.*/vapid.* edits don't churn either one).
 	reconcileOnSystemMail := func(e *core.RecordEvent) error {
-		if globalIMAPManager != nil && strings.HasPrefix(e.Record.GetString("key"), "mail.") {
-			globalIMAPManager.onSettingsChanged()
+		if strings.HasPrefix(e.Record.GetString("key"), "mail.") {
+			if globalIMAPManager != nil {
+				globalIMAPManager.onSettingsChanged()
+			}
+			reconcileMailDomainsRegistrar(app)
 		}
 		return e.Next()
 	}
@@ -291,6 +298,12 @@ func registerShared(app *pocketbase.PocketBase) {
 			imapFetcherShutdown()
 			return te.Next()
 		})
+
+		// Install the maildomains registrar for an SMTP deployment at boot;
+		// reconcileOnMailSettings / reconcileOnSystemMail keep it current
+		// afterward. A no-op on Postmark (core wires that centrally) or on a
+		// hosted composition (the seam is already claimed).
+		reconcileMailDomainsRegistrar(app)
 
 		// Draft endpoint (requires auth, saves without sending)
 		e.Router.POST("/api/mail/draft", func(re *core.RequestEvent) error {
@@ -429,6 +442,29 @@ func systemSetting(_ core.App, key string) string {
 	return syscfg.Get(key)
 }
 
+// reconcileMailDomainsRegistrar (re-)installs the maildomains registrar when
+// this deployment's configured provider is SMTP. Called once at boot and
+// again whenever mail/system settings change (the provider can be switched
+// to or from SMTP at runtime), mirroring how globalIMAPManager reconciles on
+// the same events — see reconcileOnMailSettings / reconcileOnSystemMail.
+//
+// Deliberately NOT called from newProviderFromSystem: that function runs on
+// every send/verify/webhook request, and SetResolver has nothing new to do
+// between settings changes. A hosted composition has already claimed the
+// seam with its delegating registrar before this ever runs; SetResolver is a
+// no-op there by design. Postmark's registrar is wired centrally in core
+// (wireMailDomains) since it needs the account token core alone is trusted
+// to hold — only SMTP needs its own registrar installed here.
+func reconcileMailDomainsRegistrar(app core.App) {
+	name := systemSetting(app, "mail.provider")
+	if name == "" {
+		name = "postmark"
+	}
+	if name == "smtp" {
+		maildomains.SetResolver(NewSMTPRegistrar(smtpConfigFromSystem(app)))
+	}
+}
+
 // newProviderFromSystem builds the provider from system settings. The provider
 // choice and its credentials/SMTP config are deployment-wide infrastructure,
 // configured in the /admin Settings console.
@@ -438,15 +474,6 @@ func newProviderFromSystem(app core.App) Provider {
 		name = "postmark"
 	}
 	smtpCfg := smtpConfigFromSystem(app)
-
-	// A hosted composition has already claimed the maildomains seam with its
-	// delegating registrar; SetResolver is a no-op there by design. Only an
-	// SMTP deployment needs its own registrar installed — Postmark's is wired
-	// centrally in core (wireMailDomains), since it needs the account token
-	// core alone is trusted to hold.
-	if name == "smtp" {
-		maildomains.SetResolver(NewSMTPRegistrar(smtpCfg))
-	}
 
 	return newProviderByName(
 		name,
