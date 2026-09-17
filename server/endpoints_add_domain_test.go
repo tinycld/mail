@@ -2,6 +2,7 @@ package mail
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -259,6 +260,111 @@ func TestAddDomainDoesNotCreateRecordWhenEnrollmentFails(t *testing.T) {
 		func(t *testing.T, app *tests.TestApp) {
 			if got := countMailDomains(t, app); got != 0 {
 				t.Fatalf("expected no mail_domains row to be created, got %d", got)
+			}
+		},
+	)
+}
+
+// A GENERIC provider failure (a 5xx from the provider, a socket error — the
+// fall-through case) must create nothing either. Only the
+// ErrDomainAlreadyEnrolled path was pinned before, so the switch could fall
+// through to the save and the suite stayed green: a row the provider has
+// never heard of, which is the exact half-broken state this handler exists
+// to prevent.
+func TestAddDomainDoesNotCreateRecordOnGenericProviderError(t *testing.T) {
+	registrar := &stubRegistrar{err: errors.New("postmark create domain: 500 Internal Server Error")}
+
+	runAddDomainScenario(t, "generic provider failure creates nothing", registrar,
+		func(app core.App) *core.Record {
+			return seedAddDomainAuthUser(t, app, "admin@acme.com", "admin")
+		},
+		`{"domain":"acme.com"}`,
+		http.StatusBadGateway,
+		[]string{"Failed to enroll the domain with the mail provider"},
+		// The raw provider text must not leak to an org admin.
+		[]string{"Internal Server Error"},
+		func(t *testing.T, app *tests.TestApp) {
+			if got := countMailDomains(t, app); got != 0 {
+				t.Fatalf("expected no mail_domains row after a provider error, got %d", got)
+			}
+		},
+	)
+}
+
+// No credentials is the DEFAULT state of every fresh standalone install, so
+// this is the path an operator is most likely to hit first. It must 503 and
+// create nothing — a row saved here would display as a configured domain on
+// a deployment that cannot provision domains at all.
+func TestAddDomainDoesNotCreateRecordWhenProvisioningNotConfigured(t *testing.T) {
+	registrar := &stubRegistrar{err: maildomains.ErrNotConfigured}
+
+	runAddDomainScenario(t, "unconfigured provisioning creates nothing", registrar,
+		func(app core.App) *core.Record {
+			return seedAddDomainAuthUser(t, app, "admin@acme.com", "admin")
+		},
+		`{"domain":"acme.com"}`,
+		http.StatusServiceUnavailable,
+		[]string{"not configured for this deployment"},
+		nil,
+		func(t *testing.T, app *tests.TestApp) {
+			if got := countMailDomains(t, app); got != 0 {
+				t.Fatalf("expected no mail_domains row when provisioning is unconfigured, got %d", got)
+			}
+		},
+	)
+}
+
+// AMENDMENT 1 / the new migration's entire justification: the created row must
+// carry the provider's own domain id. Without it every later status check
+// falls back to the paged by-name scan, which on a shared hosting account
+// reports a domain past the first page as unenrolled. The enrollment state is
+// asserted alongside it so a write to the wrong field name — or to the right
+// field with the id dropped — fails here.
+func TestAddDomainStoresProviderDomainMetadata(t *testing.T) {
+	registrar := &stubRegistrar{rec: &maildomains.DomainRecords{
+		Domain: "acme.com", ID: 12345, DKIMVerified: true, ReturnPathVerified: true,
+	}}
+
+	runAddDomainScenario(t, "add stamps provider_domain_metadata", registrar,
+		func(app core.App) *core.Record {
+			return seedAddDomainAuthUser(t, app, "admin@acme.com", "admin")
+		},
+		`{"domain":"acme.com"}`,
+		http.StatusOK,
+		[]string{`"domain":"acme.com"`},
+		nil,
+		func(t *testing.T, app *tests.TestApp) {
+			records, err := app.FindRecordsByFilter("mail_domains", "domain = {:domain}", "", 1, 0,
+				map[string]any{"domain": "acme.com"})
+			if err != nil {
+				t.Fatalf("failed to query mail_domains: %v", err)
+			}
+			if len(records) != 1 {
+				t.Fatalf("expected 1 mail_domains row, got %d", len(records))
+			}
+
+			meta := readProviderDomainMetadata(records[0])
+			if meta.Postmark == nil {
+				t.Fatalf("provider_domain_metadata.postmark missing on the created row; "+
+					"raw field = %#v", records[0].Get("provider_domain_metadata"))
+			}
+			if meta.Postmark.DomainID != 12345 {
+				t.Fatalf("provider_domain_metadata.postmark.domain_id = %d, want 12345 — "+
+					"without the stored id every later check falls back to the paged by-name scan",
+					meta.Postmark.DomainID)
+			}
+			if meta.Postmark.Enrolled == nil || !*meta.Postmark.Enrolled {
+				t.Fatalf("provider_domain_metadata.postmark.enrolled = %+v, want a pointer to true",
+					meta.Postmark.Enrolled)
+			}
+			if meta.Postmark.CheckedAt == "" {
+				t.Error("provider_domain_metadata.postmark.checked_at must be stamped on the add path")
+			}
+			if meta.Postmark.DKIMVerified == nil || !*meta.Postmark.DKIMVerified {
+				t.Errorf("dkim_verified = %+v, want a pointer to true", meta.Postmark.DKIMVerified)
+			}
+			if meta.Postmark.ReturnPathVerified == nil || !*meta.Postmark.ReturnPathVerified {
+				t.Errorf("return_path_verified = %+v, want a pointer to true", meta.Postmark.ReturnPathVerified)
 			}
 		},
 	)
