@@ -25,7 +25,7 @@ import {
 } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import { DnsRecordsPanel } from './DnsRecordsPanel'
+import { DnsRecordsPanel, hasUnpublishedDnsRecords } from './DnsRecordsPanel'
 import { assertVerifySaved } from './verify-domain'
 
 const addDomainSchema = z.object({
@@ -434,11 +434,33 @@ function buildProviderHint(
     return 'Set this domain as the server InboundDomain in Postmark'
 }
 
-function buildOutboundHint(details: VerificationDetails | null): string {
-    return details?.outbound?.error || 'outbound sending'
+// buildOutboundHint phrases the three-valued `enrolled` state, which is the
+// whole reason that field is three-valued: "the provider rejected this domain"
+// and "we could not reach the provider" need different actions from the admin,
+// and returning the raw sentinel text for both conflated exactly the two cases
+// the type was introduced to separate. Only "no" is the admin's to fix; an
+// "unknown" says the check did not run and the row's flags are stale.
+export function buildOutboundHint(details: VerificationDetails | null): string {
+    const outbound = details?.outbound
+    const error = outbound?.error
+    if (outbound?.enrolled === 'no') {
+        return error
+            ? `Not enrolled with the mail provider — ${error}`
+            : 'Not enrolled with the mail provider'
+    }
+    if (outbound?.enrolled === 'unknown') {
+        return error
+            ? `Could not reach the mail provider, so this was not checked — ${error}`
+            : 'Could not reach the mail provider, so this was not checked'
+    }
+    return error || 'outbound sending'
 }
 
-function DomainVerificationPanel({
+// Exported for a mount test: the panel's VISIBILITY wiring is the part worth
+// pinning. `verified` excludes DKIM and return-path, so gating the DNS panel on
+// it hid the records an admin still had to publish the moment the badge went
+// green — a defect no unit test of the helper alone can catch.
+export function DomainVerificationPanel({
     domain,
     provider,
 }: {
@@ -469,7 +491,10 @@ function DomainVerificationPanel({
                 hint={outboundHint}
                 advisory
             />
-            <DnsRecordsPanel outbound={details?.outbound} isVisible={!domain.verified} />
+            <DnsRecordsPanel
+                outbound={details?.outbound}
+                isVisible={hasUnpublishedDnsRecords(details?.outbound)}
+            />
         </View>
     )
 }
