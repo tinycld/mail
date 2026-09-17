@@ -1,6 +1,7 @@
 import { useLiveQuery } from '@tanstack/react-db'
 import { useMutation as useReactQueryMutation } from '@tanstack/react-query'
 import type {
+    AddDomainResponse,
     VerificationDetails,
     VerifyDomainResponse,
     WebhookURLsResponse,
@@ -21,9 +22,9 @@ import {
     Trash2,
     XCircle,
 } from 'lucide-react-native'
-import { newRecordId } from 'pbtsdb/core'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
+import { DnsRecordsPanel } from './DnsRecordsPanel'
 import { assertVerifySaved } from './verify-domain'
 
 const addDomainSchema = z.object({
@@ -469,6 +470,7 @@ function DomainVerificationPanel({
                 hint={outboundHint}
                 advisory
             />
+            <DnsRecordsPanel outbound={details?.outbound} isVisible={!domain.verified} />
         </View>
     )
 }
@@ -559,7 +561,6 @@ function DeleteDomainButton({
 
 function AddDomainForm() {
     const primaryFgColor = useThemeColor('primary-foreground')
-    const [domainsCollection] = useStore('mail_domains')
 
     const {
         control,
@@ -575,20 +576,11 @@ function AddDomainForm() {
     })
 
     const addMutation = useMutation({
-        mutationFn: mutation(function* (data: z.infer<typeof addDomainSchema>) {
-            yield domainsCollection.insert({
-                id: newRecordId(),
-                domain: data.domain,
-                verified: false,
-                mx_verified: false,
-                inbound_domain_verified: false,
-                spf_verified: false,
-                dkim_verified: false,
-                return_path_verified: false,
-                last_checked_at: '',
-                verification_details: null,
-            })
-        }),
+        mutationFn: async (data: z.infer<typeof addDomainSchema>) =>
+            pb.send<AddDomainResponse>('/api/mail/domains', {
+                method: 'POST',
+                body: { domain: data.domain },
+            }),
         onSuccess: () => reset(),
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
