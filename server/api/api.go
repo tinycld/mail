@@ -173,6 +173,16 @@ type VerifyDomainResponse struct {
 	SaveError             string               `json:"save_error,omitempty"`
 }
 
+// AddDomainResponse is returned by POST /api/mail/domains. Enrollment with
+// the provider has already succeeded by the time this is returned — Records
+// carries the DNS the admin must publish, so a client never has to make a
+// second round trip just to learn what to show.
+type AddDomainResponse struct {
+	ID      string               `json:"id"`
+	Domain  string               `json:"domain"`
+	Records *OutboundCheckResult `json:"records,omitempty"`
+}
+
 // WebhookURLsResponse is returned by GET /api/mail/domains/{id}/webhook-urls:
 // the provider-facing inbound and bounce webhook URLs for the domain.
 type WebhookURLsResponse struct {
