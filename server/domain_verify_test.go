@@ -388,3 +388,153 @@ func TestCheckOutboundStampsMetadataOnFailure(t *testing.T) {
 		t.Error("expected checked_at to be stamped even on failure")
 	}
 }
+
+// --- verifyDomainRecord tests: the `verified` verdict itself ---
+
+// newVerifyVerdictApp builds an app carrying the full field set
+// verifyDomainRecord writes plus the system_settings rows that choose the
+// provider. The SMTP provider is used deliberately: it verifies non-strictly
+// (any non-empty server hostname satisfies the inbound check) and publishes a
+// concrete MX host, so both inbound legs can be driven to a known value and
+// the test can isolate the Outbound term of the verdict.
+func newVerifyVerdictApp(t *testing.T) *tests.TestApp {
+	t.Helper()
+	app := setupSettingsTestApp(t)
+
+	col := core.NewBaseCollection("mail_domains")
+	col.Fields.Add(&core.TextField{Name: "domain", Required: true})
+	col.Fields.Add(&core.BoolField{Name: "verified"})
+	col.Fields.Add(&core.BoolField{Name: "mx_verified"})
+	col.Fields.Add(&core.BoolField{Name: "inbound_domain_verified"})
+	col.Fields.Add(&core.BoolField{Name: "spf_verified"})
+	col.Fields.Add(&core.BoolField{Name: "dkim_verified"})
+	col.Fields.Add(&core.BoolField{Name: "return_path_verified"})
+	col.Fields.Add(&core.TextField{Name: "last_checked_at"})
+	col.Fields.Add(&core.JSONField{Name: "provider_domain_metadata", MaxSize: 2000})
+	col.Fields.Add(&core.JSONField{Name: "verification_details", MaxSize: 4000})
+	if err := app.Save(col); err != nil {
+		t.Fatalf("save mail_domains collection: %v", err)
+	}
+
+	saveSystemSetting(t, app, "mail.provider", "smtp")
+	saveSystemSetting(t, app, "mail.smtp_inbound_mode", "smtp")
+	saveSystemSetting(t, app, "mail.smtp_public_hostname", "mx.operator.example")
+
+	return app
+}
+
+// runVerifyVerdict drives verifyDomainRecord end to end with both inbound legs
+// forced to inboundOK and the outbound seam answering with registrar, and
+// returns the persisted row.
+func runVerifyVerdict(t *testing.T, inboundOK bool, registrar maildomains.Registrar) *core.Record {
+	t.Helper()
+
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	maildomains.SetResolver(registrar)
+
+	// The SMTP provider's expected MX host is its PublicHostname; answering
+	// with a different host is how the inbound leg is driven to false.
+	mxHost := "mx.operator.example."
+	if !inboundOK {
+		mxHost = "mx.somewhere-else.example."
+	}
+	withMXLookup(t, func(_ context.Context, _ string) ([]*net.MX, error) {
+		return []*net.MX{{Host: mxHost, Pref: 10}}, nil
+	})
+
+	app := newVerifyVerdictApp(t)
+	if !inboundOK {
+		// An inbound mode the provider does not serve makes
+		// CheckInboundDomain report no inbound domain at all, so the Provider
+		// leg fails alongside the mismatched MX above.
+		saveSystemSetting(t, app, "mail.smtp_inbound_mode", "none")
+	}
+	record := newVerifyTestRecord(t, app)
+
+	details, err := verifyDomainRecord(context.Background(), app, record)
+	if err != nil {
+		t.Fatalf("verifyDomainRecord: %v", err)
+	}
+	if details.MX.OK != inboundOK {
+		t.Fatalf("precondition: MX.OK = %v, want %v (%+v)", details.MX.OK, inboundOK, details.MX)
+	}
+	if details.Provider.OK != inboundOK {
+		t.Fatalf("precondition: Provider.OK = %v, want %v (%+v)", details.Provider.OK, inboundOK, details.Provider)
+	}
+
+	saved, err := app.FindRecordById("mail_domains", record.Id)
+	if err != nil {
+		t.Fatalf("reload record: %v", err)
+	}
+	return saved
+}
+
+func newVerifyTestRecord(t *testing.T, app core.App) *core.Record {
+	t.Helper()
+	col, err := app.FindCollectionByNameOrId("mail_domains")
+	if err != nil {
+		t.Fatalf("find mail_domains: %v", err)
+	}
+	rec := core.NewRecord(col)
+	rec.Set("domain", "acme.com")
+	if err := app.Save(rec); err != nil {
+		t.Fatalf("save record: %v", err)
+	}
+	return rec
+}
+
+// The happy path: inbound ready AND the provider has the domain enrolled.
+func TestVerifyDomainRecord_EnrolledAndInboundReadyIsVerified(t *testing.T) {
+	saved := runVerifyVerdict(t, true, &stubRegistrar{rec: &maildomains.DomainRecords{
+		Domain: "acme.com", ID: 1, DKIMVerified: true, ReturnPathVerified: true,
+	}})
+
+	if !saved.GetBool("verified") {
+		t.Fatalf("verified = false, want true for an enrolled domain with inbound ready")
+	}
+}
+
+// THE regression this branch exists to fix: a domain the provider has never
+// enrolled cannot send at all, so it must NOT show a green badge even when
+// both inbound checks pass. Deleting the `Enrolled != "no"` term from the
+// verdict must fail here.
+func TestVerifyDomainRecord_NotEnrolledIsNotVerified(t *testing.T) {
+	saved := runVerifyVerdict(t, true, &stubRegistrar{err: maildomains.ErrDomainNotEnrolled})
+
+	if saved.GetBool("verified") {
+		t.Fatalf("verified = true for a domain the provider has never enrolled; " +
+			"inbound readiness alone must not produce a green badge")
+	}
+	// The inbound legs genuinely passed — the verdict must be driven by the
+	// outbound term, not by an inbound check having been broken instead.
+	if !saved.GetBool("mx_verified") || !saved.GetBool("inbound_domain_verified") {
+		t.Fatalf("expected both inbound flags true; mx=%v inbound=%v",
+			saved.GetBool("mx_verified"), saved.GetBool("inbound_domain_verified"))
+	}
+}
+
+// "unknown" must NOT disqualify. A single provider blip during the hourly
+// reverify would otherwise flip every working customer domain to unverified.
+// Changing `!= "no"` to `== "yes"` must fail here.
+func TestVerifyDomainRecord_UnknownEnrollmentStaysVerified(t *testing.T) {
+	saved := runVerifyVerdict(t, true, &stubRegistrar{err: errors.New("socket closed")})
+
+	if !saved.GetBool("verified") {
+		t.Fatalf("verified = false after a transient provider failure; " +
+			`an "unknown" enrollment state must not disqualify a working domain`)
+	}
+}
+
+// Outbound enrollment alone is not sufficient: inbound readiness is still
+// required, so the verdict is a conjunction rather than the outbound term
+// having replaced it.
+func TestVerifyDomainRecord_EnrolledButInboundNotReadyIsNotVerified(t *testing.T) {
+	saved := runVerifyVerdict(t, false, &stubRegistrar{rec: &maildomains.DomainRecords{
+		Domain: "acme.com", ID: 1, DKIMVerified: true, ReturnPathVerified: true,
+	}})
+
+	if saved.GetBool("verified") {
+		t.Fatalf("verified = true with inbound not ready; enrollment alone is not enough")
+	}
+}
