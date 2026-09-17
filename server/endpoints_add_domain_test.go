@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 	"tinycld.org/core/maildomains"
+	"tinycld.org/packages/mail/api"
 )
 
 // setupAddDomainTestApp builds a test app with the collections
@@ -39,6 +41,7 @@ func setupAddDomainTestApp(t *testing.T) *tests.TestApp {
 	domains.Fields.Add(&core.BoolField{Name: "dkim_verified"})
 	domains.Fields.Add(&core.BoolField{Name: "return_path_verified"})
 	domains.Fields.Add(&core.JSONField{Name: "provider_domain_metadata", MaxSize: 2000})
+	domains.Fields.Add(&core.JSONField{Name: "verification_details", MaxSize: 4000})
 	if err := app.Save(domains); err != nil {
 		t.Fatalf("failed to save mail_domains: %v", err)
 	}
@@ -140,8 +143,31 @@ func runAddDomainScenario(
 	scenario.Test(t)
 }
 
+// readVerificationDetails unmarshals a mail_domains row's verification_details
+// JSON field, mirroring readProviderDomainMetadata's marshal-roundtrip since
+// core.Record.Get returns the field as a generic any, not the typed struct.
+func readVerificationDetails(t *testing.T, record *core.Record) *api.VerificationDetails {
+	t.Helper()
+	raw := record.Get("verification_details")
+	if raw == nil {
+		return nil
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("failed to marshal verification_details: %v", err)
+	}
+	var details api.VerificationDetails
+	if err := json.Unmarshal(data, &details); err != nil {
+		t.Fatalf("failed to unmarshal verification_details: %v", err)
+	}
+	return &details
+}
+
 // Adding a domain enrolls it with the provider AND creates the row, so the
-// DNS records exist before the admin is asked to publish anything.
+// DNS records exist before the admin is asked to publish anything. An admin
+// who never presses Verify must still be able to read verification_details
+// off the row — this is the field the settings UI's DNS panel reads, and it
+// used to stay empty until the first Verify.
 func TestAddDomainEnrollsAndCreatesRecord(t *testing.T) {
 	registrar := &stubRegistrar{rec: &maildomains.DomainRecords{
 		Domain: "acme.com", ID: 12345, SPFVerified: true, DKIMVerified: true,
@@ -165,6 +191,21 @@ func TestAddDomainEnrollsAndCreatesRecord(t *testing.T) {
 			}
 			if len(records) != 1 {
 				t.Fatalf("expected 1 mail_domains row for acme.com, got %d", len(records))
+			}
+
+			details := readVerificationDetails(t, records[0])
+			if details == nil {
+				t.Fatalf("expected verification_details to be populated on add, got nil")
+			}
+			outbound := details.Outbound
+			if outbound.Enrolled != "yes" {
+				t.Fatalf("expected outbound.enrolled = yes, got %q", outbound.Enrolled)
+			}
+			if outbound.DKIMHost != "sel._domainkey.acme.com" || outbound.DKIMTextValue != "k=rsa;p=X" {
+				t.Fatalf("expected DKIM host/value on outbound, got %+v", outbound)
+			}
+			if outbound.ReturnPathDomain != "pm-bounces.acme.com" || outbound.ReturnPathCNAMEValue != "pm.mtasv.net" {
+				t.Fatalf("expected return-path domain/value on outbound, got %+v", outbound)
 			}
 		},
 	)

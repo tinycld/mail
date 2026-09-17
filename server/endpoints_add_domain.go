@@ -61,6 +61,29 @@ func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 		if err != nil {
 			return re.InternalServerError("mail_domains collection missing", err)
 		}
+
+		outbound := api.OutboundCheckResult{
+			Enrolled:             "yes",
+			SPF:                  rec.SPFVerified,
+			DKIM:                 rec.DKIMVerified,
+			ReturnPath:           rec.ReturnPathVerified,
+			DKIMHost:             rec.DKIMHost,
+			DKIMTextValue:        rec.DKIMTextValue,
+			ReturnPathDomain:     rec.ReturnPathDomain,
+			ReturnPathCNAMEValue: rec.ReturnPathCNAMEValue,
+		}
+
+		providerName, providerConfigured := describeProvider(newProviderFromSystem(app))
+
+		// MX and Provider are left at their zero values: those checks
+		// genuinely have not run yet, and the UI already renders zero-value
+		// checks as unverified, which is accurate at enrollment time.
+		details := &api.VerificationDetails{
+			ProviderConfigured: providerConfigured,
+			ProviderName:       providerName,
+			Outbound:           outbound,
+		}
+
 		record := core.NewRecord(col)
 		record.Set("domain", domain)
 		// Enrollment succeeded but nothing has been verified yet — MX and the
@@ -73,6 +96,11 @@ func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 		record.Set("spf_verified", rec.SPFVerified)
 		record.Set("dkim_verified", rec.DKIMVerified)
 		record.Set("return_path_verified", rec.ReturnPathVerified)
+		// verification_details must be populated here, not left for the first
+		// Verify press: it is the field the settings UI reads to show the DNS
+		// records the admin must publish, and a row with none looks like a
+		// domain with nothing to configure.
+		record.Set("verification_details", details)
 		record.Set("provider_domain_metadata", providerDomainMetadata{
 			Postmark: &postmarkDomainMetadata{
 				DomainID:           rec.ID,
@@ -88,18 +116,9 @@ func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 		}
 
 		return re.JSON(http.StatusOK, api.AddDomainResponse{
-			ID:     record.Id,
-			Domain: domain,
-			Records: &api.OutboundCheckResult{
-				Enrolled:             "yes",
-				SPF:                  rec.SPFVerified,
-				DKIM:                 rec.DKIMVerified,
-				ReturnPath:           rec.ReturnPathVerified,
-				DKIMHost:             rec.DKIMHost,
-				DKIMTextValue:        rec.DKIMTextValue,
-				ReturnPathDomain:     rec.ReturnPathDomain,
-				ReturnPathCNAMEValue: rec.ReturnPathCNAMEValue,
-			},
+			ID:      record.Id,
+			Domain:  domain,
+			Records: &outbound,
 		})
 	}
 }
