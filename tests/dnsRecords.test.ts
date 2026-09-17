@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDnsRecords } from '~/tinycld/mail/settings/DnsRecordsPanel'
+import { buildDnsRecords, hasUnpublishedDnsRecords } from '~/tinycld/mail/settings/DnsRecordsPanel'
 
 describe('buildDnsRecords', () => {
     it('returns the DKIM and return-path records to publish', () => {
@@ -95,5 +95,71 @@ describe('buildDnsRecords', () => {
 
     it('returns nothing when there is no outbound result at all', () => {
         expect(buildDnsRecords(undefined)).toEqual([])
+    })
+})
+
+// FIX 7: the panel must stay visible while there are still records to publish.
+//
+// It used to be gated on `!domain.verified`, but `verified` deliberately
+// EXCLUDES DKIM and return-path — they are advisory. So the moment MX and the
+// inbound domain went green, the badge flipped to Verified and the panel
+// VANISHED, while the DKIM and Return-Path rows were still showing red and the
+// host/value/copy UI needed to fix them was gone.
+describe('hasUnpublishedDnsRecords', () => {
+    const postmarkRecords = {
+        dkim_host: 'sel._domainkey.acme.com',
+        dkim_text_value: 'k=rsa;p=X',
+        return_path_domain: 'pm-bounces.acme.com',
+        return_path_cname_value: 'pm.mtasv.net',
+    }
+
+    it('stays visible when a record is still unpublished', () => {
+        expect(
+            hasUnpublishedDnsRecords({
+                spf: true,
+                dkim: true,
+                return_path: false,
+                enrolled: 'yes',
+                ...postmarkRecords,
+            })
+        ).toBe(true)
+    })
+
+    it('stays visible when DKIM alone is unpublished', () => {
+        expect(
+            hasUnpublishedDnsRecords({
+                spf: true,
+                dkim: false,
+                return_path: true,
+                enrolled: 'yes',
+                ...postmarkRecords,
+            })
+        ).toBe(true)
+    })
+
+    // The panel is not permanently pinned open: once every record it can show
+    // is verified, it has nothing left to say.
+    it('hides once every record is published', () => {
+        expect(
+            hasUnpublishedDnsRecords({
+                spf: true,
+                dkim: true,
+                return_path: true,
+                enrolled: 'yes',
+                ...postmarkRecords,
+            })
+        ).toBe(false)
+    })
+
+    it('hides when the provider reported no records at all', () => {
+        expect(
+            hasUnpublishedDnsRecords({
+                spf: false,
+                dkim: false,
+                return_path: false,
+                enrolled: 'yes',
+            })
+        ).toBe(false)
+        expect(hasUnpublishedDnsRecords(undefined)).toBe(false)
     })
 })

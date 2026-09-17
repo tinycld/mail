@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -536,5 +537,200 @@ func TestVerifyDomainRecord_EnrolledButInboundNotReadyIsNotVerified(t *testing.T
 
 	if saved.GetBool("verified") {
 		t.Fatalf("verified = true with inbound not ready; enrollment alone is not enough")
+	}
+}
+
+// --- Correctness-review fixes ---
+
+// sequencedRegistrar answers GetDomain differently depending on whether the
+// caller passed a provider id. It is the shape the stale-id scenario needs:
+// the provider knows the domain by NAME but no longer by the stored id, which
+// is what deleting and re-creating a domain at the provider produces.
+type sequencedRegistrar struct {
+	byID      *maildomains.DomainRecords
+	byIDErr   error
+	byName    *maildomains.DomainRecords
+	byNameErr error
+
+	gotIDs []int64
+}
+
+func (s *sequencedRegistrar) AddDomain(context.Context, string) (*maildomains.DomainRecords, error) {
+	return nil, errors.New("AddDomain not expected in this test")
+}
+
+func (s *sequencedRegistrar) GetDomain(_ context.Context, _ string, providerDomainID int64) (*maildomains.DomainRecords, error) {
+	s.gotIDs = append(s.gotIDs, providerDomainID)
+	if providerDomainID != 0 {
+		return s.byID, s.byIDErr
+	}
+	return s.byName, s.byNameErr
+}
+
+// FIX 1: ErrNotConfigured is neither "the provider says no" nor "we could not
+// reach it" — this deployment cannot answer the question at all. Reachable
+// with mail.postmark_server_token set and mail.postmark_account_token empty,
+// which is a normal config (sending needs only the server token) that passes
+// the verify endpoint's Configured() guard while the registrar's token() is
+// "". Falling into the generic branch yielded "unknown", which does not
+// disqualify `verified`, so the admin saw a GREEN badge on a domain the
+// provider has never enrolled while every outbound message failed.
+func TestCheckOutboundNotConfiguredIsNotEnrolled(t *testing.T) {
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	maildomains.SetResolver(&stubRegistrar{err: maildomains.ErrNotConfigured})
+
+	app := newOutboundTestApp(t)
+	record := newOutboundTestRecord(t, app, "acme.com", 0)
+
+	got := checkOutbound(context.Background(), record)
+
+	if got.Enrolled != "no" {
+		t.Fatalf("Enrolled = %q, want %q: we cannot assert a domain is enrolled "+
+			"when this deployment has no way to check", got.Enrolled, "no")
+	}
+	// The admin must see a cause they can act on, not the seam's internal
+	// sentinel text ("maildomains: no registrar configured").
+	if !strings.Contains(got.Error, "not configured") {
+		t.Errorf("Error = %q, want it to name the missing provisioning config", got.Error)
+	}
+	if strings.Contains(got.Error, "no registrar configured") {
+		t.Errorf("Error = %q leaks the internal sentinel instead of an admin-facing cause", got.Error)
+	}
+}
+
+// FIX 1 (end to end): the unconfigured deployment must not produce a green
+// badge. This is the defect's actual user-visible symptom.
+func TestVerifyDomainRecord_NotConfiguredIsNotVerified(t *testing.T) {
+	saved := runVerifyVerdict(t, true, &stubRegistrar{err: maildomains.ErrNotConfigured})
+
+	if saved.GetBool("verified") {
+		t.Fatalf("verified = true although domain provisioning is not configured; " +
+			"a domain the provider has never enrolled must not show a green badge")
+	}
+	if !saved.GetBool("mx_verified") || !saved.GetBool("inbound_domain_verified") {
+		t.Fatalf("expected both inbound flags true so the verdict is driven by the "+
+			"outbound term; mx=%v inbound=%v",
+			saved.GetBool("mx_verified"), saved.GetBool("inbound_domain_verified"))
+	}
+}
+
+// FIX 8: a call that never got an answer must not be stamped as a definitive
+// `false`. The metadata column exists to record "the provider's answer with a
+// timestamp"; writing false for a call that failed defeats that, and a nil
+// pointer already expresses "we did not get an answer".
+func TestCheckOutboundUnknownStampsNoEnrolledVerdict(t *testing.T) {
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	maildomains.SetResolver(&stubRegistrar{err: errors.New("socket closed")})
+
+	app := newOutboundTestApp(t)
+	record := newOutboundTestRecord(t, app, "acme.com", 0)
+
+	checkOutbound(context.Background(), record)
+
+	meta := readProviderDomainMetadata(record)
+	if meta.Postmark == nil {
+		t.Fatal("expected postmark metadata to be stamped even on a failed call")
+	}
+	if meta.Postmark.Enrolled != nil {
+		t.Fatalf("enrolled = %v, want nil: the call never got an answer, so neither "+
+			"true nor false is honest", *meta.Postmark.Enrolled)
+	}
+	if meta.Postmark.CheckedAt == "" {
+		t.Error("expected checked_at to be stamped even on a failed call")
+	}
+}
+
+// FIX 2: a stale stored provider id must not deadlock the domain forever.
+// Scenario: the operator deletes and re-creates acme.com at the provider, so
+// its id moves 42 -> 99. Without a rescan the id lookup returns "not enrolled"
+// forever (GetDomain never falls back to findByName while an id is stored),
+// the badge is stuck red telling the admin to re-add a domain that exists, and
+// re-adding returns 409 "already configured on this host" — no self-service
+// recovery at all, only direct DB surgery.
+func TestCheckOutboundRelearnsStaleProviderID(t *testing.T) {
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	registrar := &sequencedRegistrar{
+		byIDErr: maildomains.ErrDomainNotEnrolled,
+		byName:  &maildomains.DomainRecords{Domain: "acme.com", ID: 99, DKIMVerified: true},
+	}
+	maildomains.SetResolver(registrar)
+
+	app := newOutboundTestApp(t)
+	record := newOutboundTestRecord(t, app, "acme.com", 42)
+
+	got := checkOutbound(context.Background(), record)
+
+	if got.Enrolled != "yes" {
+		t.Fatalf("Enrolled = %q, want %q: the by-name rescan found the re-created domain",
+			got.Enrolled, "yes")
+	}
+	// The stale id must be replaced, not merely ignored — otherwise every
+	// future check pays for the rescan and the row stays wrong on disk.
+	meta := readProviderDomainMetadata(record)
+	if meta.Postmark == nil || meta.Postmark.DomainID != 99 {
+		t.Fatalf("stored domain_id = %+v, want the re-learned 99", meta.Postmark)
+	}
+	if len(registrar.gotIDs) != 2 || registrar.gotIDs[0] != 42 || registrar.gotIDs[1] != 0 {
+		t.Fatalf("gotIDs = %v, want [42 0]: the stored id first, then a by-name rescan",
+			registrar.gotIDs)
+	}
+}
+
+// FIX 2, the other half: when the by-name rescan ALSO fails, "no" is the
+// correct answer — the provider genuinely does not have this domain. The id
+// must still be cleared, so the next check starts on the by-name path rather
+// than re-deriving "no" from an id that can never resolve again.
+func TestCheckOutboundClearsIDWhenRescanAlsoFails(t *testing.T) {
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	registrar := &sequencedRegistrar{
+		byIDErr:   maildomains.ErrDomainNotEnrolled,
+		byNameErr: maildomains.ErrDomainNotEnrolled,
+	}
+	maildomains.SetResolver(registrar)
+
+	app := newOutboundTestApp(t)
+	record := newOutboundTestRecord(t, app, "acme.com", 42)
+
+	got := checkOutbound(context.Background(), record)
+
+	if got.Enrolled != "no" {
+		t.Fatalf("Enrolled = %q, want %q after both lookups failed", got.Enrolled, "no")
+	}
+	meta := readProviderDomainMetadata(record)
+	if meta.Postmark == nil || meta.Postmark.DomainID != 0 {
+		t.Fatalf("stored domain_id = %+v, want it cleared to 0 so the next check "+
+			"falls back to a by-name scan", meta.Postmark)
+	}
+}
+
+// FIX 2 guard: a transport failure on the id lookup must NOT trigger a rescan
+// or clear the id. Only ErrDomainNotEnrolled means the id might be stale; a
+// socket error means we learned nothing, and discarding the id over it would
+// force a by-name scan on every blip.
+func TestCheckOutboundKeepsIDOnTransportFailure(t *testing.T) {
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	registrar := &sequencedRegistrar{byIDErr: errors.New("socket closed")}
+	maildomains.SetResolver(registrar)
+
+	app := newOutboundTestApp(t)
+	record := newOutboundTestRecord(t, app, "acme.com", 42)
+
+	got := checkOutbound(context.Background(), record)
+
+	if got.Enrolled != "unknown" {
+		t.Fatalf("Enrolled = %q, want %q", got.Enrolled, "unknown")
+	}
+	if len(registrar.gotIDs) != 1 {
+		t.Fatalf("gotIDs = %v, want exactly one lookup: a transport failure is not "+
+			"evidence the stored id is stale", registrar.gotIDs)
+	}
+	meta := readProviderDomainMetadata(record)
+	if meta.Postmark == nil || meta.Postmark.DomainID != 42 {
+		t.Fatalf("stored domain_id = %+v, want 42 retained", meta.Postmark)
 	}
 }

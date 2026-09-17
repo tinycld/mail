@@ -200,18 +200,57 @@ func checkOutbound(ctx context.Context, record *core.Record) api.OutboundCheckRe
 	result := api.OutboundCheckResult{}
 	rec, err := maildomains.Current().GetDomain(ctx, domain, priorID)
 
+	// A lookup BY STORED ID that comes back "not enrolled" is ambiguous: the
+	// domain may genuinely be gone, or the operator may have deleted and
+	// re-created it at the provider, which mints a NEW id and strands ours.
+	// Retrying by name distinguishes the two, and is the only self-service
+	// recovery there is — a stale id otherwise pins the row at "no" forever
+	// (GetDomain never falls back to findByName while an id is stored) while
+	// re-adding the domain returns "already configured on this host".
+	relearnedID := false
+	if priorID != 0 && errors.Is(err, maildomains.ErrDomainNotEnrolled) {
+		rec, err = maildomains.Current().GetDomain(ctx, domain, 0)
+		relearnedID = true
+	}
+
 	stamp := &postmarkDomainMetadata{DomainID: priorID, CheckedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 	switch {
+	case errors.Is(err, maildomains.ErrNotConfigured):
+		// Neither "the provider says no" nor "we could not reach the
+		// provider": this deployment has no way to ask at all. It must not
+		// read as enrolled — asserting enrollment we never checked is exactly
+		// the green-badge-on-a-dead-domain failure the three-valued type
+		// exists to prevent — so it disqualifies `verified`, and the message
+		// names the cause the admin can act on instead of blaming their DNS.
+		result.Enrolled = "no"
+		result.Error = "mail domain provisioning is not configured on this deployment; " +
+			"set the provider account credentials in settings"
+		stamp.Enrolled = nil
+		if relearnedID {
+			stamp.DomainID = 0
+		}
+		record.Set("provider_domain_metadata", providerDomainMetadata{Postmark: stamp})
+		return result
 	case errors.Is(err, maildomains.ErrDomainNotEnrolled):
 		result.Enrolled = "no"
 		result.Error = err.Error()
 		stamp.Enrolled = boolPtr(false)
+		// The by-name rescan also failed, so the stored id is worthless AND
+		// the provider genuinely does not have this domain. Clearing it keeps
+		// the next check on the by-name path rather than re-deriving "no" from
+		// an id that can never resolve again.
+		if relearnedID {
+			stamp.DomainID = 0
+		}
 		record.Set("provider_domain_metadata", providerDomainMetadata{Postmark: stamp})
 		return result
 	case err != nil:
 		result.Enrolled = "unknown"
 		result.Error = err.Error()
-		stamp.Enrolled = boolPtr(false)
+		// The call never produced an answer, so neither true nor false is
+		// honest here — a nil pointer is the column's way of saying so. A
+		// definitive `false` would claim the provider rejected the domain.
+		stamp.Enrolled = nil
 		record.Set("provider_domain_metadata", providerDomainMetadata{Postmark: stamp})
 		return result
 	}
@@ -225,9 +264,12 @@ func checkOutbound(ctx context.Context, record *core.Record) api.OutboundCheckRe
 	result.ReturnPathDomain = rec.ReturnPathDomain
 	result.ReturnPathCNAMEValue = rec.ReturnPathCNAMEValue
 
-	// A zero prior id that just resolved via the by-name fallback: persist the
-	// id the seam learned so that fallback doesn't run again next time.
-	if priorID == 0 && rec.ID != 0 {
+	// Persist whatever id the seam just resolved. Two cases reach here with a
+	// new one: a zero prior id resolved by the by-name fallback, and a stale
+	// prior id that the rescan above replaced (the provider re-created the
+	// domain under a new id). Writing it back is what stops the by-name scan
+	// running again next time.
+	if rec.ID != 0 {
 		stamp.DomainID = rec.ID
 	}
 	stamp.Enrolled = boolPtr(true)

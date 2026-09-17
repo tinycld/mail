@@ -43,6 +43,16 @@ export function buildDnsRecords(outbound?: OutboundCheckResult): DnsRecord[] {
     return records
 }
 
+// hasUnpublishedDnsRecords reports whether the panel still has something
+// actionable to show. This — not the domain's overall verdict — is what gates
+// visibility: `verified` deliberately excludes DKIM and return-path (they are
+// advisory), so gating on it hid the panel the moment MX and inbound went
+// green, taking the host/value/copy UI away while those rows were still red
+// and leaving the admin a red row with no way to fix it.
+export function hasUnpublishedDnsRecords(outbound?: OutboundCheckResult): boolean {
+    return buildDnsRecords(outbound).some(record => !record.verified)
+}
+
 export function DnsRecordsPanel({
     outbound,
     isVisible,
