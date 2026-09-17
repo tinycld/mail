@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mrz1836/postmark"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/audit"
@@ -320,10 +321,13 @@ func registerShared(app *pocketbase.PocketBase) {
 			return te.Next()
 		})
 
-		// Install the maildomains registrar for an SMTP deployment at boot;
-		// reconcileOnMailSettings / reconcileOnSystemMail keep it current
-		// afterward. A no-op on Postmark (core wires that centrally) or on a
-		// hosted composition (the seam is already claimed).
+		// Install the maildomains registrar matching the configured provider
+		// at boot; reconcileOnMailSettings / reconcileOnSystemMail keep it
+		// current afterward. Runs for both smtp and Postmark (see
+		// reconcileMailDomainsRegistrar) so a deployment that boots straight
+		// into Postmark does not rely solely on core's own wireMailDomains,
+		// which only runs once and cannot react to a later provider switch.
+		// A no-op on a hosted composition (the seam is already claimed).
 		reconcileMailDomainsRegistrar(app)
 
 		// Draft endpoint (requires auth, saves without sending)
@@ -463,19 +467,34 @@ func systemSetting(_ core.App, key string) string {
 	return syscfg.Get(key)
 }
 
-// reconcileMailDomainsRegistrar (re-)installs the maildomains registrar when
-// this deployment's configured provider is SMTP. Called once at boot and
+// reconcileMailDomainsRegistrar (re-)installs the maildomains registrar
+// matching this deployment's configured provider. Called once at boot and
 // again whenever mail/system settings change (the provider can be switched
-// to or from SMTP at runtime), mirroring how globalIMAPManager reconciles on
-// the same events — see reconcileOnMailSettings / reconcileOnSystemMail.
+// between SMTP and Postmark at runtime), mirroring how globalIMAPManager
+// reconciles on the same events — see reconcileOnMailSettings /
+// reconcileOnSystemMail.
+//
+// Must handle BOTH branches, not just smtp: SetResolver is last-writer-wins
+// with no way to "uninstall", so leaving the non-SMTP branch as a no-op
+// stranded whatever registrar was already installed (typically core's
+// Postmark one from wireMailDomains) when a deployment switched TO SMTP and
+// then back away from it — the SMTPRegistrar would keep reporting every
+// domain "enrolled" from pure DNS lookups while Postmark had never heard of
+// it. This was I1 from the final whole-branch review.
 //
 // Deliberately NOT called from newProviderFromSystem: that function runs on
 // every send/verify/webhook request, and SetResolver has nothing new to do
 // between settings changes. A hosted composition has already claimed the
 // seam with its delegating registrar before this ever runs; SetResolver is a
-// no-op there by design. Postmark's registrar is wired centrally in core
-// (wireMailDomains) since it needs the account token core alone is trusted
-// to hold — only SMTP needs its own registrar installed here.
+// no-op there by design.
+//
+// The non-SMTP (Postmark) branch constructs its own registrar here — mail
+// cannot rely solely on core's wireMailDomains, because wireMailDomains runs
+// once at boot and never again, so it alone cannot pick up a provider switch
+// made after boot. It uses the same lazy-token-accessor shape as core's
+// wireMailDomains (see maildomains.NewPostmarkRegistrar) so the registrar
+// installed here is never stale even if system settings load or change after
+// this call.
 func reconcileMailDomainsRegistrar(app core.App) {
 	name := systemSetting(app, "mail.provider")
 	if name == "" {
@@ -483,7 +502,11 @@ func reconcileMailDomainsRegistrar(app core.App) {
 	}
 	if name == "smtp" {
 		maildomains.SetResolver(NewSMTPRegistrar(smtpConfigFromSystem(app)))
+		return
 	}
+	accountToken := func() string { return systemSetting(app, "mail.postmark_account_token") }
+	client := postmark.NewClient(systemSetting(app, "mail.postmark_server_token"), accountToken())
+	maildomains.SetResolver(maildomains.NewPostmarkRegistrar(accountToken, client))
 }
 
 // newProviderFromSystem builds the provider from system settings. The provider

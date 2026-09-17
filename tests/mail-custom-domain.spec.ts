@@ -20,6 +20,13 @@ import PocketBase from 'pocketbase'
 // fills in the domain and clicks Add exactly as a user would, and the panel
 // that appears is the real component rendering real (locally-created) data,
 // not an assertion against the fixture's JSON.
+//
+// Because it intercepts POST /api/mail/domains at the network layer, this
+// spec does NOT exercise the real handleAddDomain server path (provider
+// enrollment, ErrNotConfigured / ErrDomainAlreadyEnrolled handling, the
+// actual DNS record values Postmark returns). Do not read this spec as
+// end-to-end coverage of domain enrollment — it only covers the client-side
+// settings UI rendering a mail_domains row.
 
 // PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
 // through to PB transparently — see scripts/dev.ts::isPbPath.
