@@ -12,6 +12,7 @@ import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { FormErrorSummary, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
+import * as Clipboard from 'expo-clipboard'
 import {
     CheckCircle,
     Copy,
@@ -261,11 +262,9 @@ function WebhookURLs({ domainId }: { domainId: string }) {
     })
 
     const copyUrl = async (url: string, label: string) => {
-        if (typeof navigator !== 'undefined' && navigator.clipboard) {
-            await navigator.clipboard.writeText(url)
-            setCopied(label)
-            setTimeout(() => setCopied(null), 2000)
-        }
+        await Clipboard.setStringAsync(url)
+        setCopied(label)
+        setTimeout(() => setCopied(null), 2000)
     }
 
     if (!urls) {
