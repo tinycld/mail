@@ -260,9 +260,9 @@ A 500-entry in-process LRU cache keys on the full upstream URL with a 1-hour TTL
 
 ### Notification batcher
 
-When a new `mail_messages` row is created, `bufferMailNotification` runs in a goroutine and pushes the message ID into a per-user buffer (`notify_batcher.go`). Every 2 minutes (`startMailBatcher` ticker), the buffer is drained: per user, every buffered message is collapsed into a single `mail.new` notification ("You have N new messages") dispatched via `core/notify`. This keeps mobile push storms in check when a long thread arrives.
+When a new `mail_messages` row is created, `bufferMailNotification` runs in a goroutine and pushes the message ID into a per-user buffer (`notify_batcher.go`). Every 2 minutes (`startMailBatcher` ticker), the buffer is drained per user and dispatched via `core/notify` as type `mail_new_message`. A single buffered message keeps its identity — "New mail from <sender>", with the subject as the body; two or more collapse into one "You have N new messages". This keeps mobile push storms in check when a long thread arrives.
 
-If a user has zero buffered messages when the tick fires, nothing is dispatched — no idle pings.
+Nothing is dispatched when the drained buffer is empty — either because no mail arrived, or because the user's notify mode is `important_only` and `filterImportantMail` dropped everything in it (that mode keeps only mail from a known contact).
 
 ### Cross-package coupling
 
@@ -333,7 +333,7 @@ server/
     smtp_session.go            AUTH (incl. read-only refusal), From-header ownership check, DATA → Send
     notify_batcher.go          buffered new-mail notification batcher (2 min tick)
     auth.go                    HTTP Basic auth helper
-    thread_markers.go          unread / has_attachments / first_draft markers
+    thread_markers.go          has_draft / has_attachments thread markers
     api/                       request / response payload contract (generated into @tinycld/app-generated/mail-api)
 ```
 
