@@ -295,6 +295,10 @@ func registerShared(app *pocketbase.PocketBase) {
 			return handleSend(app, re)
 		}).BindFunc(requireAuth)
 
+		// Add-domain endpoint: enrolls with the provider, then creates the row
+		// (requires auth; handler checks org admin/owner).
+		e.Router.POST("/api/mail/domains", handleAddDomain(app)).BindFunc(requireAuth)
+
 		// Domain verification endpoint (requires auth; handler checks org admin/owner)
 		e.Router.POST("/api/mail/domains/{id}/verify", func(re *core.RequestEvent) error {
 			return handleVerifyDomain(app, re)
