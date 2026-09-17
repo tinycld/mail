@@ -110,7 +110,6 @@ func runAddDomainScenario(
 
 	maildomains.ResetForTesting()
 	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(registrar)
 
 	var tokenUser *core.Record
 
@@ -131,6 +130,19 @@ func runAddDomainScenario(
 		},
 	}
 	scenario.BeforeTestFunc = func(_ testing.TB, _ *tests.TestApp, _ *core.ServeEvent) {
+		// Register only BINDS its OnServe handlers inside TestAppFactory; they
+		// don't run until ApiScenario triggers OnServe below, which is what
+		// calls Register's own boot-time reconcileMailDomainsRegistrar (see
+		// register.go) — it installs a real Postmark registrar by default
+		// (system_settings has no mail.provider row here, so it defaults to
+		// "postmark"), and that now happens for every provider, not just
+		// smtp, since I1 was fixed to reconcile both branches. BeforeTestFunc
+		// runs as the terminal handler of that same OnServe chain (see
+		// ApiScenario.test: OnServe().Trigger(event, beforeTestFunc)), i.e.
+		// AFTER reconcileMailDomainsRegistrar's handler has already run via
+		// e.Next() — so setting the stub here, not in TestAppFactory, is what
+		// makes it the one handleAddDomain actually calls through to.
+		maildomains.SetResolver(registrar)
 		if tokenUser != nil {
 			scenario.Headers["Authorization"] = authTokenFor(t, tokenUser)
 		}
