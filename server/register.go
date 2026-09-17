@@ -155,6 +155,12 @@ func registerShared(app *pocketbase.PocketBase) {
 		return e.Next()
 	})
 
+	// mail_domains carries state only the server may author: the provider's
+	// account-scoped domain id and every derived verification flag. See
+	// mail_domains_guard.go for why the collection's admin-or-owner API rules
+	// do not cover this.
+	registerMailDomainWriteGuard(app)
+
 	// Auto-generate webhook_secret for new domains
 	app.OnRecordCreate("mail_domains").BindFunc(func(e *core.RecordEvent) error {
 		if e.Record.GetString("webhook_secret") == "" {
