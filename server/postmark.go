@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/jaytaylor/html2text"
-	"github.com/mrz1836/postmark"
 	"tinycld.org/core/mailer"
 )
 
@@ -183,35 +182,6 @@ func (p *PostmarkProvider) VerifyWebhookSignature(_ map[string]string, _ []byte)
 	return nil
 }
 
-func (p *PostmarkProvider) AddDomain(ctx context.Context, domain string) (*DomainVerification, error) {
-	details, err := p.sender.Client().CreateDomain(ctx, postmark.DomainCreateRequest{
-		Name: domain,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("postmark create domain failed: %w", err)
-	}
-	return domainDetailsToVerification(details), nil
-}
-
-func (p *PostmarkProvider) CheckDomainVerification(ctx context.Context, domain string) (*DomainVerification, error) {
-	domains, err := p.sender.Client().GetDomains(ctx, 100, 0)
-	if err != nil {
-		return nil, fmt.Errorf("postmark list domains failed: %w", err)
-	}
-
-	for _, d := range domains.Domains {
-		if d.Name == domain {
-			details, err := p.sender.Client().GetDomain(ctx, d.ID)
-			if err != nil {
-				return nil, fmt.Errorf("postmark get domain failed: %w", err)
-			}
-			return domainDetailsToVerification(details), nil
-		}
-	}
-
-	return nil, fmt.Errorf("domain %q not found in Postmark", domain)
-}
-
 // CheckInboundDomain fetches the current Postmark server (the one the server
 // token belongs to) and returns its InboundDomain. This assumes one Postmark
 // server per org — if an org later runs multiple servers, this will need to
@@ -226,20 +196,6 @@ func (p *PostmarkProvider) CheckInboundDomain(ctx context.Context) (*InboundVeri
 		ServerInboundDomain: server.InboundDomain,
 		InboundAddress:      server.InboundAddress,
 	}, nil
-}
-
-func domainDetailsToVerification(d postmark.DomainDetails) *DomainVerification {
-	return &DomainVerification{
-		Domain:               d.Name,
-		ID:                   d.ID,
-		SPFVerified:          d.SPFVerified,
-		DKIMVerified:         d.DKIMVerified,
-		ReturnPathVerified:   d.ReturnPathDomainVerified,
-		DKIMHost:             d.DKIMHost,
-		DKIMTextValue:        d.DKIMTextValue,
-		ReturnPathDomain:     d.ReturnPathDomain,
-		ReturnPathCNAMEValue: d.ReturnPathDomainCNAMEValue,
-	}
 }
 
 func convertRecipients(prs []postmarkRecipient) []Recipient {

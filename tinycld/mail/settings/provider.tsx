@@ -1,6 +1,7 @@
 import { useLiveQuery } from '@tanstack/react-db'
 import { useMutation as useReactQueryMutation } from '@tanstack/react-query'
 import type {
+    AddDomainResponse,
     VerificationDetails,
     VerifyDomainResponse,
     WebhookURLsResponse,
@@ -11,6 +12,7 @@ import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { FormErrorSummary, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
+import * as Clipboard from 'expo-clipboard'
 import {
     CheckCircle,
     Copy,
@@ -21,9 +23,9 @@ import {
     Trash2,
     XCircle,
 } from 'lucide-react-native'
-import { newRecordId } from 'pbtsdb/core'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
+import { DnsRecordsPanel, hasUnpublishedDnsRecords } from './DnsRecordsPanel'
 import { assertVerifySaved } from './verify-domain'
 
 const addDomainSchema = z.object({
@@ -260,11 +262,9 @@ function WebhookURLs({ domainId }: { domainId: string }) {
     })
 
     const copyUrl = async (url: string, label: string) => {
-        if (typeof navigator !== 'undefined' && navigator.clipboard) {
-            await navigator.clipboard.writeText(url)
-            setCopied(label)
-            setTimeout(() => setCopied(null), 2000)
-        }
+        await Clipboard.setStringAsync(url)
+        setCopied(label)
+        setTimeout(() => setCopied(null), 2000)
     }
 
     if (!urls) {
@@ -434,11 +434,33 @@ function buildProviderHint(
     return 'Set this domain as the server InboundDomain in Postmark'
 }
 
-function buildOutboundHint(details: VerificationDetails | null): string {
-    return details?.outbound?.error || 'outbound sending'
+// buildOutboundHint phrases the three-valued `enrolled` state, which is the
+// whole reason that field is three-valued: "the provider rejected this domain"
+// and "we could not reach the provider" need different actions from the admin,
+// and returning the raw sentinel text for both conflated exactly the two cases
+// the type was introduced to separate. Only "no" is the admin's to fix; an
+// "unknown" says the check did not run and the row's flags are stale.
+export function buildOutboundHint(details: VerificationDetails | null): string {
+    const outbound = details?.outbound
+    const error = outbound?.error
+    if (outbound?.enrolled === 'no') {
+        return error
+            ? `Not enrolled with the mail provider — ${error}`
+            : 'Not enrolled with the mail provider'
+    }
+    if (outbound?.enrolled === 'unknown') {
+        return error
+            ? `Could not reach the mail provider, so this was not checked — ${error}`
+            : 'Could not reach the mail provider, so this was not checked'
+    }
+    return error || 'outbound sending'
 }
 
-function DomainVerificationPanel({
+// Exported for a mount test: the panel's VISIBILITY wiring is the part worth
+// pinning. `verified` excludes DKIM and return-path, so gating the DNS panel on
+// it hid the records an admin still had to publish the moment the badge went
+// green — a defect no unit test of the helper alone can catch.
+export function DomainVerificationPanel({
     domain,
     provider,
 }: {
@@ -468,6 +490,10 @@ function DomainVerificationPanel({
                 ok={domain.return_path_verified}
                 hint={outboundHint}
                 advisory
+            />
+            <DnsRecordsPanel
+                outbound={details?.outbound}
+                isVisible={hasUnpublishedDnsRecords(details?.outbound)}
             />
         </View>
     )
@@ -559,7 +585,6 @@ function DeleteDomainButton({
 
 function AddDomainForm() {
     const primaryFgColor = useThemeColor('primary-foreground')
-    const [domainsCollection] = useStore('mail_domains')
 
     const {
         control,
@@ -575,20 +600,11 @@ function AddDomainForm() {
     })
 
     const addMutation = useMutation({
-        mutationFn: mutation(function* (data: z.infer<typeof addDomainSchema>) {
-            yield domainsCollection.insert({
-                id: newRecordId(),
-                domain: data.domain,
-                verified: false,
-                mx_verified: false,
-                inbound_domain_verified: false,
-                spf_verified: false,
-                dkim_verified: false,
-                return_path_verified: false,
-                last_checked_at: '',
-                verification_details: null,
-            })
-        }),
+        mutationFn: async (data: z.infer<typeof addDomainSchema>) =>
+            pb.send<AddDomainResponse>('/api/mail/domains', {
+                method: 'POST',
+                body: { domain: data.domain },
+            }),
         onSuccess: () => reset(),
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })

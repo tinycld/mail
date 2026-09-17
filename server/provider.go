@@ -15,8 +15,14 @@ type SendResult = mailer.SendResult
 type RecipientFailure = mailer.RecipientFailure
 
 // Provider defines the pluggable email provider interface.
-// Send is delegated to the shared mailer package. The remaining methods
-// are mail-package-specific (inbound parsing, bounces, domain management).
+// Send is delegated to the shared mailer package. The remaining methods are
+// mail-package-specific (inbound parsing, bounces, inbound domain config).
+//
+// Enrolling a sending domain and reading back its verification state are NOT
+// here: those are account-credential operations, and on a hosted deployment
+// this process never holds the account token. They go through
+// tinycld.org/core/maildomains instead — see checkOutbound in
+// domain_verify.go.
 type Provider interface {
 	// Configured reports whether the provider has the credentials it needs to
 	// reach the provider API (e.g. a Postmark server token). Inbound webhook
@@ -29,8 +35,6 @@ type Provider interface {
 	ParseInbound(body []byte) (*InboundMessage, error)
 	ParseBounce(body []byte) (*BounceEvent, error)
 	VerifyWebhookSignature(headers map[string]string, body []byte) error
-	AddDomain(ctx context.Context, domain string) (*DomainVerification, error)
-	CheckDomainVerification(ctx context.Context, domain string) (*DomainVerification, error)
 	CheckInboundDomain(ctx context.Context) (*InboundVerification, error)
 }
 
@@ -74,16 +78,4 @@ type InboundAttachment struct {
 	Content     string `json:"content"`
 	ContentID   string `json:"content_id,omitempty"`
 	Size        int64  `json:"size"`
-}
-
-type DomainVerification struct {
-	Domain               string `json:"domain"`
-	ID                   int64  `json:"id"`
-	SPFVerified          bool   `json:"spf_verified"`
-	DKIMVerified         bool   `json:"dkim_verified"`
-	ReturnPathVerified   bool   `json:"return_path_verified"`
-	DKIMHost             string `json:"dkim_host,omitempty"`
-	DKIMTextValue        string `json:"dkim_text_value,omitempty"`
-	ReturnPathDomain     string `json:"return_path_domain,omitempty"`
-	ReturnPathCNAMEValue string `json:"return_path_cname_value,omitempty"`
 }
