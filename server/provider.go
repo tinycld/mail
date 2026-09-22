@@ -25,6 +25,14 @@ type Provider interface {
 	// checks will fail. Callers on those paths should reject early when this
 	// returns false rather than surfacing an opaque API error.
 	Configured() bool
+
+	// Send puts a message on the wire. Every caller MUST call
+	// checkSendAllowed (send_gate.go) immediately beforehand — that gate is
+	// what bounds an account's outbound fan-out and volume, and it is
+	// enforced only by its call sites. Two exist today, in endpoints_send.go
+	// and smtp_session.go; a third that skips the gate sends unmetered mail
+	// under this deployment's domain reputation, and no test of the normal
+	// path would notice.
 	Send(ctx context.Context, req *SendRequest) (*SendResult, error)
 	ParseInbound(body []byte) (*InboundMessage, error)
 	ParseBounce(body []byte) (*BounceEvent, error)

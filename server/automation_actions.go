@@ -476,6 +476,15 @@ const maxSendsPerMailboxPerHour = 20
 
 // checkSendRateLimit reports whether the rule has room to send one message.
 //
+// This is the automation-only loop-breaker, not the abuse gate. It asks
+// whether a mailbox is stuck exchanging auto-replies with a remote
+// autoresponder; checkSendAllowed in send_gate.go asks whether any given
+// message may go at all, and runs on every outbound path including this one.
+// Automation sends pass through both, which is correct — they answer
+// different questions and neither supersedes the other. Do not merge them:
+// this one takes a rule-shaped request that the two user-facing send paths
+// cannot supply.
+//
 // Counts messages this mailbox has actually sent in the last hour, from
 // mail_messages — the same rows the sent folder reads. Three properties
 // matter, and each was wrong in an earlier version that counted rule_runs:
