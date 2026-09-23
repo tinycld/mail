@@ -1,8 +1,12 @@
 package mail
 
 import (
+	"fmt"
+	"strconv"
+
 	"github.com/emersion/go-smtp"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/types"
 
 	"tinycld.org/core/logging"
 )
@@ -53,7 +57,99 @@ func checkSendAllowed(app core.App, userID, mailboxID string, recipientCount int
 			msg:  "too many recipients: send to at most 100 addresses per message",
 		}
 	}
+
+	ceiling := dailySendCap(app)
+	if ceiling <= 0 {
+		return nil
+	}
+
+	sent, err := sendsToday(app)
+	if err != nil {
+		// Fail CLOSED — see the header. We cannot tell whether this send is
+		// part of a spam run, and mail that has left cannot be recalled.
+		gateLog.Error("could not count today's sends; refusing the send",
+			"user", userID, "mailbox", mailboxID, "err", err)
+		return &sendError{
+			kind: sendErrForbidden,
+			msg:  "cannot verify the daily send limit right now; try again shortly",
+			err:  err,
+		}
+	}
+	if sent >= ceiling {
+		gateLog.Warn("refused an outbound message at the daily send cap",
+			"user", userID, "mailbox", mailboxID, "sentToday", sent, "cap", ceiling)
+		return &sendError{
+			kind: sendErrForbidden,
+			msg:  "this deployment has reached its daily send limit; it resets at midnight UTC",
+		}
+	}
+
 	return nil
+}
+
+// dailySendCap resolves the deployment's outbound ceiling for one UTC day.
+//
+// Read through syscfg rather than the settings collection, which is what puts
+// it out of this deployment's own reach: where an operator owns these values
+// they are never written here, and a value a deployment could edit is not a
+// limit on that deployment. It rides the mail.* namespace the provider
+// credentials already use, so an operator sets it exactly where they set the
+// Postmark token and no new channel exists to keep in step.
+//
+// Zero or unset means unlimited, matching every other ceiling in the
+// ecosystem. A value that will not parse is treated as unset and logged: the
+// alternative is refusing every send over a typo, and the operator gets a
+// loud record either way.
+func dailySendCap(app core.App) int {
+	raw := systemSetting(app, "mail.max_sends_per_day")
+	if raw == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		gateLog.Error("mail.max_sends_per_day is not a non-negative integer; treating it as unlimited",
+			"value", raw)
+		return 0
+	}
+	return n
+}
+
+// sendsToday counts the messages this deployment has handed to the provider
+// since midnight UTC.
+//
+// Two counting traps here, both learned by checkSendRateLimit before this
+// existed, and both silent when you get them wrong.
+//
+// The bound is a types.DateTime, never an RFC3339 string: PocketBase stores
+// dates as "2006-01-02 15:04:05.000Z" and compares them as TEXT, so an
+// RFC3339 literal sorts above every stored value and the filter matches
+// nothing — a cap that never engages and looks like it works.
+//
+// Only "sent" and "bounced" count. "sending" names a send in progress but is
+// storeMessage's default for an unset status, so every message arriving over
+// the inbound webhook or IMAP sync carries it; counting it would charge
+// RECEIVED mail against the send budget, and because this check fails closed
+// a busy mailbox would read as a silent outage. The synchronous send path
+// never leaves a message as "sending", so excluding it loses no coverage.
+func sendsToday(app core.App) (int, error) {
+	now := types.NowDateTime()
+	midnight, err := types.ParseDateTime(now.Time().UTC().Format("2006-01-02") + " 00:00:00.000Z")
+	if err != nil {
+		return 0, fmt.Errorf("parse midnight: %w", err)
+	}
+
+	var result struct {
+		Count int `db:"count"`
+	}
+	err = app.DB().NewQuery(`
+		SELECT COUNT(*) AS count FROM mail_messages
+		WHERE (delivery_status = 'sent' OR delivery_status = 'bounced')
+		  AND date >= {:since}
+	`).Bind(map[string]any{"since": midnight}).One(&result)
+	if err != nil {
+		return 0, fmt.Errorf("count today's sends: %w", err)
+	}
+	return result.Count, nil
 }
 
 // smtpErrorForRefusal maps a gate refusal onto an SMTP reply.
