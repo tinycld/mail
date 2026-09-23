@@ -15,6 +15,7 @@ import (
 	"tinycld.org/core/audit"
 	"tinycld.org/core/coreserver"
 	"tinycld.org/core/oauth"
+	"tinycld.org/core/outboundstats"
 	"tinycld.org/core/quota"
 	"tinycld.org/core/search"
 	"tinycld.org/core/syscfg"
@@ -75,6 +76,11 @@ func registerShared(app *pocketbase.PocketBase) {
 		Collection: "mail_messages",
 		SizeField:  "total_size",
 	})
+
+	// How much this deployment has sent, for whoever composed the app to read
+	// if they need it. We report the number and learn nothing about what is
+	// decided with it — see outboundstats.
+	outboundstats.Register("mail", sendsSince)
 
 	// Audit logging for mail collections
 	audit.RegisterCollection(app, "mail_domains", &audit.CollectionConfig{
