@@ -90,38 +90,38 @@ func seedMessage(t *testing.T, app *tests.TestApp, status string, at time.Time) 
 	}
 }
 
-func TestDailySendCap_UnsetIsUnlimited(t *testing.T) {
+func TestConfiguredDailyCap_UnsetIsUnlimited(t *testing.T) {
 	app := setupSendCapApp(t, "")
-	if got := dailySendCap(app); got != 0 {
+	if got := configuredDailyCap(app); got != 0 {
 		t.Errorf("dailySendCap = %d, want 0 (unlimited)", got)
 	}
 }
 
 // A typo must not refuse every send. The operator gets a loud log instead.
-func TestDailySendCap_UnparseableIsUnlimited(t *testing.T) {
+func TestConfiguredDailyCap_UnparseableIsUnlimited(t *testing.T) {
 	for _, bad := range []string{"lots", "-5", "3.5", " "} {
 		app := setupSendCapApp(t, bad)
-		if got := dailySendCap(app); got != 0 {
+		if got := configuredDailyCap(app); got != 0 {
 			t.Errorf("dailySendCap(%q) = %d, want 0 (unlimited)", bad, got)
 		}
 	}
 }
 
-func TestDailySendCap_ReadsTheConfiguredValue(t *testing.T) {
+func TestConfiguredDailyCap_ReadsTheConfiguredValue(t *testing.T) {
 	app := setupSendCapApp(t, "50")
-	if got := dailySendCap(app); got != 50 {
+	if got := configuredDailyCap(app); got != 50 {
 		t.Errorf("dailySendCap = %d, want 50", got)
 	}
 }
 
-func TestSendsToday_CountsSentAndBounced(t *testing.T) {
+func TestSendsSince_CountsSentAndBounced(t *testing.T) {
 	app := setupSendCapApp(t, "")
 	now := time.Now().UTC()
 
 	seedMessage(t, app, "sent", now)
 	seedMessage(t, app, "bounced", now)
 
-	got, err := sendsToday(app)
+	got, err := sendsSince(app, startOfUTCDay(time.Now()))
 	if err != nil {
 		t.Fatalf("sendsToday: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestSendsToday_CountsSentAndBounced(t *testing.T) {
 // storeMessage's default for an unset status, so every inbound webhook and
 // IMAP-synced message carries it. Counting those would charge RECEIVED mail
 // against the send budget.
-func TestSendsToday_IgnoresReceivedMail(t *testing.T) {
+func TestSendsSince_IgnoresReceivedMail(t *testing.T) {
 	app := setupSendCapApp(t, "")
 	now := time.Now().UTC()
 
@@ -144,7 +144,7 @@ func TestSendsToday_IgnoresReceivedMail(t *testing.T) {
 	seedMessage(t, app, "draft", now)
 	seedMessage(t, app, "sent", now)
 
-	got, err := sendsToday(app)
+	got, err := sendsSince(app, startOfUTCDay(time.Now()))
 	if err != nil {
 		t.Fatalf("sendsToday: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestSendsToday_IgnoresReceivedMail(t *testing.T) {
 
 // The window is today, not all time: yesterday's sends must not hold a
 // deployment at its ceiling forever.
-func TestSendsToday_ExcludesEarlierDays(t *testing.T) {
+func TestSendsSince_ExcludesEarlierDays(t *testing.T) {
 	app := setupSendCapApp(t, "")
 	now := time.Now().UTC()
 
@@ -163,7 +163,7 @@ func TestSendsToday_ExcludesEarlierDays(t *testing.T) {
 	seedMessage(t, app, "sent", now.AddDate(0, 0, -7))
 	seedMessage(t, app, "sent", now)
 
-	got, err := sendsToday(app)
+	got, err := sendsSince(app, startOfUTCDay(time.Now()))
 	if err != nil {
 		t.Fatalf("sendsToday: %v", err)
 	}
@@ -175,11 +175,11 @@ func TestSendsToday_ExcludesEarlierDays(t *testing.T) {
 // The RFC3339 trap: PocketBase compares dates as text, so a bound formatted
 // as "...T00:00:00Z" sorts above every stored value and matches nothing. If
 // this regresses, the count is always zero and the cap silently never fires.
-func TestSendsToday_CountsAnythingAtAll(t *testing.T) {
+func TestSendsSince_CountsAnythingAtAll(t *testing.T) {
 	app := setupSendCapApp(t, "")
 	seedMessage(t, app, "sent", time.Now().UTC())
 
-	got, err := sendsToday(app)
+	got, err := sendsSince(app, startOfUTCDay(time.Now()))
 	if err != nil {
 		t.Fatalf("sendsToday: %v", err)
 	}

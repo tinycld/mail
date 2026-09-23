@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/emersion/go-smtp"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/types"
 
 	"tinycld.org/core/logging"
+	"tinycld.org/core/sendquota"
 )
 
 var gateLog = logging.ForPackage("mail")
@@ -71,33 +73,59 @@ func checkSendAllowed(app core.App, userID, mailboxID string, domain *core.Recor
 		return refusal
 	}
 
-	ceiling := dailySendCap(app)
-	if ceiling <= 0 {
-		return nil
-	}
+	limits := sendLimits(app)
 
-	sent, err := sendsToday(app)
-	if err != nil {
-		// Fail CLOSED — see the header. We cannot tell whether this send is
-		// part of a spam run, and mail that has left cannot be recalled.
-		gateLog.Error("could not count today's sends; refusing the send",
-			"user", userID, "mailbox", mailboxID, "err", err)
-		return &sendError{
-			kind: sendErrForbidden,
-			msg:  "cannot verify the daily send limit right now; try again shortly",
-			err:  err,
+	// The hourly ceiling is checked first. It is normally unset, and when it
+	// is set this deployment is under review — so that is the reason its
+	// sender needs to hear, not a daily number they are nowhere near.
+	if limits.PerHour > 0 {
+		sent, err := sendsSince(app, time.Now().UTC().Add(-time.Hour))
+		if err != nil {
+			return uncountableSendRefusal(userID, mailboxID, "hour", err)
+		}
+		if sent >= limits.PerHour {
+			gateLog.Warn("refused an outbound message at the hourly send throttle",
+				"user", userID, "mailbox", mailboxID,
+				"sentThisHour", sent, "cap", limits.PerHour)
+			return &sendError{
+				kind: sendErrForbidden,
+				msg: "sending from this deployment is temporarily rate-limited while " +
+					"its recent delivery problems are reviewed; contact your administrator",
+			}
 		}
 	}
-	if sent >= ceiling {
-		gateLog.Warn("refused an outbound message at the daily send cap",
-			"user", userID, "mailbox", mailboxID, "sentToday", sent, "cap", ceiling)
-		return &sendError{
-			kind: sendErrForbidden,
-			msg:  "this deployment has reached its daily send limit; it resets at midnight UTC",
+
+	if limits.PerDay > 0 {
+		sent, err := sendsSince(app, startOfUTCDay(time.Now()))
+		if err != nil {
+			return uncountableSendRefusal(userID, mailboxID, "day", err)
+		}
+		if sent >= limits.PerDay {
+			gateLog.Warn("refused an outbound message at the daily send cap",
+				"user", userID, "mailbox", mailboxID, "sentToday", sent, "cap", limits.PerDay)
+			return &sendError{
+				kind: sendErrForbidden,
+				msg:  "this deployment has reached its daily send limit; it resets at midnight UTC",
+			}
 		}
 	}
 
 	return nil
+}
+
+// uncountableSendRefusal is the fail-CLOSED path shared by both windows.
+//
+// Logged at Error rather than Warn: a refusal at a ceiling is the system
+// working, while a ceiling that cannot be evaluated is a deployment that has
+// stopped sending for a reason nobody asked for.
+func uncountableSendRefusal(userID, mailboxID, window string, err error) *sendError {
+	gateLog.Error("could not count sends; refusing the send",
+		"user", userID, "mailbox", mailboxID, "window", window, "err", err)
+	return &sendError{
+		kind: sendErrForbidden,
+		msg:  "cannot verify the send limit right now; try again shortly",
+		err:  err,
+	}
 }
 
 // checkDomainAuthenticated refuses a send from a domain whose outbound DNS is
@@ -158,20 +186,32 @@ func checkDomainAuthenticated(domain *core.Record) *sendError {
 	}
 }
 
-// dailySendCap resolves the deployment's outbound ceiling for one UTC day.
+// sendLimits resolves this deployment's outbound ceilings.
 //
-// Read through syscfg rather than the settings collection, which is what puts
-// it out of this deployment's own reach: where an operator owns these values
-// they are never written here, and a value a deployment could edit is not a
-// limit on that deployment. It rides the mail.* namespace the provider
-// credentials already use, so an operator sets it exactly where they set the
-// Postmark token and no new channel exists to keep in step.
+// Read through core's sendquota seam rather than from this deployment's own
+// settings, which is the whole point: the hourly ceiling is a throttle
+// applied to a deployment whose mail is causing problems, and a throttle its
+// subject can raise is not a throttle.
+//
+// A standalone deployment claims nothing, so the seam resolves to unlimited
+// and this falls back to whatever the operator configured for itself. That
+// keeps the single-deployment case exactly as it was — a daily cap it sets
+// and owns — while a supervised one has both ceilings set for it.
+func sendLimits(app core.App) sendquota.SendLimits {
+	if sendquota.IsClaimed() {
+		return sendquota.Limits(app)
+	}
+	return sendquota.SendLimits{PerDay: configuredDailyCap(app)}
+}
+
+// configuredDailyCap is a standalone deployment's own daily ceiling, read
+// from the mail.* settings namespace beside the provider credentials.
 //
 // Zero or unset means unlimited, matching every other ceiling in the
 // ecosystem. A value that will not parse is treated as unset and logged: the
 // alternative is refusing every send over a typo, and the operator gets a
 // loud record either way.
-func dailySendCap(app core.App) int {
+func configuredDailyCap(app core.App) int {
 	raw := systemSetting(app, "mail.max_sends_per_day")
 	if raw == "" {
 		return 0
@@ -185,8 +225,14 @@ func dailySendCap(app core.App) int {
 	return n
 }
 
-// sendsToday counts the messages this deployment has handed to the provider
-// since midnight UTC.
+// startOfUTCDay is midnight UTC on the day `now` falls in.
+func startOfUTCDay(now time.Time) time.Time {
+	u := now.UTC()
+	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+// sendsSince counts the messages this deployment has handed to the provider
+// at or after `since`.
 //
 // Two counting traps here, both learned by checkSendRateLimit before this
 // existed, and both silent when you get them wrong.
@@ -202,11 +248,10 @@ func dailySendCap(app core.App) int {
 // RECEIVED mail against the send budget, and because this check fails closed
 // a busy mailbox would read as a silent outage. The synchronous send path
 // never leaves a message as "sending", so excluding it loses no coverage.
-func sendsToday(app core.App) (int, error) {
-	now := types.NowDateTime()
-	midnight, err := types.ParseDateTime(now.Time().UTC().Format("2006-01-02") + " 00:00:00.000Z")
+func sendsSince(app core.App, since time.Time) (int, error) {
+	bound, err := types.ParseDateTime(since.UTC().Format("2006-01-02 15:04:05.000Z"))
 	if err != nil {
-		return 0, fmt.Errorf("parse midnight: %w", err)
+		return 0, fmt.Errorf("parse window start: %w", err)
 	}
 
 	var result struct {
@@ -216,9 +261,9 @@ func sendsToday(app core.App) (int, error) {
 		SELECT COUNT(*) AS count FROM mail_messages
 		WHERE (delivery_status = 'sent' OR delivery_status = 'bounced')
 		  AND date >= {:since}
-	`).Bind(map[string]any{"since": midnight}).One(&result)
+	`).Bind(map[string]any{"since": bound}).One(&result)
 	if err != nil {
-		return 0, fmt.Errorf("count today's sends: %w", err)
+		return 0, fmt.Errorf("count sends in the window: %w", err)
 	}
 	return result.Count, nil
 }
