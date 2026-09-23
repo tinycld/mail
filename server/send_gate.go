@@ -3,6 +3,7 @@ package mail
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/emersion/go-smtp"
 	"github.com/pocketbase/pocketbase/core"
@@ -47,7 +48,7 @@ const maxRecipientsPerMessage = 100
 //
 // Takes core.App rather than *pocketbase.PocketBase so it stays testable
 // against tests.TestApp.
-func checkSendAllowed(app core.App, userID, mailboxID string, recipientCount int) *sendError {
+func checkSendAllowed(app core.App, userID, mailboxID string, domain *core.Record, recipientCount int) *sendError {
 	if recipientCount > maxRecipientsPerMessage {
 		gateLog.Warn("refused an outbound message over the recipient cap",
 			"user", userID, "mailbox", mailboxID,
@@ -56,6 +57,18 @@ func checkSendAllowed(app core.App, userID, mailboxID string, recipientCount int
 			kind: sendErrForbidden,
 			msg:  "too many recipients: send to at most 100 addresses per message",
 		}
+	}
+
+	if refusal := checkDomainAuthenticated(domain); refusal != nil {
+		// domain may be nil here — that is one of the states being refused —
+		// so the name is resolved defensively rather than off the record.
+		domainName := "<unresolved>"
+		if domain != nil {
+			domainName = domain.GetString("domain")
+		}
+		gateLog.Warn("refused an outbound message from an unauthenticated domain",
+			"user", userID, "mailbox", mailboxID, "domain", domainName)
+		return refusal
 	}
 
 	ceiling := dailySendCap(app)
@@ -85,6 +98,64 @@ func checkSendAllowed(app core.App, userID, mailboxID string, recipientCount int
 	}
 
 	return nil
+}
+
+// checkDomainAuthenticated refuses a send from a domain whose outbound DNS is
+// not fully verified.
+//
+// SPF, DKIM and the return-path CNAME are all records the sender publishes in
+// DNS for a domain they control, and the provider confirms each one. That
+// makes this the strongest filter in the gate: everything else here bounds how
+// much a sender may do, while this one asks whether they own what they claim
+// to be sending as. Someone spinning up throwaway accounts to relay spam does
+// not have DNS control of a real domain, and cannot get it cheaply.
+//
+// All three rather than DKIM alone, deliberately. SPF and DKIM are what a
+// receiving server actually evaluates, so missing either lands mail in spam
+// and teaches the recipient's filter that this deployment sends unauthenticated
+// mail — the reputation damage the whole gate exists to prevent. The
+// return-path CNAME is what routes bounces back to the provider instead of the
+// sender's own MX, which is what makes bounce and complaint handling work at
+// all; a deployment that skips it cannot see its own delivery failures.
+//
+// The flags are refreshed hourly by the re-verification ticker
+// (domain_verify_ticker.go), so a domain that has just been configured starts
+// sending within the hour without anyone intervening, and one whose DNS is
+// later removed stops.
+//
+// Deliberately NOT gated on `verified`: that field is MX and inbound-domain
+// verification — the RECEIVING side. A domain can receive perfectly while
+// being unable to prove it owns what it sends as.
+func checkDomainAuthenticated(domain *core.Record) *sendError {
+	if domain == nil {
+		// No domain record means the caller could not resolve one, which is
+		// exactly the state this gate must not send from.
+		return &sendError{
+			kind: sendErrForbidden,
+			msg:  "cannot verify the sending domain; check the domain's DNS setup in mail settings",
+		}
+	}
+
+	var missing []string
+	if !domain.GetBool("spf_verified") {
+		missing = append(missing, "SPF")
+	}
+	if !domain.GetBool("dkim_verified") {
+		missing = append(missing, "DKIM")
+	}
+	if !domain.GetBool("return_path_verified") {
+		missing = append(missing, "Return-Path")
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+
+	return &sendError{
+		kind: sendErrForbidden,
+		msg: fmt.Sprintf(
+			"this domain cannot send yet: %s not verified. Add the DNS records shown in mail settings; verification re-runs hourly.",
+			strings.Join(missing, ", ")),
+	}
 }
 
 // dailySendCap resolves the deployment's outbound ceiling for one UTC day.

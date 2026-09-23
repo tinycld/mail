@@ -41,6 +41,35 @@ func setupSendCapApp(t *testing.T, cap string) *tests.TestApp {
 	return app
 }
 
+// verifiedDomain returns a mail_domains record with all three outbound DNS
+// checks passing, so a test of some OTHER gate is not refused by the domain
+// one first.
+func verifiedDomain(t *testing.T, app *tests.TestApp) *core.Record {
+	t.Helper()
+
+	col, err := app.FindCollectionByNameOrId("mail_domains")
+	if err != nil {
+		col = core.NewBaseCollection("mail_domains")
+		col.Fields.Add(&core.TextField{Name: "domain"})
+		col.Fields.Add(&core.BoolField{Name: "spf_verified"})
+		col.Fields.Add(&core.BoolField{Name: "dkim_verified"})
+		col.Fields.Add(&core.BoolField{Name: "return_path_verified"})
+		if err := app.Save(col); err != nil {
+			t.Fatalf("save mail_domains: %v", err)
+		}
+	}
+
+	rec := core.NewRecord(col)
+	rec.Set("domain", "example.com")
+	rec.Set("spf_verified", true)
+	rec.Set("dkim_verified", true)
+	rec.Set("return_path_verified", true)
+	if err := app.Save(rec); err != nil {
+		t.Fatalf("seed domain: %v", err)
+	}
+	return rec
+}
+
 // seedMessage writes one mail_messages row with the given status and age.
 func seedMessage(t *testing.T, app *tests.TestApp, status string, at time.Time) {
 	t.Helper()
@@ -165,7 +194,7 @@ func TestCheckSendAllowed_AllowsUnderTheDailyCap(t *testing.T) {
 	seedMessage(t, app, "sent", now)
 	seedMessage(t, app, "sent", now)
 
-	if refusal := checkSendAllowed(app, "u1", "mb1", 1); refusal != nil {
+	if refusal := checkSendAllowed(app, "u1", "mb1", verifiedDomain(t, app), 1); refusal != nil {
 		t.Errorf("under the cap must be allowed, got %v", refusal)
 	}
 }
@@ -177,7 +206,7 @@ func TestCheckSendAllowed_RefusesAtTheDailyCap(t *testing.T) {
 		seedMessage(t, app, "sent", now)
 	}
 
-	refusal := checkSendAllowed(app, "u1", "mb1", 1)
+	refusal := checkSendAllowed(app, "u1", "mb1", verifiedDomain(t, app), 1)
 	if refusal == nil {
 		t.Fatal("the fourth send must be refused at a cap of 3")
 	}
@@ -197,7 +226,7 @@ func TestCheckSendAllowed_NoCapNeverRefuses(t *testing.T) {
 		seedMessage(t, app, "sent", now)
 	}
 
-	if refusal := checkSendAllowed(app, "u1", "mb1", 1); refusal != nil {
+	if refusal := checkSendAllowed(app, "u1", "mb1", verifiedDomain(t, app), 1); refusal != nil {
 		t.Errorf("with no cap configured nothing may be refused, got %v", refusal)
 	}
 }
@@ -214,7 +243,7 @@ func TestCheckSendAllowed_FailsClosedWhenTheCountFails(t *testing.T) {
 		t.Fatalf("drop mail_messages: %v", err)
 	}
 
-	refusal := checkSendAllowed(app, "u1", "mb1", 1)
+	refusal := checkSendAllowed(app, "u1", "mb1", verifiedDomain(t, app), 1)
 	if refusal == nil {
 		t.Fatal("an uncountable send budget must REFUSE, not allow — see the gate's header")
 	}
@@ -229,7 +258,7 @@ func TestCheckSendAllowed_RecipientCapRunsFirst(t *testing.T) {
 	app := setupSendCapApp(t, "1")
 	seedMessage(t, app, "sent", time.Now().UTC())
 
-	refusal := checkSendAllowed(app, "u1", "mb1", maxRecipientsPerMessage+1)
+	refusal := checkSendAllowed(app, "u1", "mb1", verifiedDomain(t, app), maxRecipientsPerMessage+1)
 	if refusal == nil {
 		t.Fatal("an oversized recipient list must be refused")
 	}

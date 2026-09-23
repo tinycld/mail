@@ -214,7 +214,7 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 
 	// The abuse gate runs above the demo branch on purpose, so a demo account
 	// exercises the same refusals without real provider credentials.
-	if refusal := checkSendAllowed(app, p.UserID, p.MailboxID, len(p.To)+len(p.Cc)+len(p.Bcc)); refusal != nil {
+	if refusal := checkSendAllowed(app, p.UserID, p.MailboxID, domainRecord, len(p.To)+len(p.Cc)+len(p.Bcc)); refusal != nil {
 		return nil, refusal
 	}
 
