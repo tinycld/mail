@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/mail"
+	"strconv"
 	"time"
 
 	"github.com/jaytaylor/html2text"
@@ -149,12 +150,16 @@ func (p *PostmarkProvider) ParseInbound(body []byte) (*InboundMessage, error) {
 }
 
 type postmarkBouncePayload struct {
+	ID          int64  `json:"ID"`
 	RecordType  string `json:"RecordType"`
 	Type        string `json:"Type"`
+	TypeCode    int    `json:"TypeCode"`
 	MessageID   string `json:"MessageID"`
 	Description string `json:"Description"`
 	Details     string `json:"Details"`
+	From        string `json:"From"`
 	Email       string `json:"Email"`
+	Inactive    bool   `json:"Inactive"`
 	BouncedAt   string `json:"BouncedAt"`
 }
 
@@ -169,11 +174,23 @@ func (p *PostmarkProvider) ParseBounce(body []byte) (*BounceEvent, error) {
 		description = description + ": " + payload.Details
 	}
 
+	// The ID travels as a string because it is only ever an opaque key to
+	// deduplicate on, and a provider that later widens or prefixes it should
+	// not force a type change on everything that stores one.
+	var id string
+	if payload.ID != 0 {
+		id = strconv.FormatInt(payload.ID, 10)
+	}
+
 	return &BounceEvent{
+		ID:          id,
 		RecordType:  payload.RecordType,
 		BounceType:  payload.Type,
+		TypeCode:    payload.TypeCode,
 		MessageID:   payload.MessageID,
+		From:        payload.From,
 		Email:       payload.Email,
+		Inactive:    payload.Inactive,
 		Description: description,
 		BouncedAt:   payload.BouncedAt,
 	}, nil

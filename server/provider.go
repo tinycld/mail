@@ -52,10 +52,35 @@ type InboundVerification struct {
 
 // BounceEvent represents a parsed bounce or spam complaint notification.
 type BounceEvent struct {
-	RecordType  string `json:"record_type"`
-	BounceType  string `json:"bounce_type"`
-	MessageID   string `json:"message_id"`
-	Email       string `json:"email"`
+	// ID is the provider's own identifier for this notification. Providers
+	// retry, and an operator can replay from a dashboard, so anything that
+	// COUNTS bounces must deduplicate on it — overwriting a message's status
+	// twice is harmless, adding to a tally twice is not.
+	ID string `json:"id"`
+
+	RecordType string `json:"record_type"`
+
+	// BounceType is the provider's display name for the kind of failure
+	// ("HardBounce", "SoftBounce", "SpamNotification", …). TypeCode is the
+	// stable numeric form of the same thing; prefer it and fall back to this,
+	// because a display string is free to change in a way a code is not.
+	BounceType string `json:"bounce_type"`
+	TypeCode   int    `json:"type_code"`
+
+	MessageID string `json:"message_id"`
+
+	// From is the address the failed message was sent AS. The recipient is in
+	// Email; this is the sender, and it is what lets something outside this
+	// deployment attribute a bounce back to whoever sent it.
+	From string `json:"from"`
+
+	Email string `json:"email"`
+
+	// Inactive reports that the provider has suppressed this address as a
+	// result of the failure. A stronger signal than the bounce alone: the
+	// provider has decided not to try again.
+	Inactive bool `json:"inactive"`
+
 	Description string `json:"description"`
 	BouncedAt   string `json:"bounced_at"`
 }
