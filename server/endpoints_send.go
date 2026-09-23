@@ -212,6 +212,12 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 		Attachments: p.Attachments,
 	}
 
+	// The abuse gate runs above the demo branch on purpose, so a demo account
+	// exercises the same refusals without real provider credentials.
+	if refusal := checkSendAllowed(app, p.UserID, p.MailboxID, len(p.To)+len(p.Cc)+len(p.Bcc)); refusal != nil {
+		return nil, refusal
+	}
+
 	var result *SendResult
 	if coreserver.IsDemoUser(app, p.UserID) {
 		// Demo accounts: skip the provider call but synthesize a result so
@@ -250,6 +256,7 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 		MessageID:      result.MessageID,
 		InReplyTo:      inReplyToHeader,
 		Alias:          p.AliasID,
+		SentBy:         p.UserID,
 		SenderName:     displayName,
 		SenderEmail:    senderEmail,
 		To:             toMailerRecipients(p.To),

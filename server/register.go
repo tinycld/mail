@@ -91,6 +91,7 @@ func registerShared(app *pocketbase.PocketBase) {
 	// delete) — an ownerless mailbox is unmanageable. Server backstop for the
 	// drawer's client-side checks.
 	registerMailboxLastOwnerGuard(app)
+	registerSentByGuard(app)
 
 	// Personal automation rules need to know which users an arriving message
 	// belongs to; mail_messages has no direct user FK so the generic

@@ -146,6 +146,9 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 	if msg.Alias != "" {
 		record.Set("alias", msg.Alias)
 	}
+	if msg.SentBy != "" {
+		record.Set("sent_by", msg.SentBy)
+	}
 	record.Set("sender_name", msg.SenderName)
 	record.Set("sender_email", msg.SenderEmail)
 	record.Set("date", msg.Date)
@@ -265,9 +268,14 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 
 // storedMessage is the internal representation passed to storeMessage.
 type storedMessage struct {
-	MessageID      string
-	InReplyTo      string
-	Alias          string
+	MessageID string
+	InReplyTo string
+	Alias     string
+	// SentBy is the user who sent this message. Empty for inbound mail and
+	// for anything stored before the sent_by migration — a reader must treat
+	// "" as unknown, never as a claim about who sent it. The shared mailbox
+	// means SenderEmail cannot answer this.
+	SentBy         string
 	References     string
 	SenderName     string
 	SenderEmail    string

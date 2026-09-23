@@ -314,6 +314,19 @@ func (s *smtpSession) Data(r io.Reader) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Count the true fan-out: header To/Cc plus the envelope-only Bcc derived
+	// above. Not len(s.recipients), which includes addresses already in To/Cc
+	// and would double-count them.
+	//
+	// Unlike the persistence failures further down, a refusal here MUST be
+	// returned. Those return nil because provider.Send already succeeded — the
+	// mail was delivered and only the local copy failed. This gate sits above
+	// the send, so refusing and returning nil would accept the message from
+	// the client and silently drop it.
+	if refusal := checkSendAllowed(s.app, s.user.Id, s.mailbox.Id, len(msg.To)+len(msg.Cc)+len(bcc)); refusal != nil {
+		return smtpErrorForRefusal(refusal)
+	}
+
 	var result *SendResult
 	if s.user != nil && coreserver.IsDemoUser(s.app, s.user.Id) {
 		// Demo user: skip relay, synthesize a result so the local Sent-folder
@@ -355,11 +368,19 @@ func (s *smtpSession) Data(r io.Reader) error {
 		return nil
 	}
 
-	deliveryStatus, bounceReason := deliveryStatusForResult(result, len(msg.To)+len(msg.Cc)+len(s.recipients))
+	// Same deduped count the gate uses: s.recipients is the full envelope and
+	// repeats every address that also appears in To/Cc, so counting it here
+	// inflated the total. deliveryStatusForResult marks a message "bounced"
+	// only when len(FailedRecipients) >= totalRecipients, so an inflated
+	// total meant a send whose every recipient failed was still recorded
+	// "sent" — one address in both the header and the envelope counted twice,
+	// and 1 >= 2 is false.
+	deliveryStatus, bounceReason := deliveryStatusForResult(result, len(msg.To)+len(msg.Cc)+len(bcc))
 
 	storedMsg := &storedMessage{
 		MessageID:      result.MessageID,
 		InReplyTo:      inReplyToHeader,
+		SentBy:         s.user.Id,
 		SenderName:     displayName,
 		SenderEmail:    fmt.Sprintf("%s@%s", senderAddress, domainName),
 		To:             msg.To,
