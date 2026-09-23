@@ -323,7 +323,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 	// mail was delivered and only the local copy failed. This gate sits above
 	// the send, so refusing and returning nil would accept the message from
 	// the client and silently drop it.
-	if refusal := checkSendAllowed(s.app, s.user.Id, s.mailbox.Id, len(msg.To)+len(msg.Cc)+len(bcc)); refusal != nil {
+	if refusal := checkSendAllowed(s.app, s.user.Id, s.mailbox.Id, s.domain, len(msg.To)+len(msg.Cc)+len(bcc)); refusal != nil {
 		return smtpErrorForRefusal(refusal)
 	}
 

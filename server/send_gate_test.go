@@ -12,7 +12,10 @@ import (
 )
 
 func TestCheckSendAllowed_AllowsUnderTheCap(t *testing.T) {
-	if refusal := checkSendAllowed(nil, "u1", "mb1", maxRecipientsPerMessage-1); refusal != nil {
+	app := setupSendCapApp(t, "")
+	domain := verifiedDomain(t, app)
+
+	if refusal := checkSendAllowed(app, "u1", "mb1", domain, maxRecipientsPerMessage-1); refusal != nil {
 		t.Fatalf("under the cap must be allowed, got %v", refusal)
 	}
 }
@@ -21,13 +24,18 @@ func TestCheckSendAllowed_AllowsUnderTheCap(t *testing.T) {
 // matches the Rcpt handler, which refuses the recipient that would make the
 // list exceed 100 rather than the hundredth itself.
 func TestCheckSendAllowed_AllowsExactlyTheCap(t *testing.T) {
-	if refusal := checkSendAllowed(nil, "u1", "mb1", maxRecipientsPerMessage); refusal != nil {
+	app := setupSendCapApp(t, "")
+	domain := verifiedDomain(t, app)
+
+	if refusal := checkSendAllowed(app, "u1", "mb1", domain, maxRecipientsPerMessage); refusal != nil {
 		t.Fatalf("exactly the cap must be allowed, got %v", refusal)
 	}
 }
 
 func TestCheckSendAllowed_RefusesOverTheCap(t *testing.T) {
-	refusal := checkSendAllowed(nil, "u1", "mb1", maxRecipientsPerMessage+1)
+	// nil app and nil domain on purpose: the recipient cap is the first check
+	// in the gate, so it must refuse without reaching either.
+	refusal := checkSendAllowed(nil, "u1", "mb1", nil, maxRecipientsPerMessage+1)
 	if refusal == nil {
 		t.Fatal("over the cap must be refused")
 	}
