@@ -18,9 +18,11 @@ import (
 // successor is already a member. So mail settles ownership itself, mailbox by
 // mailbox, inside the offboard transaction.
 //
-// Personal mailboxes are out of scope here: the leaver's inbox stays with the
-// anonymized account, and handleUserDeleted sweeps one only after a real
-// users delete leaves it memberless.
+// The leaver's personal mailbox is deleted, in every mode: it is the leaver's
+// own address, and it must not stay live on an account nobody can sign in to.
+// A reassign plan moves authored content, not an inbox, so the successor gets
+// no copy. The delete cascades to the memberships of anyone the leaver shared
+// the mailbox with.
 
 // soleOwnedMailbox is a shared mailbox where the user is the only owner.
 // OtherMembers counts the members that are not the user: when it is zero,
@@ -72,13 +74,24 @@ func mailboxHeir(leaverID string, plan offboard.Plan, actorUserID string) string
 	return actorUserID
 }
 
-// handOverSoleOwnedMailboxes is mail's offboard.Handler. It only adds or
+// offboardMail is mail's offboard.Handler. It first settles the shared
+// mailboxes, which can refuse the whole offboard, then deletes the leaver's
+// personal mailboxes.
+func offboardMail(txApp core.App, leaver *core.Record, plan offboard.Plan, actorUserID string) error {
+	if err := handOverSoleOwnedMailboxes(txApp, leaver, plan, actorUserID); err != nil {
+		return err
+	}
+	return deletePersonalMailboxesOf(txApp, leaver.Id)
+}
+
+// handOverSoleOwnedMailboxes settles the shared mailboxes. It only adds or
 // upgrades the heir's membership: it never deletes a mailbox, a message or a
 // membership, and it leaves every mailbox that has another owner alone.
 //
-// With no heir (a self-delete in delete-my-data mode) it follows core's
-// last-owner guard: refuse, and tell the user what to do first. A shared
-// mailbox nobody else uses is left as it is, because no one loses access.
+// With no heir (a self-delete in delete-my-data or keep mode, keep being an
+// account delete with no plan) it follows core's last-owner guard: refuse,
+// and tell the user what to do first. A shared mailbox nobody else uses is
+// left as it is, because no one loses access.
 func handOverSoleOwnedMailboxes(txApp core.App, leaver *core.Record, plan offboard.Plan, actorUserID string) error {
 	owned, err := findSoleOwnedSharedMailboxes(txApp, leaver.Id)
 	if err != nil {
@@ -93,7 +106,8 @@ func handOverSoleOwnedMailboxes(txApp core.App, leaver *core.Record, plan offboa
 		for _, mb := range owned {
 			if mb.OtherMembers > 0 {
 				return fmt.Errorf("%w: you are the only owner of the shared mailbox %q, which other people use. "+
-					"Make one of them an owner, or choose a successor for your content, before you delete your account",
+					"Make one of them an owner or delete the mailbox, or choose a successor for your content, "+
+					"before you delete your account",
 					offboard.ErrInvalidPlan, mb.label())
 			}
 		}

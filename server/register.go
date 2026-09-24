@@ -97,9 +97,11 @@ func registerShared(app *pocketbase.PocketBase) {
 	// may become a new shared mailbox's first owner.
 	registerMailboxCreatorGuard(app)
 	// A shared mailbox whose only owner leaves must get a new owner, and a
-	// direct users delete must not strip one away. See offboard.go.
-	offboard.RegisterHandler("mail", handOverSoleOwnedMailboxes)
+	// direct users delete must not strip one away. The leaver's personal
+	// mailbox goes with the account on both paths. See offboard.go.
+	offboard.RegisterHandler("mail", offboardMail)
 	registerSoleOwnerDeleteGuard(app)
+	registerPersonalMailboxCleanup(app)
 
 	// Personal automation rules need to know which users an arriving message
 	// belongs to; mail_messages has no direct user FK so the generic
