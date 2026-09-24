@@ -24,8 +24,10 @@ export function registerCollections(
         collectionOptions: indexing,
     })
 
+    // created_by is server-owned: mailbox_creator_guard.go sets it to the
+    // caller, because the members bootstrap rule trusts it.
     const mail_mailboxes = newCollection('mail_mailboxes', {
-        omitOnInsert: ['created', 'updated'] as const,
+        omitOnInsert: ['created', 'updated', 'created_by'] as const,
         relations: { domain: mail_domains },
         collectionOptions: indexing,
     })

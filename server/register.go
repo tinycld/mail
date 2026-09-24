@@ -92,6 +92,9 @@ func registerShared(app *pocketbase.PocketBase) {
 	// drawer's client-side checks.
 	registerMailboxLastOwnerGuard(app)
 	registerSentByGuard(app)
+	// Pins created_by, which the members bootstrap rule trusts to decide who
+	// may become a new shared mailbox's first owner.
+	registerMailboxCreatorGuard(app)
 
 	// Personal automation rules need to know which users an arriving message
 	// belongs to; mail_messages has no direct user FK so the generic
