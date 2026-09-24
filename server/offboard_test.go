@@ -236,8 +236,8 @@ func TestMailOffboard_GuestSuccessorRefused(t *testing.T) {
 }
 
 // D: a direct REST delete of your own account, while you are the only owner of
-// a shared mailbox other people use, is refused and points at
-// /api/account/delete.
+// a shared mailbox other people use, is refused and points at account
+// settings.
 func TestMailUserDeleteGuard_RefusesSoleOwnerOfSharedMailbox(t *testing.T) {
 	env := setupMailOffboardApp(t)
 
@@ -246,7 +246,7 @@ func TestMailUserDeleteGuard_RefusesSoleOwnerOfSharedMailbox(t *testing.T) {
 		URL:                   "/api/collections/users/records/" + env.owner.Id,
 		Headers:               map[string]string{"Authorization": env.ownerToken},
 		ExpectedStatus:        http.StatusForbidden,
-		ExpectedContent:       []string{`/api/account/delete`, `Support`},
+		ExpectedContent:       []string{`account settings`, `Support`},
 		TestAppFactory:        func(testing.TB) *tests.TestApp { return env.app },
 		DisableTestAppCleanup: true,
 	}).Test(t)

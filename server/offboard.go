@@ -188,9 +188,9 @@ func registerSoleOwnerDeleteGuard(app core.App) {
 		for _, mb := range owned {
 			if mb.OtherMembers > 0 {
 				return e.ForbiddenError(fmt.Sprintf(
-					"This account is the only owner of the shared mailbox %q, which other people use. "+
-						"Make one of them an owner first, or delete the account through "+
-						"/api/account/delete, which hands the mailbox over.", mb.label()), nil)
+					"You are the only owner of a shared mailbox %q other people use. "+
+						"Make someone else an owner, delete the mailbox, or delete your account "+
+						"through account settings and choose a successor.", mb.label()), nil)
 			}
 		}
 		return e.Next()
