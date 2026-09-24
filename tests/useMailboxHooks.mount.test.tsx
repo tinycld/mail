@@ -82,11 +82,16 @@ vi.mock('@tinycld/core/lib/auth', () => ({
 }))
 
 vi.mock('@tinycld/core/lib/pocketbase', async () => {
-    const { createCollection, localOnlyCollectionOptions } = await import('@tanstack/db')
+    const { BasicIndex, createCollection, localOnlyCollectionOptions } = await import(
+        '@tanstack/db'
+    )
+    // Index like the real collections (core/lib/pocketbase.ts) so joins do not fall back to a scan.
     const mk = (id: string, initialData: { id: string }[]) =>
-        createCollection(
-            localOnlyCollectionOptions({ id, getKey: (r: { id: string }) => r.id, initialData })
-        )
+        createCollection({
+            ...localOnlyCollectionOptions({ id, getKey: (r: { id: string }) => r.id, initialData }),
+            autoIndex: 'eager',
+            defaultIndexType: BasicIndex,
+        })
     const stores: Record<string, unknown> = {
         mail_domains: mk('mail_domains', h.domains),
         mail_mailboxes: mk('mail_mailboxes', h.mailboxes),
