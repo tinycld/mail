@@ -37,10 +37,9 @@ export function useSearchThreadItems(
     // Bounded to the hits actually being rendered — see the collection note in
     // collections.ts for why this must not read the whole collection.
     const resultThreadIds = useMemo(() => results.map(result => result.thread_id), [results])
-    const resultThreadIdsKey = resultThreadIds.join(',')
 
-    const { data: threadStates } = useLiveQuery(
-        query =>
+    const { data: threadStates } = useLiveQuery({
+        query: query =>
             resultThreadIds.length === 0
                 ? undefined
                 : query
@@ -51,8 +50,7 @@ export function useSearchThreadItems(
                               inArray(mail_thread_state.thread, resultThreadIds)
                           )
                       ),
-        [currentUserId, resultThreadIdsKey]
-    )
+    })
 
     const { data: allAssignments } = useMyLiveQuery((query, { userId }) =>
         query

@@ -46,13 +46,12 @@ export function useMailSendReadiness(): MailSendReadiness {
     const mailboxId =
         members?.find(m => m.type === 'personal')?.mailbox ?? members?.[0]?.mailbox ?? null
 
-    const { data: mailboxes } = useLiveQuery(
-        query =>
+    const { data: mailboxes } = useLiveQuery({
+        query: query =>
             query
                 .from({ mail_mailboxes: mailboxesCollection })
                 .where(({ mail_mailboxes }) => eq(mail_mailboxes.id, mailboxId ?? '')),
-        [mailboxId]
-    )
+    })
 
     // Identity-based resolution: `mailboxes` from a prior render's filter may
     // still be in the result set while the query catches up to the new
@@ -63,13 +62,12 @@ export function useMailSendReadiness(): MailSendReadiness {
     const mailbox = mailboxes?.find(m => m.id === mailboxId) ?? null
     const domainId = mailbox?.domain ?? null
 
-    const { data: domains } = useLiveQuery(
-        query =>
+    const { data: domains } = useLiveQuery({
+        query: query =>
             query
                 .from({ mail_domains: domainsCollection })
                 .where(({ mail_domains }) => eq(mail_domains.id, domainId ?? '')),
-        [domainId]
-    )
+    })
 
     const domain = domains?.find(d => d.id === domainId) ?? null
 
