@@ -108,22 +108,31 @@ const serializeWhere = (where: unknown): string => {
     })
 }
 
+// Each entry records the call form too: the hook must use the object form
+// (`{ query }`), while core's useMyLiveQuery may still pass `(fn, deps)`.
+type QueryFn = (q: never) => { query?: { from?: unknown; where?: unknown } } | null | undefined
+
+const recordQuery = (fn: QueryFn, form: 'object' | 'deps') => (q: never) => {
+    const built = fn(q)
+    if (built?.query) {
+        seenQueries.push(
+            `${form}|${serializeWhere(built.query.from)}|${serializeWhere(built.query.where)}`
+        )
+    }
+    return built as never
+}
+
 vi.mock('@tanstack/react-db', async () => {
     const actual = await vi.importActual<typeof import('@tanstack/react-db')>('@tanstack/react-db')
     return {
         ...actual,
-        useLiveQuery: (fn: unknown, deps: unknown[]) =>
-            actual.useLiveQuery((q: never) => {
-                const built = (fn as (q: never) => { query?: { from?: unknown; where?: unknown } })(
-                    q
-                )
-                if (built?.query) {
-                    seenQueries.push(
-                        `${serializeWhere(built.query.from)}|${serializeWhere(built.query.where)}`
-                    )
-                }
-                return built as never
-            }, deps),
+        useLiveQuery: (arg: QueryFn | { query: QueryFn }, deps?: unknown[]) => {
+            const config =
+                typeof arg === 'function'
+                    ? recordQuery(arg, deps ? 'deps' : 'object')
+                    : { ...arg, query: recordQuery(arg.query, 'object') }
+            return actual.useLiveQuery(config as never, deps as never)
+        },
     }
 })
 
@@ -178,4 +187,32 @@ test('an empty result set resolves no rows and issues no unbounded query', async
     const { result } = renderHook(() => useSearchThreadItems('u1', []))
 
     await waitFor(() => expect(result.current).toEqual([]))
+})
+
+// The object form derives query identity from the query IR, so new ids in the
+// results must re-run the query without a deps array.
+test('re-runs the thread_state query when the results change', async () => {
+    const { result, rerender } = renderHook(
+        ({ results }: { results: MailSearchResult[] }) => useSearchThreadItems('u1', results),
+        { initialProps: { results: [hit('thread_hit1', 'First')] } }
+    )
+
+    await waitFor(() => expect(result.current.map(r => r.stateId)).toEqual(['ts_hit1']))
+
+    rerender({ results: [hit('thread_hit2', 'Second')] })
+
+    await waitFor(() => expect(result.current.map(r => r.stateId)).toEqual(['ts_hit2']))
+})
+
+test('the thread_state query uses the object form of useLiveQuery', async () => {
+    // Match on the FROM part only: the label query also names mail_thread_state
+    // in its WHERE clause.
+    const readsThreadState = (q: string) => q.split('|')[1]?.includes('mail_thread_state')
+
+    renderHook(() => useSearchThreadItems('u1', [hit('thread_hit1', 'First')]))
+
+    await waitFor(() => expect(seenQueries.some(readsThreadState)).toBe(true))
+
+    const forms = seenQueries.filter(readsThreadState).map(q => q.split('|')[0])
+    expect(new Set(forms)).toEqual(new Set(['object']))
 })

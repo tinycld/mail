@@ -21,13 +21,12 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
     const [aliasesCollection] = useStore('mail_mailbox_aliases')
     const [showForm, setShowForm] = useState(false)
 
-    const { data: aliases } = useLiveQuery(
-        query =>
+    const { data: aliases } = useLiveQuery({
+        query: query =>
             query
                 .from({ mail_mailbox_aliases: aliasesCollection })
                 .where(({ mail_mailbox_aliases }) => eq(mail_mailbox_aliases.mailbox, mailboxId)),
-        [mailboxId]
-    )
+    })
 
     const remove = useMutation({
         mutationFn: mutation(function* (aliasId: string) {

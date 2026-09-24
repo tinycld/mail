@@ -32,13 +32,12 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
         'mail_mailboxes'
     )
 
-    const { data: mailboxesInDomain } = useLiveQuery(
-        query =>
+    const { data: mailboxesInDomain } = useLiveQuery({
+        query: query =>
             query
                 .from({ mail_mailboxes: mailboxesCollection })
                 .where(({ mail_mailboxes }) => eq(mail_mailboxes.domain, mailboxDomainId)),
-        [mailboxDomainId]
-    )
+    })
     const { data: aliasesAll } = useLiveQuery(query =>
         query.from({ mail_mailbox_aliases: aliasesCollection })
     )

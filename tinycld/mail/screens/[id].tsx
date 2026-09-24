@@ -76,13 +76,12 @@ export default function MailDetailScreen() {
 
     const threadState = threadStates?.[0]
 
-    const { data: threads } = useLiveQuery(
-        query =>
+    const { data: threads } = useLiveQuery({
+        query: query =>
             query
                 .from({ mail_threads: threadsCollection })
                 .where(({ mail_threads }) => eq(mail_threads.id, id)),
-        [id]
-    )
+    })
     const thread = threads?.[0]
 
     const { personal, shared } = useMailboxes()
@@ -100,14 +99,13 @@ export default function MailDetailScreen() {
         for (const a of id.aliases) ownAddresses.add(a.address.toLowerCase())
     }
 
-    const { data: messages } = useLiveQuery(
-        query =>
+    const { data: messages } = useLiveQuery({
+        query: query =>
             query
                 .from({ mail_messages: messagesCollection })
                 .where(({ mail_messages }) => eq(mail_messages.thread, id))
                 .orderBy(({ mail_messages }) => mail_messages.date, 'asc'),
-        [id]
-    )
+    })
 
     const tabLeaf = messages?.[0]?.subject
 
