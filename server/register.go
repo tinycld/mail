@@ -15,6 +15,7 @@ import (
 	"tinycld.org/core/audit"
 	"tinycld.org/core/coreserver"
 	"tinycld.org/core/oauth"
+	"tinycld.org/core/offboard"
 	"tinycld.org/core/outboundstats"
 	"tinycld.org/core/quota"
 	"tinycld.org/core/search"
@@ -98,6 +99,15 @@ func registerShared(app *pocketbase.PocketBase) {
 	// drawer's client-side checks.
 	registerMailboxLastOwnerGuard(app)
 	registerSentByGuard(app)
+	// Pins created_by, which the members bootstrap rule trusts to decide who
+	// may become a new shared mailbox's first owner.
+	registerMailboxCreatorGuard(app)
+	// A shared mailbox whose only owner leaves must get a new owner, and a
+	// direct users delete must not strip one away. The leaver's personal
+	// mailbox goes with the account on both paths. See offboard.go.
+	offboard.RegisterHandler("mail", offboardMail)
+	registerSoleOwnerDeleteGuard(app)
+	registerPersonalMailboxCleanup(app)
 
 	// Personal automation rules need to know which users an arriving message
 	// belongs to; mail_messages has no direct user FK so the generic

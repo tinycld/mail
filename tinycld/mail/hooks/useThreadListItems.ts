@@ -95,19 +95,18 @@ export function useThreadListItems(
     // coMembers is never consulted). Return undefined from the queryFn so the
     // hook skips the subscription entirely instead of opening two dead live
     // queries on every unified-inbox mount.
-    const { data: targetMailbox } = useLiveQuery(
-        query =>
+    const { data: targetMailbox } = useLiveQuery({
+        query: query =>
             isUnified
                 ? undefined
                 : query
                       .from({ mail_mailboxes: mailboxesCollection })
                       .where(({ mail_mailboxes }) => eq(mail_mailboxes.id, filter.mailboxId)),
-        [filter.mailboxId, isUnified]
-    )
+    })
     const mailboxType = targetMailbox?.[0]?.type ?? 'personal'
 
-    const { data: coMembers } = useLiveQuery(
-        query =>
+    const { data: coMembers } = useLiveQuery({
+        query: query =>
             isUnified
                 ? undefined
                 : query
@@ -115,8 +114,7 @@ export function useThreadListItems(
                       .where(({ mail_mailbox_members }) =>
                           eq(mail_mailbox_members.mailbox, filter.mailboxId)
                       ),
-        [filter.mailboxId, isUnified]
-    )
+    })
 
     // The mailbox-id set the page query restricts threads to. For unified inbox
     // it's every mailbox the user belongs to; otherwise just the active one.
@@ -177,13 +175,12 @@ export function useThreadListItems(
 
     // Bounded to the rendered page: mail_thread_state is on-demand, so this
     // translates to a server-side filter over ~PAGE_SIZE ids rather than a
-    // whole-mailbox sync. Keyed on the joined ids so a page change refetches
-    // but a re-render with the same page does not.
+    // whole-mailbox sync. The query identity hashes the ids, so a page change
+    // refetches but a re-render with the same page does not.
     const pageThreadIds = useMemo(() => pageThreads.map(thread => thread.id), [pageThreads])
-    const pageThreadIdsKey = pageThreadIds.join(',')
 
-    const { data: threadStates, isLoading: threadStatesLoading } = useLiveQuery(
-        query =>
+    const { data: threadStates, isLoading: threadStatesLoading } = useLiveQuery({
+        query: query =>
             pageThreadIds.length === 0
                 ? undefined
                 : query
@@ -194,8 +191,7 @@ export function useThreadListItems(
                               inArray(mail_thread_state.thread, pageThreadIds)
                           )
                       ),
-        [currentUserId, pageThreadIdsKey]
-    )
+    })
 
     const totalItems = pageResult?.totalItems ?? 0
     const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE))
