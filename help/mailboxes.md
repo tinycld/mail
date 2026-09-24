@@ -9,7 +9,7 @@ order: 20
 
 When your account is created on a server that has Mail installed, a personal mailbox is created automatically. The address is derived from your **username**; you can rename it from **Settings → Mailboxes**. You're the **owner** of your personal mailbox and you're the only member — nobody else on the server can read it.
 
-If your account is deleted, your personal mailbox and all its messages are cleaned up automatically.
+If your account is deleted, your personal mailbox and all its messages are deleted. This also applies if you shared the mailbox with other people: they lose access to it. Its messages do not go to the person who takes over your content.
 
 ## Shared mailboxes
 
@@ -30,6 +30,8 @@ Every mailbox member has one of two roles:
 - **Member** — can read and send from the mailbox, but can't change membership or settings.
 
 You can't have a mailbox with zero owners — removing the last owner is blocked. If you need to transfer a mailbox, promote someone to owner first, then remove yourself.
+
+If you are the only owner of a shared mailbox that other people use, you cannot delete your account until the mailbox has another owner. Make one of its members an owner or delete the mailbox. You can also choose someone to take over your content when you delete your account; that person then becomes the owner.
 
 ## Aliases
 
