@@ -61,7 +61,14 @@ func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 		}
 
 		rec, err := maildomains.Current().AddDomain(re.Request.Context(), domain)
+		var refused *maildomains.RefusedError
 		switch {
+		case errors.As(err, &refused):
+			// The registrar declined the name on purpose, and its message is
+			// written for the admin. It rides on the domain field so the add
+			// form shows it beside the input, like domain_exists above.
+			return router.NewApiError(http.StatusConflict, refused.Message,
+				validation.Errors{"domain": validation.NewError(refused.Code, refused.Message)})
 		case errors.Is(err, maildomains.ErrDomainAlreadyEnrolled):
 			return router.NewApiError(http.StatusConflict,
 				"That domain is already configured on this host.", err)

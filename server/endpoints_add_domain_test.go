@@ -3,6 +3,7 @@ package mail
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -416,6 +417,32 @@ func TestAddDomainExistingRowIsDomainExists(t *testing.T) {
 		func(t *testing.T, app *tests.TestApp) {
 			if got := countMailDomains(t, app); got != 1 {
 				t.Fatalf("expected the existing row only, got %d", got)
+			}
+		},
+	)
+}
+
+// A deliberate refusal carries the registrar's own code and message to the
+// admin, on the domain field, and creates nothing. It must not collapse into
+// the generic provider failure, which tells the admin nothing they can act on.
+func TestAddDomainRefusalShowsRegistrarMessage(t *testing.T) {
+	registrar := &stubRegistrar{err: fmt.Errorf("enroll: %w",
+		maildomains.Refused("name_blocked", "The name example.org cannot be used. Choose a different domain."))}
+
+	runAddDomainScenario(t, "refused domain", registrar,
+		func(app core.App) *core.Record {
+			return seedAddDomainAuthUser(t, app, "admin@acme.com", "admin")
+		},
+		`{"domain":"example.org"}`,
+		http.StatusConflict,
+		[]string{
+			`"message":"The name example.org cannot be used. Choose a different domain."`,
+			`"domain":{"code":"name_blocked","message":"The name example.org cannot be used. Choose a different domain."}`,
+		},
+		[]string{"Failed to enroll the domain"},
+		func(t *testing.T, app *tests.TestApp) {
+			if got := countMailDomains(t, app); got != 0 {
+				t.Fatalf("expected no mail_domains row after a refusal, got %d", got)
 			}
 		},
 	)
