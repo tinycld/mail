@@ -1,3 +1,4 @@
+import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useMutation as useReactQueryMutation } from '@tanstack/react-query'
 import type {
@@ -16,6 +17,7 @@ import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { AddDomainForm } from './AddDomainForm'
 import { DnsRecordsPanel, hasUnpublishedDnsRecords } from './DnsRecordsPanel'
+import { domainRemovalWarning } from './domain-removal'
 import { assertVerifySaved } from './verify-domain'
 
 export default function ProviderSettings() {
@@ -192,13 +194,18 @@ function DomainRowItem({ domain, provider }: { domain: DomainRow; provider: 'pos
                         onPress={() => verifyMutation.mutate()}
                     />
                     <DeleteDomainButton
-                        confirming={confirming}
-                        onConfirm={() => deleteMutation.mutate()}
-                        onStartConfirm={() => setConfirming(true)}
-                        onCancel={() => setConfirming(false)}
+                        isVisible={!confirming}
+                        onPress={() => setConfirming(true)}
                     />
                 </View>
             </View>
+
+            <RemoveDomainConfirm
+                isVisible={confirming}
+                domain={domain}
+                onConfirm={() => deleteMutation.mutate()}
+                onCancel={() => setConfirming(false)}
+            />
 
             <DomainVerificationPanel domain={domain} provider={provider} />
 
@@ -516,49 +523,81 @@ function CheckRow({
     )
 }
 
-function DeleteDomainButton({
-    confirming,
+function DeleteDomainButton({ isVisible, onPress }: { isVisible: boolean; onPress: () => void }) {
+    const dangerColor = useThemeColor('danger')
+    if (!isVisible) return null
+    return (
+        <Pressable className="p-1" onPress={onPress} accessibilityLabel="Remove domain">
+            <Trash2 size={16} color={dangerColor} />
+        </Pressable>
+    )
+}
+
+// Mailboxes cascade-delete with their domain; the count makes that visible
+// before the admin commits.
+function useDomainMailboxCount(domainId: string) {
+    const [mailboxesCollection] = useStore('mail_mailboxes')
+    const { data = [] } = useLiveQuery(
+        query =>
+            query
+                .from({ m: mailboxesCollection })
+                .where(({ m }) => eq(m.domain, domainId))
+                .select(({ m }) => ({ id: m.id })),
+        [domainId]
+    )
+    return data.length
+}
+
+function RemoveDomainConfirm({
+    isVisible,
+    domain,
     onConfirm,
-    onStartConfirm,
     onCancel,
 }: {
-    confirming: boolean
+    isVisible: boolean
+    domain: DomainRow
     onConfirm: () => void
-    onStartConfirm: () => void
     onCancel: () => void
 }) {
-    const dangerColor = useThemeColor('danger')
+    if (!isVisible) return null
+    return <RemoveDomainConfirmBody domain={domain} onConfirm={onConfirm} onCancel={onCancel} />
+}
 
-    if (confirming) {
-        return (
+function RemoveDomainConfirmBody({
+    domain,
+    onConfirm,
+    onCancel,
+}: {
+    domain: DomainRow
+    onConfirm: () => void
+    onCancel: () => void
+}) {
+    const warning = domainRemovalWarning(domain.domain, useDomainMailboxCount(domain.id))
+    return (
+        <View testID="remove-domain-confirm" className="gap-2 rounded-md border border-danger p-3">
+            <Text className="text-foreground" style={{ fontSize: 13 }}>
+                {warning}
+            </Text>
             <View className="flex-row gap-2">
                 <Pressable
                     onPress={onConfirm}
                     className="px-3 rounded-md bg-danger"
-                    style={{
-                        paddingVertical: 6,
-                    }}
+                    style={{ paddingVertical: 6 }}
                 >
                     <Text className="text-danger-foreground" style={{ fontSize: 13 }}>
-                        Remove
+                        Remove domain
                     </Text>
                 </Pressable>
                 <Pressable
                     onPress={onCancel}
                     className="px-3 rounded-md"
-                    style={{
-                        paddingVertical: 6,
-                    }}
+                    style={{ paddingVertical: 6 }}
                 >
-                    <Text style={{ fontSize: 13 }}>Cancel</Text>
+                    <Text className="text-foreground" style={{ fontSize: 13 }}>
+                        Cancel
+                    </Text>
                 </Pressable>
             </View>
-        )
-    }
-
-    return (
-        <Pressable className="p-1" onPress={onStartConfirm}>
-            <Trash2 size={16} color={dangerColor} />
-        </Pressable>
+        </View>
     )
 }
