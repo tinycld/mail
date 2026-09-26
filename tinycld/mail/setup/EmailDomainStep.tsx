@@ -1,5 +1,6 @@
 import { useLiveQuery } from '@tanstack/react-db'
 import type { AddDomainResponse, OutboundCheckResult } from '@tinycld/app-generated/mail-api'
+import { SetupContinueButton } from '@tinycld/core/components/setup/wizard/SetupContinueButton'
 import { SidebarSlot } from '@tinycld/core/components/sidebar-primitives/SidebarSlot'
 import { errorToString } from '@tinycld/core/lib/errors'
 import { useMutation } from '@tinycld/core/lib/mutations'
@@ -234,9 +235,7 @@ export default function EmailDomainStep({ next }: SetupStepProps) {
             <OwnDomainCard isSelected={isOwnSelected} onPress={chooseOwn} />
             <OwnDomainForm isVisible={isOwnSelected} panel={panel} />
             <DomainList domains={domains} />
-            <Button className="self-start" onPress={next}>
-                <ButtonText>Continue</ButtonText>
-            </Button>
+            <SetupContinueButton onPress={next} />
         </View>
     )
 }

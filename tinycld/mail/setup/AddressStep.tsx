@@ -1,6 +1,7 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import type { SendEmailResponse } from '@tinycld/app-generated/mail-api'
+import { SetupContinueButton } from '@tinycld/core/components/setup/wizard/SetupContinueButton'
 import { useAuth } from '@tinycld/core/lib/auth'
 import { errorToString } from '@tinycld/core/lib/errors'
 import { useMutation } from '@tinycld/core/lib/mutations'
@@ -173,9 +174,7 @@ export default function AddressStep({ next }: SetupStepProps) {
                 Make the address you will send and receive email from.
             </Text>
             <AddressBody mailbox={mailbox} />
-            <Button className="self-start" onPress={next}>
-                <ButtonText>Continue</ButtonText>
-            </Button>
+            <SetupContinueButton onPress={next} />
         </View>
     )
 }
