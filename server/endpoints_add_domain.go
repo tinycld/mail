@@ -51,14 +51,24 @@ func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 		// own row must read as "already added" to the caller, which a
 		// provider-side duplicate (another deployment on a shared provider
 		// account) must not.
+		// The existing row's id rides along in the error's params, so a
+		// client that retries an interrupted add can go on to verify it.
 		if existing, _ := app.FindFirstRecordByData("mail_domains", "domain", domain); existing != nil {
 			return router.NewApiError(http.StatusConflict,
 				"That domain is already added.",
-				validation.Errors{"domain": validation.NewError(domainExistsCode, "That domain is already added.")})
+				validation.Errors{"domain": validation.NewError(domainExistsCode, "That domain is already added.").
+					SetParams(map[string]any{"id": existing.Id})})
 		}
 
 		rec, err := maildomains.Current().AddDomain(re.Request.Context(), domain)
+		var refused *maildomains.RefusedError
 		switch {
+		case errors.As(err, &refused):
+			// The registrar declined the name on purpose, and its message is
+			// written for the admin. It rides on the domain field so the add
+			// form shows it beside the input, like domain_exists above.
+			return router.NewApiError(http.StatusConflict, refused.Message,
+				validation.Errors{"domain": validation.NewError(refused.Code, refused.Message)})
 		case errors.Is(err, maildomains.ErrDomainAlreadyEnrolled):
 			return router.NewApiError(http.StatusConflict,
 				"That domain is already configured on this host.", err)

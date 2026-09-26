@@ -20,7 +20,9 @@ Mail enrolls the domain with your mail provider immediately, and only creates th
 
 ## During first-run setup
 
-When an owner or admin sets up the server, the setup wizard has an **Email domain** step. The step can show ready-made domain choices from other apps. To use your own domain, enter it under **Use my own domain**, publish the DNS records that the step shows, then click **Verify**. When a domain is verified, the **Your address** step lets you make your first address on it. You can then send a test message to your account email. "Sent" means the server accepted the message, not that it arrived. You can add more domains later in **Settings → Mail → Domains**.
+When an owner or admin sets up the server, the setup wizard has an **Email domain** step. The step asks where your team's email addresses live. Other apps can show ready-made domain choices here, and each choice has its own setup. If there are no other choices, the step opens the form for your own domain immediately.
+
+To use your own domain, click **Your own domain**, enter the domain, publish the DNS records that the step shows, then click **Verify**. When a domain is verified, the **Your address** step lets you make your first address on it. You can then send a test message to your account email. "Sent" means the server accepted the message, not that it arrived. You can add more domains later in **Settings → Mail → Domains**.
 
 ## The verification checklist
 
@@ -78,9 +80,15 @@ The webhook secret is a per-domain random 32-character hex string, auto-generate
 
 ## Removing a domain
 
-Delete the domain row from the settings page. This removes it from TinyCld but doesn't touch your DNS records or the provider side — you'll want to remove those manually if the domain isn't going to be used elsewhere.
+To remove a domain, click the trash icon on its row in **Settings → Mail → Domains**, then click **Remove domain**.
 
-Mailboxes and aliases on the deleted domain are also removed (cascade), so be sure no one is depending on the addresses before deleting.
+Removing a domain also does these things:
+
+- It releases the domain at your email provider.
+- If the service manages DNS for the domain, it removes the domain's DNS records.
+- It deletes every mailbox and alias on the domain, and all their mail.
+
+You cannot undo this. Make sure that no one uses the addresses before you remove the domain. If you manage the DNS records yourself, remove them at your DNS provider.
 
 ## See also
 
