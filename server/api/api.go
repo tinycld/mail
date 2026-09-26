@@ -141,13 +141,7 @@ type OutboundCheckResult struct {
 	// VerificationDetails.MX.Expected, so the enrollment response (which never
 	// runs the MX check — see handleAddDomain) can still tell the client what
 	// to render before the first Verify.
-	MXHost string `json:"mx_host,omitempty"`
-	// SPFInclude is the provider's SPF include directive (e.g.
-	// "spf.mtasv.net" for Postmark), when the provider has one to publish. Not
-	// every provider does — Postmark deprecated SPF entirely (see
-	// maildomains.DomainRecords.SPFVerified) — so this stays empty rather than
-	// a guess, and the client omits the SPF row when it is empty.
-	SPFInclude           string `json:"spf_include,omitempty"`
+	MXHost               string `json:"mx_host,omitempty"`
 	DKIMHost             string `json:"dkim_host,omitempty"`
 	DKIMTextValue        string `json:"dkim_text_value,omitempty"`
 	ReturnPathDomain     string `json:"return_path_domain,omitempty"`

@@ -64,10 +64,10 @@ func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 
 		provider := newProviderFromSystem(app)
 		outbound := api.OutboundCheckResult{
-			Enrolled:             "yes",
-			SPF:                  rec.SPFVerified,
-			DKIM:                 rec.DKIMVerified,
-			ReturnPath:           rec.ReturnPathVerified,
+			Enrolled:   "yes",
+			SPF:        rec.SPFVerified,
+			DKIM:       rec.DKIMVerified,
+			ReturnPath: rec.ReturnPathVerified,
 			// MXHost is known at enrollment time even though the MX check
 			// itself hasn't run yet (see the comment below) — it's a pure
 			// function of the configured provider, not a lookup result, so the

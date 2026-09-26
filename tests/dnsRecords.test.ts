@@ -29,38 +29,23 @@ describe('buildDnsRecords', () => {
         })
     })
 
-    // MX and SPF (when the provider has an include to publish) lead the list —
-    // an admin publishes DNS top-down, and inbound routing (MX) plus outbound
-    // authorization (SPF) come before DKIM/return-path signing.
-    it('leads with MX and SPF when both are available', () => {
+    // MX leads the list — an admin publishes DNS top-down, and inbound
+    // routing comes before DKIM/return-path signing.
+    it('leads with MX when an mx_host is available', () => {
         const records = buildDnsRecords({
             spf: false,
             dkim: false,
             return_path: false,
             enrolled: 'yes',
-            mx_host: 'mx.router.example',
-            spf_include: 'spf.mtasv.net',
+            mx_host: 'mx.example.com',
+            dkim_host: 'pm._domainkey.example.com',
+            dkim_text_value: 'k=rsa; p=abc',
         })
 
         expect(records.map(r => [r.label, r.type, r.host, r.value])).toEqual([
-            ['MX', 'MX', '@', 'MX 10 mx.router.example'],
-            ['SPF', 'TXT', '@', 'v=spf1 include:spf.mtasv.net ~all'],
+            ['MX', 'MX', '@', 'MX 10 mx.example.com'],
+            ['DKIM', 'TXT', 'pm._domainkey.example.com', 'k=rsa; p=abc'],
         ])
-    })
-
-    // Postmark deprecated SPF entirely (see maildomains.DomainRecords), so
-    // spf_include is empty on that path — the row must be omitted rather than
-    // rendered with a blank include.
-    it('omits the SPF row when the provider gives no include value', () => {
-        const records = buildDnsRecords({
-            spf: false,
-            dkim: false,
-            return_path: false,
-            enrolled: 'yes',
-            mx_host: 'mx.router.example',
-        })
-
-        expect(records.map(r => r.label)).toEqual(['MX'])
     })
 
     // No mx_host (e.g. SMTP in IMAP-fetch mode, which publishes no MX target
@@ -71,10 +56,11 @@ describe('buildDnsRecords', () => {
             dkim: false,
             return_path: false,
             enrolled: 'yes',
-            spf_include: 'spf.mtasv.net',
+            dkim_host: 'pm._domainkey.example.com',
+            dkim_text_value: 'k=rsa; p=abc',
         })
 
-        expect(records.map(r => r.label)).toEqual(['SPF'])
+        expect(records.map(r => r.label)).toEqual(['DKIM'])
     })
 
     it('marks a record verified once the provider confirms it', () => {
