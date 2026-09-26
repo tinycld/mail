@@ -1,42 +1,22 @@
 import { useLiveQuery } from '@tanstack/react-db'
 import { useMutation as useReactQueryMutation } from '@tanstack/react-query'
 import type {
-    AddDomainResponse,
     VerificationDetails,
     VerifyDomainResponse,
     WebhookURLsResponse,
 } from '@tinycld/app-generated/mail-api'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
-import { errorToString, handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
+import { errorToString } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { FormErrorSummary, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
 import * as Clipboard from 'expo-clipboard'
-import {
-    CheckCircle,
-    Copy,
-    Globe,
-    Loader2,
-    Plus,
-    RefreshCw,
-    Trash2,
-    XCircle,
-} from 'lucide-react-native'
+import { CheckCircle, Copy, Globe, Loader2, RefreshCw, Trash2, XCircle } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
+import { AddDomainForm } from './AddDomainForm'
 import { DnsRecordsPanel, hasUnpublishedDnsRecords } from './DnsRecordsPanel'
 import { assertVerifySaved } from './verify-domain'
-
-const addDomainSchema = z.object({
-    domain: z
-        .string()
-        .min(1, 'Domain is required')
-        .regex(
-            /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/,
-            'Enter a valid domain'
-        ),
-})
 
 export default function ProviderSettings() {
     const primaryColor = useThemeColor('primary')
@@ -580,68 +560,5 @@ function DeleteDomainButton({
         <Pressable className="p-1" onPress={onStartConfirm}>
             <Trash2 size={16} color={dangerColor} />
         </Pressable>
-    )
-}
-
-// Exported so the setup wizard's domain step adds a domain through the same
-// form and endpoint as this screen.
-export function AddDomainForm({ onAdded }: { onAdded?: (added: AddDomainResponse) => void }) {
-    const primaryFgColor = useThemeColor('primary-foreground')
-
-    const {
-        control,
-        handleSubmit,
-        setError,
-        getValues,
-        reset,
-        formState: { errors, isSubmitted, isDirty },
-    } = useForm({
-        mode: 'onChange',
-        resolver: zodResolver(addDomainSchema),
-        defaultValues: { domain: '' },
-    })
-
-    const addMutation = useMutation({
-        mutationFn: async (data: z.infer<typeof addDomainSchema>) =>
-            pb.send<AddDomainResponse>('/api/mail/domains', {
-                method: 'POST',
-                body: { domain: data.domain },
-            }),
-        onSuccess: added => {
-            reset()
-            onAdded?.(added)
-        },
-        onError: handleMutationErrorsWithForm({ setError, getValues }),
-    })
-
-    const onSubmit = handleSubmit(data => addMutation.mutate(data))
-    const canSubmit = !addMutation.isPending && isDirty
-
-    const addButton = (
-        <Pressable
-            onPress={onSubmit}
-            disabled={!canSubmit}
-            className={`flex-row items-center gap-1 px-4 rounded-lg py-2.5 bg-primary ${canSubmit ? 'opacity-100' : 'opacity-50'}`}
-        >
-            <Plus size={16} color={primaryFgColor} />
-            <Text className="text-primary-foreground" style={{ fontWeight: '600' }}>
-                {addMutation.isPending ? 'Adding...' : 'Add'}
-            </Text>
-        </Pressable>
-    )
-
-    return (
-        <View className="gap-3">
-            <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
-
-            <TextInput
-                control={control}
-                name="domain"
-                label="Add Domain"
-                placeholder="example.com"
-                wrapperProps={{ style: { marginBottom: 0 } }}
-                addon={addButton}
-            />
-        </View>
     )
 }
