@@ -13,6 +13,7 @@ import {
 import { Plus } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb/core'
 import { Pressable, Text, View } from 'react-native'
+import { type MailboxType, newMailboxRecords } from './mailbox-records'
 
 const mailboxSchema = z.object({
     address: z
@@ -31,6 +32,9 @@ interface CreateProps {
     domainOptions: Array<{ label: string; value: string }>
     userId: string
     onDone: () => void
+    /** Default 'shared'. 'personal' makes the creator's own address. */
+    type?: MailboxType
+    defaults?: Partial<Pick<MailboxFormValues, 'address' | 'display_name'>>
 }
 
 interface EditProps {
@@ -47,7 +51,7 @@ export function MailboxForm(props: Props) {
     return props.mode === 'create' ? <CreateForm {...props} /> : <EditForm {...props} />
 }
 
-function CreateForm({ domainOptions, userId, onDone }: CreateProps) {
+function CreateForm({ domainOptions, userId, onDone, type = 'shared', defaults }: CreateProps) {
     const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
     const [mailboxesCollection, membersCollection] = useStore(
@@ -62,34 +66,28 @@ function CreateForm({ domainOptions, userId, onDone }: CreateProps) {
         getValues,
         watch,
         reset,
-        formState: { errors, isSubmitted, isDirty, isValid },
+        formState: { errors, isSubmitted, isValid },
     } = useForm<MailboxFormValues>({
         mode: 'onChange',
         resolver: zodResolver(mailboxSchema),
         defaultValues: {
-            address: '',
+            address: defaults?.address ?? '',
             domain: domainOptions[0]?.value ?? '',
-            display_name: '',
+            display_name: defaults?.display_name ?? '',
         },
     })
 
     const createMutation = useMutation({
         mutationFn: mutation(function* (data: MailboxFormValues) {
-            const mailboxId = newRecordId()
-            yield mailboxesCollection.insert({
-                id: mailboxId,
-                address: data.address,
-                domain: data.domain,
-                display_name: data.display_name,
-                name: data.display_name,
-                type: 'shared',
+            const { mailbox, member } = newMailboxRecords({
+                data,
+                type,
+                userId,
+                mailboxId: newRecordId(),
+                memberId: newRecordId(),
             })
-            yield membersCollection.insert({
-                id: newRecordId(),
-                mailbox: mailboxId,
-                user: userId,
-                role: 'owner',
-            })
+            yield mailboxesCollection.insert(mailbox)
+            yield membersCollection.insert(member)
         }),
         onSuccess: () => {
             reset()
@@ -99,7 +97,8 @@ function CreateForm({ domainOptions, userId, onDone }: CreateProps) {
     })
 
     const onSubmit = handleSubmit(d => createMutation.mutate(d))
-    const canSubmit = !createMutation.isPending && isDirty && isValid
+    // Not gated on isDirty: prefilled defaults are a valid submission as-is.
+    const canSubmit = !createMutation.isPending && isValid
     const values = watch()
     const domainName = domainOptions.find(d => d.value === values.domain)?.label ?? ''
 

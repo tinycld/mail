@@ -91,42 +91,43 @@ func TestIMAPFetcher_PullsUnseenAndIngests(t *testing.T) {
 }
 
 // dispatchInbound routes purely by recipient domain → owning org. The system
-// IMAP account receives mail for every hosted domain, so isolation must come from
-// the address: a message addressed to a domain we don't host is dropped (stored
-// nowhere), and one to a hosted domain lands only in that domain's mailbox.
+// IMAP account receives mail for every served domain, so isolation must come
+// from the address: a message addressed to a domain we don't serve is dropped
+// (stored nowhere), and one to a served domain lands only in that domain's
+// mailbox.
 func TestDispatchInbound_RoutesByRecipientDomain(t *testing.T) {
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_iso_001")
 	seedMember(t, app, "mb_iso_001", "user_alice")
 
-	// 1. Recipient on an UN-hosted domain → dropped (no mailbox resolves).
-	unhosted := &InboundMessage{
+	// 1. Recipient on an unserved domain → dropped (no mailbox resolves).
+	unserved := &InboundMessage{
 		From:      Recipient{Email: "sender@external.example"},
-		To:        []Recipient{{Email: "nobody@nothosted.example"}},
-		Subject:   "unhosted",
+		To:        []Recipient{{Email: "nobody@notserved.example"}},
+		Subject:   "unserved",
 		TextBody:  "should be stored nowhere",
-		MessageID: "<unhosted-1@example.org>",
+		MessageID: "<unserved-1@example.org>",
 		Date:      time.Now().UTC().Format(time.RFC3339),
 	}
-	_ = dispatchInbound(app, unhosted)
-	if msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "unhosted"}); len(msgs) != 0 {
-		t.Fatalf("expected 0 messages for an unhosted recipient domain, got %d", len(msgs))
+	_ = dispatchInbound(app, unserved)
+	if msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "unserved"}); len(msgs) != 0 {
+		t.Fatalf("expected 0 messages for an unserved recipient domain, got %d", len(msgs))
 	}
 
-	// 2. Recipient on a hosted domain → delivered to that domain's mailbox.
-	hosted := &InboundMessage{
+	// 2. Recipient on a served domain → delivered to that domain's mailbox.
+	served := &InboundMessage{
 		From:      Recipient{Email: "sender@external.example"},
 		To:        []Recipient{{Email: "alice@acme.com"}},
-		Subject:   "hosted",
+		Subject:   "served",
 		TextBody:  "delivered to acme",
-		MessageID: "<hosted-1@example.org>",
+		MessageID: "<served-1@example.org>",
 		Date:      time.Now().UTC().Format(time.RFC3339),
 	}
-	if err := dispatchInbound(app, hosted); err != nil {
+	if err := dispatchInbound(app, served); err != nil {
 		t.Fatalf("dispatchInbound: %v", err)
 	}
-	if msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "hosted"}); len(msgs) != 1 {
-		t.Fatalf("expected 1 message delivered to the hosted domain, got %d", len(msgs))
+	if msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "served"}); len(msgs) != 1 {
+		t.Fatalf("expected 1 message delivered to the served domain, got %d", len(msgs))
 	}
 }
 

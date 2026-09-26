@@ -192,9 +192,9 @@ func TestWebhookURLs_MemberGets403NoSecret(t *testing.T) {
 	)
 }
 
-// A GUEST — the least-privileged role — must be denied. (Cross-tenant
-// disclosure is no longer a mail concern: single-org means one DB per org and
-// the hosting router owns isolation.)
+// A GUEST — the least-privileged role — must be denied. (Cross-org
+// disclosure is not a mail concern: single-org means one DB per org, and
+// isolation between deployments is the supervisor's job.)
 func TestWebhookURLs_GuestGets403NoSecret(t *testing.T) {
 	runWebhookURLsScenario(t, "guest is denied",
 		func(app core.App) (string, *core.Record) {

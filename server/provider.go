@@ -19,8 +19,8 @@ type RecipientFailure = mailer.RecipientFailure
 // mail-package-specific (inbound parsing, bounces, inbound domain config).
 //
 // Enrolling a sending domain and reading back its verification state are NOT
-// here: those are account-credential operations, and on a hosted deployment
-// this process never holds the account token. They go through
+// here: those are account-credential operations, and where the provider
+// account is shared this process never holds the account token. They go through
 // tinycld.org/core/maildomains instead — see checkOutbound in
 // domain_verify.go.
 type Provider interface {

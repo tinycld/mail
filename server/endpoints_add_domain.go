@@ -6,12 +6,18 @@ import (
 	"strings"
 	"time"
 
+	validation "github.com/pocketbase/ozzo-validation/v4"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
 
 	"tinycld.org/core/maildomains"
 	"tinycld.org/packages/mail/api"
 )
+
+// domainExistsCode marks a 409 whose cause is a mail_domains row this
+// deployment already holds, so a client can tell it from the provider-side
+// duplicate, which is also a 409.
+const domainExistsCode = "domain_exists"
 
 // handleAddDomain enrolls a domain with the mail provider and then creates the
 // mail_domains row.
@@ -21,8 +27,8 @@ import (
 // the provider had never heard of: they displayed as verified and every send
 // from them failed. A row that exists is now a row the provider knows.
 //
-// On a hosted deployment the enrollment call travels over ctl.sock to the
-// router, which holds the account token. This handler cannot tell the
+// Where another process holds the provider account token, the enrollment call
+// travels to it through the maildomains seam. This handler cannot tell the
 // difference, and must not be able to.
 func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 	return func(re *core.RequestEvent) error {
@@ -39,6 +45,16 @@ func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 		domain := strings.ToLower(strings.TrimSpace(body.Domain))
 		if domain == "" {
 			return re.BadRequestError("domain is required", nil)
+		}
+
+		// Checked before the provider is asked: a re-add of this deployment's
+		// own row must read as "already added" to the caller, which a
+		// provider-side duplicate (another deployment on a shared provider
+		// account) must not.
+		if existing, _ := app.FindFirstRecordByData("mail_domains", "domain", domain); existing != nil {
+			return router.NewApiError(http.StatusConflict,
+				"That domain is already added.",
+				validation.Errors{"domain": validation.NewError(domainExistsCode, "That domain is already added.")})
 		}
 
 		rec, err := maildomains.Current().AddDomain(re.Request.Context(), domain)
@@ -62,18 +78,24 @@ func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 			return re.InternalServerError("mail_domains collection missing", err)
 		}
 
+		provider := newProviderFromSystem(app)
 		outbound := api.OutboundCheckResult{
-			Enrolled:             "yes",
-			SPF:                  rec.SPFVerified,
-			DKIM:                 rec.DKIMVerified,
-			ReturnPath:           rec.ReturnPathVerified,
+			Enrolled:   "yes",
+			SPF:        rec.SPFVerified,
+			DKIM:       rec.DKIMVerified,
+			ReturnPath: rec.ReturnPathVerified,
+			// MXHost is known at enrollment time even though the MX check
+			// itself hasn't run yet (see the comment below) — it's a pure
+			// function of the configured provider, not a lookup result, so the
+			// admin sees what to publish before ever pressing Verify.
+			MXHost:               expectedInboundMXHost(app, provider),
 			DKIMHost:             rec.DKIMHost,
 			DKIMTextValue:        rec.DKIMTextValue,
 			ReturnPathDomain:     rec.ReturnPathDomain,
 			ReturnPathCNAMEValue: rec.ReturnPathCNAMEValue,
 		}
 
-		providerName, providerConfigured := describeProvider(newProviderFromSystem(app))
+		providerName, providerConfigured := describeProvider(provider)
 
 		// MX and Provider are left at their zero values: those checks
 		// genuinely have not run yet, and the UI already renders zero-value

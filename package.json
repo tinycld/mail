@@ -13,6 +13,7 @@
         "./automation": "./tinycld/mail/automation.ts",
         "./sidebar": "./tinycld/mail/sidebar.tsx",
         "./settings/*": "./tinycld/mail/settings/*.tsx",
+        "./setup/*": "./tinycld/mail/setup/*.tsx",
         "./system-settings/*": "./tinycld/mail/system-settings/*.tsx",
         "./hooks/*": "./tinycld/mail/hooks/*.ts",
         "./components/*": "./tinycld/mail/components/*.tsx",

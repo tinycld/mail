@@ -229,7 +229,7 @@ func realIMAPDial(ctx context.Context, addr string, useTLS bool) (*imapclient.Cl
 }
 
 // dispatchInbound routes a parsed message to each recipient's mailbox. The
-// system IMAP account receives mail for every hosted domain, so routing is
+// system IMAP account receives mail for every served domain, so routing is
 // purely by recipient address: resolveMailboxByAddress finds the mailbox via its
 // own domain (and thus the owning org), which keeps org isolation intact without
 // a separate org filter. Reuses processInboundForMailbox (same path the webhook +

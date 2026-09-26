@@ -8,10 +8,11 @@ import { Pressable, Text, View } from 'react-native'
 
 export type DnsRecord = {
     label: string
-    type: 'TXT' | 'CNAME'
+    type: 'MX' | 'TXT' | 'CNAME'
     host: string
     value: string
-    verified: boolean
+    // null: not checked yet — a row whose stored details predate the flag.
+    verified: boolean | null
 }
 
 // buildDnsRecords turns the provider's reported outbound check into the DNS
@@ -19,9 +20,22 @@ export type DnsRecord = {
 // part worth pinning, not the JSX. A self-hosted SMTP deployment can report
 // DKIM without a return-path CNAME (or nothing at all) — each record is only
 // included when the provider reported both the host and the value it needs.
+//
+// MX leads the list (inbound routing). Its verified flag is the last MX
+// check's result. Details stored before mx_verified existed lack it, so it
+// reads as unknown (no badge, not "left to publish") until the next Verify.
 export function buildDnsRecords(outbound?: OutboundCheckResult): DnsRecord[] {
     if (!outbound) return []
     const records: DnsRecord[] = []
+    if (outbound.mx_host) {
+        records.push({
+            label: 'MX',
+            type: 'MX',
+            host: '@',
+            value: `10 ${outbound.mx_host}`,
+            verified: outbound.mx_verified ?? null,
+        })
+    }
     if (outbound.dkim_host && outbound.dkim_text_value) {
         records.push({
             label: 'DKIM',
@@ -50,7 +64,7 @@ export function buildDnsRecords(outbound?: OutboundCheckResult): DnsRecord[] {
 // green, taking the host/value/copy UI away while those rows were still red
 // and leaving the admin a red row with no way to fix it.
 export function hasUnpublishedDnsRecords(outbound?: OutboundCheckResult): boolean {
-    return buildDnsRecords(outbound).some(record => !record.verified)
+    return buildDnsRecords(outbound).some(record => record.verified === false)
 }
 
 export function DnsRecordsPanel({
@@ -69,7 +83,7 @@ export function DnsRecordsPanel({
                 DNS records to publish
             </Text>
             {records.map(record => (
-                <DnsRecordRow key={record.host} record={record} />
+                <DnsRecordRow key={record.label} record={record} />
             ))}
         </View>
     )
@@ -96,7 +110,7 @@ function DnsRecordRow({ record }: { record: DnsRecord }) {
                 <Text className="text-foreground" style={{ fontSize: 11, fontWeight: '600' }}>
                     {record.label} ({record.type})
                 </Text>
-                <VerifiedBadge isVisible={record.verified} successColor={successColor} />
+                <VerifiedBadge isVisible={record.verified === true} successColor={successColor} />
             </View>
             <Text className="text-muted-foreground" style={{ fontSize: 11 }}>
                 {record.host}

@@ -18,6 +18,10 @@ Out of the box, Mail can send through whatever address your provider gives you. 
 
 Mail enrolls the domain with your mail provider immediately, and only creates the row once that succeeds — so a domain that shows up here is one your provider already knows about. The row appears with a checklist of verification steps and, right away, the DNS records you need to publish — no extra step to reveal them.
 
+## During first-run setup
+
+When an owner or admin sets up the server, the setup wizard has an **Email domain** step. The step can show ready-made domain choices from other apps. To use your own domain, enter it under **Use my own domain**, publish the DNS records that the step shows, then click **Verify**. When a domain is verified, the **Your address** step lets you make your first address on it. You can then send a test message to your account email. "Sent" means the server accepted the message, not that it arrived. You can add more domains later in **Settings → Mail → Domains**.
+
 ## The verification checklist
 
 Each domain has four checks, all four green is required for full send + receive. The exact targets depend on which [provider](help://mail:provider-setup) this server uses:

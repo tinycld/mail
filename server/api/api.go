@@ -135,7 +135,17 @@ type OutboundCheckResult struct {
 	// Enrolled is "yes", "no" or "unknown". Three-valued because a check that
 	// could not run must not look like a domain the provider rejected — the
 	// UI phrases them differently and only "no" is the admin's to fix.
-	Enrolled             string `json:"enrolled,omitempty"`
+	Enrolled string `json:"enrolled,omitempty"`
+	// MXHost is the expected inbound MX target (expectedInboundMXHost) — the
+	// value the admin must point an MX record at. Carried here, not just in
+	// VerificationDetails.MX.Expected, so the enrollment response (which never
+	// runs the MX check — see handleAddDomain) can still tell the client what
+	// to render before the first Verify.
+	MXHost string `json:"mx_host,omitempty"`
+	// MXVerified mirrors VerificationDetails.MX.OK, so the DNS table can mark
+	// the MX row from the same object that carries MXHost. False until the
+	// first Verify: enrollment never runs the MX check.
+	MXVerified           bool   `json:"mx_verified"`
 	DKIMHost             string `json:"dkim_host,omitempty"`
 	DKIMTextValue        string `json:"dkim_text_value,omitempty"`
 	ReturnPathDomain     string `json:"return_path_domain,omitempty"`

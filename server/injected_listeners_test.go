@@ -82,7 +82,7 @@ func TestStartInjectedMailListeners_ServesAllThreeInjectedListeners(t *testing.T
 		t.Fatalf("IMAP greeting = %q, err=%v", greeting, err)
 	}
 
-	// Submission: auth offered over plaintext (router terminated TLS), no STARTTLS.
+	// Submission: auth offered over plaintext (the supervisor terminated TLS), no STARTTLS.
 	subConn, subR := dialMailListener(t, subLn)
 	if greeting, err := subR.ReadString('\n'); err != nil || !strings.HasPrefix(greeting, "220 ") {
 		t.Fatalf("submission greeting = %q, err=%v", greeting, err)
@@ -92,7 +92,7 @@ func TestStartInjectedMailListeners_ServesAllThreeInjectedListeners(t *testing.T
 		t.Fatalf("submission must offer AUTH over the injected listener, got %q", subEhlo)
 	}
 	if strings.Contains(subEhlo, "STARTTLS") {
-		t.Fatalf("submission must not advertise STARTTLS (router terminates), got %q", subEhlo)
+		t.Fatalf("submission must not advertise STARTTLS (the supervisor terminates), got %q", subEhlo)
 	}
 
 	// Inbound MX: server-to-server, never offers AUTH or STARTTLS.
@@ -105,7 +105,7 @@ func TestStartInjectedMailListeners_ServesAllThreeInjectedListeners(t *testing.T
 		t.Fatalf("inbound MX must not offer AUTH, got %q", mxEhlo)
 	}
 	if strings.Contains(mxEhlo, "STARTTLS") {
-		t.Fatalf("inbound MX must not advertise STARTTLS (router terminates), got %q", mxEhlo)
+		t.Fatalf("inbound MX must not advertise STARTTLS (the supervisor terminates), got %q", mxEhlo)
 	}
 }
 

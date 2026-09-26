@@ -224,6 +224,24 @@ func TestAddDomainEnrollsAndCreatesRecord(t *testing.T) {
 	)
 }
 
+// The admin must see the MX target to publish before ever pressing Verify —
+// enrollment succeeds without the MX check having run, so mx_host must be
+// filled from expectedInboundMXHost directly, not read back off a check.
+func TestAddDomainIncludesExpectedMXHost(t *testing.T) {
+	registrar := &stubRegistrar{rec: &maildomains.DomainRecords{Domain: "acme.com", ID: 1}}
+
+	runAddDomainScenario(t, "add response includes mx_host", registrar,
+		func(app core.App) *core.Record {
+			return seedAddDomainAuthUser(t, app, "admin@acme.com", "admin")
+		},
+		`{"domain":"acme.com"}`,
+		http.StatusOK,
+		[]string{`"mx_host":"inbound.postmarkapp.com"`},
+		nil,
+		nil,
+	)
+}
+
 // Non-admins cannot add a domain — same gate as verify.
 func TestAddDomainRequiresAdmin(t *testing.T) {
 	registrar := &stubRegistrar{rec: &maildomains.DomainRecords{Domain: "acme.com", ID: 1}}
@@ -256,7 +274,7 @@ func TestAddDomainDoesNotCreateRecordWhenEnrollmentFails(t *testing.T) {
 		`{"domain":"acme.com"}`,
 		http.StatusConflict,
 		[]string{"already configured on this host"},
-		nil,
+		[]string{"domain_exists"},
 		func(t *testing.T, app *tests.TestApp) {
 			if got := countMailDomains(t, app); got != 0 {
 				t.Fatalf("expected no mail_domains row to be created, got %d", got)
@@ -316,7 +334,7 @@ func TestAddDomainDoesNotCreateRecordWhenProvisioningNotConfigured(t *testing.T)
 
 // AMENDMENT 1 / the new migration's entire justification: the created row must
 // carry the provider's own domain id. Without it every later status check
-// falls back to the paged by-name scan, which on a shared hosting account
+// falls back to the paged by-name scan, which on a shared provider account
 // reports a domain past the first page as unenrolled. The enrollment state is
 // asserted alongside it so a write to the wrong field name — or to the right
 // field with the id dropped — fails here.
@@ -365,6 +383,37 @@ func TestAddDomainStoresProviderDomainMetadata(t *testing.T) {
 			}
 			if meta.Postmark.ReturnPathVerified == nil || !*meta.Postmark.ReturnPathVerified {
 				t.Errorf("return_path_verified = %+v, want a pointer to true", meta.Postmark.ReturnPathVerified)
+			}
+		},
+	)
+}
+
+// A domain this deployment already holds is refused before the provider is
+// asked, with a machine code a client can tell apart from the provider-side
+// duplicate (which is also a 409).
+func TestAddDomainExistingRowIsDomainExists(t *testing.T) {
+	registrar := &stubRegistrar{err: errors.New("provider must not be called")}
+
+	runAddDomainScenario(t, "re-adding an existing domain", registrar,
+		func(app core.App) *core.Record {
+			col, err := app.FindCollectionByNameOrId("mail_domains")
+			if err != nil {
+				t.Fatal(err)
+			}
+			row := core.NewRecord(col)
+			row.Set("domain", "acme.com")
+			if err := app.Save(row); err != nil {
+				t.Fatal(err)
+			}
+			return seedAddDomainAuthUser(t, app, "admin@acme.com", "admin")
+		},
+		`{"domain":"ACME.com"}`,
+		http.StatusConflict,
+		[]string{`"code":"domain_exists"`},
+		nil,
+		func(t *testing.T, app *tests.TestApp) {
+			if got := countMailDomains(t, app); got != 1 {
+				t.Fatalf("expected the existing row only, got %d", got)
 			}
 		},
 	)
