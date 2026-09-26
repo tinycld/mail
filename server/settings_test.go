@@ -6,6 +6,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 
+	"tinycld.org/core/maildomains"
 	"tinycld.org/core/syscfg"
 )
 
@@ -59,6 +60,14 @@ func setupSettingsTestApp(t *testing.T) *tests.TestApp {
 
 func saveSystemSetting(t *testing.T, app *tests.TestApp, key, value string) {
 	t.Helper()
+	if rec, err := app.FindFirstRecordByFilter(
+		"system_settings", "key = {:key}", map[string]any{"key": key}); err == nil {
+		rec.Set("value", value)
+		if err := app.Save(rec); err != nil {
+			t.Fatalf("failed to update system setting %s: %v", key, err)
+		}
+		return
+	}
 	col, err := app.FindCollectionByNameOrId("system_settings")
 	if err != nil {
 		t.Fatalf("system_settings collection missing: %v", err)
@@ -159,5 +168,34 @@ func TestSmtpConfigFromSystem_DrivesImapFetcher(t *testing.T) {
 	}
 	if cfg.IMAPHost != "imap.example.com" {
 		t.Errorf("IMAPHost = %q, want imap.example.com", cfg.IMAPHost)
+	}
+}
+
+// Switching mail.provider away from SMTP must swap out the maildomains
+// registrar, not leave SMTPRegistrar installed. SetResolver is
+// last-writer-wins with no "uninstall", so before this fix
+// reconcileMailDomainsRegistrar only ever wrote on the smtp branch — a
+// deployment moved from SMTP to Postmark kept reporting every domain
+// "enrolled" from pure DNS lookups forever, including across restarts (I1
+// from the final whole-branch review).
+func TestReconcileMailDomainsRegistrar_SwitchesProviderType(t *testing.T) {
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+
+	app := setupSettingsTestApp(t)
+	saveSystemSetting(t, app, "mail.provider", "smtp")
+	saveSystemSetting(t, app, "mail.smtp_host", "smtp.example.com")
+
+	reconcileMailDomainsRegistrar(app)
+	if _, ok := maildomains.Current().(*SMTPRegistrar); !ok {
+		t.Fatalf("after smtp: Current() = %T, want *SMTPRegistrar", maildomains.Current())
+	}
+
+	saveSystemSetting(t, app, "mail.provider", "postmark")
+	saveSystemSetting(t, app, "mail.postmark_account_token", "acct-token")
+
+	reconcileMailDomainsRegistrar(app)
+	if _, ok := maildomains.Current().(*maildomains.PostmarkRegistrar); !ok {
+		t.Fatalf("after switch to postmark: Current() = %T, want *maildomains.PostmarkRegistrar", maildomains.Current())
 	}
 }

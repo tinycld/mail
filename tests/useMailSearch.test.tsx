@@ -8,6 +8,13 @@ vi.mock('@tinycld/core/lib/pocketbase', () => ({
     pb: { send: vi.fn().mockRejectedValue(new Error('Search failed')) },
 }))
 
+// The failure is reported, not printed: with Sentry uninitialized the real
+// reporter writes to stderr, which would leave the test output noisy.
+vi.mock('@tinycld/core/lib/errors', () => ({
+    captureException: vi.fn(),
+}))
+
+import { captureException } from '@tinycld/core/lib/errors'
 import { useMailSearch } from '~/tinycld/mail/hooks/useMailSearch'
 
 // A failed search must surface as an error state, not read as an empty inbox —
@@ -19,4 +26,5 @@ test('a failed search surfaces an error, not an empty result', async () => {
     expect(result.current.error).toContain('Search failed')
     expect(result.current.isSearching).toBe(false)
     expect(result.current.results).toEqual([])
+    expect(captureException).toHaveBeenCalled()
 })

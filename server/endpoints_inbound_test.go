@@ -97,12 +97,6 @@ func (s *stubProvider) ParseBounce(_ []byte) (*BounceEvent, error) { return nil,
 func (s *stubProvider) VerifyWebhookSignature(_ map[string]string, _ []byte) error {
 	return nil
 }
-func (s *stubProvider) AddDomain(_ context.Context, _ string) (*DomainVerification, error) {
-	return nil, nil
-}
-func (s *stubProvider) CheckDomainVerification(_ context.Context, _ string) (*DomainVerification, error) {
-	return nil, nil
-}
 func (s *stubProvider) CheckInboundDomain(_ context.Context) (*InboundVerification, error) {
 	return nil, nil
 }

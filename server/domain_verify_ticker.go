@@ -44,6 +44,15 @@ func startDomainReverifyLoop(ctx context.Context, app core.App) {
 }
 
 func reverifyUnconfirmedDomains(ctx context.Context, app core.App) {
+	// The same guard handleVerifyDomain applies, and for the same reason: with
+	// no provider configured every check fails for a cause that is not the
+	// admin's DNS, and persisting those failures stamps each row with a
+	// misleading verdict. The endpoint returns a targeted 400; the ticker has
+	// nobody to answer, so it simply does not run.
+	if !newProviderFromSystem(app).Configured() {
+		return
+	}
+
 	records, err := app.FindRecordsByFilter(
 		"mail_domains",
 		"verified = false",
