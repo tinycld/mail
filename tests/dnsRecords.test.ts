@@ -1,3 +1,4 @@
+import type { OutboundCheckResult } from '@tinycld/app-generated/mail-api'
 import { describe, expect, it } from 'vitest'
 import { buildDnsRecords, hasUnpublishedDnsRecords } from '~/tinycld/mail/settings/DnsRecordsPanel'
 
@@ -64,6 +65,19 @@ describe('buildDnsRecords', () => {
         expect(hasUnpublishedDnsRecords({ ...outbound, mx_verified: false })).toBe(true)
         expect(buildDnsRecords({ ...outbound, mx_verified: true })[0].verified).toBe(true)
         expect(hasUnpublishedDnsRecords({ ...outbound, mx_verified: true })).toBe(false)
+    })
+
+    // Details stored before mx_verified existed lack it: unknown, not red.
+    it('treats a missing mx_verified as unknown', () => {
+        const outbound = {
+            spf: true,
+            dkim: true,
+            return_path: true,
+            enrolled: 'yes',
+            mx_host: 'mx.example.com',
+        } as OutboundCheckResult
+        expect(buildDnsRecords(outbound)[0].verified).toBeNull()
+        expect(hasUnpublishedDnsRecords(outbound)).toBe(false)
     })
 
     // No mx_host (e.g. SMTP in IMAP-fetch mode, which publishes no MX target

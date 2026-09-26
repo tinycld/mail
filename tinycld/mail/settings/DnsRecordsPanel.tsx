@@ -11,7 +11,8 @@ export type DnsRecord = {
     type: 'MX' | 'TXT' | 'CNAME'
     host: string
     value: string
-    verified: boolean
+    // null: not checked yet — a row whose stored details predate the flag.
+    verified: boolean | null
 }
 
 // buildDnsRecords turns the provider's reported outbound check into the DNS
@@ -21,7 +22,8 @@ export type DnsRecord = {
 // included when the provider reported both the host and the value it needs.
 //
 // MX leads the list (inbound routing). Its verified flag is the last MX
-// check's result, false until the first Verify.
+// check's result. Details stored before mx_verified existed lack it, so it
+// reads as unknown (no badge, not "left to publish") until the next Verify.
 export function buildDnsRecords(outbound?: OutboundCheckResult): DnsRecord[] {
     if (!outbound) return []
     const records: DnsRecord[] = []
@@ -31,7 +33,7 @@ export function buildDnsRecords(outbound?: OutboundCheckResult): DnsRecord[] {
             type: 'MX',
             host: '@',
             value: `10 ${outbound.mx_host}`,
-            verified: outbound.mx_verified,
+            verified: outbound.mx_verified ?? null,
         })
     }
     if (outbound.dkim_host && outbound.dkim_text_value) {
@@ -62,7 +64,7 @@ export function buildDnsRecords(outbound?: OutboundCheckResult): DnsRecord[] {
 // green, taking the host/value/copy UI away while those rows were still red
 // and leaving the admin a red row with no way to fix it.
 export function hasUnpublishedDnsRecords(outbound?: OutboundCheckResult): boolean {
-    return buildDnsRecords(outbound).some(record => !record.verified)
+    return buildDnsRecords(outbound).some(record => record.verified === false)
 }
 
 export function DnsRecordsPanel({
@@ -108,7 +110,7 @@ function DnsRecordRow({ record }: { record: DnsRecord }) {
                 <Text className="text-foreground" style={{ fontSize: 11, fontWeight: '600' }}>
                     {record.label} ({record.type})
                 </Text>
-                <VerifiedBadge isVisible={record.verified} successColor={successColor} />
+                <VerifiedBadge isVisible={record.verified === true} successColor={successColor} />
             </View>
             <Text className="text-muted-foreground" style={{ fontSize: 11 }}>
                 {record.host}
