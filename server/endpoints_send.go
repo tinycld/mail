@@ -210,6 +210,10 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 		InReplyTo:   inReplyToHeader,
 		References:  referencesHeader,
 		Attachments: p.Attachments,
+
+		// Echoed back on the provider's delivery and bounce notifications,
+		// which carry no From address for a receiver to attribute them by.
+		Metadata: map[string]string{senderDomainMetadataKey: domainOf(fromAddr)},
 	}
 
 	// The abuse gate runs above the demo branch on purpose, so a demo account
