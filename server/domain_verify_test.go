@@ -97,17 +97,40 @@ func TestCheckMX_EmptyExpectedSkipsLookup(t *testing.T) {
 }
 
 func TestExpectedInboundMXHost_PerProvider(t *testing.T) {
-	if got := expectedInboundMXHost(NewPostmarkProvider("tok", "")); got != postmarkInboundMXHost {
+	app := setupSettingsTestApp(t)
+	if got := expectedInboundMXHost(app, NewPostmarkProvider("tok", "")); got != postmarkInboundMXHost {
 		t.Errorf("postmark: got %q, want %q", got, postmarkInboundMXHost)
 	}
-	if got := expectedInboundMXHost(NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "smtp"})); got != "mx.example.com" {
+	if got := expectedInboundMXHost(app, NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "smtp"})); got != "mx.example.com" {
 		t.Errorf("smtp/listener: got %q, want %q", got, "mx.example.com")
 	}
-	if got := expectedInboundMXHost(NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "imap"})); got != "" {
+	if got := expectedInboundMXHost(app, NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "imap"})); got != "" {
 		t.Errorf("smtp/imap-fetch: got %q, want empty (no MX on our side)", got)
 	}
-	if got := expectedInboundMXHost(&NoopProvider{}); got != "" {
+	if got := expectedInboundMXHost(app, &NoopProvider{}); got != "" {
 		t.Errorf("noop: got %q, want empty", got)
+	}
+}
+
+// A router fronting several tenant domains publishes ONE MX host for all of
+// them (its own inbound listener), which cannot be any provider's per-tenant
+// value — mail.inbound_mx_host lets that host override every provider branch
+// when present, and change nothing when absent.
+func TestExpectedInboundMXHost_SystemSettingOverridesProvider(t *testing.T) {
+	app := setupSettingsTestApp(t)
+	saveSystemSetting(t, app, "mail.inbound_mx_host", "mx.router.example")
+
+	if got := expectedInboundMXHost(app, NewPostmarkProvider("tok", "")); got != "mx.router.example" {
+		t.Errorf("postmark: got %q, want the system setting to win", got)
+	}
+	if got := expectedInboundMXHost(app, NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "smtp"})); got != "mx.router.example" {
+		t.Errorf("smtp/listener: got %q, want the system setting to win", got)
+	}
+	if got := expectedInboundMXHost(app, NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "imap"})); got != "mx.router.example" {
+		t.Errorf("smtp/imap-fetch: got %q, want the system setting to win even in imap mode", got)
+	}
+	if got := expectedInboundMXHost(app, &NoopProvider{}); got != "mx.router.example" {
+		t.Errorf("noop: got %q, want the system setting to win", got)
 	}
 }
 

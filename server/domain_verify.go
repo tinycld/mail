@@ -21,13 +21,23 @@ import (
 const postmarkInboundMXHost = "inbound.postmarkapp.com"
 
 // expectedInboundMXHost returns the MX host the operator should publish in
-// DNS so this provider can deliver inbound mail. For Postmark this is the
-// fixed "inbound.postmarkapp.com"; for the self-hosted SMTP provider it is
-// the operator's PublicHostname (the host running the inbound SMTP listener);
-// for everything else (NoopProvider, unconfigured) it returns "" — which
+// DNS so mail can be delivered inbound.
+//
+// mail.inbound_mx_host wins whenever it is set: on a hosted deployment the
+// router terminates inbound SMTP for every tenant domain behind ONE MX host
+// of its own, which is not any provider's per-tenant value and must override
+// every branch below — including SMTP's own IMAP-fetch mode, which otherwise
+// reports "" (see below). Absent that setting, the per-provider default
+// applies exactly as before: for Postmark this is the fixed
+// "inbound.postmarkapp.com"; for the self-hosted SMTP provider it is the
+// operator's PublicHostname (the host running the inbound SMTP listener); for
+// everything else (NoopProvider, unconfigured) it returns "" — which
 // suppresses the MX check (always failing OK=false with an informative hint
 // in the UI).
-func expectedInboundMXHost(provider Provider) string {
+func expectedInboundMXHost(app core.App, provider Provider) string {
+	if host := systemSetting(app, "mail.inbound_mx_host"); host != "" {
+		return host
+	}
 	switch p := provider.(type) {
 	case *PostmarkProvider:
 		return postmarkInboundMXHost
@@ -322,9 +332,14 @@ func verifyDomainRecord(ctx context.Context, app core.App, record *core.Record) 
 		ProviderConfigured: providerConfigured,
 		ProviderName:       providerName,
 	}
-	details.MX = checkMX(ctx, domain, expectedInboundMXHost(provider))
+	mxHost := expectedInboundMXHost(app, provider)
+	details.MX = checkMX(ctx, domain, mxHost)
 	details.Provider = checkProviderInbound(ctx, provider, domain)
 	details.Outbound = checkOutbound(ctx, record)
+	// Stamped from the same value the MX check just used, not read back off
+	// details.MX.Expected, so the DNS panel's MX row always matches the row
+	// above it.
+	details.Outbound.MXHost = mxHost
 
 	record.Set("mx_verified", details.MX.OK)
 	record.Set("inbound_domain_verified", details.Provider.OK)
