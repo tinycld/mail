@@ -9,10 +9,10 @@ import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
 import { Button, ButtonText } from '@tinycld/core/ui/button'
 import { useState } from 'react'
 import { Text, View } from 'react-native'
+import { AddDomainForm } from '~/tinycld/mail/settings/AddDomainForm'
 import { DnsRecordsPanel } from '~/tinycld/mail/settings/DnsRecordsPanel'
-import { AddDomainForm } from '~/tinycld/mail/settings/provider'
 import { assertVerifySaved } from '~/tinycld/mail/settings/verify-domain'
-import { hasVerifiedDomain } from '~/tinycld/mail/setup/setup-logic'
+import { domainPanelTarget, hasVerifiedDomain } from '~/tinycld/mail/setup/setup-logic'
 
 // Adding and verifying domains is an owner/admin action on the server.
 export function useIsStepVisible() {
@@ -58,13 +58,36 @@ function useVerifyDomain() {
     }
 }
 
-// The domain added in this step. Its DNS records come from the live row once
-// a verify has refreshed them, and from the add response until then.
-function useNewDomain(domains: DomainItem[]) {
+interface PanelDomain {
+    id: string
+    domain: string
+    outbound: OutboundCheckResult | undefined
+    isVerified: boolean
+}
+
+// The domain the DNS + Verify panel is for. A just-added domain shows the add
+// response's records until its row syncs; a row's records come from its last
+// verify.
+function useDomainPanel(domains: DomainItem[]) {
     const [added, setAdded] = useState<AddDomainResponse | null>(null)
-    const row = domains.find(d => d.id === added?.id)
-    const outbound: OutboundCheckResult | undefined = row?.outbound ?? added?.records
-    return { added, setAdded, outbound, isVerified: row?.verified ?? false }
+    const { verify, isPending, errorMessage } = useVerifyDomain()
+    const row = domainPanelTarget(domains, added?.id)
+    const fromRow: PanelDomain | null = row
+        ? { id: row.id, domain: row.domain, outbound: row.outbound, isVerified: row.verified }
+        : null
+    const fromAdded: PanelDomain | null = added
+        ? { id: added.id, domain: added.domain, outbound: added.records, isVerified: false }
+        : null
+    const domain = fromRow ?? fromAdded
+    return {
+        domain,
+        setAdded,
+        onVerify: () => {
+            if (domain) verify(domain.id)
+        },
+        isPending,
+        errorMessage,
+    }
 }
 
 function VerifiedLabel({ isVerified }: { isVerified: boolean }) {
@@ -77,34 +100,30 @@ function ErrorText({ message }: { message: string | null }) {
     return <Text className="text-sm text-danger">{message}</Text>
 }
 
-function NewDomainPanel({
-    added,
-    outbound,
-    isVerified,
-}: {
-    added: AddDomainResponse | null
-    outbound: OutboundCheckResult | undefined
-    isVerified: boolean
-}) {
-    const { verify, isPending, errorMessage } = useVerifyDomain()
-    if (!added) return null
+function DomainPanel({
+    domain,
+    onVerify,
+    isPending,
+    errorMessage,
+}: Omit<ReturnType<typeof useDomainPanel>, 'setAdded'>) {
+    if (!domain) return null
     return (
         <View testID="setup-new-domain" className="mb-4 gap-2 rounded-xl border border-border p-3">
             <Text className="text-sm text-foreground">
-                Publish these records at your DNS provider for {added.domain}, then verify. DNS
+                Publish the DNS records for {domain.domain} at your DNS provider, then verify. DNS
                 changes can take some time to show.
             </Text>
-            <DnsRecordsPanel outbound={outbound} isVisible />
+            <DnsRecordsPanel outbound={domain.outbound} isVisible />
             <View className="flex-row items-center gap-3">
                 <Button
                     variant="outline"
                     className="self-start"
-                    onPress={() => verify(added.id)}
+                    onPress={onVerify}
                     isDisabled={isPending}
                 >
                     <ButtonText>{isPending ? 'Verifying…' : 'Verify'}</ButtonText>
                 </Button>
-                <VerifiedLabel isVerified={isVerified} />
+                <VerifiedLabel isVerified={domain.isVerified} />
             </View>
             <ErrorText message={errorMessage} />
         </View>
@@ -133,7 +152,7 @@ function DomainList({ domains }: { domains: DomainItem[] }) {
 
 export default function EmailDomainStep({ next }: SetupStepProps) {
     const domains = useDomains()
-    const { added, setAdded, outbound, isVerified } = useNewDomain(domains)
+    const { setAdded, ...panel } = useDomainPanel(domains)
     return (
         <View className="max-w-[440px] gap-1">
             <Text className="text-2xl font-bold text-foreground">Your email domain</Text>
@@ -144,7 +163,7 @@ export default function EmailDomainStep({ next }: SetupStepProps) {
             <SidebarSlot target="mail" slot="setup-domain-options" />
             <Text className="mt-2 text-sm font-semibold text-foreground">Use my own domain</Text>
             <AddDomainForm onAdded={setAdded} />
-            <NewDomainPanel added={added} outbound={outbound} isVerified={isVerified} />
+            <DomainPanel {...panel} />
             <DomainList domains={domains} />
             <Button className="self-start" onPress={next}>
                 <ButtonText>Continue</ButtonText>

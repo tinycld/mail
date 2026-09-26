@@ -12,6 +12,18 @@ export function verifiedDomainOptions(
     return rows.filter(row => row.verified).map(row => ({ label: row.domain, value: row.id }))
 }
 
+// Which domain the step's DNS + Verify panel is for. The domain added in this
+// visit wins, verified or not, so the person sees it turn green. Otherwise it
+// is the newest unverified domain, so a person who comes back to the wizard
+// can still finish one they added earlier. `rows` are oldest first.
+export function domainPanelTarget<T extends { id: string; verified: boolean }>(
+    rows: readonly T[],
+    addedId: string | undefined
+): T | undefined {
+    if (addedId) return rows.find(row => row.id === addedId)
+    return rows.filter(row => !row.verified).at(-1)
+}
+
 export function testMessageRequest({
     mailboxId,
     to,

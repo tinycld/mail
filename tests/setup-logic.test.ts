@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+    domainPanelTarget,
     hasVerifiedDomain,
     testMessageRequest,
     verifiedDomainOptions,
@@ -27,6 +28,31 @@ describe('hasVerifiedDomain', () => {
 describe('verifiedDomainOptions', () => {
     it('offers only verified domains, keyed by record id', () => {
         expect(verifiedDomainOptions(domains)).toEqual([{ label: 'ready.test', value: 'd2' }])
+    })
+})
+
+describe('domainPanelTarget', () => {
+    const rows = [
+        { id: 'a', verified: false },
+        { id: 'b', verified: true },
+        { id: 'c', verified: false },
+        { id: 'd', verified: true },
+    ]
+
+    it('picks the domain added in this visit, even once verified', () => {
+        expect(domainPanelTarget(rows, 'b')?.id).toBe('b')
+    })
+
+    it('is undefined while the added domain has not synced yet', () => {
+        expect(domainPanelTarget(rows, 'new')).toBeUndefined()
+    })
+
+    it('otherwise picks the newest unverified domain', () => {
+        expect(domainPanelTarget(rows, undefined)?.id).toBe('c')
+    })
+
+    it('is undefined when every domain is verified', () => {
+        expect(domainPanelTarget([{ id: 'b', verified: true }], undefined)).toBeUndefined()
     })
 })
 
