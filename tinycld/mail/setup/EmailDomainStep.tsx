@@ -12,7 +12,7 @@ import { Text, View } from 'react-native'
 import { AddDomainForm } from '../settings/AddDomainForm'
 import { DnsRecordsPanel } from '../settings/DnsRecordsPanel'
 import { assertVerifySaved } from '../settings/verify-domain'
-import { domainPanelTarget, hasVerifiedDomain } from './setup-logic'
+import { domainPanelTarget, hasVerifiedDomain, setupAddDomainError } from './setup-logic'
 
 // Adding and verifying domains is an owner/admin action on the server.
 export function useIsStepVisible() {
@@ -162,7 +162,7 @@ export default function EmailDomainStep({ next }: SetupStepProps) {
             </Text>
             <SidebarSlot target="mail" slot="setup-domain-options" />
             <Text className="mt-2 text-sm font-semibold text-foreground">Use my own domain</Text>
-            <AddDomainForm onAdded={setAdded} />
+            <AddDomainForm onAdded={setAdded} describeError={setupAddDomainError} />
             <DomainPanel {...panel} />
             <DomainList domains={domains} />
             <Button className="self-start" onPress={next}>

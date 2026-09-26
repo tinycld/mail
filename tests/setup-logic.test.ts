@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
     domainPanelTarget,
     hasVerifiedDomain,
+    setupAddDomainError,
     testMessageRequest,
     verifiedDomainOptions,
 } from '~/tinycld/mail/setup/setup-logic'
@@ -79,5 +80,19 @@ describe('testMessageRequest', () => {
     it('falls back when the workspace has no name', () => {
         const req = testMessageRequest({ mailboxId: 'mb1', to: 'a@b.test', workspaceName: '  ' })
         expect(req.subject).toBe('Test message from your workspace')
+    })
+})
+
+describe('setupAddDomainError', () => {
+    it('sends a 503 to the Email sending step', () => {
+        expect(setupAddDomainError({ status: 503, response: {} })).toBe(
+            'Set up email sending first, then come back to this step.'
+        )
+    })
+
+    it('keeps the default message for any other error', () => {
+        expect(setupAddDomainError({ status: 409 })).toBeNull()
+        expect(setupAddDomainError(new Error('boom'))).toBeNull()
+        expect(setupAddDomainError(null)).toBeNull()
     })
 })

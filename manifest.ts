@@ -12,9 +12,9 @@ const manifest = {
             id: 'email-domain',
             label: 'Email domain',
             module: 'setup/EmailDomainStep',
-            order: 'a0k',
+            order: 'a2V',
         },
-        { id: 'address', label: 'Your address', module: 'setup/AddressStep', order: 'a0s' },
+        { id: 'address', label: 'Your address', module: 'setup/AddressStep', order: 'a2k' },
     ],
     settings: [
         // 'Domains' — matches the screen's own heading, and keeps this

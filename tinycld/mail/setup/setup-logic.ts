@@ -24,6 +24,15 @@ export function domainPanelTarget<T extends { id: string; verified: boolean }>(
     return rows.filter(row => !row.verified).at(-1)
 }
 
+// The add endpoint answers 503 when this deployment has no mail provider to
+// enroll the domain with, which the Email sending step sets up.
+export function setupAddDomainError(error: unknown): string | null {
+    const status =
+        typeof error === 'object' && error !== null && 'status' in error ? error.status : undefined
+    if (status !== 503) return null
+    return 'Set up email sending first, then come back to this step.'
+}
+
 export function testMessageRequest({
     mailboxId,
     to,

@@ -19,7 +19,15 @@ const addDomainSchema = z.object({
 
 // Shared by the Domains settings screen and the setup wizard's domain step,
 // so both add a domain through the same form and endpoint.
-export function AddDomainForm({ onAdded }: { onAdded?: (added: AddDomainResponse) => void }) {
+// describeError lets a caller replace the server's message for an error it
+// understands better in its own context; returning null keeps the default.
+export function AddDomainForm({
+    onAdded,
+    describeError,
+}: {
+    onAdded?: (added: AddDomainResponse) => void
+    describeError?: (error: unknown) => string | null
+}) {
     const primaryFgColor = useThemeColor('primary-foreground')
 
     const {
@@ -35,6 +43,7 @@ export function AddDomainForm({ onAdded }: { onAdded?: (added: AddDomainResponse
         defaultValues: { domain: '' },
     })
 
+    const handleFormError = handleMutationErrorsWithForm({ setError, getValues })
     const addMutation = useMutation({
         mutationFn: async (data: z.infer<typeof addDomainSchema>) =>
             pb.send<AddDomainResponse>('/api/mail/domains', {
@@ -45,7 +54,14 @@ export function AddDomainForm({ onAdded }: { onAdded?: (added: AddDomainResponse
             reset()
             onAdded?.(added)
         },
-        onError: handleMutationErrorsWithForm({ setError, getValues }),
+        onError: error => {
+            const message = describeError?.(error)
+            if (message) {
+                setError('domain', { type: 'manual', message })
+                return
+            }
+            handleFormError(error)
+        },
     })
 
     const onSubmit = handleSubmit(data => addMutation.mutate(data))

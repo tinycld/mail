@@ -41,10 +41,19 @@ describe('mail manifest', () => {
                 id: 'email-domain',
                 label: 'Email domain',
                 module: 'setup/EmailDomainStep',
-                order: 'a0k',
+                order: 'a2V',
             },
-            { id: 'address', label: 'Your address', module: 'setup/AddressStep', order: 'a0s' },
+            { id: 'address', label: 'Your address', module: 'setup/AddressStep', order: 'a2k' },
         ])
         expect(manifest.slots).toContain('setup-domain-options')
+    })
+
+    // Both steps need a mail provider, which core's Email sending step (a2)
+    // sets up, and both come before the team invite (a3).
+    it('orders the setup steps after Email sending and before the team', () => {
+        for (const step of manifest.setupSteps ?? []) {
+            expect(step.order > 'a2').toBe(true)
+            expect(step.order < 'a3').toBe(true)
+        }
     })
 })
