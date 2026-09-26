@@ -108,7 +108,7 @@ func newInboundSMTPServer(app core.App, hostname string, tlsConfig *tls.Config) 
 // domain through the control-plane registry, and relays accepted messages
 // here over the org's private unix socket. There is no
 // MAIL_INBOUND_SMTP_ENABLED gate on this path: whether :25 is open is the
-// router operator's call, and a handed-down listener nothing dials costs
+// supervisor operator's call, and a handed-down listener nothing dials costs
 // nothing.
 func startSMTPInboundOnListener(app core.App, listen mailproto.ListenFunc) (func(), error) {
 	hostname := inboundHostname(app)
@@ -135,8 +135,9 @@ func startSMTPInboundOnListener(app core.App, listen mailproto.ListenFunc) (func
 
 // inboundHostname resolves the identity the MX greeting announces:
 // SMTP_PUBLIC_HOSTNAME when the operator set one, else the app's public host —
-// a tenant's allowlist env is empty, but its AppURL was adopted from the
-// router-materialized app config at boot, so this yields <slug>.<baseDomain>.
+// under a supervisor the allowlist env is empty, but AppURL was adopted from
+// the app config the supervisor wrote at boot, so this yields the
+// deployment's own public host.
 func inboundHostname(app core.App) string {
 	if h := os.Getenv("SMTP_PUBLIC_HOSTNAME"); h != "" {
 		return h

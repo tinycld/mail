@@ -12,10 +12,10 @@ import (
 // through the generic record API.
 //
 // provider_domain_metadata is the load-bearing one. It carries the provider's
-// numeric domain id, which on a hosted deployment is a handle into a Postmark
-// ACCOUNT SHARED BY EVERY ORG. A tenant that can choose that id can ask the
-// router to dereference another org's enrollment with the operator's account
-// token — the cross-tenant disclosure this guard exists to close. The field is
+// numeric domain id, which can be a handle into a Postmark ACCOUNT SHARED BY
+// MANY DEPLOYMENTS. A client that can choose that id can ask whatever holds
+// the account token to dereference another deployment's enrollment — the
+// disclosure this guard exists to close. The field is
 // written only by handleAddDomain (from the provider's own enrollment
 // response) and by checkOutbound (from the provider's own status response).
 //

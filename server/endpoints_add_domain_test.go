@@ -334,7 +334,7 @@ func TestAddDomainDoesNotCreateRecordWhenProvisioningNotConfigured(t *testing.T)
 
 // AMENDMENT 1 / the new migration's entire justification: the created row must
 // carry the provider's own domain id. Without it every later status check
-// falls back to the paged by-name scan, which on a shared hosting account
+// falls back to the paged by-name scan, which on a shared provider account
 // reports a domain past the first page as unenrolled. The enrollment state is
 // asserted alongside it so a write to the wrong field name — or to the right
 // field with the id dropped — fails here.

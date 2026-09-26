@@ -14,6 +14,11 @@ import (
 	"tinycld.org/packages/mail/api"
 )
 
+// domainExistsCode marks a 409 whose cause is a mail_domains row this
+// deployment already holds, so a client can tell it from the provider-side
+// duplicate, which is also a 409.
+const domainExistsCode = "domain_exists"
+
 // handleAddDomain enrolls a domain with the mail provider and then creates the
 // mail_domains row.
 //
@@ -22,14 +27,9 @@ import (
 // the provider had never heard of: they displayed as verified and every send
 // from them failed. A row that exists is now a row the provider knows.
 //
-// On a hosted deployment the enrollment call travels over ctl.sock to the
-// router, which holds the account token. This handler cannot tell the
+// Where another process holds the provider account token, the enrollment call
+// travels to it through the maildomains seam. This handler cannot tell the
 // difference, and must not be able to.
-// domainExistsCode marks a 409 whose cause is a mail_domains row this
-// deployment already holds, so a client can tell it from the provider-side
-// duplicate, which is also a 409.
-const domainExistsCode = "domain_exists"
-
 func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 	return func(re *core.RequestEvent) error {
 		if err := verifyAdmin(re.Auth); err != nil {

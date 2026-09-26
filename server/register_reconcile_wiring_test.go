@@ -20,8 +20,7 @@ import (
 // registrar happened to be installed, which on a switch to SMTP means every
 // domain reported "enrolled" from pure DNS lookups.
 //
-// Modelled on hosting/cmd/serve-router/hooks_test.go, which exists for the
-// same reason one level up: exercise the real production symbol so removing
+// The point is to exercise the real production symbol so removing
 // the call fails here.
 //
 // The observable signal is maildomains.Current(): a sentinel registrar is

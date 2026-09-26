@@ -333,7 +333,7 @@ func registerShared(app *pocketbase.PocketBase) {
 		// reconcileMailDomainsRegistrar) so a deployment that boots straight
 		// into Postmark does not rely solely on core's own wireMailDomains,
 		// which only runs once and cannot react to a later provider switch.
-		// A no-op on a hosted composition (the seam is already claimed).
+		// A no-op when a delegating registrar already claimed the seam.
 		reconcileMailDomainsRegistrar(app)
 
 		// Draft endpoint (requires auth, saves without sending)
@@ -490,9 +490,9 @@ func systemSetting(_ core.App, key string) string {
 //
 // Deliberately NOT called from newProviderFromSystem: that function runs on
 // every send/verify/webhook request, and SetResolver has nothing new to do
-// between settings changes. A hosted composition has already claimed the
-// seam with its delegating registrar before this ever runs; SetResolver is a
-// no-op there by design.
+// between settings changes. A composition that delegates enrollment has
+// already claimed the seam with its own registrar before this ever runs;
+// SetResolver is a no-op there by design.
 //
 // The non-SMTP (Postmark) branch constructs its own registrar here — mail
 // cannot rely solely on core's wireMailDomains, because wireMailDomains runs

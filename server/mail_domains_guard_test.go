@@ -117,9 +117,9 @@ func runDomainGuardScenario(
 }
 
 // C1 layer 2: provider_domain_metadata carries the provider's account-scoped
-// domain id. On a hosted deployment that account is shared by every org, so a
-// tenant that can choose the id can make the router dereference ANOTHER org's
-// enrollment with the operator's account token. An org admin is authenticated
+// domain id. That account can be shared by many deployments, so a client that
+// can choose the id can make the account-token holder dereference ANOTHER
+// deployment's enrollment. An org admin is authenticated
 // and passes the collection's update rule, so the rule is no defence — the
 // field simply is not client state.
 func TestMailDomainsGuardRejectsProviderMetadataPatch(t *testing.T) {
@@ -140,7 +140,7 @@ func TestMailDomainsGuardRejectsProviderMetadataPatch(t *testing.T) {
 			}
 			meta := readProviderDomainMetadata(rec)
 			if meta.Postmark == nil || meta.Postmark.DomainID != 7 {
-				t.Fatalf("provider domain id = %+v, want the server's 7 — the tenant overwrote it", meta.Postmark)
+				t.Fatalf("provider domain id = %+v, want the server's 7 — the client overwrote it", meta.Postmark)
 			}
 		},
 	)
@@ -184,7 +184,7 @@ func TestMailDomainsGuardRejectsVerifiedPatch(t *testing.T) {
 				t.Fatalf("row vanished: %v", err)
 			}
 			if rec.GetBool("verified") {
-				t.Fatal("verified = true — the tenant self-certified an unverified domain")
+				t.Fatal("verified = true — the client self-certified an unverified domain")
 			}
 		},
 	)
