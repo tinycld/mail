@@ -82,7 +82,7 @@ The webhook secret is a per-domain random 32-character hex string, auto-generate
 
 Delete the domain row from the settings page. This removes it from TinyCld but doesn't touch your DNS records or the provider side — you'll want to remove those manually if the domain isn't going to be used elsewhere.
 
-Mailboxes and aliases on the deleted domain are also removed (cascade), so be sure no one is depending on the addresses before deleting.
+Mailboxes and aliases on the deleted domain are also removed (cascade), so be sure no one is depending on the addresses before deleting. Before it removes the domain, Mail tells you how many mailboxes go with it. Click **Remove domain** to continue.
 
 ## See also
 
