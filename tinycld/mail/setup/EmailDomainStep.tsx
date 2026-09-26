@@ -10,7 +10,7 @@ import { Button, ButtonText } from '@tinycld/core/ui/button'
 import { useState } from 'react'
 import { Text, View } from 'react-native'
 import { AddDomainForm } from '../settings/AddDomainForm'
-import { DnsRecordsPanel } from '../settings/DnsRecordsPanel'
+import { DnsRecordsPanel, hasUnpublishedDnsRecords } from '../settings/DnsRecordsPanel'
 import { assertVerifySaved } from '../settings/verify-domain'
 import { domainPanelTarget, hasVerifiedDomain, setupAddDomainError } from './setup-logic'
 
@@ -100,6 +100,24 @@ function ErrorText({ message }: { message: string | null }) {
     return <Text className="text-sm text-danger">{message}</Text>
 }
 
+// The publish instruction only applies while a record is still unverified; a
+// domain whose DNS someone else manages has nothing for the person to publish.
+function PanelIntro({ domain }: { domain: PanelDomain }) {
+    if (!hasUnpublishedDnsRecords(domain.outbound)) {
+        return (
+            <Text className="text-sm text-foreground">
+                Verify {domain.domain} to check its setup.
+            </Text>
+        )
+    }
+    return (
+        <Text className="text-sm text-foreground">
+            Publish the DNS records for {domain.domain} at your DNS provider, then verify. DNS
+            changes can take some time to show.
+        </Text>
+    )
+}
+
 function DomainPanel({
     domain,
     onVerify,
@@ -109,10 +127,7 @@ function DomainPanel({
     if (!domain) return null
     return (
         <View testID="setup-new-domain" className="mb-4 gap-2 rounded-xl border border-border p-3">
-            <Text className="text-sm text-foreground">
-                Publish the DNS records for {domain.domain} at your DNS provider, then verify. DNS
-                changes can take some time to show.
-            </Text>
+            <PanelIntro domain={domain} />
             <DnsRecordsPanel outbound={domain.outbound} isVisible />
             <View className="flex-row items-center gap-3">
                 <Button
