@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
     hasVerifiedDomain,
-    isMailboxMember,
     testMessageRequest,
     verifiedDomainOptions,
 } from '~/tinycld/mail/setup/setup-logic'
@@ -28,23 +27,6 @@ describe('hasVerifiedDomain', () => {
 describe('verifiedDomainOptions', () => {
     it('offers only verified domains, keyed by record id', () => {
         expect(verifiedDomainOptions(domains)).toEqual([{ label: 'ready.test', value: 'd2' }])
-    })
-})
-
-describe('isMailboxMember', () => {
-    const memberships = [{ user: 'u1' }, { user: 'u2' }]
-
-    it('is true when the user has a membership', () => {
-        expect(isMailboxMember(memberships, 'u2')).toBe(true)
-    })
-
-    it('is false when the user has none', () => {
-        expect(isMailboxMember(memberships, 'u3')).toBe(false)
-    })
-
-    it('is false for a blank user id, even against a row with a blank user', () => {
-        expect(isMailboxMember([{ user: '' }], '')).toBe(false)
-        expect(isMailboxMember([{ user: '' }], undefined)).toBe(false)
     })
 })
 

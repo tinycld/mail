@@ -11,9 +11,9 @@ import { useOrgInfo } from '@tinycld/core/lib/use-org-info'
 import { Button, ButtonText } from '@tinycld/core/ui/button'
 import { Text, View } from 'react-native'
 import { MailboxForm } from '~/tinycld/mail/settings/MailboxForm'
+import { defaultAddressFor } from '~/tinycld/mail/settings/mailbox-records'
 import {
     hasVerifiedDomain,
-    isMailboxMember,
     testMessageRequest,
     verifiedDomainOptions,
 } from '~/tinycld/mail/setup/setup-logic'
@@ -36,15 +36,14 @@ export function useIsStepVisible() {
 }
 
 export function useIsStepDone() {
-    const { user } = useAuth({ throwIfAnon: false })
     const [membersCollection] = useStore('mail_mailbox_members')
     const { data, isReady } = useMyLiveQuery((query, { userId }) =>
         query
             .from({ m: membersCollection })
             .where(({ m }) => eq(m.user, userId))
-            .select(({ m }) => ({ user: m.user }))
+            .select(({ m }) => ({ id: m.id }))
     )
-    return isReady ? isMailboxMember(data ?? [], user?.id) : undefined
+    return isReady ? (data?.length ?? 0) > 0 : undefined
 }
 
 // The newest mailbox the current user belongs to: the one this step created,
@@ -127,15 +126,33 @@ function CreatedMailbox({ mailbox }: { mailbox: { id: string; email: string } })
     )
 }
 
+// The user's username and name prefill the form, as the server does when it
+// gives a later user their own address.
+function useMe() {
+    const [usersCollection] = useStore('users')
+    const { data } = useMyLiveQuery((query, { userId }) =>
+        query
+            .from({ u: usersCollection })
+            .where(({ u }) => eq(u.id, userId))
+            .select(({ u }) => ({ id: u.id, username: u.username, name: u.name }))
+    )
+    return data?.[0]
+}
+
 function NewMailboxForm() {
-    const { user } = useAuth()
+    const me = useMe()
     const { rows } = useDomainRows()
+    // The form reads its defaults once, so it mounts after the user row loads.
+    if (!me) return null
+    const defaults = { address: defaultAddressFor(me.username), display_name: me.name }
     return (
         <View className="mb-4">
             <MailboxForm
                 mode="create"
+                type="personal"
                 domainOptions={verifiedDomainOptions(rows)}
-                userId={user.id}
+                userId={me.id}
+                defaults={defaults}
                 onDone={noop}
             />
         </View>

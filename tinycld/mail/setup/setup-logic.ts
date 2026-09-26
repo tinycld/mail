@@ -12,14 +12,6 @@ export function verifiedDomainOptions(
     return rows.filter(row => row.verified).map(row => ({ label: row.domain, value: row.id }))
 }
 
-export function isMailboxMember(
-    memberships: ReadonlyArray<{ user: string }>,
-    userId: string | undefined
-): boolean {
-    if (!userId) return false
-    return memberships.some(m => m.user === userId)
-}
-
 export function testMessageRequest({
     mailboxId,
     to,
