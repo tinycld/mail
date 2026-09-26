@@ -240,9 +240,12 @@ func TestEventFromBounce_DeliveryMapsToDelivered(t *testing.T) {
 		DeliveredAt: "2026-01-02T03:04:05Z",
 	}
 
-	event, ok := eventFromBounce(b)
+	event, recognised, ok := eventFromBounce(b)
 	if !ok {
 		t.Fatal("eventFromBounce reported not-ok for a Delivery record")
+	}
+	if !recognised {
+		t.Error("recognised = false, want true for a Delivery record")
 	}
 	if event.Kind != deliveryevents.Delivered {
 		t.Errorf("Kind = %v, want Delivered", event.Kind)
@@ -259,9 +262,12 @@ func TestEventFromBounce_DeliveryMapsToDelivered(t *testing.T) {
 func TestEventFromBounce_SpamComplaintMapsToComplaint(t *testing.T) {
 	b := &BounceEvent{RecordType: "SpamComplaint", MessageID: "pm-1", Description: "spam"}
 
-	event, ok := eventFromBounce(b)
+	event, recognised, ok := eventFromBounce(b)
 	if !ok {
 		t.Fatal("eventFromBounce reported not-ok for a SpamComplaint record")
+	}
+	if !recognised {
+		t.Error("recognised = false, want true for a SpamComplaint record")
 	}
 	if event.Kind != deliveryevents.Complaint {
 		t.Errorf("Kind = %v, want Complaint", event.Kind)
@@ -277,9 +283,12 @@ func TestEventFromBounce_SpamComplaintMapsToComplaint(t *testing.T) {
 func TestEventFromBounce_HardBounceMapsToBouncedHard(t *testing.T) {
 	b := &BounceEvent{RecordType: "Bounce", MessageID: "pm-1", TypeCode: pmCodeHardBounce, Description: "no such user"}
 
-	event, ok := eventFromBounce(b)
+	event, recognised, ok := eventFromBounce(b)
 	if !ok {
 		t.Fatal("eventFromBounce reported not-ok for a recognised hard bounce")
+	}
+	if !recognised {
+		t.Error("recognised = false, want true for a recognised hard bounce")
 	}
 	if event.Kind != deliveryevents.Bounced {
 		t.Errorf("Kind = %v, want Bounced", event.Kind)
@@ -289,12 +298,20 @@ func TestEventFromBounce_HardBounceMapsToBouncedHard(t *testing.T) {
 	}
 }
 
-func TestEventFromBounce_UnrecognisedBounceMapsToBouncedWithEmptyClass(t *testing.T) {
+// The unrecognised case is the one the review caught: ok (there IS a message
+// to apply the event to) must stay true so the bounce still gets recorded,
+// but recognised must go false so handleBounce's "unrecognised bounce type"
+// warning still fires — folding the two into one bool silenced that warning
+// for every unmapped provider failure type.
+func TestEventFromBounce_UnrecognisedBounceIsStillAppliedButNotRecognised(t *testing.T) {
 	b := &BounceEvent{RecordType: "Bounce", MessageID: "pm-1", TypeCode: 999999}
 
-	event, ok := eventFromBounce(b)
+	event, recognised, ok := eventFromBounce(b)
 	if !ok {
 		t.Fatal("eventFromBounce reported not-ok for an unrecognised bounce")
+	}
+	if recognised {
+		t.Error("recognised = true, want false for an unrecognised type")
 	}
 	if event.Kind != deliveryevents.Bounced {
 		t.Errorf("Kind = %v, want Bounced", event.Kind)
@@ -304,16 +321,9 @@ func TestEventFromBounce_UnrecognisedBounceMapsToBouncedWithEmptyClass(t *testin
 	}
 }
 
-func TestDomainOf(t *testing.T) {
-	cases := map[string]string{
-		"alice@example.com": "example.com",
-		"no-at-sign":        "",
-		"":                  "",
-		"a@b@c.com":         "c.com",
-	}
-	for in, want := range cases {
-		if got := domainOf(in); got != want {
-			t.Errorf("domainOf(%q) = %q, want %q", in, got, want)
-		}
+func TestEventFromBounce_EmptyMessageIDIsNotOk(t *testing.T) {
+	_, _, ok := eventFromBounce(&BounceEvent{RecordType: "Bounce", TypeCode: pmCodeHardBounce})
+	if ok {
+		t.Fatal("ok = true, want false when the payload carries no message id")
 	}
 }

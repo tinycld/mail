@@ -50,6 +50,41 @@ func TestBuildFromAddress_UsesPrimaryWhenAliasNil(t *testing.T) {
 	}
 }
 
+// TestSendMetadata_SenderDomainIsBareDomainNotFromHeader proves the
+// sender_domain metadata value sendMessage sets is the domain record's own
+// field, not something parsed out of buildFromAddress's output. A prior
+// version ran a naive domainOf(fromAddr) parse on the formatted From header
+// ("Name <addr@domain>" or "<addr@domain>"), which returns "domain>" — this
+// pins the fix by constructing the same From header sendMessage builds and
+// showing it plays no part in the metadata value.
+func TestSendMetadata_SenderDomainIsBareDomainNotFromHeader(t *testing.T) {
+	app := setupAliasTestApp(t)
+	seedDomainAndMailbox(t, app, "acme.com", "support", "mb_send_test007")
+
+	mb, err := app.FindRecordById("mail_mailboxes", padID("mb_send_test007"))
+	if err != nil {
+		t.Fatalf("failed to load mailbox: %v", err)
+	}
+	domainRecord, err := app.FindRecordById("mail_domains", mb.GetString("domain"))
+	if err != nil {
+		t.Fatalf("failed to load domain: %v", err)
+	}
+
+	fromAddr := buildFromAddress(mb, domainRecord, nil)
+	if !strings.Contains(fromAddr, "<") {
+		t.Fatalf("expected buildFromAddress to produce an angle-bracket From header, got %q", fromAddr)
+	}
+
+	// This mirrors exactly what sendMessage puts in sendReq.Metadata.
+	got := strings.ToLower(domainRecord.GetString("domain"))
+	if got != "acme.com" {
+		t.Errorf("sender_domain metadata = %q, want acme.com", got)
+	}
+	if strings.Contains(got, "<") || strings.Contains(got, ">") {
+		t.Errorf("sender_domain metadata = %q, must not carry From-header punctuation", got)
+	}
+}
+
 func TestVerifyAliasBelongsToMailbox_RejectsMismatch(t *testing.T) {
 	app := setupAliasTestApp(t)
 

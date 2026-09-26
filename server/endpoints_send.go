@@ -213,7 +213,9 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 
 		// Echoed back on the provider's delivery and bounce notifications,
 		// which carry no From address for a receiver to attribute them by.
-		Metadata: map[string]string{senderDomainMetadataKey: domainOf(fromAddr)},
+		// fromAddr is "Name <addr@domain>" or "<addr@domain>" (buildFromAddress),
+		// not a bare address — the domain record itself is the reliable source.
+		Metadata: map[string]string{senderDomainMetadataKey: strings.ToLower(domain)},
 	}
 
 	// The abuse gate runs above the demo branch on purpose, so a demo account

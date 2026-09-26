@@ -12,18 +12,6 @@ import (
 // back to a sender without a From address to go on — see endpoints_send.go.
 const senderDomainMetadataKey = "sender_domain"
 
-// domainOf returns the part of an email address after the last "@", or ""
-// if addr has none. addr@b@c.com resolves as c.com: the last "@" wins,
-// matching how a mail server itself parses the address.
-func domainOf(addr string) string {
-	for i := len(addr) - 1; i >= 0; i-- {
-		if addr[i] == '@' {
-			return addr[i+1:]
-		}
-	}
-	return ""
-}
-
 // applyDeliveryEvent is the one place a provider delivery/bounce/complaint
 // notification is applied to a stored mail_messages row, whether it arrived
 // through this package's own webhook (handleBounce) or was handed over by
@@ -93,18 +81,18 @@ func truncateRunes(s string, n int) string {
 }
 
 // eventFromBounce maps a parsed provider bounce/delivery payload onto the
-// package-agnostic deliveryevents.Event, or reports ok = false for a
-// notification that doesn't correspond to a delivery outcome at all — an
-// auto-responder or unsubscribe notice, say (classifyBounce's
-// bounceClassNone with recognised = false is the "unmapped" case; recognised
-// = true with bounceClassNone never reaches here as a failure at all, since
-// that only occurs for notifications that classifyBounce already treats as
-// not a delivery failure — see its NonFailures case, which this function
-// still reports as a Bounced event with an empty Class, matching the brief's
-// requirement that only genuinely unrecognised types carry Class "").
-func eventFromBounce(b *BounceEvent) (deliveryevents.Event, bool) {
+// package-agnostic deliveryevents.Event.
+//
+// ok reports whether the payload identifies a message at all (a non-empty
+// MessageID) — false means there is nothing to apply, full stop. recognised
+// is narrower: it is classifyBounce's own verdict on whether this specific
+// failure type is one mail knows how to classify, kept separate from ok so
+// an unmapped bounce type still gets applied as a Bounced event (with an
+// empty Class) AND still gets its own warning logged by the caller — folding
+// the two into one bool silenced that warning for every unrecognised type.
+func eventFromBounce(b *BounceEvent) (event deliveryevents.Event, recognised bool, ok bool) {
 	if b == nil || b.MessageID == "" {
-		return deliveryevents.Event{}, false
+		return deliveryevents.Event{}, false, false
 	}
 
 	if b.RecordType == "Delivery" {
@@ -113,7 +101,7 @@ func eventFromBounce(b *BounceEvent) (deliveryevents.Event, bool) {
 			Kind:              deliveryevents.Delivered,
 			ProviderMessageID: b.MessageID,
 			At:                at,
-		}, true
+		}, true, true
 	}
 
 	if b.RecordType == "SpamComplaint" {
@@ -123,17 +111,17 @@ func eventFromBounce(b *BounceEvent) (deliveryevents.Event, bool) {
 			Class:             "complaint",
 			Reason:            b.Description,
 			At:                bouncedAtOrNow(b.BouncedAt),
-		}, true
+		}, true, true
 	}
 
-	class, _ := classifyBounce(b)
+	class, recognised := classifyBounce(b)
 	return deliveryevents.Event{
 		Kind:              deliveryevents.Bounced,
 		ProviderMessageID: b.MessageID,
 		Class:             bounceClassToString(class),
 		Reason:            b.Description,
 		At:                bouncedAtOrNow(b.BouncedAt),
-	}, true
+	}, recognised, true
 }
 
 // bounceClassToString maps the internal classification onto the wire values

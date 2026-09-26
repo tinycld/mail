@@ -30,7 +30,7 @@ func handleBounce(app core.App, provider Provider, re *core.RequestEvent, secret
 		return re.BadRequestError("Missing message ID in bounce payload", nil)
 	}
 
-	deliveryEvent, recognised := eventFromBounce(event)
+	deliveryEvent, recognised, _ := eventFromBounce(event)
 	if !recognised {
 		// Not counted, and loud about it. A failure type nobody has mapped is
 		// a gap in whatever judges senders by these, and it should be noticed
