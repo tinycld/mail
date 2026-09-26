@@ -1,4 +1,4 @@
-import { eq } from '@tanstack/db'
+import { eq, gt, inArray } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import type { SendEmailResponse } from '@tinycld/app-generated/mail-api'
 import { SetupContinueButton } from '@tinycld/core/components/setup/wizard/SetupContinueButton'
@@ -10,10 +10,19 @@ import type { SetupStepProps } from '@tinycld/core/lib/setup/types'
 import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { useOrgInfo } from '@tinycld/core/lib/use-org-info'
 import { Button, ButtonText } from '@tinycld/core/ui/button'
+import { useRouter } from 'expo-router'
 import { Text, View } from 'react-native'
 import { MailboxForm } from '../settings/MailboxForm'
 import { defaultAddressFor } from '../settings/mailbox-records'
-import { hasVerifiedDomain, testMessageRequest, verifiedDomainOptions } from './setup-logic'
+import {
+    EMAIL_DOMAIN_STEP_HREF,
+    hasVerifiedDomain,
+    type TestMessageState,
+    testMessageLabel,
+    testMessageRequest,
+    testMessageState,
+    verifiedDomainOptions,
+} from './setup-logic'
 
 function useDomainRows() {
     const [domainsCollection] = useStore('mail_domains')
@@ -26,21 +35,31 @@ function useDomainRows() {
     return { rows: data ?? [], isReady }
 }
 
+// The step hooks declare their return type: the generated package config
+// imports this module, and an inferred type here would depend on the store
+// types that the same config builds, which is a cycle tsc cannot resolve.
+//
 // A mailbox needs a verified domain, so the step waits for the domain step.
-export function useIsStepVisible() {
+export function useIsStepVisible(): boolean | undefined {
     const { rows, isReady } = useDomainRows()
     return isReady ? hasVerifiedDomain(rows) : undefined
 }
 
-export function useIsStepDone() {
-    const [membersCollection] = useStore('mail_mailbox_members')
-    const { data, isReady } = useMyLiveQuery((query, { userId }) =>
+// Done only when a message has arrived. The mail_messages list rule already
+// limits rows to mailboxes the user is a member of, so a single-collection
+// query answers "delivered in one of my mailboxes" with one limit-1 request.
+// A join through members and threads would load every thread of every mailbox
+// the user can see, and this hook runs on each wizard render.
+export function useIsStepDone(): boolean | undefined {
+    const [messagesCollection] = useStore('mail_messages')
+    const { data, isReady } = useLiveQuery(query =>
         query
-            .from({ m: membersCollection })
-            .where(({ m }) => eq(m.user, userId))
-            .select(({ m }) => ({ id: m.id }))
+            .from({ msg: messagesCollection })
+            .where(({ msg }) => gt(msg.delivered_at, ''))
+            .select(({ msg }) => ({ id: msg.id }))
+            .findOne()
     )
-    return isReady ? (data?.length ?? 0) > 0 : undefined
+    return isReady ? data !== undefined : undefined
 }
 
 // The newest mailbox the current user belongs to: the one this step created,
@@ -83,14 +102,71 @@ function useTestMessage(mailboxId: string) {
         to: user.email,
         send: () => send.mutate(),
         isPending: send.isPending,
-        isSent: send.isSuccess,
         errorMessage: send.error ? errorToString(send.error) : null,
     }
 }
 
-function SentLabel({ isSent }: { isSent: boolean }) {
-    if (!isSent) return null
-    return <Text className="text-sm text-success">Sent</Text>
+const OUTBOUND_STATUSES = ['sent', 'bounced', 'spam_complaint']
+
+// The newest message the user sent from this mailbox. It is read from the
+// store, not from the send response, so the status is correct after a reload.
+function useTestMessageState(mailboxId: string) {
+    const [messagesCollection, threadsCollection] = useStore('mail_messages', 'mail_threads')
+    const { data } = useMyLiveQuery((query, { userId }) =>
+        query
+            .from({ msg: messagesCollection })
+            .innerJoin({ t: threadsCollection }, ({ msg, t }) => eq(msg.thread, t.id))
+            .where(({ msg }) => eq(msg.sent_by, userId))
+            .where(({ msg }) => inArray(msg.delivery_status, OUTBOUND_STATUSES))
+            .where(({ t }) => eq(t.mailbox, mailboxId))
+            .orderBy(({ msg }) => msg.created, 'desc')
+            .select(({ msg }) => ({
+                delivery_status: msg.delivery_status,
+                delivered_at: msg.delivered_at,
+                bounce_class: msg.bounce_class,
+                bounce_reason: msg.bounce_reason,
+            }))
+            .findOne()
+    )
+    return testMessageState(data)
+}
+
+function BouncedHelp({ isVisible }: { isVisible: boolean }) {
+    const router = useRouter()
+    if (!isVisible) return null
+    const openEmailDomainStep = () => router.push(EMAIL_DOMAIN_STEP_HREF)
+    return (
+        <Button
+            variant="link"
+            className="self-start px-0"
+            onPress={openEmailDomainStep}
+            testID="setup-address-check-dns"
+        >
+            <ButtonText>Check your DNS records</ButtonText>
+        </Button>
+    )
+}
+
+const STATUS_COLOR: Record<TestMessageState['kind'], string> = {
+    none: 'text-muted-foreground',
+    sending: 'text-muted-foreground',
+    sent: 'text-muted-foreground',
+    delivered: 'text-success',
+    bounced: 'text-danger',
+}
+
+function TestMessageStatus({ mailboxId }: { mailboxId: string }) {
+    const state = useTestMessageState(mailboxId)
+    if (state.kind === 'none') return null
+    const labelClass = `text-sm ${STATUS_COLOR[state.kind]}`
+    return (
+        <View className="gap-1">
+            <Text testID="setup-address-test-status" className={labelClass}>
+                {testMessageLabel(state)}
+            </Text>
+            <BouncedHelp isVisible={state.kind === 'bounced'} />
+        </View>
+    )
 }
 
 function ErrorText({ message }: { message: string | null }) {
@@ -99,7 +175,7 @@ function ErrorText({ message }: { message: string | null }) {
 }
 
 function CreatedMailbox({ mailbox }: { mailbox: { id: string; email: string } }) {
-    const { to, send, isPending, isSent, errorMessage } = useTestMessage(mailbox.id)
+    const { to, send, isPending, errorMessage } = useTestMessage(mailbox.id)
     return (
         <View testID="setup-address-created" className="mb-4 gap-2">
             <Text className="text-sm text-foreground">Your address is</Text>
@@ -116,8 +192,8 @@ function CreatedMailbox({ mailbox }: { mailbox: { id: string; email: string } })
                 >
                     <ButtonText>{isPending ? 'Sending…' : 'Send a test message'}</ButtonText>
                 </Button>
-                <SentLabel isSent={isSent} />
             </View>
+            <TestMessageStatus mailboxId={mailbox.id} />
             <ErrorText message={errorMessage} />
         </View>
     )

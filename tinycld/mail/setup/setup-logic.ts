@@ -1,4 +1,5 @@
 import type { SendEmailRequest } from '@tinycld/app-generated/mail-api'
+import { appHref } from '@tinycld/core/lib/org-routes'
 
 export function hasVerifiedDomain(rows: ReadonlyArray<{ verified: boolean }>): boolean {
     return rows.some(row => row.verified)
@@ -61,4 +62,51 @@ function escapeHtml(value: string): string {
         .replaceAll('<', '&lt;')
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
+}
+
+export const EMAIL_DOMAIN_STEP_HREF = appHref('setup/mail.email-domain')
+
+export type TestMessageState =
+    | { kind: 'none' }
+    | { kind: 'sending' }
+    | { kind: 'sent' }
+    | { kind: 'delivered' }
+    | { kind: 'bounced'; bounceClass: string; reason: string }
+
+// An outbound message never gets delivery_status "delivered": the provider's
+// delivery notice sets delivered_at instead, so that field decides delivery.
+export function testMessageState(
+    row:
+        | {
+              delivery_status: string
+              delivered_at: string
+              bounce_class: string
+              bounce_reason: string
+          }
+        | undefined
+): TestMessageState {
+    if (!row) return { kind: 'none' }
+    if (row.delivery_status === 'bounced' || row.delivery_status === 'spam_complaint') {
+        return { kind: 'bounced', bounceClass: row.bounce_class, reason: row.bounce_reason }
+    }
+    if (row.delivered_at) return { kind: 'delivered' }
+    if (row.delivery_status === 'sending') return { kind: 'sending' }
+    return { kind: 'sent' }
+}
+
+export function testMessageLabel(state: TestMessageState): string {
+    switch (state.kind) {
+        case 'none':
+            return ''
+        case 'sending':
+            return 'Sending…'
+        case 'sent':
+            return 'Sent. Waiting for delivery…'
+        case 'delivered':
+            return 'Delivered'
+        case 'bounced': {
+            const prefix = state.bounceClass ? `Bounced (${state.bounceClass})` : 'Bounced'
+            return state.reason ? `${prefix}: ${state.reason}` : prefix
+        }
+    }
 }
