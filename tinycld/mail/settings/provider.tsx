@@ -583,7 +583,9 @@ function DeleteDomainButton({
     )
 }
 
-function AddDomainForm() {
+// Exported so the setup wizard's domain step adds a domain through the same
+// form and endpoint as this screen.
+export function AddDomainForm({ onAdded }: { onAdded?: (added: AddDomainResponse) => void }) {
     const primaryFgColor = useThemeColor('primary-foreground')
 
     const {
@@ -605,7 +607,10 @@ function AddDomainForm() {
                 method: 'POST',
                 body: { domain: data.domain },
             }),
-        onSuccess: () => reset(),
+        onSuccess: added => {
+            reset()
+            onAdded?.(added)
+        },
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
 
