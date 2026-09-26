@@ -10,13 +10,9 @@ import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { useOrgInfo } from '@tinycld/core/lib/use-org-info'
 import { Button, ButtonText } from '@tinycld/core/ui/button'
 import { Text, View } from 'react-native'
-import { MailboxForm } from '~/tinycld/mail/settings/MailboxForm'
-import { defaultAddressFor } from '~/tinycld/mail/settings/mailbox-records'
-import {
-    hasVerifiedDomain,
-    testMessageRequest,
-    verifiedDomainOptions,
-} from '~/tinycld/mail/setup/setup-logic'
+import { MailboxForm } from '../settings/MailboxForm'
+import { defaultAddressFor } from '../settings/mailbox-records'
+import { hasVerifiedDomain, testMessageRequest, verifiedDomainOptions } from './setup-logic'
 
 function useDomainRows() {
     const [domainsCollection] = useStore('mail_domains')

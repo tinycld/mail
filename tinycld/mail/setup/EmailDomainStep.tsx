@@ -9,10 +9,10 @@ import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
 import { Button, ButtonText } from '@tinycld/core/ui/button'
 import { useState } from 'react'
 import { Text, View } from 'react-native'
-import { AddDomainForm } from '~/tinycld/mail/settings/AddDomainForm'
-import { DnsRecordsPanel } from '~/tinycld/mail/settings/DnsRecordsPanel'
-import { assertVerifySaved } from '~/tinycld/mail/settings/verify-domain'
-import { domainPanelTarget, hasVerifiedDomain } from '~/tinycld/mail/setup/setup-logic'
+import { AddDomainForm } from '../settings/AddDomainForm'
+import { DnsRecordsPanel } from '../settings/DnsRecordsPanel'
+import { assertVerifySaved } from '../settings/verify-domain'
+import { domainPanelTarget, hasVerifiedDomain } from './setup-logic'
 
 // Adding and verifying domains is an owner/admin action on the server.
 export function useIsStepVisible() {
