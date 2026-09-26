@@ -112,24 +112,23 @@ func TestExpectedInboundMXHost_PerProvider(t *testing.T) {
 	}
 }
 
-// A router fronting several tenant domains publishes ONE MX host for all of
-// them (its own inbound listener), which cannot be any provider's per-tenant
-// value — mail.inbound_mx_host lets that host override every provider branch
-// when present, and change nothing when absent.
+// A deployment-wide mail.inbound_mx_host names ONE MX host for every domain,
+// which cannot be any provider's per-domain value. It overrides every
+// provider branch when present, and changes nothing when absent.
 func TestExpectedInboundMXHost_SystemSettingOverridesProvider(t *testing.T) {
 	app := setupSettingsTestApp(t)
-	saveSystemSetting(t, app, "mail.inbound_mx_host", "mx.router.example")
+	saveSystemSetting(t, app, "mail.inbound_mx_host", "mx.inbound.example.com")
 
-	if got := expectedInboundMXHost(app, NewPostmarkProvider("tok", "")); got != "mx.router.example" {
+	if got := expectedInboundMXHost(app, NewPostmarkProvider("tok", "")); got != "mx.inbound.example.com" {
 		t.Errorf("postmark: got %q, want the system setting to win", got)
 	}
-	if got := expectedInboundMXHost(app, NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "smtp"})); got != "mx.router.example" {
+	if got := expectedInboundMXHost(app, NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "smtp"})); got != "mx.inbound.example.com" {
 		t.Errorf("smtp/listener: got %q, want the system setting to win", got)
 	}
-	if got := expectedInboundMXHost(app, NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "imap"})); got != "mx.router.example" {
+	if got := expectedInboundMXHost(app, NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "imap"})); got != "mx.inbound.example.com" {
 		t.Errorf("smtp/imap-fetch: got %q, want the system setting to win even in imap mode", got)
 	}
-	if got := expectedInboundMXHost(app, &NoopProvider{}); got != "mx.router.example" {
+	if got := expectedInboundMXHost(app, &NoopProvider{}); got != "mx.inbound.example.com" {
 		t.Errorf("noop: got %q, want the system setting to win", got)
 	}
 }

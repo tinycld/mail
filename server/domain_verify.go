@@ -23,9 +23,9 @@ const postmarkInboundMXHost = "inbound.postmarkapp.com"
 // expectedInboundMXHost returns the MX host the operator should publish in
 // DNS so mail can be delivered inbound.
 //
-// mail.inbound_mx_host wins whenever it is set: on a hosted deployment the
-// router terminates inbound SMTP for every tenant domain behind ONE MX host
-// of its own, which is not any provider's per-tenant value and must override
+// mail.inbound_mx_host wins whenever it is set: it is a deployment-wide
+// setting naming ONE MX host that accepts inbound SMTP for every domain,
+// which is not any provider's per-domain value and must override
 // every branch below — including SMTP's own IMAP-fetch mode, which otherwise
 // reports "" (see below). Absent that setting, the per-provider default
 // applies exactly as before: for Postmark this is the fixed
