@@ -8,7 +8,7 @@ import { Pressable, Text, View } from 'react-native'
 
 export type DnsRecord = {
     label: string
-    type: 'TXT' | 'CNAME'
+    type: 'MX' | 'TXT' | 'CNAME'
     host: string
     value: string
     verified: boolean
@@ -19,9 +19,36 @@ export type DnsRecord = {
 // part worth pinning, not the JSX. A self-hosted SMTP deployment can report
 // DKIM without a return-path CNAME (or nothing at all) — each record is only
 // included when the provider reported both the host and the value it needs.
+//
+// MX leads the list (inbound routing) followed by SPF (outbound
+// authorization) when the provider has an include to publish — Postmark
+// deprecated SPF entirely, so spf_include stays empty on that path and the
+// row is omitted rather than shown blank. MX has no per-check verified flag
+// on OutboundCheckResult (that's domain.mx_verified, surfaced by its own
+// "Inbound MX" CheckRow elsewhere) so it is always rendered "verified" here —
+// it must never make hasUnpublishedDnsRecords report the panel as having
+// something left to publish.
 export function buildDnsRecords(outbound?: OutboundCheckResult): DnsRecord[] {
     if (!outbound) return []
     const records: DnsRecord[] = []
+    if (outbound.mx_host) {
+        records.push({
+            label: 'MX',
+            type: 'MX',
+            host: '@',
+            value: `MX 10 ${outbound.mx_host}`,
+            verified: true,
+        })
+    }
+    if (outbound.spf_include) {
+        records.push({
+            label: 'SPF',
+            type: 'TXT',
+            host: '@',
+            value: `v=spf1 include:${outbound.spf_include} ~all`,
+            verified: outbound.spf,
+        })
+    }
     if (outbound.dkim_host && outbound.dkim_text_value) {
         records.push({
             label: 'DKIM',
@@ -69,7 +96,7 @@ export function DnsRecordsPanel({
                 DNS records to publish
             </Text>
             {records.map(record => (
-                <DnsRecordRow key={record.host} record={record} />
+                <DnsRecordRow key={record.label} record={record} />
             ))}
         </View>
     )

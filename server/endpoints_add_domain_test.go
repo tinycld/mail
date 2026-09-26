@@ -224,6 +224,24 @@ func TestAddDomainEnrollsAndCreatesRecord(t *testing.T) {
 	)
 }
 
+// The admin must see the MX target to publish before ever pressing Verify —
+// enrollment succeeds without the MX check having run, so mx_host must be
+// filled from expectedInboundMXHost directly, not read back off a check.
+func TestAddDomainIncludesExpectedMXHost(t *testing.T) {
+	registrar := &stubRegistrar{rec: &maildomains.DomainRecords{Domain: "acme.com", ID: 1}}
+
+	runAddDomainScenario(t, "add response includes mx_host", registrar,
+		func(app core.App) *core.Record {
+			return seedAddDomainAuthUser(t, app, "admin@acme.com", "admin")
+		},
+		`{"domain":"acme.com"}`,
+		http.StatusOK,
+		[]string{`"mx_host":"inbound.postmarkapp.com"`},
+		nil,
+		nil,
+	)
+}
+
 // Non-admins cannot add a domain — same gate as verify.
 func TestAddDomainRequiresAdmin(t *testing.T) {
 	registrar := &stubRegistrar{rec: &maildomains.DomainRecords{Domain: "acme.com", ID: 1}}

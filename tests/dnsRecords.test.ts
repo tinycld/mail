@@ -29,6 +29,54 @@ describe('buildDnsRecords', () => {
         })
     })
 
+    // MX and SPF (when the provider has an include to publish) lead the list —
+    // an admin publishes DNS top-down, and inbound routing (MX) plus outbound
+    // authorization (SPF) come before DKIM/return-path signing.
+    it('leads with MX and SPF when both are available', () => {
+        const records = buildDnsRecords({
+            spf: false,
+            dkim: false,
+            return_path: false,
+            enrolled: 'yes',
+            mx_host: 'mx.router.example',
+            spf_include: 'spf.mtasv.net',
+        })
+
+        expect(records.map(r => [r.label, r.type, r.host, r.value])).toEqual([
+            ['MX', 'MX', '@', 'MX 10 mx.router.example'],
+            ['SPF', 'TXT', '@', 'v=spf1 include:spf.mtasv.net ~all'],
+        ])
+    })
+
+    // Postmark deprecated SPF entirely (see maildomains.DomainRecords), so
+    // spf_include is empty on that path — the row must be omitted rather than
+    // rendered with a blank include.
+    it('omits the SPF row when the provider gives no include value', () => {
+        const records = buildDnsRecords({
+            spf: false,
+            dkim: false,
+            return_path: false,
+            enrolled: 'yes',
+            mx_host: 'mx.router.example',
+        })
+
+        expect(records.map(r => r.label)).toEqual(['MX'])
+    })
+
+    // No mx_host (e.g. SMTP in IMAP-fetch mode, which publishes no MX target
+    // on our side) — the row must not render a "MX 10 " with nothing after it.
+    it('omits the MX row when there is no mx_host', () => {
+        const records = buildDnsRecords({
+            spf: false,
+            dkim: false,
+            return_path: false,
+            enrolled: 'yes',
+            spf_include: 'spf.mtasv.net',
+        })
+
+        expect(records.map(r => r.label)).toEqual(['SPF'])
+    })
+
     it('marks a record verified once the provider confirms it', () => {
         const records = buildDnsRecords({
             spf: true,

@@ -62,18 +62,24 @@ func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 			return re.InternalServerError("mail_domains collection missing", err)
 		}
 
+		provider := newProviderFromSystem(app)
 		outbound := api.OutboundCheckResult{
 			Enrolled:             "yes",
 			SPF:                  rec.SPFVerified,
 			DKIM:                 rec.DKIMVerified,
 			ReturnPath:           rec.ReturnPathVerified,
+			// MXHost is known at enrollment time even though the MX check
+			// itself hasn't run yet (see the comment below) — it's a pure
+			// function of the configured provider, not a lookup result, so the
+			// admin sees what to publish before ever pressing Verify.
+			MXHost:               expectedInboundMXHost(app, provider),
 			DKIMHost:             rec.DKIMHost,
 			DKIMTextValue:        rec.DKIMTextValue,
 			ReturnPathDomain:     rec.ReturnPathDomain,
 			ReturnPathCNAMEValue: rec.ReturnPathCNAMEValue,
 		}
 
-		providerName, providerConfigured := describeProvider(newProviderFromSystem(app))
+		providerName, providerConfigured := describeProvider(provider)
 
 		// MX and Provider are left at their zero values: those checks
 		// genuinely have not run yet, and the UI already renders zero-value
