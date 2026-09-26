@@ -20,11 +20,8 @@ export type DnsRecord = {
 // DKIM without a return-path CNAME (or nothing at all) — each record is only
 // included when the provider reported both the host and the value it needs.
 //
-// MX leads the list (inbound routing). MX has no per-check verified flag
-// on OutboundCheckResult (that's domain.mx_verified, surfaced by its own
-// "Inbound MX" CheckRow elsewhere) so it is always rendered "verified" here —
-// it must never make hasUnpublishedDnsRecords report the panel as having
-// something left to publish.
+// MX leads the list (inbound routing). Its verified flag is the last MX
+// check's result, false until the first Verify.
 export function buildDnsRecords(outbound?: OutboundCheckResult): DnsRecord[] {
     if (!outbound) return []
     const records: DnsRecord[] = []
@@ -33,8 +30,8 @@ export function buildDnsRecords(outbound?: OutboundCheckResult): DnsRecord[] {
             label: 'MX',
             type: 'MX',
             host: '@',
-            value: `MX 10 ${outbound.mx_host}`,
-            verified: true,
+            value: `10 ${outbound.mx_host}`,
+            verified: outbound.mx_verified,
         })
     }
     if (outbound.dkim_host && outbound.dkim_text_value) {

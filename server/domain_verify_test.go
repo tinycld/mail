@@ -786,3 +786,49 @@ func TestCheckOutboundKeepsIDOnTransportFailure(t *testing.T) {
 		t.Fatalf("stored domain_id = %+v, want 42 retained", meta.Postmark)
 	}
 }
+
+// End to end through verifyDomainRecord: with a deployment-wide inbound MX
+// host, a strict provider whose inbound domain is something else, and an MX
+// pointing at that host, the domain verifies, and the MX result reaches the
+// outbound block the DNS table reads.
+func TestVerifyDomainRecord_SystemMXHostVerifies(t *testing.T) {
+	app := setupSettingsTestApp(t)
+	saveSystemSetting(t, app, "mail.provider", "postmark")
+	saveSystemSetting(t, app, "mail.postmark_server_token", "tok")
+	saveSystemSetting(t, app, "mail.inbound_mx_host", "mx.inbound.example.com")
+	col := core.NewBaseCollection("mail_domains")
+	col.Fields.Add(&core.TextField{Name: "domain", Required: true})
+	for _, name := range []string{"verified", "mx_verified", "inbound_domain_verified", "spf_verified", "dkim_verified", "return_path_verified"} {
+		col.Fields.Add(&core.BoolField{Name: name})
+	}
+	col.Fields.Add(&core.JSONField{Name: "provider_domain_metadata", MaxSize: 2000})
+	col.Fields.Add(&core.JSONField{Name: "verification_details", MaxSize: 4000})
+	col.Fields.Add(&core.TextField{Name: "last_checked_at"})
+	if err := app.Save(col); err != nil {
+		t.Fatal(err)
+	}
+	record := core.NewRecord(col)
+	record.Set("domain", "example.com")
+	if err := app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	maildomains.SetResolver(&stubRegistrar{rec: &maildomains.DomainRecords{Domain: "example.com", ID: 7}})
+	withMXLookup(t, func(context.Context, string) ([]*net.MX, error) {
+		return []*net.MX{{Host: "mx.inbound.example.com.", Pref: 10}}, nil
+	})
+
+	details, err := verifyDomainRecord(context.Background(), app, record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !record.GetBool("verified") {
+		t.Fatalf("expected verified; details = %+v", details)
+	}
+	if !details.Outbound.MXVerified || details.Outbound.MXHost != "mx.inbound.example.com" {
+		t.Fatalf("outbound MX = (%q, %v), want (mx.inbound.example.com, true)",
+			details.Outbound.MXHost, details.Outbound.MXVerified)
+	}
+}

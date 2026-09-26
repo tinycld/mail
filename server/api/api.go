@@ -141,7 +141,11 @@ type OutboundCheckResult struct {
 	// VerificationDetails.MX.Expected, so the enrollment response (which never
 	// runs the MX check — see handleAddDomain) can still tell the client what
 	// to render before the first Verify.
-	MXHost               string `json:"mx_host,omitempty"`
+	MXHost string `json:"mx_host,omitempty"`
+	// MXVerified mirrors VerificationDetails.MX.OK, so the DNS table can mark
+	// the MX row from the same object that carries MXHost. False until the
+	// first Verify: enrollment never runs the MX check.
+	MXVerified           bool   `json:"mx_verified"`
 	DKIMHost             string `json:"dkim_host,omitempty"`
 	DKIMTextValue        string `json:"dkim_text_value,omitempty"`
 	ReturnPathDomain     string `json:"return_path_domain,omitempty"`

@@ -348,6 +348,7 @@ func verifyDomainRecord(ctx context.Context, app core.App, record *core.Record) 
 	// details.MX.Expected, so the DNS panel's MX row always matches the row
 	// above it.
 	details.Outbound.MXHost = mxHost
+	details.Outbound.MXVerified = details.MX.OK
 
 	record.Set("mx_verified", details.MX.OK)
 	record.Set("inbound_domain_verified", details.Provider.OK)
