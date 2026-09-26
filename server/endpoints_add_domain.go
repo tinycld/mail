@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	validation "github.com/pocketbase/ozzo-validation/v4"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
 
@@ -24,6 +25,11 @@ import (
 // On a hosted deployment the enrollment call travels over ctl.sock to the
 // router, which holds the account token. This handler cannot tell the
 // difference, and must not be able to.
+// domainExistsCode marks a 409 whose cause is a mail_domains row this
+// deployment already holds, so a client can tell it from the provider-side
+// duplicate, which is also a 409.
+const domainExistsCode = "domain_exists"
+
 func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 	return func(re *core.RequestEvent) error {
 		if err := verifyAdmin(re.Auth); err != nil {
@@ -39,6 +45,16 @@ func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 		domain := strings.ToLower(strings.TrimSpace(body.Domain))
 		if domain == "" {
 			return re.BadRequestError("domain is required", nil)
+		}
+
+		// Checked before the provider is asked: a re-add of this deployment's
+		// own row must read as "already added" to the caller, which a
+		// provider-side duplicate (another deployment on a shared provider
+		// account) must not.
+		if existing, _ := app.FindFirstRecordByData("mail_domains", "domain", domain); existing != nil {
+			return router.NewApiError(http.StatusConflict,
+				"That domain is already added.",
+				validation.Errors{"domain": validation.NewError(domainExistsCode, "That domain is already added.")})
 		}
 
 		rec, err := maildomains.Current().AddDomain(re.Request.Context(), domain)
