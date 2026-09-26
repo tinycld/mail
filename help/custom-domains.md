@@ -80,9 +80,15 @@ The webhook secret is a per-domain random 32-character hex string, auto-generate
 
 ## Removing a domain
 
-Delete the domain row from the settings page. This removes it from TinyCld but doesn't touch your DNS records or the provider side — you'll want to remove those manually if the domain isn't going to be used elsewhere.
+To remove a domain, click the trash icon on its row in **Settings → Mail → Domains**, then click **Remove domain**.
 
-Mailboxes and aliases on the deleted domain are also removed (cascade), so be sure no one is depending on the addresses before deleting. Before it removes the domain, Mail tells you how many mailboxes go with it. Click **Remove domain** to continue.
+Removing a domain also does these things:
+
+- It releases the domain at your email provider.
+- If the service manages DNS for the domain, it removes the domain's DNS records.
+- It deletes every mailbox and alias on the domain, and all their mail.
+
+You cannot undo this. Make sure that no one uses the addresses before you remove the domain. If you manage the DNS records yourself, remove them at your DNS provider.
 
 ## See also
 

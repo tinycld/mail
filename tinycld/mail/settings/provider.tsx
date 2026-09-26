@@ -1,4 +1,3 @@
-import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useMutation as useReactQueryMutation } from '@tanstack/react-query'
 import type {
@@ -533,21 +532,6 @@ function DeleteDomainButton({ isVisible, onPress }: { isVisible: boolean; onPres
     )
 }
 
-// Mailboxes cascade-delete with their domain; the count makes that visible
-// before the admin commits.
-function useDomainMailboxCount(domainId: string) {
-    const [mailboxesCollection] = useStore('mail_mailboxes')
-    const { data = [] } = useLiveQuery(
-        query =>
-            query
-                .from({ m: mailboxesCollection })
-                .where(({ m }) => eq(m.domain, domainId))
-                .select(({ m }) => ({ id: m.id })),
-        [domainId]
-    )
-    return data.length
-}
-
 function RemoveDomainConfirm({
     isVisible,
     domain,
@@ -560,19 +544,7 @@ function RemoveDomainConfirm({
     onCancel: () => void
 }) {
     if (!isVisible) return null
-    return <RemoveDomainConfirmBody domain={domain} onConfirm={onConfirm} onCancel={onCancel} />
-}
-
-function RemoveDomainConfirmBody({
-    domain,
-    onConfirm,
-    onCancel,
-}: {
-    domain: DomainRow
-    onConfirm: () => void
-    onCancel: () => void
-}) {
-    const warning = domainRemovalWarning(domain.domain, useDomainMailboxCount(domain.id))
+    const warning = domainRemovalWarning(domain.domain)
     return (
         <View testID="remove-domain-confirm" className="gap-2 rounded-md border border-danger p-3">
             <Text className="text-foreground" style={{ fontSize: 13 }}>
