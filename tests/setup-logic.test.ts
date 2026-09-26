@@ -85,14 +85,20 @@ describe('testMessageRequest', () => {
 
 describe('setupAddDomainError', () => {
     it('sends a 503 to the Email sending step', () => {
-        expect(setupAddDomainError({ status: 503, response: {} })).toBe(
+        expect(setupAddDomainError({ status: 503, response: {} }, false)).toBe(
             'Set up email sending first, then come back to this step.'
         )
     })
 
+    it('sends a 503 to the administrator when mail settings are managed', () => {
+        expect(setupAddDomainError({ status: 503, response: {} }, true)).toBe(
+            'Mail domains are not available yet. Ask your administrator.'
+        )
+    })
+
     it('keeps the default message for any other error', () => {
-        expect(setupAddDomainError({ status: 409 })).toBeNull()
-        expect(setupAddDomainError(new Error('boom'))).toBeNull()
-        expect(setupAddDomainError(null)).toBeNull()
+        expect(setupAddDomainError({ status: 409 }, false)).toBeNull()
+        expect(setupAddDomainError(new Error('boom'), true)).toBeNull()
+        expect(setupAddDomainError(null, false)).toBeNull()
     })
 })

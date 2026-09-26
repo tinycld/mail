@@ -6,6 +6,7 @@ import { useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import type { SetupStepProps } from '@tinycld/core/lib/setup/types'
 import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
+import { useIsSettingManaged } from '@tinycld/core/lib/use-managed-settings'
 import { Button, ButtonText } from '@tinycld/core/ui/button'
 import { useState } from 'react'
 import { Text, View } from 'react-native'
@@ -168,6 +169,8 @@ function DomainList({ domains }: { domains: DomainItem[] }) {
 export default function EmailDomainStep({ next }: SetupStepProps) {
     const domains = useDomains()
     const { setAdded, ...panel } = useDomainPanel(domains)
+    const isMailManaged = useIsSettingManaged('mail.')
+    const describeAddError = (error: unknown) => setupAddDomainError(error, isMailManaged)
     return (
         <View className="max-w-[440px] gap-1">
             <Text className="text-2xl font-bold text-foreground">Your email domain</Text>
@@ -177,7 +180,7 @@ export default function EmailDomainStep({ next }: SetupStepProps) {
             </Text>
             <SidebarSlot target="mail" slot="setup-domain-options" />
             <Text className="mt-2 text-sm font-semibold text-foreground">Use my own domain</Text>
-            <AddDomainForm onAdded={setAdded} describeError={setupAddDomainError} />
+            <AddDomainForm onAdded={setAdded} describeError={describeAddError} />
             <DomainPanel {...panel} />
             <DomainList domains={domains} />
             <Button className="self-start" onPress={next}>
