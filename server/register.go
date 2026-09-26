@@ -177,6 +177,8 @@ func registerShared(app *pocketbase.PocketBase) {
 	// mail_domains_guard.go for why the collection's admin-or-owner API rules
 	// do not cover this.
 	registerMailDomainWriteGuard(app)
+	// A deleted domain is released at the provider; see mail_domains_removal.go.
+	registerMailDomainRemovalHook(app)
 
 	// Auto-generate webhook_secret for new domains
 	app.OnRecordCreate("mail_domains").BindFunc(func(e *core.RecordEvent) error {
