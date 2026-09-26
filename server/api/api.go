@@ -125,12 +125,22 @@ type ProviderCheckResult struct {
 	Error          string `json:"error,omitempty"`
 }
 
-// OutboundCheckResult reports the DNS checks for outbound deliverability.
+// OutboundCheckResult reports outbound deliverability: whether the provider
+// has the domain enrolled, whether SPF/DKIM/return-path verify, and the DNS
+// records the admin must publish to make them verify.
 type OutboundCheckResult struct {
-	SPF        bool   `json:"spf"`
-	DKIM       bool   `json:"dkim"`
-	ReturnPath bool   `json:"return_path"`
-	Error      string `json:"error,omitempty"`
+	SPF        bool `json:"spf"`
+	DKIM       bool `json:"dkim"`
+	ReturnPath bool `json:"return_path"`
+	// Enrolled is "yes", "no" or "unknown". Three-valued because a check that
+	// could not run must not look like a domain the provider rejected — the
+	// UI phrases them differently and only "no" is the admin's to fix.
+	Enrolled             string `json:"enrolled,omitempty"`
+	DKIMHost             string `json:"dkim_host,omitempty"`
+	DKIMTextValue        string `json:"dkim_text_value,omitempty"`
+	ReturnPathDomain     string `json:"return_path_domain,omitempty"`
+	ReturnPathCNAMEValue string `json:"return_path_cname_value,omitempty"`
+	Error                string `json:"error,omitempty"`
 }
 
 // VerificationDetails is the full per-check breakdown of a domain
@@ -161,6 +171,16 @@ type VerifyDomainResponse struct {
 	VerificationDetails   *VerificationDetails `json:"verification_details"`
 	Saved                 bool                 `json:"saved"`
 	SaveError             string               `json:"save_error,omitempty"`
+}
+
+// AddDomainResponse is returned by POST /api/mail/domains. Enrollment with
+// the provider has already succeeded by the time this is returned — Records
+// carries the DNS the admin must publish, so a client never has to make a
+// second round trip just to learn what to show.
+type AddDomainResponse struct {
+	ID      string               `json:"id"`
+	Domain  string               `json:"domain"`
+	Records *OutboundCheckResult `json:"records,omitempty"`
 }
 
 // WebhookURLsResponse is returned by GET /api/mail/domains/{id}/webhook-urls:

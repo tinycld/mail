@@ -10,10 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mrz1836/postmark"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/audit"
 	"tinycld.org/core/coreserver"
+	"tinycld.org/core/maildomains"
 	"tinycld.org/core/oauth"
 	"tinycld.org/core/offboard"
 	"tinycld.org/core/outboundstats"
@@ -143,11 +145,15 @@ func registerShared(app *pocketbase.PocketBase) {
 	}
 
 	// A settings change to the mail app may toggle provider or inbound mode —
-	// reconcile the IMAP fetcher. (The former per-org settings cache is gone;
+	// reconcile the IMAP fetcher and, when the provider is SMTP, the
+	// maildomains registrar. (The former per-org settings cache is gone;
 	// provider config is deployment-wide in system_settings.)
 	reconcileOnMailSettings := func(e *core.RecordEvent) error {
-		if e.Record.GetString("app") == "mail" && globalIMAPManager != nil {
-			globalIMAPManager.onSettingsChanged()
+		if e.Record.GetString("app") == "mail" {
+			if globalIMAPManager != nil {
+				globalIMAPManager.onSettingsChanged()
+			}
+			reconcileMailDomainsRegistrar(app)
 		}
 		return e.Next()
 	}
@@ -166,6 +172,12 @@ func registerShared(app *pocketbase.PocketBase) {
 		return e.Next()
 	})
 
+	// mail_domains carries state only the server may author: the provider's
+	// account-scoped domain id and every derived verification flag. See
+	// mail_domains_guard.go for why the collection's admin-or-owner API rules
+	// do not cover this.
+	registerMailDomainWriteGuard(app)
+
 	// Auto-generate webhook_secret for new domains
 	app.OnRecordCreate("mail_domains").BindFunc(func(e *core.RecordEvent) error {
 		if e.Record.GetString("webhook_secret") == "" {
@@ -183,12 +195,15 @@ func registerShared(app *pocketbase.PocketBase) {
 	app.OnRecordAfterDeleteSuccess("settings").BindFunc(reconcileOnMailSettings)
 
 	// The mail provider + IMAP config are SYSTEM-WIDE (system_settings), so a
-	// system-settings change to a mail.* key may toggle the IMAP fetcher on/off.
-	// Reconcile on those changes too (filtered so sentry.*/vapid.* edits don't
-	// churn the fetcher).
+	// system-settings change to a mail.* key may toggle the IMAP fetcher on/off
+	// and may switch the provider to or from SMTP. Reconcile on those changes
+	// too (filtered so sentry.*/vapid.* edits don't churn either one).
 	reconcileOnSystemMail := func(e *core.RecordEvent) error {
-		if globalIMAPManager != nil && strings.HasPrefix(e.Record.GetString("key"), "mail.") {
-			globalIMAPManager.onSettingsChanged()
+		if strings.HasPrefix(e.Record.GetString("key"), "mail.") {
+			if globalIMAPManager != nil {
+				globalIMAPManager.onSettingsChanged()
+			}
+			reconcileMailDomainsRegistrar(app)
 		}
 		return e.Next()
 	}
@@ -287,6 +302,10 @@ func registerShared(app *pocketbase.PocketBase) {
 			return handleSend(app, re)
 		}).BindFunc(requireAuth)
 
+		// Add-domain endpoint: enrolls with the provider, then creates the row
+		// (requires auth; handler checks org admin/owner).
+		e.Router.POST("/api/mail/domains", handleAddDomain(app)).BindFunc(requireAuth)
+
 		// Domain verification endpoint (requires auth; handler checks org admin/owner)
 		e.Router.POST("/api/mail/domains/{id}/verify", func(re *core.RequestEvent) error {
 			return handleVerifyDomain(app, re)
@@ -307,6 +326,15 @@ func registerShared(app *pocketbase.PocketBase) {
 			imapFetcherShutdown()
 			return te.Next()
 		})
+
+		// Install the maildomains registrar matching the configured provider
+		// at boot; reconcileOnMailSettings / reconcileOnSystemMail keep it
+		// current afterward. Runs for both smtp and Postmark (see
+		// reconcileMailDomainsRegistrar) so a deployment that boots straight
+		// into Postmark does not rely solely on core's own wireMailDomains,
+		// which only runs once and cannot react to a later provider switch.
+		// A no-op on a hosted composition (the seam is already claimed).
+		reconcileMailDomainsRegistrar(app)
 
 		// Draft endpoint (requires auth, saves without sending)
 		e.Router.POST("/api/mail/draft", func(re *core.RequestEvent) error {
@@ -445,6 +473,48 @@ func systemSetting(_ core.App, key string) string {
 	return syscfg.Get(key)
 }
 
+// reconcileMailDomainsRegistrar (re-)installs the maildomains registrar
+// matching this deployment's configured provider. Called once at boot and
+// again whenever mail/system settings change (the provider can be switched
+// between SMTP and Postmark at runtime), mirroring how globalIMAPManager
+// reconciles on the same events — see reconcileOnMailSettings /
+// reconcileOnSystemMail.
+//
+// Must handle BOTH branches, not just smtp: SetResolver is last-writer-wins
+// with no way to "uninstall", so leaving the non-SMTP branch as a no-op
+// stranded whatever registrar was already installed (typically core's
+// Postmark one from wireMailDomains) when a deployment switched TO SMTP and
+// then back away from it — the SMTPRegistrar would keep reporting every
+// domain "enrolled" from pure DNS lookups while Postmark had never heard of
+// it. This was I1 from the final whole-branch review.
+//
+// Deliberately NOT called from newProviderFromSystem: that function runs on
+// every send/verify/webhook request, and SetResolver has nothing new to do
+// between settings changes. A hosted composition has already claimed the
+// seam with its delegating registrar before this ever runs; SetResolver is a
+// no-op there by design.
+//
+// The non-SMTP (Postmark) branch constructs its own registrar here — mail
+// cannot rely solely on core's wireMailDomains, because wireMailDomains runs
+// once at boot and never again, so it alone cannot pick up a provider switch
+// made after boot. It uses the same lazy-token-accessor shape as core's
+// wireMailDomains (see maildomains.NewPostmarkRegistrar) so the registrar
+// installed here is never stale even if system settings load or change after
+// this call.
+func reconcileMailDomainsRegistrar(app core.App) {
+	name := systemSetting(app, "mail.provider")
+	if name == "" {
+		name = "postmark"
+	}
+	if name == "smtp" {
+		maildomains.SetResolver(NewSMTPRegistrar(smtpConfigFromSystem(app)))
+		return
+	}
+	accountToken := func() string { return systemSetting(app, "mail.postmark_account_token") }
+	client := postmark.NewClient(systemSetting(app, "mail.postmark_server_token"), accountToken())
+	maildomains.SetResolver(maildomains.NewPostmarkRegistrar(accountToken, client))
+}
+
 // newProviderFromSystem builds the provider from system settings. The provider
 // choice and its credentials/SMTP config are deployment-wide infrastructure,
 // configured in the /admin Settings console.
@@ -453,11 +523,13 @@ func newProviderFromSystem(app core.App) Provider {
 	if name == "" {
 		name = "postmark"
 	}
+	smtpCfg := smtpConfigFromSystem(app)
+
 	return newProviderByName(
 		name,
 		systemSetting(app, "mail.postmark_server_token"),
 		systemSetting(app, "mail.postmark_account_token"),
-		smtpConfigFromSystem(app),
+		smtpCfg,
 	)
 }
 
