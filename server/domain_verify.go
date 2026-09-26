@@ -98,9 +98,9 @@ func checkMX(ctx context.Context, domain, expectedHost string) api.MXCheckResult
 // providerRequiresExactInboundMatch reports whether the provider's
 // InboundDomain must textually equal the verifying domain to count as
 // configured. Postmark requires this (one server per inbound domain); SMTP
-// does not (one operator host serves any number of tenant domains, so as
-// long as the operator's PublicHostname is set we accept it and lean on the
-// MX check to prove inbound mail actually arrives).
+// does not (one operator host serves any number of domains, so as long as
+// the operator's PublicHostname is set we accept it and lean on the MX check
+// to prove inbound mail actually arrives).
 func providerRequiresExactInboundMatch(provider Provider) bool {
 	_, isPostmark := provider.(*PostmarkProvider)
 	return isPostmark
@@ -110,7 +110,15 @@ func providerRequiresExactInboundMatch(provider Provider) bool {
 // and checks whether it satisfies the verifying domain. The strictness is
 // provider-dependent: see providerRequiresExactInboundMatch. For NoopProvider /
 // unconfigured providers we return an explicit "not configured" hint.
-func checkProviderInbound(ctx context.Context, provider Provider, domain string) api.ProviderCheckResult {
+//
+// A deployment-wide mail.inbound_mx_host takes the provider out of the
+// inbound path: mail for every domain is delivered to that one MX host, so
+// the provider's own inbound domain is irrelevant and would never match. The
+// MX check alone proves inbound delivery then, and the provider is not asked.
+func checkProviderInbound(ctx context.Context, app core.App, provider Provider, domain string) api.ProviderCheckResult {
+	if systemSetting(app, "mail.inbound_mx_host") != "" {
+		return api.ProviderCheckResult{OK: true, ExpectedDomain: domain}
+	}
 	return checkProviderInboundStrict(ctx, provider, domain, providerRequiresExactInboundMatch(provider))
 }
 
@@ -185,8 +193,8 @@ func boolPtr(b bool) *bool { return &b }
 
 // checkOutbound reads the domain's provider-side state through the
 // maildomains seam. It does NOT take a Provider: these are account-credential
-// operations, and on a hosted deployment they are performed by the router,
-// not here.
+// operations, and where a resolver is registered they are performed by
+// whatever process owns the provider account, not here.
 //
 // Failure stays best-effort — outbound never blocks the inbound verdict — but
 // is now three-valued. A provider that has never heard of the domain is the
@@ -334,7 +342,7 @@ func verifyDomainRecord(ctx context.Context, app core.App, record *core.Record) 
 	}
 	mxHost := expectedInboundMXHost(app, provider)
 	details.MX = checkMX(ctx, domain, mxHost)
-	details.Provider = checkProviderInbound(ctx, provider, domain)
+	details.Provider = checkProviderInbound(ctx, app, provider, domain)
 	details.Outbound = checkOutbound(ctx, record)
 	// Stamped from the same value the MX check just used, not read back off
 	// details.MX.Expected, so the DNS panel's MX row always matches the row

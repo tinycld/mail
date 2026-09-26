@@ -133,6 +133,35 @@ func TestExpectedInboundMXHost_SystemSettingOverridesProvider(t *testing.T) {
 	}
 }
 
+// With a deployment-wide inbound MX host, mail for every domain arrives at
+// that host, never at the provider's own inbound domain. A strict provider
+// (Postmark) whose inbound domain is something else must not block
+// verification: the MX check is the proof, and the provider is not asked.
+func TestCheckProviderInbound_SystemMXHostSkipsProvider(t *testing.T) {
+	app := setupSettingsTestApp(t)
+	saveSystemSetting(t, app, "mail.inbound_mx_host", "mx.inbound.example.com")
+
+	p := &fakeProvider{inboundDomain: "other.example.com"}
+	got := checkProviderInbound(context.Background(), app, p, "example.com")
+	if !got.OK {
+		t.Fatalf("expected the provider check to pass under a system MX host; got %+v", got)
+	}
+
+	p = &fakeProvider{inboundErr: errors.New("403")}
+	if got := checkProviderInbound(context.Background(), app, p, "example.com"); !got.OK {
+		t.Fatalf("the provider must not be asked under a system MX host; got %+v", got)
+	}
+}
+
+// Without the setting the provider's own strictness still applies.
+func TestCheckProviderInbound_NoSystemMXHostKeepsProviderRule(t *testing.T) {
+	app := setupSettingsTestApp(t)
+	p := &fakeProvider{inboundErr: errors.New("403")}
+	if got := checkProviderInbound(context.Background(), app, p, "example.com"); got.OK {
+		t.Fatalf("expected the provider failure to surface; got %+v", got)
+	}
+}
+
 // --- Provider check tests (pure — no DB involved) ---
 
 type fakeProvider struct {
@@ -193,11 +222,11 @@ func TestCheckProviderInboundStrict_DomainMismatch(t *testing.T) {
 }
 
 // Non-strict (SMTP-style) verification accepts any non-empty server domain —
-// the operator's PublicHostname rarely equals each tenant's domain, and the
+// the operator's PublicHostname rarely equals each domain it serves, and the
 // MX check is the actual proof that mail will arrive.
 func TestCheckProviderInboundStrict_NonStrictAcceptsAnyHostname(t *testing.T) {
 	p := &fakeProvider{inboundDomain: "mx.operator.example", inboundAddress: "mx@operator.example"}
-	got := checkProviderInboundStrict(context.Background(), p, "tenant.example", false)
+	got := checkProviderInboundStrict(context.Background(), p, "example.com", false)
 	if !got.OK {
 		t.Fatalf("expected non-strict to accept any non-empty hostname; got %+v", got)
 	}
@@ -205,7 +234,7 @@ func TestCheckProviderInboundStrict_NonStrictAcceptsAnyHostname(t *testing.T) {
 
 func TestCheckProviderInboundStrict_NonStrictStillRejectsEmpty(t *testing.T) {
 	p := &fakeProvider{inboundDomain: ""}
-	got := checkProviderInboundStrict(context.Background(), p, "tenant.example", false)
+	got := checkProviderInboundStrict(context.Background(), p, "example.com", false)
 	if got.OK {
 		t.Fatalf("expected non-strict to still reject empty server domain")
 	}
@@ -330,8 +359,9 @@ func TestCheckOutboundNotEnrolled(t *testing.T) {
 	}
 }
 
-// A transport or provider failure is UNKNOWN, not "no": the router being
-// restarted must not make a working domain look unenrolled.
+// A transport or provider failure is UNKNOWN, not "no": the process that owns
+// the provider account being restarted must not make a working domain look
+// unenrolled.
 func TestCheckOutboundTransportFailureIsUnknown(t *testing.T) {
 	maildomains.ResetForTesting()
 	t.Cleanup(maildomains.ResetForTesting)
