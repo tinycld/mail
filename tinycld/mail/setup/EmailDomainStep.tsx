@@ -3,16 +3,18 @@ import type { AddDomainResponse, OutboundCheckResult } from '@tinycld/app-genera
 import { SidebarSlot } from '@tinycld/core/components/sidebar-primitives/SidebarSlot'
 import { errorToString } from '@tinycld/core/lib/errors'
 import { useMutation } from '@tinycld/core/lib/mutations'
+import { packageSidebarContributions } from '@tinycld/core/lib/packages/derive-components'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import type { SetupStepProps } from '@tinycld/core/lib/setup/types'
 import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
 import { useIsSettingManaged } from '@tinycld/core/lib/use-managed-settings'
 import { Button, ButtonText } from '@tinycld/core/ui/button'
 import { useState } from 'react'
-import { Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { AddDomainForm } from '../settings/AddDomainForm'
 import { DnsRecordsPanel, hasUnpublishedDnsRecords } from '../settings/DnsRecordsPanel'
 import { assertVerifySaved } from '../settings/verify-domain'
+import { type DomainChoice, initialChoice, showOwnDomainForm } from './domain-choice'
 import { domainPanelTarget, hasVerifiedDomain, setupAddDomainError } from './setup-logic'
 
 // Adding and verifying domains is an owner/admin action on the server.
@@ -166,22 +168,71 @@ function DomainList({ domains }: { domains: DomainItem[] }) {
     )
 }
 
+// The choice only opens the own-domain form. Contributed option cards run
+// their own setup: slot components get no props, so they cannot report back.
+function useDomainChoice() {
+    const contributed = packageSidebarContributions.mail?.['setup-domain-options'] ?? []
+    const [choice, setChoice] = useState<DomainChoice>(() => initialChoice(contributed.length > 0))
+    return {
+        isOwnSelected: showOwnDomainForm(choice),
+        chooseOwn: () => setChoice('own'),
+    }
+}
+
+function ownCardClassName(isSelected: boolean) {
+    const border = isSelected ? 'border-primary' : 'border-border'
+    return `mt-2 gap-1 rounded-xl border p-3 ${border}`
+}
+
+function OwnDomainCard({ isSelected, onPress }: { isSelected: boolean; onPress: () => void }) {
+    return (
+        <Pressable
+            testID="setup-own-domain-option"
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSelected }}
+            onPress={onPress}
+            className={ownCardClassName(isSelected)}
+        >
+            <Text className="text-sm font-semibold text-foreground">Your own domain</Text>
+            <Text className="text-sm text-muted-foreground">
+                Use a domain you already own, like yourcompany.com.
+            </Text>
+        </Pressable>
+    )
+}
+
+function OwnDomainForm({
+    isVisible,
+    panel,
+}: {
+    isVisible: boolean
+    panel: ReturnType<typeof useDomainPanel>
+}) {
+    const isMailManaged = useIsSettingManaged('mail.')
+    if (!isVisible) return null
+    const { setAdded, ...panelProps } = panel
+    const describeAddError = (error: unknown) => setupAddDomainError(error, isMailManaged)
+    return (
+        <View className="mt-2 gap-1">
+            <AddDomainForm onAdded={setAdded} describeError={describeAddError} />
+            <DomainPanel {...panelProps} />
+        </View>
+    )
+}
+
 export default function EmailDomainStep({ next }: SetupStepProps) {
     const domains = useDomains()
-    const { setAdded, ...panel } = useDomainPanel(domains)
-    const isMailManaged = useIsSettingManaged('mail.')
-    const describeAddError = (error: unknown) => setupAddDomainError(error, isMailManaged)
+    const panel = useDomainPanel(domains)
+    const { isOwnSelected, chooseOwn } = useDomainChoice()
     return (
         <View className="max-w-[440px] gap-1">
             <Text className="text-2xl font-bold text-foreground">Your email domain</Text>
             <Text className="mb-3 text-sm text-muted-foreground">
-                Choose where your team's email addresses live. You can add more domains later in
-                Settings → Mail → Domains.
+                Where should your team's email addresses live?
             </Text>
             <SidebarSlot target="mail" slot="setup-domain-options" />
-            <Text className="mt-2 text-sm font-semibold text-foreground">Use my own domain</Text>
-            <AddDomainForm onAdded={setAdded} describeError={describeAddError} />
-            <DomainPanel {...panel} />
+            <OwnDomainCard isSelected={isOwnSelected} onPress={chooseOwn} />
+            <OwnDomainForm isVisible={isOwnSelected} panel={panel} />
             <DomainList domains={domains} />
             <Button className="self-start" onPress={next}>
                 <ButtonText>Continue</ButtonText>
