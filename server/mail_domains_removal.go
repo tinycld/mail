@@ -11,8 +11,9 @@ import (
 
 var domainRemovalLog = logging.ForPackage("mail")
 
-// domainRemovalTimeout bounds the provider call. The row is already gone, so
-// the hook must not hold the delete response open on a slow provider.
+// domainRemovalTimeout bounds the provider call. The hook is synchronous, so
+// a slow provider holds the delete response open for up to this long (or the
+// registrar's own shorter timeout); the delete itself has already committed.
 const domainRemovalTimeout = 30 * time.Second
 
 // registerMailDomainRemovalHook releases a deleted domain at the provider
@@ -21,7 +22,9 @@ const domainRemovalTimeout = 30 * time.Second
 //
 // It runs only after the delete has committed and never returns an error:
 // the org's choice to delete the domain stands even when the provider is
-// down. A leftover enrollment is reported by the provider-side reconcile.
+// down. Nothing retries a failed removal: the domain stays enrolled at the
+// provider, and held by whatever registered it there, until the owner adds
+// the domain again and deletes it again.
 func registerMailDomainRemovalHook(app core.App) {
 	app.OnRecordAfterDeleteSuccess("mail_domains").BindFunc(func(e *core.RecordEvent) error {
 		releaseDeletedDomain(e.Record)
