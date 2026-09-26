@@ -34,4 +34,17 @@ describe('mail manifest', () => {
         expect(Array.isArray(manifest.settings)).toBe(true)
         expect(manifest.settings?.length).toBeGreaterThan(0)
     })
+
+    it('declares the setup wizard steps and the domain options slot', () => {
+        expect(manifest.setupSteps).toEqual([
+            {
+                id: 'email-domain',
+                label: 'Email domain',
+                module: 'setup/EmailDomainStep',
+                order: 'a0k',
+            },
+            { id: 'address', label: 'Your address', module: 'setup/AddressStep', order: 'a0s' },
+        ])
+        expect(manifest.slots).toContain('setup-domain-options')
+    })
 })

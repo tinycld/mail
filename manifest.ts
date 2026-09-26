@@ -6,7 +6,16 @@ const manifest = {
     routes: { directory: 'screens' },
     nav: { label: 'Mail', icon: 'mail', order: 5, shortcut: 'm' },
     sidebar: { component: 'sidebar' },
-    slots: ['sidebar.after-labels'],
+    slots: ['sidebar.after-labels', 'setup-domain-options'],
+    setupSteps: [
+        {
+            id: 'email-domain',
+            label: 'Email domain',
+            module: 'setup/EmailDomainStep',
+            order: 'a0k',
+        },
+        { id: 'address', label: 'Your address', module: 'setup/AddressStep', order: 'a0s' },
+    ],
     settings: [
         // 'Domains' — matches the screen's own heading, and keeps this
         // distinct from the systemSettings 'Provider' panel below, which is
@@ -57,7 +66,7 @@ const manifest = {
         module: 'tinycld.org/packages/mail/cli',
     },
     repository: { url: 'https://github.com/tinycld/mail' },
-    peerVersions: { '@tinycld/core': '>=0.5.1 <0.6.0' },
+    peerVersions: { '@tinycld/core': '>=0.5.3 <0.6.0' },
 }
 
 export default manifest
