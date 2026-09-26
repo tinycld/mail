@@ -401,6 +401,7 @@ func TestAddDomainExistingRowIsDomainExists(t *testing.T) {
 				t.Fatal(err)
 			}
 			row := core.NewRecord(col)
+			row.Id = "existingdom0001"
 			row.Set("domain", "acme.com")
 			if err := app.Save(row); err != nil {
 				t.Fatal(err)
@@ -409,7 +410,8 @@ func TestAddDomainExistingRowIsDomainExists(t *testing.T) {
 		},
 		`{"domain":"ACME.com"}`,
 		http.StatusConflict,
-		[]string{`"code":"domain_exists"`},
+		// The id lets a client verify the domain it already added.
+		[]string{`"code":"domain_exists"`, `"params":{"id":"existingdom0001"}`},
 		nil,
 		func(t *testing.T, app *tests.TestApp) {
 			if got := countMailDomains(t, app); got != 1 {
