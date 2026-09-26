@@ -7,7 +7,7 @@ order: 110
 
 ## Why custom domains
 
-Out of the box, Mail can send through whatever address your provider gives you. To actually use your own domain — `you@yourcompany.com` — DNS needs to be set up correctly: MX records to receive, SPF / DKIM to send, return-path for bounces, and Postmark needs to know about the domain. Mail walks you through all of this.
+Out of the box, Mail can send through whatever address your provider gives you. To actually use your own domain — `you@yourcompany.com` — DNS needs to be set up correctly: MX records to receive, SPF / DKIM to send, return-path for bounces, and your mail provider needs to know about the domain. Mail walks you through all of this.
 
 ## Adding a domain
 
@@ -16,7 +16,11 @@ Out of the box, Mail can send through whatever address your provider gives you. 
 3. Enter the bare domain (e.g. `example.com`, not `@example.com` or `https://example.com`).
 4. Click **Add**.
 
-The domain is created in TinyCld, and Postmark is asked to create a matching server-side domain record. Once that finishes, the row shows a checklist of verification steps.
+Mail enrolls the domain with your mail provider immediately, and only creates the row once that succeeds — so a domain that shows up here is one your provider already knows about. The row appears with a checklist of verification steps and, right away, the DNS records you need to publish — no extra step to reveal them.
+
+## During first-run setup
+
+When an owner or admin sets up the server, the setup wizard has an **Email domain** step. The step can show ready-made domain choices from other apps. To use your own domain, enter it under **Use my own domain**, publish the DNS records that the step shows, then click **Verify**. When a domain is verified, the **Your address** step lets you make your first address on it. You can then send a test message to your account email. "Sent" means the server accepted the message, not that it arrived. You can add more domains later in **Settings → Mail → Domains**.
 
 ## The verification checklist
 
@@ -31,11 +35,11 @@ Each domain has four checks, all four green is required for full send + receive.
 - **DKIM** — DNS CNAME / TXT records for cryptographic signing of outgoing mail. Required for deliverability. Postmark generates the keys; self-hosted SMTP expects a record at `<selector>._domainkey.<domain>` where the selector comes from your provider settings (defaults to `tinycld`).
 - **Return-Path** — DNS CNAME for bounce handling. Postmark provides the target; for self-hosted SMTP we use the presence of a DMARC record at `_dmarc.<domain>` as the indicator.
 
-For each one, click **View setup instructions** to see the exact DNS records to add. Most DNS providers (Cloudflare, AWS Route 53, GoDaddy) let you paste these directly.
+The DKIM and Return-Path records appear as a **DNS records to publish** list under the checklist, each with its host, type, and value shown ready to copy. Most DNS providers (Cloudflare, AWS Route 53, GoDaddy) let you paste these directly. This list only shows while the domain isn't yet fully verified — once every check is green, the checklist alone is enough.
 
 ## Verifying
 
-After adding DNS records, click **Verify now** in the domain row. Mail re-runs every check. DNS propagation can take a few minutes (occasionally hours), so it's OK to come back later.
+After publishing the DNS records, click **Verify** in the domain row. Mail re-runs every check. DNS propagation can take a few minutes (occasionally hours), so it's OK to come back later.
 
 Mail also re-verifies any not-yet-fully-verified domain automatically once per hour in the background. So if your DNS records are correct but propagating slowly, the domain will eventually flip to green on its own.
 

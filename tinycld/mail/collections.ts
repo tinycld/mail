@@ -20,7 +20,7 @@ export function registerCollections(
     const indexing = { autoIndex: 'eager' as const, defaultIndexType: BasicIndex }
 
     const mail_domains = newCollection('mail_domains', {
-        omitOnInsert: ['created', 'updated', 'webhook_secret'] as const,
+        omitOnInsert: ['created', 'updated', 'webhook_secret', 'provider_domain_metadata'] as const,
         collectionOptions: indexing,
     })
 

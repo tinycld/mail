@@ -6,35 +6,17 @@ import type {
     WebhookURLsResponse,
 } from '@tinycld/app-generated/mail-api'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
-import { errorToString, handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
+import { errorToString } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { FormErrorSummary, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
-import {
-    CheckCircle,
-    Copy,
-    Globe,
-    Loader2,
-    Plus,
-    RefreshCw,
-    Trash2,
-    XCircle,
-} from 'lucide-react-native'
-import { newRecordId } from 'pbtsdb/core'
+import * as Clipboard from 'expo-clipboard'
+import { CheckCircle, Copy, Globe, Loader2, RefreshCw, Trash2, XCircle } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
+import { AddDomainForm } from './AddDomainForm'
+import { DnsRecordsPanel, hasUnpublishedDnsRecords } from './DnsRecordsPanel'
 import { assertVerifySaved } from './verify-domain'
-
-const addDomainSchema = z.object({
-    domain: z
-        .string()
-        .min(1, 'Domain is required')
-        .regex(
-            /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/,
-            'Enter a valid domain'
-        ),
-})
 
 export default function ProviderSettings() {
     const primaryColor = useThemeColor('primary')
@@ -260,11 +242,9 @@ function WebhookURLs({ domainId }: { domainId: string }) {
     })
 
     const copyUrl = async (url: string, label: string) => {
-        if (typeof navigator !== 'undefined' && navigator.clipboard) {
-            await navigator.clipboard.writeText(url)
-            setCopied(label)
-            setTimeout(() => setCopied(null), 2000)
-        }
+        await Clipboard.setStringAsync(url)
+        setCopied(label)
+        setTimeout(() => setCopied(null), 2000)
     }
 
     if (!urls) {
@@ -434,11 +414,33 @@ function buildProviderHint(
     return 'Set this domain as the server InboundDomain in Postmark'
 }
 
-function buildOutboundHint(details: VerificationDetails | null): string {
-    return details?.outbound?.error || 'outbound sending'
+// buildOutboundHint phrases the three-valued `enrolled` state, which is the
+// whole reason that field is three-valued: "the provider rejected this domain"
+// and "we could not reach the provider" need different actions from the admin,
+// and returning the raw sentinel text for both conflated exactly the two cases
+// the type was introduced to separate. Only "no" is the admin's to fix; an
+// "unknown" says the check did not run and the row's flags are stale.
+export function buildOutboundHint(details: VerificationDetails | null): string {
+    const outbound = details?.outbound
+    const error = outbound?.error
+    if (outbound?.enrolled === 'no') {
+        return error
+            ? `Not enrolled with the mail provider — ${error}`
+            : 'Not enrolled with the mail provider'
+    }
+    if (outbound?.enrolled === 'unknown') {
+        return error
+            ? `Could not reach the mail provider, so this was not checked — ${error}`
+            : 'Could not reach the mail provider, so this was not checked'
+    }
+    return error || 'outbound sending'
 }
 
-function DomainVerificationPanel({
+// Exported for a mount test: the panel's VISIBILITY wiring is the part worth
+// pinning. `verified` excludes DKIM and return-path, so gating the DNS panel on
+// it hid the records an admin still had to publish the moment the badge went
+// green — a defect no unit test of the helper alone can catch.
+export function DomainVerificationPanel({
     domain,
     provider,
 }: {
@@ -468,6 +470,10 @@ function DomainVerificationPanel({
                 ok={domain.return_path_verified}
                 hint={outboundHint}
                 advisory
+            />
+            <DnsRecordsPanel
+                outbound={details?.outbound}
+                isVisible={hasUnpublishedDnsRecords(details?.outbound)}
             />
         </View>
     )
@@ -554,73 +560,5 @@ function DeleteDomainButton({
         <Pressable className="p-1" onPress={onStartConfirm}>
             <Trash2 size={16} color={dangerColor} />
         </Pressable>
-    )
-}
-
-function AddDomainForm() {
-    const primaryFgColor = useThemeColor('primary-foreground')
-    const [domainsCollection] = useStore('mail_domains')
-
-    const {
-        control,
-        handleSubmit,
-        setError,
-        getValues,
-        reset,
-        formState: { errors, isSubmitted, isDirty },
-    } = useForm({
-        mode: 'onChange',
-        resolver: zodResolver(addDomainSchema),
-        defaultValues: { domain: '' },
-    })
-
-    const addMutation = useMutation({
-        mutationFn: mutation(function* (data: z.infer<typeof addDomainSchema>) {
-            yield domainsCollection.insert({
-                id: newRecordId(),
-                domain: data.domain,
-                verified: false,
-                mx_verified: false,
-                inbound_domain_verified: false,
-                spf_verified: false,
-                dkim_verified: false,
-                return_path_verified: false,
-                last_checked_at: '',
-                verification_details: null,
-            })
-        }),
-        onSuccess: () => reset(),
-        onError: handleMutationErrorsWithForm({ setError, getValues }),
-    })
-
-    const onSubmit = handleSubmit(data => addMutation.mutate(data))
-    const canSubmit = !addMutation.isPending && isDirty
-
-    const addButton = (
-        <Pressable
-            onPress={onSubmit}
-            disabled={!canSubmit}
-            className={`flex-row items-center gap-1 px-4 rounded-lg py-2.5 bg-primary ${canSubmit ? 'opacity-100' : 'opacity-50'}`}
-        >
-            <Plus size={16} color={primaryFgColor} />
-            <Text className="text-primary-foreground" style={{ fontWeight: '600' }}>
-                {addMutation.isPending ? 'Adding...' : 'Add'}
-            </Text>
-        </Pressable>
-    )
-
-    return (
-        <View className="gap-3">
-            <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
-
-            <TextInput
-                control={control}
-                name="domain"
-                label="Add Domain"
-                placeholder="example.com"
-                wrapperProps={{ style: { marginBottom: 0 } }}
-                addon={addButton}
-            />
-        </View>
     )
 }

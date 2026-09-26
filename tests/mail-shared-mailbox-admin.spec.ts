@@ -15,6 +15,22 @@ interface SeededUser {
     name: string
 }
 
+// Seeds a test account with a superuser write, taking the documented
+// exception to "e2e never writes data directly" (see CLAUDE.md).
+//
+// WHY the real path is unreachable: creating a user through the UI requires
+// the invite flow, which sends a real invitation email and needs the
+// recipient to open a link from an inbox. CI has no mail provider
+// credentials and no second inbox to read, so no admin+member pair can be
+// brought into existence by driving the app.
+//
+// WHAT this therefore does NOT cover: none of user creation is exercised
+// here — not the invite endpoint, not the invitation email, not the accept
+// flow, and not the role assignment the invite form performs. Do not read
+// this spec as end-to-end coverage of provisioning a user; it covers only
+// what an already-existing admin and member can each see and do on the
+// shared-mailbox settings screen.
+//
 // Single-org: the role lives on the users record itself, so seeding a test
 // account is a single create (the former orgs + user_org junction is gone).
 async function seedUser(role: 'admin' | 'member', label: string): Promise<SeededUser> {

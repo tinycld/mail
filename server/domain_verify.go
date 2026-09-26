@@ -2,6 +2,7 @@ package mail
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/maildomains"
 	"tinycld.org/packages/mail/api"
 )
 
@@ -19,13 +21,23 @@ import (
 const postmarkInboundMXHost = "inbound.postmarkapp.com"
 
 // expectedInboundMXHost returns the MX host the operator should publish in
-// DNS so this provider can deliver inbound mail. For Postmark this is the
-// fixed "inbound.postmarkapp.com"; for the self-hosted SMTP provider it is
-// the operator's PublicHostname (the host running the inbound SMTP listener);
-// for everything else (NoopProvider, unconfigured) it returns "" — which
+// DNS so mail can be delivered inbound.
+//
+// mail.inbound_mx_host wins whenever it is set: it is a deployment-wide
+// setting naming ONE MX host that accepts inbound SMTP for every domain,
+// which is not any provider's per-domain value and must override
+// every branch below — including SMTP's own IMAP-fetch mode, which otherwise
+// reports "" (see below). Absent that setting, the per-provider default
+// applies exactly as before: for Postmark this is the fixed
+// "inbound.postmarkapp.com"; for the self-hosted SMTP provider it is the
+// operator's PublicHostname (the host running the inbound SMTP listener); for
+// everything else (NoopProvider, unconfigured) it returns "" — which
 // suppresses the MX check (always failing OK=false with an informative hint
 // in the UI).
-func expectedInboundMXHost(provider Provider) string {
+func expectedInboundMXHost(app core.App, provider Provider) string {
+	if host := systemSetting(app, "mail.inbound_mx_host"); host != "" {
+		return host
+	}
 	switch p := provider.(type) {
 	case *PostmarkProvider:
 		return postmarkInboundMXHost
@@ -86,9 +98,9 @@ func checkMX(ctx context.Context, domain, expectedHost string) api.MXCheckResult
 // providerRequiresExactInboundMatch reports whether the provider's
 // InboundDomain must textually equal the verifying domain to count as
 // configured. Postmark requires this (one server per inbound domain); SMTP
-// does not (one operator host serves any number of tenant domains, so as
-// long as the operator's PublicHostname is set we accept it and lean on the
-// MX check to prove inbound mail actually arrives).
+// does not (one operator host serves any number of domains, so as long as
+// the operator's PublicHostname is set we accept it and lean on the MX check
+// to prove inbound mail actually arrives).
 func providerRequiresExactInboundMatch(provider Provider) bool {
 	_, isPostmark := provider.(*PostmarkProvider)
 	return isPostmark
@@ -98,7 +110,15 @@ func providerRequiresExactInboundMatch(provider Provider) bool {
 // and checks whether it satisfies the verifying domain. The strictness is
 // provider-dependent: see providerRequiresExactInboundMatch. For NoopProvider /
 // unconfigured providers we return an explicit "not configured" hint.
-func checkProviderInbound(ctx context.Context, provider Provider, domain string) api.ProviderCheckResult {
+//
+// A deployment-wide mail.inbound_mx_host takes the provider out of the
+// inbound path: mail for every domain is delivered to that one MX host, so
+// the provider's own inbound domain is irrelevant and would never match. The
+// MX check alone proves inbound delivery then, and the provider is not asked.
+func checkProviderInbound(ctx context.Context, app core.App, provider Provider, domain string) api.ProviderCheckResult {
+	if systemSetting(app, "mail.inbound_mx_host") != "" {
+		return api.ProviderCheckResult{OK: true, ExpectedDomain: domain}
+	}
 	return checkProviderInboundStrict(ctx, provider, domain, providerRequiresExactInboundMatch(provider))
 }
 
@@ -128,18 +148,154 @@ func checkProviderInboundStrict(ctx context.Context, provider Provider, domain s
 	return result
 }
 
-// checkOutbound queries the provider for SPF/DKIM/Return-Path verification.
-// Failure is best-effort — missing outbound doesn't block the inbound verdict.
-func checkOutbound(ctx context.Context, provider Provider, domain string) api.OutboundCheckResult {
-	result := api.OutboundCheckResult{}
-	v, err := provider.CheckDomainVerification(ctx, domain)
+// postmarkDomainMetadata is the per-provider slice of provider_domain_metadata
+// this package writes and reads. Field names and shape match the TypeScript
+// ProviderDomainMetadata type in tinycld/mail/types.ts — keep them in sync.
+type postmarkDomainMetadata struct {
+	DomainID           int64  `json:"domain_id,omitempty"`
+	CheckedAt          string `json:"checked_at,omitempty"`
+	Enrolled           *bool  `json:"enrolled,omitempty"`
+	SPFVerified        *bool  `json:"spf_verified,omitempty"`
+	DKIMVerified       *bool  `json:"dkim_verified,omitempty"`
+	ReturnPathVerified *bool  `json:"return_path_verified,omitempty"`
+}
+
+// providerDomainMetadata is the provider_domain_metadata JSON field. Only
+// Postmark stamps it today (SMTP has no provider account and thus no id to
+// remember); the outer struct leaves room for a second provider without a
+// further migration.
+type providerDomainMetadata struct {
+	Postmark *postmarkDomainMetadata `json:"postmark,omitempty"`
+}
+
+// readProviderDomainMetadata decodes the record's provider_domain_metadata
+// field. A json field arrives as types.JSONRaw or an already-decoded any
+// depending on how the record was loaded, so this round-trips through
+// encoding/json rather than asserting a concrete type. A missing or
+// unparsable value yields the zero struct — never an error — because this
+// field is reporting-only and must not block a verification run.
+func readProviderDomainMetadata(record *core.Record) providerDomainMetadata {
+	var meta providerDomainMetadata
+	raw := record.Get("provider_domain_metadata")
+	if raw == nil {
+		return meta
+	}
+	data, err := json.Marshal(raw)
 	if err != nil {
+		return meta
+	}
+	_ = json.Unmarshal(data, &meta)
+	return meta
+}
+
+// boolPtr is a small helper so call sites can take the address of a literal.
+func boolPtr(b bool) *bool { return &b }
+
+// checkOutbound reads the domain's provider-side state through the
+// maildomains seam. It does NOT take a Provider: these are account-credential
+// operations, and where a resolver is registered they are performed by
+// whatever process owns the provider account, not here.
+//
+// Failure stays best-effort — outbound never blocks the inbound verdict — but
+// is now three-valued. A provider that has never heard of the domain is the
+// admin's problem ("no"); a socket or API failure is not ("unknown"), and
+// conflating them would tell an admin to fix a domain that is fine.
+//
+// It also maintains provider_domain_metadata on the record (in memory only —
+// the caller's app.Save persists it alongside the row's own flags, so the two
+// cannot drift): the stored provider id is read and forwarded so a by-name
+// scan happens at most once per domain, a newly learned id is persisted, and
+// the provider's answer is stamped with checked_at on every call, success or
+// failure, so "asked and told no" stays distinguishable from "never asked".
+func checkOutbound(ctx context.Context, record *core.Record) api.OutboundCheckResult {
+	domain := record.GetString("domain")
+	meta := readProviderDomainMetadata(record)
+	var priorID int64
+	if meta.Postmark != nil {
+		priorID = meta.Postmark.DomainID
+	}
+
+	result := api.OutboundCheckResult{}
+	rec, err := maildomains.Current().GetDomain(ctx, domain, priorID)
+
+	// A lookup BY STORED ID that comes back "not enrolled" is ambiguous: the
+	// domain may genuinely be gone, or the operator may have deleted and
+	// re-created it at the provider, which mints a NEW id and strands ours.
+	// Retrying by name distinguishes the two, and is the only self-service
+	// recovery there is — a stale id otherwise pins the row at "no" forever
+	// (GetDomain never falls back to findByName while an id is stored) while
+	// re-adding the domain returns "already configured on this host".
+	relearnedID := false
+	if priorID != 0 && errors.Is(err, maildomains.ErrDomainNotEnrolled) {
+		rec, err = maildomains.Current().GetDomain(ctx, domain, 0)
+		relearnedID = true
+	}
+
+	stamp := &postmarkDomainMetadata{DomainID: priorID, CheckedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	switch {
+	case errors.Is(err, maildomains.ErrNotConfigured):
+		// Neither "the provider says no" nor "we could not reach the
+		// provider": this deployment has no way to ask at all. It must not
+		// read as enrolled — asserting enrollment we never checked is exactly
+		// the green-badge-on-a-dead-domain failure the three-valued type
+		// exists to prevent — so it disqualifies `verified`, and the message
+		// names the cause the admin can act on instead of blaming their DNS.
+		result.Enrolled = "no"
+		result.Error = "mail domain provisioning is not configured on this deployment; " +
+			"set the provider account credentials in settings"
+		stamp.Enrolled = nil
+		if relearnedID {
+			stamp.DomainID = 0
+		}
+		record.Set("provider_domain_metadata", providerDomainMetadata{Postmark: stamp})
+		return result
+	case errors.Is(err, maildomains.ErrDomainNotEnrolled):
+		result.Enrolled = "no"
 		result.Error = err.Error()
+		stamp.Enrolled = boolPtr(false)
+		// The by-name rescan also failed, so the stored id is worthless AND
+		// the provider genuinely does not have this domain. Clearing it keeps
+		// the next check on the by-name path rather than re-deriving "no" from
+		// an id that can never resolve again.
+		if relearnedID {
+			stamp.DomainID = 0
+		}
+		record.Set("provider_domain_metadata", providerDomainMetadata{Postmark: stamp})
+		return result
+	case err != nil:
+		result.Enrolled = "unknown"
+		result.Error = err.Error()
+		// The call never produced an answer, so neither true nor false is
+		// honest here — a nil pointer is the column's way of saying so. A
+		// definitive `false` would claim the provider rejected the domain.
+		stamp.Enrolled = nil
+		record.Set("provider_domain_metadata", providerDomainMetadata{Postmark: stamp})
 		return result
 	}
-	result.SPF = v.SPFVerified
-	result.DKIM = v.DKIMVerified
-	result.ReturnPath = v.ReturnPathVerified
+
+	result.Enrolled = "yes"
+	result.SPF = rec.SPFVerified
+	result.DKIM = rec.DKIMVerified
+	result.ReturnPath = rec.ReturnPathVerified
+	result.DKIMHost = rec.DKIMHost
+	result.DKIMTextValue = rec.DKIMTextValue
+	result.ReturnPathDomain = rec.ReturnPathDomain
+	result.ReturnPathCNAMEValue = rec.ReturnPathCNAMEValue
+
+	// Persist whatever id the seam just resolved. Two cases reach here with a
+	// new one: a zero prior id resolved by the by-name fallback, and a stale
+	// prior id that the rescan above replaced (the provider re-created the
+	// domain under a new id). Writing it back is what stops the by-name scan
+	// running again next time.
+	if rec.ID != 0 {
+		stamp.DomainID = rec.ID
+	}
+	stamp.Enrolled = boolPtr(true)
+	stamp.SPFVerified = boolPtr(rec.SPFVerified)
+	stamp.DKIMVerified = boolPtr(rec.DKIMVerified)
+	stamp.ReturnPathVerified = boolPtr(rec.ReturnPathVerified)
+	record.Set("provider_domain_metadata", providerDomainMetadata{Postmark: stamp})
+
 	return result
 }
 
@@ -184,9 +340,15 @@ func verifyDomainRecord(ctx context.Context, app core.App, record *core.Record) 
 		ProviderConfigured: providerConfigured,
 		ProviderName:       providerName,
 	}
-	details.MX = checkMX(ctx, domain, expectedInboundMXHost(provider))
-	details.Provider = checkProviderInbound(ctx, provider, domain)
-	details.Outbound = checkOutbound(ctx, provider, domain)
+	mxHost := expectedInboundMXHost(app, provider)
+	details.MX = checkMX(ctx, domain, mxHost)
+	details.Provider = checkProviderInbound(ctx, app, provider, domain)
+	details.Outbound = checkOutbound(ctx, record)
+	// Stamped from the same value the MX check just used, not read back off
+	// details.MX.Expected, so the DNS panel's MX row always matches the row
+	// above it.
+	details.Outbound.MXHost = mxHost
+	details.Outbound.MXVerified = details.MX.OK
 
 	record.Set("mx_verified", details.MX.OK)
 	record.Set("inbound_domain_verified", details.Provider.OK)
@@ -195,7 +357,12 @@ func verifyDomainRecord(ctx context.Context, app core.App, record *core.Record) 
 	record.Set("return_path_verified", details.Outbound.ReturnPath)
 	record.Set("verification_details", details)
 	record.Set("last_checked_at", time.Now().UTC().Format(time.RFC3339Nano))
-	record.Set("verified", details.MX.OK && details.Provider.OK)
+	// A domain the provider has never enrolled cannot send at all, so it must
+	// not show as verified. Previously `verified` was inbound-only, and an
+	// unenrolled domain displayed a green badge while every send failed.
+	// "unknown" is treated as not-disqualifying: a transport failure must not
+	// flip a working domain to unverified.
+	record.Set("verified", details.MX.OK && details.Provider.OK && details.Outbound.Enrolled != "no")
 
 	if err := app.Save(record); err != nil {
 		return details, err

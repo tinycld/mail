@@ -105,7 +105,7 @@ After saving credentials:
 - **"Provider not configured"** — you haven't saved a server token (Postmark) or selected a provider. Outbound is blocked.
 - **"401 Unauthorized" from Postmark** — token is wrong or revoked. Regenerate in Postmark and re-save.
 - **"403 Forbidden" from Postmark** — token is valid but doesn't have the permissions you need (e.g. an account token where the server token is required). Double-check which is which.
-- **"connection refused" on port 25** (SMTP provider) — your cloud provider is blocking outbound 25. Open a ticket or switch hosting.
+- **"connection refused" on port 25** (SMTP provider) — your cloud provider is blocking outbound 25. Open a ticket, or move to a cloud provider that allows it.
 - **Mail goes to spam** (SMTP provider) — most often missing DKIM signing. See the DKIM section above.
 
 ## See also

@@ -97,12 +97,6 @@ func (s *stubProvider) ParseBounce(_ []byte) (*BounceEvent, error) { return nil,
 func (s *stubProvider) VerifyWebhookSignature(_ map[string]string, _ []byte) error {
 	return nil
 }
-func (s *stubProvider) AddDomain(_ context.Context, _ string) (*DomainVerification, error) {
-	return nil, nil
-}
-func (s *stubProvider) CheckDomainVerification(_ context.Context, _ string) (*DomainVerification, error) {
-	return nil, nil
-}
 func (s *stubProvider) CheckInboundDomain(_ context.Context) (*InboundVerification, error) {
 	return nil, nil
 }
@@ -392,7 +386,7 @@ func TestHandleInbound_KnownRecipientStoresMessage(t *testing.T) {
 }
 
 // TestHandleInbound_DisabledUserMailboxStillReceives pins a deliberate policy
-// decision (hosting HANDOFF §6, resolved 2026-07-28): delivery does NOT
+// decision (resolved 2026-07-28): delivery does NOT
 // consult users.disabled. Disable is a reversible suspension — mail keeps
 // accumulating so it is waiting when the account is re-enabled, and senders
 // learn nothing about the account's state (a bounce would leak it). The
