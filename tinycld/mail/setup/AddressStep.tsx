@@ -104,21 +104,25 @@ function useTestMessage(mailboxId: string) {
 
 const OUTBOUND_STATUSES = ['sending', 'sent', 'bounced', 'spam_complaint']
 
-// The newest message the user sent. It is read from the store, not from the
-// send response, so the status is correct after a reload.
+// The newest message the user sent from this mailbox's address. It is read
+// from the store, not from the send response, so the status is correct after
+// a reload.
 //
-// Filtered by sent_by alone, from one collection — no thread join, no
-// mailbox condition. At setup time the user has only just created their
-// mailbox, so the newest message they sent IS the test message; a
-// single-collection filter with a limit pushes to the server, where a join
-// through threads (like useIsStepDone's cross-mailbox read above) would pull
-// every thread of every mailbox the user can see.
-function useTestMessageState() {
+// Filtered by sent_by AND sender_email — still one collection, no thread
+// join — so this stays a single server-side filter (mailbox-scoped, not just
+// user-scoped): an owner with other mailboxes, or who has sent other mail,
+// must see this mailbox's test message, not merely their own newest one.
+// sender_email is stored verbatim as `${mailbox.address}@${domain.domain}`
+// (endpoints_send.go: senderEmail := fmt.Sprintf("%s@%s", senderAddress,
+// domain), no case normalization) — the same fields senderEmail here is built
+// from (useMyNewestMailbox), so the comparison is exact-case.
+function useTestMessageState(senderEmail: string) {
     const [messagesCollection] = useStore('mail_messages')
     const { data } = useMyLiveQuery((query, { userId }) =>
         query
             .from({ msg: messagesCollection })
             .where(({ msg }) => eq(msg.sent_by, userId))
+            .where(({ msg }) => eq(msg.sender_email, senderEmail))
             .where(({ msg }) => inArray(msg.delivery_status, OUTBOUND_STATUSES))
             .orderBy(({ msg }) => msg.created, 'desc')
             .select(({ msg }) => ({
@@ -156,8 +160,8 @@ const STATUS_COLOR: Record<TestMessageState['kind'], string> = {
     bounced: 'text-danger',
 }
 
-function TestMessageStatus() {
-    const state = useTestMessageState()
+function TestMessageStatus({ senderEmail }: { senderEmail: string }) {
+    const state = useTestMessageState(senderEmail)
     if (state.kind === 'none') return null
     const labelClass = `text-sm ${STATUS_COLOR[state.kind]}`
     return (
@@ -194,7 +198,7 @@ function CreatedMailbox({ mailbox }: { mailbox: { id: string; email: string } })
                     <ButtonText>{isPending ? 'Sending…' : 'Send a test message'}</ButtonText>
                 </Button>
             </View>
-            <TestMessageStatus />
+            <TestMessageStatus senderEmail={mailbox.email} />
             <ErrorText message={errorMessage} />
         </View>
     )
