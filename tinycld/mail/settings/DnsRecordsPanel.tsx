@@ -5,6 +5,7 @@ import * as Clipboard from 'expo-clipboard'
 import { Check, Copy } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
+import { MONOSPACE_FONT } from '../lib/monospace-font'
 
 export type DnsRecord = {
     label: string
@@ -119,7 +120,7 @@ function DnsRecordRow({ record }: { record: DnsRecord }) {
                 <Text
                     className="text-foreground flex-1"
                     numberOfLines={1}
-                    style={{ fontSize: 11, fontFamily: 'monospace' }}
+                    style={{ fontSize: 11, fontFamily: MONOSPACE_FONT }}
                 >
                     {record.value}
                 </Text>
