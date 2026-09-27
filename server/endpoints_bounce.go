@@ -30,7 +30,7 @@ func handleBounce(app core.App, provider Provider, re *core.RequestEvent, secret
 		return re.BadRequestError("Missing message ID in bounce payload", nil)
 	}
 
-	deliveryEvent, recognised, _ := eventFromBounce(event)
+	deliveryEvent, recognised, ok := eventFromBounce(event)
 	if !recognised {
 		// Not counted, and loud about it. A failure type nobody has mapped is
 		// a gap in whatever judges senders by these, and it should be noticed
@@ -38,6 +38,12 @@ func handleBounce(app core.App, provider Provider, re *core.RequestEvent, secret
 		app.Logger().Warn("unrecognised bounce type; not classified",
 			"record_type", event.RecordType, "bounce_type", event.BounceType,
 			"type_code", event.TypeCode, "message_id", event.MessageID)
+	}
+	if !ok {
+		// A recognised non-failure (an auto-responder, an unsubscribe): there
+		// is no outcome to apply, matching the hosted router, which does not
+		// forward these either.
+		return re.JSON(http.StatusOK, api.WebhookAckResponse{Status: "ignored"})
 	}
 
 	handled, err := applyDeliveryEvent(app, deliveryEvent)

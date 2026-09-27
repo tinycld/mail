@@ -327,3 +327,113 @@ func TestEventFromBounce_EmptyMessageIDIsNotOk(t *testing.T) {
 		t.Fatal("ok = true, want false when the payload carries no message id")
 	}
 }
+
+// A recognised non-failure (auto-responder, unsubscribe, …) must not be
+// applied as a Bounced event with an empty class — that showed as "Bounced"
+// on the address step and blocked a later real Delivered event. It matches
+// the hosted router, which attributes and logs these but never forwards
+// them because there is no outcome to record.
+func TestEventFromBounce_RecognisedNonFailureIsNotOk(t *testing.T) {
+	b := &BounceEvent{RecordType: "Bounce", MessageID: "pm-1", TypeCode: pmCodeAutoResponder}
+
+	event, recognised, ok := eventFromBounce(b)
+	if ok {
+		t.Fatal("ok = true, want false for a recognised non-failure (auto-responder)")
+	}
+	if !recognised {
+		t.Error("recognised = false, want true — classifyBounce does recognise this type")
+	}
+	if event != (deliveryevents.Event{}) {
+		t.Errorf("event = %+v, want zero value when ok is false", event)
+	}
+}
+
+// An UNRECOGNISED type must still be applied as Bounced with an empty class
+// — this is the case that keeps today's behaviour and the warning log firing
+// (see TestEventFromBounce_UnrecognisedBounceIsStillAppliedButNotRecognised).
+// This test locks in the recognised-vs-unrecognised split at the ok boundary:
+// only the recognised non-failure short-circuits to ok=false.
+func TestEventFromBounce_UnrecognisedTypeIsStillOk(t *testing.T) {
+	b := &BounceEvent{RecordType: "Bounce", MessageID: "pm-1", TypeCode: 999999}
+
+	event, recognised, ok := eventFromBounce(b)
+	if !ok {
+		t.Fatal("ok = false, want true — an unrecognised type is still applied")
+	}
+	if recognised {
+		t.Error("recognised = true, want false for an unrecognised type")
+	}
+	if event.Kind != deliveryevents.Bounced {
+		t.Errorf("Kind = %v, want Bounced", event.Kind)
+	}
+	if event.Class != "" {
+		t.Errorf("Class = %q, want empty for an unrecognised type", event.Class)
+	}
+}
+
+// An unparsable or empty DeliveredAt must fall back to now, matching the
+// bounce path's own bouncedAtOrNow — otherwise delivered_at stays empty while
+// the caller still reports handled=true, silently losing the timestamp.
+func TestEventFromBounce_DeliveryWithEmptyDeliveredAtFallsBackToNow(t *testing.T) {
+	before := time.Now().UTC()
+	b := &BounceEvent{RecordType: "Delivery", MessageID: "pm-1", DeliveredAt: ""}
+
+	event, _, ok := eventFromBounce(b)
+	if !ok {
+		t.Fatal("ok = false, want true for a Delivery record")
+	}
+	if event.At.IsZero() {
+		t.Fatal("At is zero, want a fallback to the current time")
+	}
+	if event.At.Before(before) || event.At.After(time.Now().UTC().Add(time.Second)) {
+		t.Errorf("At = %v, want close to now (%v)", event.At, before)
+	}
+}
+
+func TestEventFromBounce_DeliveryWithUnparsableDeliveredAtFallsBackToNow(t *testing.T) {
+	before := time.Now().UTC()
+	b := &BounceEvent{RecordType: "Delivery", MessageID: "pm-1", DeliveredAt: "not-a-timestamp"}
+
+	event, _, ok := eventFromBounce(b)
+	if !ok {
+		t.Fatal("ok = false, want true for a Delivery record")
+	}
+	if event.At.Before(before) || event.At.After(time.Now().UTC().Add(time.Second)) {
+		t.Errorf("At = %v, want close to now (%v)", event.At, before)
+	}
+}
+
+// applyDeliveryEvent must not trust e.Class from the wire — Save would fail
+// (500) against the bounce_class SelectField's fixed values for anything
+// outside soft/hard/complaint. An unknown value is stored as "" instead.
+func TestApplyDeliveryEvent_BouncedWithUnknownClassStoresEmpty(t *testing.T) {
+	app := setupDeliveryEventsTestApp(t)
+	seedDomainAndMailbox(t, app, "delivery-events.test", "alice", "mb_delivered0006")
+	thread := newTestThread(t, app, padID("mb_delivered0006"), "hello")
+	newDeliveryTestMessage(t, app, thread.Id, "pm-1", "sent")
+
+	handled, err := applyDeliveryEvent(app, deliveryevents.Event{
+		Kind:              deliveryevents.Bounced,
+		ProviderMessageID: "pm-1",
+		Class:             "not-a-real-class",
+		Reason:            "unexpected wire value",
+		At:                time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("applyDeliveryEvent returned error: %v", err)
+	}
+	if !handled {
+		t.Fatal("handled = false, want true")
+	}
+
+	record, err := app.FindFirstRecordByFilter("mail_messages", "message_id = {:id}", map[string]any{"id": "pm-1"})
+	if err != nil {
+		t.Fatalf("reload message: %v", err)
+	}
+	if record.GetString("delivery_status") != "bounced" {
+		t.Errorf("delivery_status = %q, want bounced", record.GetString("delivery_status"))
+	}
+	if record.GetString("bounce_class") != "" {
+		t.Errorf("bounce_class = %q, want empty for an unrecognised wire value", record.GetString("bounce_class"))
+	}
+}

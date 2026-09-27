@@ -52,7 +52,7 @@ func applyDeliveryEvent(app core.App, e deliveryevents.Event) (handled bool, err
 
 	case deliveryevents.Bounced:
 		record.Set("delivery_status", "bounced")
-		record.Set("bounce_class", e.Class)
+		record.Set("bounce_class", validBounceClassOrEmpty(e.Class))
 		record.Set("bounce_reason", truncateRunes(e.Reason, 500))
 
 	case deliveryevents.Complaint:
@@ -70,6 +70,22 @@ func applyDeliveryEvent(app core.App, e deliveryevents.Event) (handled bool, err
 	return true, nil
 }
 
+// validBounceClassOrEmpty guards the mail_messages bounce_class SelectField,
+// whose schema only accepts "soft", "hard" or "complaint". e.Class arrives
+// over the wire — from this package's own webhook, but also handed over by
+// core's deliveryevents registry from a composition where the notification
+// landed elsewhere — so an unexpected value must not reach Save, where the
+// SelectField's own values check would reject the record and turn the whole
+// call into a 500 instead of simply storing no class.
+func validBounceClassOrEmpty(class string) string {
+	switch class {
+	case "soft", "hard", "complaint":
+		return class
+	default:
+		return ""
+	}
+}
+
 // truncateRunes caps s at n runes, matching the bounce_reason field's schema
 // limit (500) — a byte-based cut could split a multi-byte character.
 func truncateRunes(s string, n int) string {
@@ -84,23 +100,26 @@ func truncateRunes(s string, n int) string {
 // package-agnostic deliveryevents.Event.
 //
 // ok reports whether the payload identifies a message at all (a non-empty
-// MessageID) — false means there is nothing to apply, full stop. recognised
-// is narrower: it is classifyBounce's own verdict on whether this specific
-// failure type is one mail knows how to classify, kept separate from ok so
-// an unmapped bounce type still gets applied as a Bounced event (with an
-// empty Class) AND still gets its own warning logged by the caller — folding
-// the two into one bool silenced that warning for every unrecognised type.
+// MessageID), AND whether there is an event to apply — false also covers a
+// RECOGNISED non-failure (an auto-responder, an unsubscribe: classifyBounce
+// returns recognised=true with bounceClassNone), matching the hosted router,
+// which attributes and logs these but never forwards them because the
+// message has no outcome to record. recognised is narrower still: it is
+// classifyBounce's own verdict on whether this specific failure type is one
+// mail knows how to classify, kept separate from ok so an UNMAPPED bounce
+// type still gets applied as a Bounced event (with an empty Class) AND still
+// gets its own warning logged by the caller — folding the two into one bool
+// silenced that warning for every unrecognised type.
 func eventFromBounce(b *BounceEvent) (event deliveryevents.Event, recognised bool, ok bool) {
 	if b == nil || b.MessageID == "" {
 		return deliveryevents.Event{}, false, false
 	}
 
 	if b.RecordType == "Delivery" {
-		at, _ := time.Parse(time.RFC3339, b.DeliveredAt)
 		return deliveryevents.Event{
 			Kind:              deliveryevents.Delivered,
 			ProviderMessageID: b.MessageID,
-			At:                at,
+			At:                bouncedAtOrNow(b.DeliveredAt),
 		}, true, true
 	}
 
@@ -115,6 +134,13 @@ func eventFromBounce(b *BounceEvent) (event deliveryevents.Event, recognised boo
 	}
 
 	class, recognised := classifyBounce(b)
+	if recognised && class == bounceClassNone {
+		// A recognised non-failure: nothing to apply. Returning ok=false here
+		// — rather than a Bounced event with an empty class — is what keeps
+		// an auto-responder or unsubscribe notice from showing as "Bounced"
+		// on the address step and blocking a later real Delivered event.
+		return deliveryevents.Event{}, true, false
+	}
 	return deliveryevents.Event{
 		Kind:              deliveryevents.Bounced,
 		ProviderMessageID: b.MessageID,
@@ -125,9 +151,9 @@ func eventFromBounce(b *BounceEvent) (event deliveryevents.Event, recognised boo
 }
 
 // bounceClassToString maps the internal classification onto the wire values
-// applyDeliveryEvent and deliveryevents.Event use. bounceClassNone —
-// including both an unrecognised type and a recognised non-failure, e.g. an
-// unsubscribe notice — carries no class of its own.
+// applyDeliveryEvent and deliveryevents.Event use. bounceClassNone reaches
+// here only for an UNRECOGNISED type — a recognised non-failure is filtered
+// out earlier in eventFromBounce — and carries no class of its own.
 func bounceClassToString(c bounceClass) string {
 	if c == bounceClassNone {
 		return ""
