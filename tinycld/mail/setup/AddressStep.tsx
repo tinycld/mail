@@ -1,6 +1,7 @@
 import { eq, gt, inArray } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import type { SendEmailResponse } from '@tinycld/app-generated/mail-api'
+import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { SetupContinueButton } from '@tinycld/core/components/setup/wizard/SetupContinueButton'
 import { useAuth } from '@tinycld/core/lib/auth'
 import { errorToString } from '@tinycld/core/lib/errors'
@@ -250,7 +251,10 @@ export default function AddressStep({ next }: SetupStepProps) {
     const mailbox = useMyNewestMailbox()
     return (
         <View className="max-w-[440px] gap-1">
-            <Text className="text-2xl font-bold text-foreground">Your email address</Text>
+            <View className="flex-row items-center gap-2">
+                <Text className="text-2xl font-bold text-foreground">Your email address</Text>
+                <HelpIcon topic="mail:delivery-tracking" />
+            </View>
             <Text className="mb-3 text-sm text-muted-foreground">
                 Make the address you will send and receive email from.
             </Text>

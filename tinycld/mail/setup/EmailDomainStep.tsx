@@ -1,5 +1,6 @@
 import { useLiveQuery } from '@tanstack/react-db'
 import type { AddDomainResponse, OutboundCheckResult } from '@tinycld/app-generated/mail-api'
+import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { SetupContinueButton } from '@tinycld/core/components/setup/wizard/SetupContinueButton'
 import { SidebarSlot } from '@tinycld/core/components/sidebar-primitives/SidebarSlot'
 import { errorToString } from '@tinycld/core/lib/errors'
@@ -227,7 +228,10 @@ export default function EmailDomainStep({ next }: SetupStepProps) {
     const { isOwnSelected, chooseOwn } = useDomainChoice()
     return (
         <View className="max-w-[440px] gap-1">
-            <Text className="text-2xl font-bold text-foreground">Your email domain</Text>
+            <View className="flex-row items-center gap-2">
+                <Text className="text-2xl font-bold text-foreground">Your email domain</Text>
+                <HelpIcon topic="mail:custom-domains" />
+            </View>
             <Text className="mb-3 text-sm text-muted-foreground">
                 Where should your team's email addresses live?
             </Text>

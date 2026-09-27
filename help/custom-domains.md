@@ -40,9 +40,10 @@ The step shows the status of your newest test message. If you leave the step and
 
 Each domain has four checks, all four green is required for full send + receive. The exact targets depend on which [provider](help://mail:provider-setup) this server uses:
 
-- **Inbound MX** — DNS MX records pointing at your provider's inbound host.
-  - **Postmark**: `inbound.postmarkapp.com`.
-  - **Self-hosted SMTP, "Built-in listener" inbound mode**: your TinyCld host's **Public hostname**.
+- **Inbound MX** — DNS MX records pointing at your provider's inbound host. The **Inbound MX** row on this page shows the exact host to use.
+  - On a server with a custom `mail.inbound_mx_host` setting, that host applies to every domain.
+  - **Postmark** (no custom setting): `inbound.postmarkapp.com`.
+  - **Self-hosted SMTP, "Built-in listener" inbound mode** (no custom setting): `{{server-host}}`.
   - **Self-hosted SMTP, "Poll IMAP" inbound mode**: not checked — mail arrives via IMAP polling instead of MX.
 - **Provider** — for Postmark, the Postmark API confirms your domain's inbound forwarding is configured. For self-hosted SMTP, this confirms the public hostname is set. Either way the provider itself is set up once for the whole deployment, not per domain.
 - **SPF** — DNS TXT record authorizing the sending host. Required so recipient servers don't mark your mail as spam.
@@ -61,7 +62,7 @@ Mail also re-verifies any not-yet-fully-verified domain automatically once per h
 
 - **Send** — outbound from any address on this domain works.
 - **Receive** — inbound mail to any address on this domain delivered to a matching [mailbox or alias](help://mail:mailboxes) appears in that mailbox's Inbox.
-- **Bounce tracking** — delivery callbacks update the `delivery_status` of sent messages. See [Delivery tracking](help://mail:delivery-tracking).
+- **Bounce tracking** — delivery callbacks update each sent message's status: a delivered message shows "Delivered" and keeps `delivery_status` "sent"; a failed message gets `delivery_status` "bounced" or "spam_complaint". See [Delivery tracking](help://mail:delivery-tracking).
 
 ## Inbound routing
 
