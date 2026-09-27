@@ -158,4 +158,10 @@ describe('testMessageLabel', () => {
             'Bounced: x'
         )
     })
+
+    it('drops the colon when a bounce carries no reason', () => {
+        expect(testMessageLabel({ kind: 'bounced', bounceClass: 'hard', reason: '' })).toBe(
+            'Bounced (hard)'
+        )
+    })
 })

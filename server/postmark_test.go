@@ -139,6 +139,37 @@ func TestParseInbound_PassesThroughNonEmptyStrippedReply(t *testing.T) {
 	}
 }
 
+// TestParseBounce_DeliveryPayload — a real Postmark Delivery webhook (sent
+// when a message reaches the recipient's server) carries Recipient and
+// DeliveredAt instead of Email/BouncedAt, plus a Metadata object mail's own
+// sends stamp with sender_domain (see senderDomainMetadataKey). ParseBounce
+// must still come out with RecordType, MessageID and DeliveredAt set so
+// eventFromBounce can map it to a Delivered event.
+func TestParseBounce_DeliveryPayload(t *testing.T) {
+	body := []byte(`{
+		"RecordType": "Delivery",
+		"MessageID": "abc-123",
+		"Recipient": "alice@acme.com",
+		"DeliveredAt": "2026-05-03T03:35:46Z",
+		"Metadata": {"sender_domain": "acme.com"}
+	}`)
+
+	p := &PostmarkProvider{}
+	event, err := p.ParseBounce(body)
+	if err != nil {
+		t.Fatalf("ParseBounce failed: %v", err)
+	}
+	if event.RecordType != "Delivery" {
+		t.Errorf("RecordType = %q, want Delivery", event.RecordType)
+	}
+	if event.MessageID != "abc-123" {
+		t.Errorf("MessageID = %q, want abc-123", event.MessageID)
+	}
+	if event.DeliveredAt != "2026-05-03T03:35:46Z" {
+		t.Errorf("DeliveredAt = %q, want 2026-05-03T03:35:46Z", event.DeliveredAt)
+	}
+}
+
 // TestParseInbound_PreservesTextBodyWhenNoHTML — when there's no HtmlBody,
 // the sender's text/plain part is trustworthy and we leave it alone.
 func TestParseInbound_PreservesTextBodyWhenNoHTML(t *testing.T) {
