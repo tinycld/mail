@@ -18,17 +18,13 @@ import { assertVerifySaved } from '../settings/verify-domain'
 import { type DomainChoice, initialChoice, showOwnDomainForm } from './domain-choice'
 import { domainPanelTarget, hasVerifiedDomain, setupAddDomainError } from './setup-logic'
 
-// The step hooks declare their return type: the generated package config
-// imports this module, and an inferred type here would depend on the store
-// types that the same config builds, which is a cycle tsc cannot resolve.
-//
 // Adding and verifying domains is an owner/admin action on the server.
-export function useIsStepVisible(): boolean | undefined {
+export function useIsStepVisible() {
     const { isReady, isAdmin } = useCurrentRole()
     return isReady ? isAdmin : undefined
 }
 
-export function useIsStepDone(): boolean | undefined {
+export function useIsStepDone() {
     const [domainsCollection] = useStore('mail_domains')
     const { data, isReady } = useLiveQuery(query =>
         query.from({ d: domainsCollection }).select(({ d }) => ({ verified: d.verified }))

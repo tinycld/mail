@@ -35,12 +35,8 @@ function useDomainRows() {
     return { rows: data ?? [], isReady }
 }
 
-// The step hooks declare their return type: the generated package config
-// imports this module, and an inferred type here would depend on the store
-// types that the same config builds, which is a cycle tsc cannot resolve.
-//
 // A mailbox needs a verified domain, so the step waits for the domain step.
-export function useIsStepVisible(): boolean | undefined {
+export function useIsStepVisible() {
     const { rows, isReady } = useDomainRows()
     return isReady ? hasVerifiedDomain(rows) : undefined
 }
@@ -50,7 +46,7 @@ export function useIsStepVisible(): boolean | undefined {
 // query answers "delivered in one of my mailboxes" with one limit-1 request.
 // A join through members and threads would load every thread of every mailbox
 // the user can see, and this hook runs on each wizard render.
-export function useIsStepDone(): boolean | undefined {
+export function useIsStepDone() {
     const [messagesCollection] = useStore('mail_messages')
     const { data, isReady } = useLiveQuery(query =>
         query
