@@ -49,8 +49,18 @@ var serverOwnedDomainFields = []string{
 // The collection's admin/owner API rules are NOT a substitute: the attacker
 // here IS an org admin, legitimately authenticated. These fields are not
 // admin-restricted, they are not client state at all.
+//
+// A SUPERUSER is exempt from both hooks. That is the deployment's operator,
+// or the seed and e2e harness standing in for one, not the org admin above:
+// a superuser already reads and writes every collection unchecked, so the
+// guard closes nothing against them, and refusing them only breaks the seed
+// (which creates the org's domain with no provider to enrol it with) and
+// the specs that stand a row up the same way.
 func registerMailDomainWriteGuard(app *pocketbase.PocketBase) {
 	app.OnRecordCreateRequest("mail_domains").BindFunc(func(e *core.RecordRequestEvent) error {
+		if e.HasSuperuserAuth() {
+			return e.Next()
+		}
 		// Enrollment with the provider must happen BEFORE a row exists, and
 		// only POST /api/mail/domains does that. A row created directly is a
 		// domain the provider has never heard of: it renders as configured
@@ -60,6 +70,9 @@ func registerMailDomainWriteGuard(app *pocketbase.PocketBase) {
 	})
 
 	app.OnRecordUpdateRequest("mail_domains").BindFunc(func(e *core.RecordRequestEvent) error {
+		if e.HasSuperuserAuth() {
+			return e.Next()
+		}
 		info, err := e.RequestInfo()
 		if err != nil {
 			return e.BadRequestError("Failed to read request body", err)
