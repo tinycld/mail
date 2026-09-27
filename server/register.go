@@ -15,6 +15,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/audit"
 	"tinycld.org/core/coreserver"
+	"tinycld.org/core/deliveryevents"
 	"tinycld.org/core/maildomains"
 	"tinycld.org/core/oauth"
 	"tinycld.org/core/offboard"
@@ -84,6 +85,10 @@ func registerShared(app *pocketbase.PocketBase) {
 	// if they need it. We report the number and learn nothing about what is
 	// decided with it — see outboundstats.
 	outboundstats.Register("mail", sendsSince)
+
+	// The composition that received a provider notification may not be
+	// this package's own webhook; it hands the event over through core.
+	deliveryevents.Register("mail", applyDeliveryEvent)
 
 	// Audit logging for mail collections
 	audit.RegisterCollection(app, "mail_domains", &audit.CollectionConfig{

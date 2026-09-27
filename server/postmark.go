@@ -160,6 +160,11 @@ type postmarkBouncePayload struct {
 	Email       string `json:"Email"`
 	Inactive    bool   `json:"Inactive"`
 	BouncedAt   string `json:"BouncedAt"`
+
+	// Recipient and DeliveredAt only appear on Postmark's Delivery webhook
+	// (RecordType "Delivery"); a bounce/complaint payload leaves them empty.
+	Recipient   string `json:"Recipient"`
+	DeliveredAt string `json:"DeliveredAt"`
 }
 
 func (p *PostmarkProvider) ParseBounce(body []byte) (*BounceEvent, error) {
@@ -181,6 +186,14 @@ func (p *PostmarkProvider) ParseBounce(body []byte) (*BounceEvent, error) {
 		id = strconv.FormatInt(payload.ID, 10)
 	}
 
+	// A Delivery notification reports the recipient as Recipient, not Email —
+	// fall back to it so downstream code has one field to read regardless of
+	// which notification type produced this event.
+	email := payload.Email
+	if email == "" {
+		email = payload.Recipient
+	}
+
 	return &BounceEvent{
 		ID:          id,
 		RecordType:  payload.RecordType,
@@ -188,10 +201,11 @@ func (p *PostmarkProvider) ParseBounce(body []byte) (*BounceEvent, error) {
 		TypeCode:    payload.TypeCode,
 		MessageID:   payload.MessageID,
 		From:        payload.From,
-		Email:       payload.Email,
+		Email:       email,
 		Inactive:    payload.Inactive,
 		Description: description,
 		BouncedAt:   payload.BouncedAt,
+		DeliveredAt: payload.DeliveredAt,
 	}, nil
 }
 

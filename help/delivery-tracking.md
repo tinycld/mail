@@ -43,6 +43,8 @@ Same treatment: recorded, indicator shown, no automatic action. Repeated spam co
 
 Delivery status changes arrive via Postmark webhooks at `/api/mail/bounces/{token}`, where the token is your domain's `webhook_secret`. The webhook is unauthenticated *to the outside world* but secured by the token (which Postmark also uses to authenticate). Mail handles the routing automatically when you set up a domain.
 
+In Postmark, turn on the **Delivery** trigger for this webhook, in addition to the bounce and complaint triggers. This lets Mail show when a message arrives at the recipient's mail server.
+
 ## See also
 
 - [Provider setup](help://mail:provider-setup)

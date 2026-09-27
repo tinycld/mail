@@ -74,6 +74,27 @@ func runDomainGuardScenario(
 	after func(t *testing.T, app *tests.TestApp),
 ) {
 	t.Helper()
+	runDomainGuardScenarioAs(t, name, method, url, body, expectStatus, `"message"`, seed, after,
+		func(app core.App) *core.Record {
+			return seedAddDomainAuthUser(t, app, "admin@attacker.example", "admin")
+		})
+}
+
+// runDomainGuardScenarioAs is runDomainGuardScenario with the acting
+// principal chosen by the caller: the org admin the guard defends against, or
+// the superuser it must let through. expectContent is a fragment the
+// response body must carry — an error's "message", or a field of the record
+// a successful write returns.
+func runDomainGuardScenarioAs(
+	t *testing.T,
+	name, method, url, body string,
+	expectStatus int,
+	expectContent string,
+	seed func(app core.App) *core.Record,
+	after func(t *testing.T, app *tests.TestApp),
+	actor func(app core.App) *core.Record,
+) {
+	t.Helper()
 	t.Setenv("IMAP_ENABLED", "false")
 	t.Setenv("SMTP_ENABLED", "false")
 
@@ -87,12 +108,12 @@ func runDomainGuardScenario(
 		Method:          method,
 		Body:            strings.NewReader(body),
 		ExpectedStatus:  expectStatus,
-		ExpectedContent: []string{`"message"`},
+		ExpectedContent: []string{expectContent},
 		Headers:         map[string]string{"Content-Type": "application/json"},
 	}
 	scenario.TestAppFactory = func(_ testing.TB) *tests.TestApp {
 		app := setupDomainGuardApp(t)
-		tokenUser = seedAddDomainAuthUser(t, app, "admin@attacker.example", "admin")
+		tokenUser = actor(app)
 		scenario.URL = url
 		if seed != nil {
 			rec := seed(app)
@@ -225,4 +246,67 @@ func TestMailDomainsGuardAllowsServerWrites(t *testing.T) {
 	if meta.Postmark == nil || meta.Postmark.DomainID != 99 {
 		t.Errorf("the server's own provider id write did not persist: %+v", meta.Postmark)
 	}
+}
+
+// seedGuardSuperuser creates the operator principal: a row in PocketBase's
+// own _superusers collection, which HasSuperuserAuth recognises.
+func seedGuardSuperuser(t *testing.T, app core.App) *core.Record {
+	t.Helper()
+	col, err := app.FindCollectionByNameOrId(core.CollectionNameSuperusers)
+	if err != nil {
+		t.Fatalf("superusers collection missing: %v", err)
+	}
+	su := core.NewRecord(col)
+	su.SetEmail("operator@example.com")
+	su.SetPassword("password12345")
+	if err := app.Save(su); err != nil {
+		t.Fatalf("failed to save superuser: %v", err)
+	}
+	return su
+}
+
+// The seed and the e2e harness create the org's mail domain as a superuser,
+// with no provider to enrol it with. The guard defends against an org admin;
+// a superuser already writes every collection unchecked, so refusing them
+// closes nothing and only breaks that setup.
+func TestMailDomainsGuardAllowsSuperuserCreate(t *testing.T) {
+	runDomainGuardScenarioAs(t,
+		"superuser can create a mail_domains row directly",
+		http.MethodPost, "/api/collections/mail_domains/records",
+		`{"domain":"acme.com","verified":true}`,
+		http.StatusOK, `"domain":"acme.com"`,
+		nil,
+		func(t *testing.T, app *tests.TestApp) {
+			if got := countMailDomains(t, app); got != 1 {
+				t.Fatalf("expected the superuser's row, got %d rows", got)
+			}
+		},
+		func(app core.App) *core.Record { return seedGuardSuperuser(t, app) },
+	)
+}
+
+// The same exemption on the update side: a superuser may set a server-owned
+// field, because nothing the guard protects is hidden from them anyway.
+func TestMailDomainsGuardAllowsSuperuserPatch(t *testing.T) {
+	var target *core.Record
+	runDomainGuardScenarioAs(t,
+		"superuser can PATCH verified",
+		http.MethodPatch, "",
+		`{"verified":true}`,
+		http.StatusOK, `"verified":true`,
+		func(app core.App) *core.Record {
+			target = seedGuardDomain(t, app, "acme.com")
+			return target
+		},
+		func(t *testing.T, app *tests.TestApp) {
+			rec, err := app.FindRecordById("mail_domains", target.Id)
+			if err != nil {
+				t.Fatalf("row vanished: %v", err)
+			}
+			if !rec.GetBool("verified") {
+				t.Fatal("the superuser's verified write did not persist")
+			}
+		},
+		func(app core.App) *core.Record { return seedGuardSuperuser(t, app) },
+	)
 }

@@ -87,6 +87,11 @@ type BounceEvent struct {
 
 	Description string `json:"description"`
 	BouncedAt   string `json:"bounced_at"`
+
+	// DeliveredAt is set only on a RecordType "Delivery" notification — the
+	// provider confirming the message actually reached the recipient's
+	// server, as opposed to a bounce or complaint about it.
+	DeliveredAt string `json:"delivered_at,omitempty"`
 }
 
 type InboundMessage struct {

@@ -22,7 +22,19 @@ Mail enrolls the domain with your mail provider immediately, and only creates th
 
 When an owner or admin sets up the server, the setup wizard has an **Email domain** step. The step asks where your team's email addresses live. Other apps can show ready-made domain choices here, and each choice has its own setup. If there are no other choices, the step opens the form for your own domain immediately.
 
-To use your own domain, click **Your own domain**, enter the domain, publish the DNS records that the step shows, then click **Verify**. When a domain is verified, the **Your address** step lets you make your first address on it. You can then send a test message to your account email. "Sent" means the server accepted the message, not that it arrived. You can add more domains later in **Settings → Mail → Domains**.
+To use your own domain, click **Your own domain**, enter the domain, publish the DNS records that the step shows, then click **Verify**. When a domain is verified, the **Your address** step lets you make your first address on it. You can add more domains later in **Settings → Mail → Domains**.
+
+### Your first address
+
+The **Your address** step makes your first email address on a verified domain. To make sure that the address can send, click **Send a test message**. The message goes to your account email. The status below the button changes while the message travels:
+
+- **Sent. Waiting for delivery…** — The mail provider accepted the message. The message did not arrive yet.
+- **Delivered** — The mail server of the recipient accepted the message. The step is now complete.
+- **Bounced** — The message did not arrive. The status shows the bounce type (soft, hard, or complaint) and the reason from the mail server.
+
+If the message bounces, click **Check your DNS records**. This link opens the **Email domain** step again. Make sure that all DNS records are green, then send a new test message. For more about each status, see [Delivery tracking](help://mail:delivery-tracking).
+
+The step shows the status of your newest test message. If you leave the step and come back, the step shows the same status.
 
 ## The verification checklist
 

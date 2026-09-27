@@ -3,7 +3,9 @@ import {
     domainPanelTarget,
     hasVerifiedDomain,
     setupAddDomainError,
+    testMessageLabel,
     testMessageRequest,
+    testMessageState,
     verifiedDomainOptions,
 } from '~/tinycld/mail/setup/setup-logic'
 
@@ -100,5 +102,60 @@ describe('setupAddDomainError', () => {
         expect(setupAddDomainError({ status: 409 }, false)).toBeNull()
         expect(setupAddDomainError(new Error('boom'), true)).toBeNull()
         expect(setupAddDomainError(null, false)).toBeNull()
+    })
+})
+
+describe('testMessageState', () => {
+    const row = (
+        o: Partial<{
+            delivery_status: string
+            delivered_at: string
+            bounce_class: string
+            bounce_reason: string
+        }>
+    ) => ({
+        delivery_status: 'sent',
+        delivered_at: '',
+        bounce_class: '',
+        bounce_reason: '',
+        ...o,
+    })
+    it('is none with no message', () =>
+        expect(testMessageState(undefined)).toEqual({ kind: 'none' }))
+    it('is sending while the provider has not answered', () =>
+        expect(testMessageState(row({ delivery_status: 'sending' }))).toEqual({ kind: 'sending' }))
+    it('is sent when accepted but not delivered', () =>
+        expect(testMessageState(row({}))).toEqual({ kind: 'sent' }))
+    it('is delivered once delivered_at is set', () =>
+        expect(testMessageState(row({ delivered_at: '2026-09-26 10:00:00Z' }))).toEqual({
+            kind: 'delivered',
+        }))
+    it('is bounced with class and reason', () =>
+        expect(
+            testMessageState(
+                row({
+                    delivery_status: 'bounced',
+                    bounce_class: 'hard',
+                    bounce_reason: 'No such user',
+                })
+            )
+        ).toEqual({ kind: 'bounced', bounceClass: 'hard', reason: 'No such user' }))
+    it('treats a spam complaint as bounced', () =>
+        expect(
+            testMessageState(row({ delivery_status: 'spam_complaint', bounce_class: 'complaint' }))
+                .kind
+        ).toBe('bounced'))
+})
+
+describe('testMessageLabel', () => {
+    it('names each state', () => {
+        expect(testMessageLabel({ kind: 'sent' })).toBe('Sent. Waiting for delivery…')
+        expect(testMessageLabel({ kind: 'delivered' })).toBe('Delivered')
+        expect(testMessageLabel({ kind: 'bounced', bounceClass: 'hard', reason: 'x' })).toBe(
+            'Bounced (hard): x'
+        )
+        expect(testMessageLabel({ kind: 'bounced', bounceClass: '', reason: 'x' })).toBe(
+            'Bounced: x'
+        )
     })
 })
