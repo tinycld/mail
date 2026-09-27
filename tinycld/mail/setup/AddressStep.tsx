@@ -109,14 +109,13 @@ const OUTBOUND_STATUSES = ['sending', 'sent', 'bounced', 'spam_complaint']
 // from the store, not from the send response, so the status is correct after
 // a reload.
 //
-// Filtered by sent_by AND sender_email — still one collection, no thread
-// join — so this stays a single server-side filter (mailbox-scoped, not just
-// user-scoped): an owner with other mailboxes, or who has sent other mail,
-// must see this mailbox's test message, not merely their own newest one.
-// sender_email is stored verbatim as `${mailbox.address}@${domain.domain}`
-// (endpoints_send.go: senderEmail := fmt.Sprintf("%s@%s", senderAddress,
-// domain), no case normalization) — the same fields senderEmail here is built
-// from (useMyNewestMailbox), so the comparison is exact-case.
+// Filtered by sent_by AND sender_email, still one collection and one
+// server-side filter, no thread join. This keeps the query mailbox-scoped,
+// not just user-scoped: an owner with other mailboxes, or who has sent other
+// mail, must see this mailbox's test message, not merely their own newest
+// one. The comparison is exact-case: sender_email is built from the same
+// address fields on both sides (server and useMyNewestMailbox here), with no
+// case normalization on either side.
 function useTestMessageState(senderEmail: string) {
     const [messagesCollection] = useStore('mail_messages')
     const { data } = useMyLiveQuery((query, { userId }) =>

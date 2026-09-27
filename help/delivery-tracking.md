@@ -15,11 +15,11 @@ Every outgoing message has a `delivery_status`. As callbacks come in, the status
 
 - **draft** — you're still composing. Auto-saved but never sent.
 - **sending** — the **Send** button has been clicked and we've submitted to the provider, but haven't gotten a `sent` confirmation back yet.
-- **sent** — the provider has accepted the message for delivery. Most messages spend less than a second in `sending` before flipping to `sent`. `delivery_status` stays "sent" even after the message is delivered — see the next paragraph.
+- **sent** — the provider has accepted the message for delivery. Most messages spend less than a second in `sending` before flipping to `sent`. `delivery_status` stays "sent" even after the message is delivered. See the next paragraph.
 - **bounced** — the recipient's mail server rejected the message. Could be a hard bounce (address doesn't exist), a soft bounce (mailbox full, temporary failure), or any other delivery error.
 - **spam_complaint** — the recipient marked the message as spam. This is rare but important; it's a strong signal for the recipient's mail provider that you're sending unwanted mail.
 
-Delivery itself is tracked separately, in a `delivered_at` timestamp. When the recipient's mail server accepts the message, Mail stamps `delivered_at` and shows "Delivered" — `delivery_status` does not change; it stays "sent".
+Delivery itself is tracked separately, in a `delivered_at` timestamp. When the recipient's mail server accepts the message, Mail stamps `delivered_at` and shows "Delivered". `delivery_status` does not change. It stays "sent".
 
 ## Where you see this
 

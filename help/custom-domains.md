@@ -16,7 +16,7 @@ Out of the box, Mail can send through whatever address your provider gives you. 
 3. Enter the bare domain (e.g. `example.com`, not `@example.com` or `https://example.com`).
 4. Click **Add**.
 
-Mail enrolls the domain with your mail provider immediately, and only creates the row once that succeeds — so a domain that shows up here is one your provider already knows about. The row appears with a checklist of verification steps and, right away, the DNS records you need to publish — no extra step to reveal them.
+Mail enrolls the domain with your mail provider immediately. Mail creates the row only after that succeeds. So a domain that shows up here is one your provider already knows about. The row shows a checklist of verification steps. The row also shows the DNS records to publish right away. There is no extra step to reveal them.
 
 ## During first-run setup
 
@@ -50,7 +50,7 @@ Each domain has four checks, all four green is required for full send + receive.
 - **DKIM** — DNS CNAME / TXT records for cryptographic signing of outgoing mail. Required for deliverability. Postmark generates the keys; self-hosted SMTP expects a record at `<selector>._domainkey.<domain>` where the selector comes from your provider settings (defaults to `tinycld`).
 - **Return-Path** — DNS CNAME for bounce handling. Postmark provides the target; for self-hosted SMTP we use the presence of a DMARC record at `_dmarc.<domain>` as the indicator.
 
-The DKIM and Return-Path records appear as a **DNS records to publish** list under the checklist, each with its host, type, and value shown ready to copy. Most DNS providers (Cloudflare, AWS Route 53, GoDaddy) let you paste these directly. This list only shows while the domain isn't yet fully verified — once every check is green, the checklist alone is enough.
+The DKIM and Return-Path records appear as a **DNS records to publish** list under the checklist. Each record shows its host, type, and value, ready to copy. Most DNS providers (Cloudflare, AWS Route 53, GoDaddy) let you paste these directly. This list shows only while the domain is not yet fully verified. Once every check is green, the checklist alone is enough.
 
 ## Verifying
 
@@ -62,7 +62,7 @@ Mail also re-verifies any not-yet-fully-verified domain automatically once per h
 
 - **Send** — outbound from any address on this domain works.
 - **Receive** — inbound mail to any address on this domain delivered to a matching [mailbox or alias](help://mail:mailboxes) appears in that mailbox's Inbox.
-- **Bounce tracking** — delivery callbacks update each sent message's status: a delivered message shows "Delivered" and keeps `delivery_status` "sent"; a failed message gets `delivery_status` "bounced" or "spam_complaint". See [Delivery tracking](help://mail:delivery-tracking).
+- **Bounce tracking** — delivery callbacks update each sent message's status. A delivered message shows "Delivered" and keeps `delivery_status` "sent". A failed message gets `delivery_status` "bounced" or "spam_complaint". See [Delivery tracking](help://mail:delivery-tracking).
 
 ## Inbound routing
 
