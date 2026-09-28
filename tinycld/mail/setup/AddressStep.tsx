@@ -1,8 +1,8 @@
 import { eq, gt, inArray } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import type { SendEmailResponse } from '@tinycld/app-generated/mail-api'
-import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { SetupContinueButton } from '@tinycld/core/components/setup/wizard/SetupContinueButton'
+import { StepHeading } from '@tinycld/core/components/setup/wizard/StepHeading'
 import { useAuth } from '@tinycld/core/lib/auth'
 import { errorToString } from '@tinycld/core/lib/errors'
 import { useMutation } from '@tinycld/core/lib/mutations'
@@ -249,14 +249,12 @@ function AddressBody({ mailbox }: { mailbox: { id: string; email: string } | nul
 export default function AddressStep({ next }: SetupStepProps) {
     const mailbox = useMyNewestMailbox()
     return (
-        <View className="max-w-[440px] gap-1">
-            <View className="flex-row items-center gap-2">
-                <Text className="text-2xl font-bold text-foreground">Your email address</Text>
-                <HelpIcon topic="mail:delivery-tracking" />
-            </View>
-            <Text className="mb-3 text-sm text-muted-foreground">
-                Make the address you will send and receive email from.
-            </Text>
+        <View>
+            <StepHeading
+                title="Your email address"
+                lead="Make the address you will send and receive email from."
+                helpTopic="mail:delivery-tracking"
+            />
             <AddressBody mailbox={mailbox} />
             <SetupContinueButton onPress={next} />
         </View>
