@@ -1,3 +1,4 @@
+import { like } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
@@ -76,7 +77,14 @@ interface Row {
 
 export default function MailSystemProvider() {
     const [systemSettings] = useStore('system_settings')
-    const { data: rows = [] } = useLiveQuery(query => query.from({ s: systemSettings }))
+    // system_settings holds every package's secrets; scope to this package's
+    // own mail.* keys instead of syncing the whole table (other panels' tokens
+    // never need to reach this client). `like` compiles to a contains-match,
+    // but every real key is `mail.<name>` so a bare "mail." substring cannot
+    // collide with another package's prefix here.
+    const { data: rows = [] } = useLiveQuery(query =>
+        query.from({ s: systemSettings }).where(({ s }) => like(s.key, 'mail.%'))
+    )
     const byKey = new Map<string, Row>(
         rows.map(r => [r.key, { id: r.id, value: r.value, is_secret: r.is_secret }])
     )

@@ -9,7 +9,7 @@ import { toThreadListItem } from '../components/thread-list-item'
 import { useThreadListStore } from '../stores/thread-list-store'
 import type { MailMessages, MailThreadState, MailThreads } from '../types'
 import { useLabels } from './useLabels'
-import { getMailboxLabel } from './useMailboxes'
+import { getMailboxLabel, useMailboxes } from './useMailboxes'
 
 export const UNIFIED_INBOX = '__all_inboxes__'
 
@@ -77,9 +77,11 @@ export function useThreadListItems(
                 )
     )
 
-    const { data: allMailboxes } = useLiveQuery(query =>
-        query.from({ mail_mailboxes: mailboxesCollection })
-    )
+    // Member-scoped set for unified-inbox label resolution — reusing
+    // useMailboxes() instead of a second whole-collection subscription on
+    // mail_mailboxes for the whole mail session (the member list rule already
+    // bounds it to "my mailboxes", but this drops the extra subscription).
+    const { personal, shared } = useMailboxes()
 
     const { data: userMemberships } = useMyLiveQuery((query, { userId }) =>
         query
@@ -259,15 +261,12 @@ export function useThreadListItems(
     }, [pageThreads])
 
     const mailboxLabelMap = useMemo(() => {
-        if (!isUnified || !allMailboxes || !userMemberships) return null
-        const myMailboxIds = new Set(userMemberships.map(m => m.mailbox))
+        if (!isUnified) return null
         const map = new Map<string, string>()
-        for (const mb of allMailboxes) {
-            if (!myMailboxIds.has(mb.id)) continue
-            map.set(mb.id, getMailboxLabel(mb, mb.type === 'personal'))
-        }
+        if (personal) map.set(personal.id, getMailboxLabel(personal, true))
+        for (const mb of shared) map.set(mb.id, getMailboxLabel(mb, false))
         return map
-    }, [isUnified, allMailboxes, userMemberships])
+    }, [isUnified, personal, shared])
 
     // Build the visible items — server already returned them in latest_date
     // desc order, so we render in iteration order.
