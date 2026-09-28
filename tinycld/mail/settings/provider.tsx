@@ -14,6 +14,7 @@ import * as Clipboard from 'expo-clipboard'
 import { CheckCircle, Copy, Globe, Loader2, RefreshCw, Trash2, XCircle } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
+import { MONOSPACE_FONT } from '../lib/monospace-font'
 import { AddDomainForm } from './AddDomainForm'
 import { DnsRecordsPanel, hasUnpublishedDnsRecords } from './DnsRecordsPanel'
 import { domainRemovalWarning } from './domain-removal'
@@ -317,7 +318,7 @@ function WebhookURLRow({
                 <Text
                     style={{
                         fontSize: 11,
-                        fontFamily: 'monospace',
+                        fontFamily: MONOSPACE_FONT,
                         color: colors.foregroundColor,
                         flex: 1,
                     }}

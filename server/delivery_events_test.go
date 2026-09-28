@@ -3,6 +3,7 @@ package mail
 import (
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/deliveryevents"
@@ -122,9 +123,11 @@ func TestApplyDeliveryEvent_BouncedSetsStatusClassAndTruncatedReason(t *testing.
 	thread := newTestThread(t, app, padID("mb_delivered0003"), "hello")
 	newDeliveryTestMessage(t, app, thread.Id, "pm-1", "sent")
 
+	// "é" is multi-byte in UTF-8; a byte-based cut at 500 would split a
+	// character and produce invalid UTF-8, so this locks in the rune-safe cut.
 	longReason := ""
 	for i := 0; i < 600; i++ {
-		longReason += "x"
+		longReason += "é"
 	}
 
 	handled, err := applyDeliveryEvent(app, deliveryevents.Event{
@@ -151,8 +154,12 @@ func TestApplyDeliveryEvent_BouncedSetsStatusClassAndTruncatedReason(t *testing.
 	if record.GetString("bounce_class") != "hard" {
 		t.Errorf("bounce_class = %q, want hard", record.GetString("bounce_class"))
 	}
-	if got := len([]rune(record.GetString("bounce_reason"))); got != 500 {
+	stored := record.GetString("bounce_reason")
+	if got := len([]rune(stored)); got != 500 {
 		t.Errorf("bounce_reason length = %d, want truncated to 500", got)
+	}
+	if !utf8.ValidString(stored) {
+		t.Errorf("bounce_reason is not valid UTF-8: %q", stored)
 	}
 }
 

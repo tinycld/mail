@@ -1,5 +1,6 @@
 import { useLiveQuery } from '@tanstack/react-db'
 import type { AddDomainResponse, OutboundCheckResult } from '@tinycld/app-generated/mail-api'
+import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { SetupContinueButton } from '@tinycld/core/components/setup/wizard/SetupContinueButton'
 import { SidebarSlot } from '@tinycld/core/components/sidebar-primitives/SidebarSlot'
 import { errorToString } from '@tinycld/core/lib/errors'
@@ -18,17 +19,13 @@ import { assertVerifySaved } from '../settings/verify-domain'
 import { type DomainChoice, initialChoice, showOwnDomainForm } from './domain-choice'
 import { domainPanelTarget, hasVerifiedDomain, setupAddDomainError } from './setup-logic'
 
-// The step hooks declare their return type: the generated package config
-// imports this module, and an inferred type here would depend on the store
-// types that the same config builds, which is a cycle tsc cannot resolve.
-//
 // Adding and verifying domains is an owner/admin action on the server.
-export function useIsStepVisible(): boolean | undefined {
+export function useIsStepVisible() {
     const { isReady, isAdmin } = useCurrentRole()
     return isReady ? isAdmin : undefined
 }
 
-export function useIsStepDone(): boolean | undefined {
+export function useIsStepDone() {
     const [domainsCollection] = useStore('mail_domains')
     const { data, isReady } = useLiveQuery(query =>
         query.from({ d: domainsCollection }).select(({ d }) => ({ verified: d.verified }))
@@ -231,7 +228,10 @@ export default function EmailDomainStep({ next }: SetupStepProps) {
     const { isOwnSelected, chooseOwn } = useDomainChoice()
     return (
         <View className="max-w-[440px] gap-1">
-            <Text className="text-2xl font-bold text-foreground">Your email domain</Text>
+            <View className="flex-row items-center gap-2">
+                <Text className="text-2xl font-bold text-foreground">Your email domain</Text>
+                <HelpIcon topic="mail:custom-domains" />
+            </View>
             <Text className="mb-3 text-sm text-muted-foreground">
                 Where should your team's email addresses live?
             </Text>
