@@ -16,10 +16,13 @@ export interface FolderCounts {
  * Reads per-mailbox folder counts from the mail_folder_counts view collection.
  *
  * The view aggregates mail_thread_state × mail_threads server-side. PocketBase
- * does NOT emit realtime events for view collections, so we bridge the gap by
- * subscribing to local mail_thread_state changes (which fire on optimistic
+ * does NOT emit realtime events for view collections — on-demand + per-query
+ * realtime (pbtsdb 0.10) doesn't change that, the filtered subscription topic
+ * is just as inert as the old whole-collection one was. So we bridge the gap
+ * by subscribing to local mail_thread_state changes (which fire on optimistic
  * writes and incoming realtime events) and invalidating the counts query so
- * it refetches.
+ * it refetches. The bare `['mail_folder_counts']` key still prefix-matches
+ * pbtsdb's on-demand cache keys (`[name, request]`).
  */
 export function useMailboxFolderCounts(): Map<string, FolderCounts> {
     const [countsCollection, threadStateCollection] = useStore(

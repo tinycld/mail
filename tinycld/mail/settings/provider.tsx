@@ -1,3 +1,4 @@
+import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useMutation as useReactQueryMutation } from '@tanstack/react-query'
 import type {
@@ -24,8 +25,12 @@ export default function ProviderSettings() {
     const primaryColor = useThemeColor('primary')
     const [systemSettings] = useStore('system_settings')
 
-    const { data: sysRows = [] } = useLiveQuery(query => query.from({ s: systemSettings }))
-    const storedProvider = sysRows.find(r => r.key === 'mail.provider')?.value
+    // system_settings holds every deployment secret; scope to the one key this
+    // screen needs instead of syncing the whole table.
+    const { data: sysRows = [] } = useLiveQuery(query =>
+        query.from({ s: systemSettings }).where(({ s }) => eq(s.key, 'mail.provider'))
+    )
+    const storedProvider = sysRows[0]?.value
 
     return (
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="bg-background">

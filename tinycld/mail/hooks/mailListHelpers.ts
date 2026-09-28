@@ -35,7 +35,7 @@ export function parseSearchParticipants(raw: string): { name: string; email: str
 /**
  * Build a list row from an FTS search hit. The hit carries display data
  * (subject, snippet, participants) but no mail_thread_state id — that lives in
- * the per-user (eager, bounded) thread_state collection. The caller resolves it
+ * the on-demand thread_state collection, queried per user. The caller resolves it
  * by thread id and passes it here so the row carries a REAL stateId and the
  * actual read/starred/folder flags. Without a resolved state the row's swipe
  * actions would target `thread_id` as if it were a state id and silently no-op,

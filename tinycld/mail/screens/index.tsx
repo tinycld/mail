@@ -215,8 +215,10 @@ export default function MailListScreen() {
     const isUnifiedView = folder === 'all-inboxes' || (isDefaultView && unifiedAvailable)
     const mailboxId = isUnifiedView ? UNIFIED_INBOX : (mailbox ?? personal?.id ?? '')
 
-    // mail_folder_counts is a view collection (no realtime). Refetch on
-    // folder/mailbox/label change so the sidebar self-heals on every nav.
+    // mail_folder_counts is a view collection (no realtime, on-demand or not).
+    // Refetch on folder/mailbox/label change so the sidebar self-heals on
+    // every nav. The bare key still prefix-matches pbtsdb's on-demand cache
+    // keys (`[name, request]`).
     const _labelKey = labels.join(',')
     useEffect(() => {
         queryClient.invalidateQueries({ queryKey: ['mail_folder_counts'] })

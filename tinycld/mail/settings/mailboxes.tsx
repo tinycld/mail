@@ -1,4 +1,4 @@
-import { and, eq, not } from '@tanstack/db'
+import { and, eq, inArray } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { useAuth } from '@tinycld/core/lib/auth'
@@ -83,7 +83,9 @@ function useMailboxData(currentUserId: string) {
     const { data: orgUsers } = useLiveQuery(query =>
         query
             .from({ users: usersCollection })
-            .where(({ users }) => and(not(eq(users.role, 'guest')), not(eq(users.disabled, true))))
+            .where(({ users }) =>
+                and(inArray(users.role, ['owner', 'admin', 'member']), eq(users.disabled, false))
+            )
     )
 
     const membersByMailbox = new Map<string, MemberRow[]>()

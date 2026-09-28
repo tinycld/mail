@@ -1,4 +1,4 @@
-import { eq } from '@tanstack/db'
+import { eq, inArray } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
@@ -38,9 +38,22 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
                 .from({ mail_mailboxes: mailboxesCollection })
                 .where(({ mail_mailboxes }) => eq(mail_mailboxes.domain, mailboxDomainId)),
     })
-    const { data: aliasesAll } = useLiveQuery(query =>
-        query.from({ mail_mailbox_aliases: aliasesCollection })
-    )
+    const mailboxIdsInDomain = (mailboxesInDomain ?? []).map(m => m.id)
+
+    // The org-wide alias list rule means an unscoped read here pulls every
+    // alias in the deployment to validate one new one. Scope to the mailboxes
+    // already fetched above — the aliases this form can actually collide
+    // with — instead of the whole mail_mailbox_aliases table.
+    const { data: aliasesInDomain } = useLiveQuery({
+        query: query =>
+            mailboxIdsInDomain.length === 0
+                ? undefined
+                : query
+                      .from({ mail_mailbox_aliases: aliasesCollection })
+                      .where(({ mail_mailbox_aliases }) =>
+                          inArray(mail_mailbox_aliases.mailbox, mailboxIdsInDomain)
+                      ),
+    })
 
     const {
         control,
@@ -63,10 +76,7 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
             if (primaryCollision) {
                 throw new Error('Address is already a primary mailbox on this domain')
             }
-            const mailboxIdsInDomain = new Set((mailboxesInDomain ?? []).map(m => m.id))
-            const aliasCollision = (aliasesAll ?? []).some(
-                a => mailboxIdsInDomain.has(a.mailbox) && a.address === addr
-            )
+            const aliasCollision = (aliasesInDomain ?? []).some(a => a.address === addr)
             if (aliasCollision) {
                 throw new Error('Address is already an alias on this domain')
             }
