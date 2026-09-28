@@ -168,6 +168,7 @@ export default function MailSystemProvider() {
     })
 
     const serverTokenSet = Boolean(byKey.get('mail.postmark_server_token')?.value)
+    const accountTokenSet = Boolean(byKey.get('mail.postmark_account_token')?.value)
     const imapPasswordSet = Boolean(byKey.get('mail.smtp_imap_password')?.value)
 
     return (
@@ -185,6 +186,7 @@ export default function MailSystemProvider() {
             <ProviderFields
                 control={control}
                 serverTokenSet={serverTokenSet}
+                accountTokenSet={accountTokenSet}
                 imapPasswordSet={imapPasswordSet}
             />
             <View className="flex-row justify-end">
@@ -201,47 +203,65 @@ export default function MailSystemProvider() {
 function ProviderFields({
     control,
     serverTokenSet,
+    accountTokenSet,
     imapPasswordSet,
 }: {
     control: Control<FormValues>
     serverTokenSet: boolean
+    accountTokenSet: boolean
     imapPasswordSet: boolean
 }) {
     const provider = useWatch({ control, name: 'provider' })
     if (provider === 'smtp') {
         return <SmtpFields control={control} imapPasswordSet={imapPasswordSet} />
     }
-    return <PostmarkFields control={control} serverTokenSet={serverTokenSet} />
+    return (
+        <PostmarkFields
+            control={control}
+            serverTokenSet={serverTokenSet}
+            accountTokenSet={accountTokenSet}
+        />
+    )
 }
 
 function secretHint(set: boolean) {
     return set ? 'Configured. Enter a new value to replace it; leave blank to keep it.' : 'Not set.'
 }
 
+// The account token is the one credential Postmark needs: the server derives
+// the sending token from it (creating the Postmark server on first use) and
+// manages domains with it. A server token is an optional override for a
+// deployment that wants to send from one specific, pre-existing server.
 function PostmarkFields({
     control,
     serverTokenSet,
+    accountTokenSet,
 }: {
     control: Control<FormValues>
     serverTokenSet: boolean
+    accountTokenSet: boolean
 }) {
     return (
         <>
-            <TextInput
-                control={control}
-                name="postmark_server_token"
-                label="Postmark server token"
-                secureTextEntry
-                autoCapitalize="none"
-                hint={secretHint(serverTokenSet)}
-            />
             <TextInput
                 control={control}
                 name="postmark_account_token"
                 label="Postmark account token"
                 secureTextEntry
                 autoCapitalize="none"
-                hint="Used for domain provisioning. Leave blank to keep the current value."
+                hint={secretHint(accountTokenSet)}
+            />
+            <TextInput
+                control={control}
+                name="postmark_server_token"
+                label="Postmark server token (optional)"
+                secureTextEntry
+                autoCapitalize="none"
+                hint={
+                    serverTokenSet
+                        ? 'Configured: mail is sent from this server. Enter a new value to replace it; leave blank to keep it.'
+                        : 'Leave blank to send from a server created under your account. Set it to send from one specific server instead.'
+                }
             />
         </>
     )

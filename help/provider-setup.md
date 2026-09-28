@@ -14,7 +14,7 @@ The mail provider is deployment-wide infrastructure — all mail goes through on
 
 Two providers ship today:
 
-- **Postmark** — managed SaaS. Sign up, paste two API tokens, point your DNS at Postmark's hosts. Best for most people.
+- **Postmark** — a hosted delivery service. Sign up, paste one API token, point your DNS at Postmark's hosts. Best for most people.
 - **Self-hosted SMTP** — TinyCld delivers mail directly via SMTP and accepts inbound either as an MX target or by polling an IMAP account. No third-party account required, but you take on the deliverability work yourself (rDNS, SPF, DKIM, monitoring).
 
 You can switch between them later without losing stored mail.
@@ -23,8 +23,8 @@ You can switch between them later without losing stored mail.
 
 A **Postmark** account ([postmarkapp.com](https://postmarkapp.com)) with at least one server. Specifically:
 
-- **Postmark account token** — found at **Account → API Tokens**. Used for domain operations (creating, verifying, listing).
-- **Postmark server token** — found inside a specific server, at **Server → API Tokens → Server API token**. Used for sending and inbound.
+- **Postmark account token** — found at **Account → API Tokens**. This is the one token you need. It manages your domains, and the server uses it to create its own Postmark server, named after your organization, the first time it needs one.
+- **Postmark server token** — optional. Found inside a specific server, at **Server → API Tokens → Server API token**. Set it only to send from one specific, pre-existing server instead of the one created for you.
 
 Postmark has a free tier suitable for testing; production use needs a paid plan.
 
@@ -32,7 +32,7 @@ Postmark has a free tier suitable for testing; production use needs a paid plan.
 
 1. Go to **Settings → System → Mail — Provider**.
 2. Pick **Postmark** as the provider.
-3. Paste your **server token** and **account token**.
+3. Paste your **account token**.
 4. Click **Save**.
 
 That's the whole setup. Once saved, outbound mail submitted from any composer routes through this Postmark server, and inbound mail routed to your verified domains lands here.
@@ -102,9 +102,9 @@ After saving credentials:
 
 ## Common errors
 
-- **"Provider not configured"** — you haven't saved a server token (Postmark) or selected a provider. Outbound is blocked.
+- **"Provider not configured"** — you haven't saved an account token (Postmark) or selected a provider. Outbound is blocked. If your Postmark account already has several servers, name the one to send from in the `mail.postmark_server_name` system setting.
 - **"401 Unauthorized" from Postmark** — token is wrong or revoked. Regenerate in Postmark and re-save.
-- **"403 Forbidden" from Postmark** — token is valid but doesn't have the permissions you need (e.g. an account token where the server token is required). Double-check which is which.
+- **"403 Forbidden" from Postmark** — token is valid but doesn't have the permissions you need (e.g. a server token pasted into the account token field). Double-check which is which.
 - **"connection refused" on port 25** (SMTP provider) — your cloud provider is blocking outbound 25. Open a ticket, or move to a cloud provider that allows it.
 - **Mail goes to spam** (SMTP provider) — most often missing DKIM signing. See the DKIM section above.
 

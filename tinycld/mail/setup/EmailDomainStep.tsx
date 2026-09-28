@@ -1,7 +1,7 @@
 import { useLiveQuery } from '@tanstack/react-db'
 import type { AddDomainResponse, OutboundCheckResult } from '@tinycld/app-generated/mail-api'
-import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { SetupContinueButton } from '@tinycld/core/components/setup/wizard/SetupContinueButton'
+import { StepHeading } from '@tinycld/core/components/setup/wizard/StepHeading'
 import { SidebarSlot } from '@tinycld/core/components/sidebar-primitives/SidebarSlot'
 import { errorToString } from '@tinycld/core/lib/errors'
 import { useMutation } from '@tinycld/core/lib/mutations'
@@ -227,14 +227,12 @@ export default function EmailDomainStep({ next }: SetupStepProps) {
     const panel = useDomainPanel(domains)
     const { isOwnSelected, chooseOwn } = useDomainChoice()
     return (
-        <View className="max-w-[440px] gap-1">
-            <View className="flex-row items-center gap-2">
-                <Text className="text-2xl font-bold text-foreground">Your email domain</Text>
-                <HelpIcon topic="mail:custom-domains" />
-            </View>
-            <Text className="mb-3 text-sm text-muted-foreground">
-                Where should your team's email addresses live?
-            </Text>
+        <View>
+            <StepHeading
+                title="Your email domain"
+                lead="Where should your team's email addresses live?"
+                helpTopic="mail:custom-domains"
+            />
             <SidebarSlot target="mail" slot="setup-domain-options" />
             <OwnDomainCard isSelected={isOwnSelected} onPress={chooseOwn} />
             <OwnDomainForm isVisible={isOwnSelected} panel={panel} />

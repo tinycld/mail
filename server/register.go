@@ -534,10 +534,27 @@ func newProviderFromSystem(app core.App) Provider {
 
 	return newProviderByName(
 		name,
-		systemSetting(app, "mail.postmark_server_token"),
+		postmarkServerToken(app),
 		systemSetting(app, "mail.postmark_account_token"),
 		smtpCfg,
 	)
+}
+
+// postmarkServerToken is the token this deployment sends with: the configured
+// one, else one core derives from the account token (creating the Postmark
+// server on first use). Not configured, or not derivable, reads as "" so the
+// provider reports itself unconfigured the same way an empty setting did.
+func postmarkServerToken(app core.App) string {
+	if configured := systemSetting(app, "mail.postmark_server_token"); configured != "" {
+		return configured
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	token, err := maildomains.ServerToken(ctx)
+	if err != nil {
+		return ""
+	}
+	return token
 }
 
 func newProviderByName(name, serverToken, accountToken string, smtpCfg SMTPConfig) Provider {
