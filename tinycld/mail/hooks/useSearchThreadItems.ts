@@ -35,7 +35,8 @@ export function useSearchThreadItems(
     const { labelMap } = useLabels()
 
     // Bounded to the hits actually being rendered — see the collection note in
-    // collections.ts for why this must not read the whole collection.
+    // collections.ts: mail_thread_state is on-demand, so an unbounded query
+    // here would fetch and subscribe to every state row instead of just these.
     const resultThreadIds = useMemo(() => results.map(result => result.thread_id), [results])
 
     const { data: threadStates } = useLiveQuery({

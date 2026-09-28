@@ -227,7 +227,7 @@ export function useThreadListItems(
     })
     const draftMessages = draftMessagesResp ?? []
 
-    // Local indexes against the (eager) supporting data.
+    // Local indexes against the supporting data fetched above.
     const stateByThread = useMemo(() => {
         const map = new Map<string, MailThreadState>()
         for (const s of (threadStates ?? []) as MailThreadState[]) {
@@ -309,14 +309,16 @@ export function useThreadListItems(
     ])
 
     // The paginated mail_threads page query is a one-shot React Query, not a
-    // live query. Archiving / trashing / moving a thread mutates
-    // mail_thread_state.folder — which the page query filters on via the
-    // back-relation — but PocketBase emits realtime events per collection, so a
-    // thread_state change fires NO mail_threads event and the cached page keeps
-    // showing the now-moved thread (the archived email never leaves the inbox).
-    // Subscribe to local thread_state changes (fired on optimistic writes and
-    // incoming realtime) and invalidate the page query so it refetches and the
-    // row drops out of the current folder. Mirrors useMailboxFolderCounts.
+    // live query, keyed on `folder` — a param no pbtsdb query filters on, so
+    // per-query realtime (pbtsdb 0.10) can't cover it either. Archiving /
+    // trashing / moving a thread mutates mail_thread_state.folder — which the
+    // page query filters on via the back-relation — but PocketBase emits
+    // realtime events per collection, so a thread_state change fires NO
+    // mail_threads event and the cached page keeps showing the now-moved
+    // thread (the archived email never leaves the inbox). Subscribe to local
+    // thread_state changes (fired on optimistic writes and incoming realtime)
+    // and invalidate the page query so it refetches and the row drops out of
+    // the current folder. Mirrors useMailboxFolderCounts.
     useEffect(() => {
         const sub = threadStateCollection.subscribeChanges(() => {
             queryClient.invalidateQueries({ queryKey: ['mail_threads_page'] })
