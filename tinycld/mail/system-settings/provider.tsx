@@ -79,9 +79,10 @@ export default function MailSystemProvider() {
     const [systemSettings] = useStore('system_settings')
     // system_settings holds every package's secrets; scope to this package's
     // own mail.* keys instead of syncing the whole table (other panels' tokens
-    // never need to reach this client). `like` compiles to a contains-match,
-    // but every real key is `mail.<name>` so a bare "mail." substring cannot
-    // collide with another package's prefix here.
+    // never need to reach this client). PocketBase's wrapLikeParams only wraps
+    // a `like` term in `%` when the term has none of its own, so this term's
+    // trailing `%` is left as-is and compiles to `key LIKE "mail.%"` — a
+    // prefix match, not a contains-match.
     const { data: rows = [] } = useLiveQuery(query =>
         query.from({ s: systemSettings }).where(({ s }) => like(s.key, 'mail.%'))
     )
