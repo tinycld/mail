@@ -1,19 +1,47 @@
 import { describe, expect, it } from 'vitest'
-import { initialChoice, showOwnDomainForm } from '~/tinycld/mail/setup/domain-choice'
+import {
+    domainTabs,
+    initialChoice,
+    OWN_DOMAIN,
+    showDomainTabs,
+    showOwnDomainForm,
+} from '~/tinycld/mail/setup/domain-choice'
+
+const HOSTED = { contributorSlug: 'hosting-ui', label: 'Built-in domain' }
+
+describe('domainTabs', () => {
+    it('lists each contributed option before the own-domain tab', () => {
+        expect(domainTabs([HOSTED])).toEqual([
+            { value: 'hosting-ui', label: 'Built-in domain' },
+            { value: OWN_DOMAIN, label: 'Your own domain' },
+        ])
+    })
+
+    it('names an unlabelled contribution after its package', () => {
+        expect(domainTabs([{ contributorSlug: 'acme-domains' }])[0]?.label).toBe('acme-domains')
+    })
+})
 
 describe('initialChoice', () => {
     it('opens the own-domain form when no package offers a domain', () => {
-        expect(initialChoice(false)).toBe('own')
+        expect(initialChoice(domainTabs([]))).toBe(OWN_DOMAIN)
     })
 
-    it('asks first when a package offers a domain', () => {
-        expect(initialChoice(true)).toBe('none')
+    it('opens the first contributed option when a package offers one', () => {
+        expect(initialChoice(domainTabs([HOSTED]))).toBe('hosting-ui')
+    })
+})
+
+describe('showDomainTabs', () => {
+    it('shows the bar only when there is more than one choice', () => {
+        expect(showDomainTabs(domainTabs([]))).toBe(false)
+        expect(showDomainTabs(domainTabs([HOSTED]))).toBe(true)
     })
 })
 
 describe('showOwnDomainForm', () => {
     it('shows the form only for the own-domain choice', () => {
-        expect(showOwnDomainForm('own')).toBe(true)
-        expect(showOwnDomainForm('none')).toBe(false)
+        expect(showOwnDomainForm(OWN_DOMAIN)).toBe(true)
+        expect(showOwnDomainForm('hosting-ui')).toBe(false)
     })
 })
