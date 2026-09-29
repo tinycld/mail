@@ -23,7 +23,7 @@ User-facing features:
 - **Custom domains** — verify your own domain end-to-end (MX → your provider's inbound host, plus SPF / DKIM / Return-Path for outbound) from the Provider settings screen. A background ticker reverifies pending domains every hour so DNS propagation eventually flips them green automatically.
 - **Providers** — **Postmark**: outbound via the REST API, inbound via a per-domain webhook-secret URL, bounce / spam-complaint callbacks via a parallel webhook. **Self-hosted SMTP**: direct-to-MX delivery, inbound via the built-in SMTP listener (gated by `MAIL_INBOUND_SMTP_ENABLED=true`) or an IMAP polling fetcher; bounces come from synchronous 5xx replies. Both implement the `Provider` interface in `server/provider.go`; the choice and its credentials live in the deployment-wide `system_settings` store.
 - **IMAP server** (port **993** implicit TLS in prod, `:1143` plain in dev) — full read / state-sync support via `github.com/emersion/go-imap/v2`. IDLE for push, UID validity for offline-safe sync, RFC 5322 message fetch, namespacing across mailboxes. Apple Mail, Thunderbird, mutt, mobile clients all work.
-- **SMTP submission** (port **465** implicit TLS in prod, `:1587` plain in dev) — send via any mail client using TinyCld credentials. Validates the `From:` header against actual mailbox / alias ownership before submitting to the provider. 25 MB total message size cap.
+- **SMTP submission** (port **465** implicit TLS in prod, `:1587` plain in dev) — send via any mail client using TinyCld credentials. Validates the envelope `MAIL FROM` address against actual mailbox / alias ownership before submitting to the provider. 25 MB total message size cap.
 - **Labels** — colored tags attached to `mail_thread_state` (per user), backed by core's unified `labels` / `label_assignments` collections shared with [Contacts](help://contacts:labels) and other packages.
 - **Search** — SQLite FTS5 across subject, snippet, sender name / email, recipient names / emails, message body (HTML-stripped), and attachment filenames. Prefix matching (`joh*`). Advanced filters: from / to / subject substrings, has-attachment, before / after dates, "has words" / "doesn't have words" with FTS `NOT`. Filters can be typed inline as `key:value` or set via the Advanced panel. Mail also registers a source with core's federated `GET /api/search` (`server/search_source.go`, plus `search: { adapter: 'search-adapter' }` in the manifest → `tinycld/mail/search-adapter.ts`), so mail rows appear in the cross-app search palette (`/`, `mail:` chip) and in the CLI; both paths call the same `SearchMail`.
 - **Realtime updates** — message arrivals, read-state changes, and folder moves propagate via PocketBase's built-in collection-realtime subscriptions (`pbtsdb` `useLiveQuery`). IMAP IDLE notifications are dispatched through an internal mailbox-keyed notifier so IMAP clients see new messages within a second.
@@ -179,10 +179,10 @@ The folder-counts view (`1830000000_create_mail_folder_counts_view.js`) is what 
 
 1. If `In-Reply-To` is set, look up an existing message with that `message_id`; if found, return its thread.
 2. Otherwise walk the `References` chain from newest to oldest, returning the first thread that has a matching message.
-3. Otherwise normalize the subject (strip `Re:` / `Fwd:` / etc.) and look up the most recent thread in the same mailbox with the same normalized subject; if found within a recency window, return it.
+3. Otherwise, if the subject carried a `Re:` / `Fwd:` / etc. prefix, normalize it (strip the prefix) and look up the most recent thread in the same mailbox with the same normalized subject; if found, return it. A subject with no such prefix skips this step.
 4. Otherwise create a fresh thread.
 
-Two unrelated emails with the same subject won't merge as long as one of the first two strategies fires — which is true for any reply-driven conversation. The subject-match fallback is the only path that can produce false-positive merges, and the recency window keeps that to a minimum.
+Two unrelated emails with the same subject won't merge as long as one of the first two strategies fires — which is true for any reply-driven conversation. The subject-match fallback is the only path that can produce false-positive merges; it has no recency window, so a `Re:` to an old subject joins the newest thread with that subject regardless of age. It only runs for a prefixed subject, so a fresh message with a plain subject always starts a new thread.
 
 ### Inbound flow
 
@@ -204,19 +204,19 @@ Composing a message in the web UI:
 
 1. Draft auto-save POSTs to `/api/mail/draft` every few keystrokes. The handler upserts a `mail_messages` row with `delivery_status='draft'`, threaded into a draft thread if one exists (matched on the in-progress message's `In-Reply-To` for replies, or a fresh thread for new compositions).
 2. Hit Send → `POST /api/mail/send`. The handler validates: the user owns the From mailbox / alias, the To list is non-empty, the message size is under 25 MB.
-3. The send handler flips `delivery_status` to `sending`, then calls `provider.Send(message)` — for Postmark, this is `POST /email` with subject, body, recipients, attachments base64-encoded.
-4. On success, the provider returns a `MessageID` that gets persisted on the `mail_messages` row as `message_id`, and `delivery_status` flips to `sent`.
+3. The send handler calls `provider.Send(message)` first — for Postmark, this is `POST /email` with subject, body, recipients, attachments base64-encoded. No `mail_messages` row is written before this call.
+4. On success, the provider returns a `MessageID`. The handler then finds-or-creates the thread and stores the `mail_messages` row with that `message_id` and a `delivery_status` from `deliveryStatusForResult`: `sent`, or `bounced` when the provider rejected every recipient synchronously (per-recipient rejections are recorded in `bounce_reason` either way).
 5. Postmark eventually POSTs delivery, bounce, or spam-complaint callbacks to `/api/mail/bounces/{webhook_secret}`. The handler looks up the message by its `message_id` and updates `delivery_status` to `delivered`, `bounced`, or `spam_complaint`.
-6. If `provider.Send` fails synchronously, the message stays in `sending` and the API returns the error to the client (so the Send button shows the failure).
+6. If `provider.Send` fails synchronously, nothing is stored and the API returns the error to the client (so the Send button shows the failure). The synchronous send path never leaves a message in `sending`.
 
 ### SMTP submission server
 
 `server/smtp_server.go` drives core's `tinycld.org/core/mailproto` transport (`mailproto.StartSMTP` owns the TLS policy, bind, and `go-smtp` server); mail supplies only the backend. The session backend (`smtp_session.go`):
 
 - **AUTH** validates username / email + password via core's `davauth.VerifyCredentials`, then refuses a user whose mail access is read-only with `535 Your mail access is read-only; sending is not permitted`.
-- **MAIL FROM** records the sender address.
-- **RCPT TO** is accepted unconditionally (the recipient validity is the provider's job, not ours).
-- **DATA** parses the incoming RFC 5322 message, **validates** the `From:` header is one of the authenticated user's mailbox primaries or aliases — if not, return `550 You don't own this address`.
+- **MAIL FROM** validates the envelope sender: the address must resolve to a `mail_mailboxes` primary or a `mail_mailbox_aliases` row (else `550 Sender address not recognized`), and the authenticated user must be a member of that mailbox (else `550 Not authorized to send from this address`).
+- **RCPT TO** requires a prior AUTH (`530`) and MAIL FROM (`503`), rejects an address without `@` (`553 Invalid recipient address`), and caps the envelope at 100 recipients (`452 Too many recipients`). Recipient validity beyond that is the provider's job, not ours.
+- **DATA** parses the incoming RFC 5322 message. It does not validate the message's `From:` header — it **replaces** it, building the outgoing From from the mailbox record (`buildOutgoingFrom`: the mailbox's `display_name` plus the primary or alias address MAIL FROM resolved) so sender identity is consistent across channels. `To` / `Cc` come from the headers; any envelope recipient not in those headers becomes `Bcc`.
 - Hands the message off to the same `provider.Send` path as the web UI.
 
 The 25 MB limit on submission is `mailproto.StartSMTP`'s default `MaxMessageBytes` (mail passes no override); `smtp_inbound_server.go` sets the same `smtp.Server.MaxMessageBytes = 25 << 20` on the port-25 inbound listener, and the REST paths bound it via `ParseMultipartForm(25 << 20)` in `endpoints_send.go` and `endpoints_draft.go`. UTF-8 (`SMTPUTF8`) and 60-second read / write timeouts are set by `mailproto`.
