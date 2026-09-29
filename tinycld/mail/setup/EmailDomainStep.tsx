@@ -1,8 +1,8 @@
 import { useLiveQuery } from '@tanstack/react-db'
 import type { AddDomainResponse, OutboundCheckResult } from '@tinycld/app-generated/mail-api'
 import { SetupContinueButton } from '@tinycld/core/components/setup/wizard/SetupContinueButton'
+import { SetupTabs } from '@tinycld/core/components/setup/wizard/SetupTabs'
 import { StepHeading } from '@tinycld/core/components/setup/wizard/StepHeading'
-import { SidebarSlot } from '@tinycld/core/components/sidebar-primitives/SidebarSlot'
 import { errorToString } from '@tinycld/core/lib/errors'
 import { useMutation } from '@tinycld/core/lib/mutations'
 import { packageSidebarContributions } from '@tinycld/core/lib/packages/derive-components'
@@ -11,12 +11,18 @@ import type { SetupStepProps } from '@tinycld/core/lib/setup/types'
 import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
 import { useIsSettingManaged } from '@tinycld/core/lib/use-managed-settings'
 import { Button, ButtonText } from '@tinycld/core/ui/button'
-import { useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Suspense, useState } from 'react'
+import { Text, View } from 'react-native'
 import { AddDomainForm } from '../settings/AddDomainForm'
 import { DnsRecordsPanel, hasUnpublishedDnsRecords } from '../settings/DnsRecordsPanel'
 import { assertVerifySaved } from '../settings/verify-domain'
-import { type DomainChoice, initialChoice, showOwnDomainForm } from './domain-choice'
+import {
+    type DomainChoice,
+    domainTabs,
+    initialChoice,
+    showDomainTabs,
+    showOwnDomainForm,
+} from './domain-choice'
 import { domainPanelTarget, hasVerifiedDomain, setupAddDomainError } from './setup-logic'
 
 // Adding and verifying domains is an owner/admin action on the server.
@@ -170,36 +176,45 @@ function DomainList({ domains }: { domains: DomainItem[] }) {
     )
 }
 
-// The choice only opens the own-domain form. Contributed option cards run
-// their own setup: slot components get no props, so they cannot report back.
+// One tab per contributed domain option, then the own-domain form. Contributed
+// panels run their own setup: slot components get no props, so they cannot
+// report back, and the choice only decides which panel shows.
 function useDomainChoice() {
     const contributed = packageSidebarContributions.mail?.['setup-domain-options'] ?? []
-    const [choice, setChoice] = useState<DomainChoice>(() => initialChoice(contributed.length > 0))
+    const tabs = domainTabs(contributed)
+    const [choice, setChoice] = useState<DomainChoice>(() => initialChoice(tabs))
     return {
+        tabs,
+        choice,
+        setChoice,
+        hasTabs: showDomainTabs(tabs),
         isOwnSelected: showOwnDomainForm(choice),
-        chooseOwn: () => setChoice('own'),
+        contributedPanel: contributed.find(c => c.contributorSlug === choice) ?? null,
     }
 }
 
-function ownCardClassName(isSelected: boolean) {
-    const border = isSelected ? 'border-primary' : 'border-border'
-    return `mt-2 gap-1 rounded-xl border p-3 ${border}`
+type DomainChoiceState = ReturnType<typeof useDomainChoice>
+
+function DomainTabBar({ state }: { state: DomainChoiceState }) {
+    if (!state.hasTabs) return null
+    return (
+        <SetupTabs
+            tabs={state.tabs}
+            value={state.choice}
+            onChange={state.setChoice}
+            testID="setup-domain-tab"
+        />
+    )
 }
 
-function OwnDomainCard({ isSelected, onPress }: { isSelected: boolean; onPress: () => void }) {
+// The selected contribution's panel, loaded on first show like any slot.
+function ContributedPanel({ entry }: { entry: DomainChoiceState['contributedPanel'] }) {
+    if (!entry) return null
+    const Component = entry.Component
     return (
-        <Pressable
-            testID="setup-own-domain-option"
-            accessibilityRole="button"
-            accessibilityState={{ selected: isSelected }}
-            onPress={onPress}
-            className={ownCardClassName(isSelected)}
-        >
-            <Text className="text-sm font-semibold text-foreground">Your own domain</Text>
-            <Text className="text-sm text-muted-foreground">
-                Use a domain you already own, like yourcompany.com.
-            </Text>
-        </Pressable>
+        <Suspense fallback={null}>
+            <Component />
+        </Suspense>
     )
 }
 
@@ -215,7 +230,10 @@ function OwnDomainForm({
     const { setAdded, ...panelProps } = panel
     const describeAddError = (error: unknown) => setupAddDomainError(error, isMailManaged)
     return (
-        <View className="mt-2 gap-1">
+        <View className="gap-1">
+            <Text className="text-sm text-muted-foreground">
+                Use a domain you already own, like yourcompany.com.
+            </Text>
             <AddDomainForm onAdded={setAdded} describeError={describeAddError} />
             <DomainPanel {...panelProps} />
         </View>
@@ -225,7 +243,7 @@ function OwnDomainForm({
 export default function EmailDomainStep({ next }: SetupStepProps) {
     const domains = useDomains()
     const panel = useDomainPanel(domains)
-    const { isOwnSelected, chooseOwn } = useDomainChoice()
+    const choice = useDomainChoice()
     return (
         <View>
             <StepHeading
@@ -233,9 +251,9 @@ export default function EmailDomainStep({ next }: SetupStepProps) {
                 lead="Where should your team's email addresses live?"
                 helpTopic="mail:custom-domains"
             />
-            <SidebarSlot target="mail" slot="setup-domain-options" />
-            <OwnDomainCard isSelected={isOwnSelected} onPress={chooseOwn} />
-            <OwnDomainForm isVisible={isOwnSelected} panel={panel} />
+            <DomainTabBar state={choice} />
+            <ContributedPanel entry={choice.contributedPanel} />
+            <OwnDomainForm isVisible={choice.isOwnSelected} panel={panel} />
             <DomainList domains={domains} />
             <SetupContinueButton onPress={next} />
         </View>
