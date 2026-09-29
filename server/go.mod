@@ -1,6 +1,6 @@
 module tinycld.org/packages/mail
 
-go 1.26.3
+go 1.27.1
 
 require (
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
@@ -13,7 +13,7 @@ require (
 	github.com/mrz1836/postmark v1.9.0
 	github.com/pocketbase/dbx v1.12.0
 	github.com/pocketbase/ozzo-validation/v4 v4.3.0
-	github.com/pocketbase/pocketbase v0.39.8
+	github.com/pocketbase/pocketbase v0.40.4
 	golang.org/x/crypto v0.54.0
 	modernc.org/sqlite v1.54.0
 	tinycld.org/core v0.0.0

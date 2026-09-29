@@ -1,6 +1,6 @@
 module tinycld.org/packages/mail/cli
 
-go 1.26.3
+go 1.27.1
 
 require (
 	github.com/jaytaylor/html2text v0.0.0-20260303211410-1a4bdc82ecec
