@@ -237,12 +237,12 @@ The 25 MB limit on submission is `mailproto.StartSMTP`'s default `MaxMessageByte
 `mail_domains` has a `verification_details` JSON column with three sub-results: MX, Provider, and Outbound (which itself splits SPF / DKIM / Return-Path), plus top-level `ProviderConfigured` and `ProviderName` fields. `handleVerifyDomain` (`endpoints_verify_domain.go`) calls `verifyDomainRecord` (`domain_verify.go`), which runs the checks in sequence:
 
 - **MX** — `net.LookupMX(domain)`, expected target is `inbound.postmarkapp.com` (Postmark) or the provider's public hostname (self-hosted SMTP, built-in listener mode; skipped in IMAP-poll mode).
-- **Provider** — asks the configured provider (`CheckInboundDomain`) to confirm that inbound is configured for this domain.
+- **Provider** — asks the configured provider (`CheckInboundDomain`) to confirm that inbound is configured for this domain. When the `mail.inbound_mx_host` system setting is set, this check passes without asking the provider.
 - **Outbound** — reads the provider's domain record (`maildomains.Current().GetDomain`) and copies its SPF, DKIM, and Return-Path verified flags. It also records `Enrolled` (`yes` / `no` / `unknown`). It does no DNS lookups of its own.
 
 Per-domain verify runs are serialized via `verifyLocks` so the user-triggered Verify and the hourly background tick can't race.
 
-`startDomainReverifyLoop` runs every hour: lists every `mail_domains` row with `verified = false` and re-runs verification. `verified` depends on the inbound checks (MX + Provider) only; outbound checks are advisory, so a verified domain with a failing SPF / DKIM / Return-Path check is not re-checked by the loop. The result is persisted back to `verification_details`. So DNS records that propagate slowly eventually flip the row green without user intervention.
+`startDomainReverifyLoop` runs every hour: lists every `mail_domains` row with `verified = false` and re-runs verification. `verified` requires MX and Provider to pass and the provider enrollment not to be `no`; the SPF / DKIM / Return-Path results are advisory, so a verified domain with a failing SPF / DKIM / Return-Path check is not re-checked by the loop. The result is persisted back to `verification_details`. So DNS records that propagate slowly eventually flip the row green without user intervention.
 
 ### Image proxy
 
