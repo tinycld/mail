@@ -5,6 +5,7 @@ import { SetupContinueButton } from '@tinycld/core/components/setup/wizard/Setup
 import { StepHeading } from '@tinycld/core/components/setup/wizard/StepHeading'
 import { useAuth } from '@tinycld/core/lib/auth'
 import { errorToString } from '@tinycld/core/lib/errors'
+import { log } from '@tinycld/core/lib/logger'
 import { useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import type { SetupStepProps } from '@tinycld/core/lib/setup/types'
@@ -17,12 +18,12 @@ import { MailboxForm } from '../settings/MailboxForm'
 import { defaultAddressFor } from '../settings/mailbox-records'
 import {
     EMAIL_DOMAIN_STEP_HREF,
-    hasVerifiedDomain,
+    hasReadyDomain,
+    readyDomainOptions,
     type TestMessageState,
     testMessageLabel,
     testMessageRequest,
     testMessageState,
-    verifiedDomainOptions,
 } from './setup-logic'
 
 function useDomainRows() {
@@ -31,15 +32,22 @@ function useDomainRows() {
         query
             .from({ d: domainsCollection })
             .orderBy(({ d }) => d.created, 'asc')
-            .select(({ d }) => ({ id: d.id, domain: d.domain, verified: d.verified }))
+            .select(({ d }) => ({
+                id: d.id,
+                domain: d.domain,
+                verified: d.verified,
+                spf_verified: d.spf_verified,
+                dkim_verified: d.dkim_verified,
+                return_path_verified: d.return_path_verified,
+            }))
     )
     return { rows: data ?? [], isReady }
 }
 
-// A mailbox needs a verified domain, so the step waits for the domain step.
+// A mailbox needs a ready domain, so the step waits for the domain step.
 export function useIsStepVisible() {
     const { rows, isReady } = useDomainRows()
-    return isReady ? hasVerifiedDomain(rows) : undefined
+    return isReady ? hasReadyDomain(rows) : undefined
 }
 
 // Done only when a message has arrived. The mail_messages list rule already
@@ -81,7 +89,7 @@ function useMyNewestMailbox() {
     return { id: newest.id, email: `${newest.address}@${newest.domain}` }
 }
 
-function useTestMessage(mailboxId: string) {
+function useTestMessage(mailbox: { id: string; email: string }) {
     const { user } = useAuth()
     const { org } = useOrgInfo()
     const send = useMutation({
@@ -89,11 +97,14 @@ function useTestMessage(mailboxId: string) {
             pb.send<SendEmailResponse>('/api/mail/send', {
                 method: 'POST',
                 body: testMessageRequest({
-                    mailboxId,
+                    mailboxId: mailbox.id,
+                    fromAddress: mailbox.email,
                     to: user.email,
                     workspaceName: org?.name ?? '',
                 }),
             }),
+        // Shown under the send button; the default toast would repeat it.
+        onError: error => log.warn('mail.setup.test-message', errorToString(error)),
     })
     return {
         to: user.email,
@@ -180,7 +191,7 @@ function ErrorText({ message }: { message: string | null }) {
 }
 
 function CreatedMailbox({ mailbox }: { mailbox: { id: string; email: string } }) {
-    const { to, send, isPending, errorMessage } = useTestMessage(mailbox.id)
+    const { to, send, isPending, errorMessage } = useTestMessage(mailbox)
     return (
         <View testID="setup-address-created" className="mb-4 gap-2">
             <Text className="text-sm text-foreground">Your address is</Text>
@@ -228,7 +239,7 @@ function NewMailboxForm() {
             <MailboxForm
                 mode="create"
                 type="personal"
-                domainOptions={verifiedDomainOptions(rows)}
+                domainOptions={readyDomainOptions(rows)}
                 userId={me.id}
                 defaults={defaults}
                 onDone={noop}
@@ -246,6 +257,8 @@ function AddressBody({ mailbox }: { mailbox: { id: string; email: string } | nul
     return <CreatedMailbox mailbox={mailbox} />
 }
 
+// Continue waits for the address to exist, so a press meant for Create cannot
+// leave the step with nothing set up. Skip stays available.
 export default function AddressStep({ next }: SetupStepProps) {
     const mailbox = useMyNewestMailbox()
     return (
@@ -256,7 +269,7 @@ export default function AddressStep({ next }: SetupStepProps) {
                 helpTopic="mail:delivery-tracking"
             />
             <AddressBody mailbox={mailbox} />
-            <SetupContinueButton onPress={next} />
+            <SetupContinueButton onPress={next} isDisabled={!mailbox} />
         </View>
     )
 }

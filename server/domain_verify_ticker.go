@@ -16,7 +16,9 @@ const (
 )
 
 // startDomainReverifyLoop runs an hourly re-check of any mail_domains rows
-// that are not yet fully verified. Verified rows are skipped — a user clicks
+// that are not yet fully verified: `verified` covers receiving only, so a row
+// that receives but cannot send (SPF, DKIM or Return-Path still failing) is
+// re-checked too. Fully verified rows are skipped — a user clicks
 // Verify again if they change DNS after success. Cancels cleanly when ctx is
 // done (hooked to OnTerminate in register.go).
 func startDomainReverifyLoop(ctx context.Context, app core.App) {
@@ -55,7 +57,7 @@ func reverifyUnconfirmedDomains(ctx context.Context, app core.App) {
 
 	records, err := app.FindRecordsByFilter(
 		"mail_domains",
-		"verified = false",
+		"verified = false || spf_verified = false || dkim_verified = false || return_path_verified = false",
 		"",
 		0,
 		0,

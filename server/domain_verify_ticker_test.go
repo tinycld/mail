@@ -86,6 +86,42 @@ func TestReverifyUnconfirmedDomainsRunsWhenProviderConfigured(t *testing.T) {
 	}
 }
 
+// `verified` covers receiving only. A row that receives but cannot send yet
+// (DKIM still pending) must be re-checked, or it stays refused by the send
+// gate until someone clicks Verify by hand.
+func TestReverifyUnconfirmedDomainsRechecksRowThatCannotSend(t *testing.T) {
+	maildomains.ResetForTesting()
+	t.Cleanup(maildomains.ResetForTesting)
+	maildomains.SetResolver(&stubRegistrar{rec: &maildomains.DomainRecords{
+		Domain: "acme.com", ID: 1,
+	}})
+
+	withMXLookup(t, func(_ context.Context, _ string) ([]*net.MX, error) {
+		return []*net.MX{{Host: "inbound.postmarkapp.com.", Pref: 10}}, nil
+	})
+
+	app := newReverifyTestApp(t)
+	saveSystemSetting(t, app, "mail.provider", "postmark")
+	saveSystemSetting(t, app, "mail.postmark_server_token", "tok")
+	record := newReverifyTestRecord(t, app)
+	for _, flag := range []string{"verified", "mx_verified", "inbound_domain_verified", "spf_verified", "return_path_verified"} {
+		record.Set(flag, true)
+	}
+	if err := app.Save(record); err != nil {
+		t.Fatalf("save record: %v", err)
+	}
+
+	reverifyUnconfirmedDomains(context.Background(), app)
+
+	saved, err := app.FindRecordById("mail_domains", record.Id)
+	if err != nil {
+		t.Fatalf("reload record: %v", err)
+	}
+	if saved.GetString("last_checked_at") == "" {
+		t.Fatal("last_checked_at is empty — a verified row without DKIM was skipped")
+	}
+}
+
 func newReverifyTestApp(t *testing.T) *tests.TestApp {
 	t.Helper()
 	app := setupSettingsTestApp(t)

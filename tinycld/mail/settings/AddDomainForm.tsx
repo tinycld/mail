@@ -1,11 +1,11 @@
 import type { AddDomainResponse } from '@tinycld/app-generated/mail-api'
-import { handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { useMutation } from '@tinycld/core/lib/mutations'
 import { pb } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { FormErrorSummary, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
+import { TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
 import { Plus } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
+import { addDomainErrorMessage } from './add-domain-error'
 
 const addDomainSchema = z.object({
     domain: z
@@ -34,16 +34,14 @@ export function AddDomainForm({
         control,
         handleSubmit,
         setError,
-        getValues,
         reset,
-        formState: { errors, isSubmitted, isDirty },
+        formState: { isDirty },
     } = useForm({
         mode: 'onChange',
         resolver: zodResolver(addDomainSchema),
         defaultValues: { domain: '' },
     })
 
-    const handleFormError = handleMutationErrorsWithForm({ setError, getValues })
     const addMutation = useMutation({
         mutationFn: async (data: z.infer<typeof addDomainSchema>) =>
             pb.send<AddDomainResponse>('/api/mail/domains', {
@@ -55,12 +53,10 @@ export function AddDomainForm({
             onAdded?.(added)
         },
         onError: error => {
-            const message = describeError?.(error)
-            if (message) {
-                setError('domain', { type: 'manual', message })
-                return
-            }
-            handleFormError(error)
+            setError('domain', {
+                type: 'manual',
+                message: addDomainErrorMessage(error, describeError),
+            })
         },
     })
 
@@ -80,10 +76,10 @@ export function AddDomainForm({
         </Pressable>
     )
 
+    // No FormErrorSummary: every error lands on the one field, so a summary
+    // would only repeat the message under the input.
     return (
         <View className="gap-3">
-            <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
-
             <TextInput
                 control={control}
                 name="domain"

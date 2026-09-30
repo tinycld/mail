@@ -18,6 +18,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native'
 import { MONOSPACE_FONT } from '../lib/monospace-font'
 import { AddDomainForm } from './AddDomainForm'
 import { DnsRecordsPanel, hasUnpublishedDnsRecords } from './DnsRecordsPanel'
+import { isDomainReady } from './domain-ready'
 import { domainRemovalWarning } from './domain-removal'
 import { assertVerifySaved } from './verify-domain'
 
@@ -175,8 +176,9 @@ function DomainRowItem({ domain, provider }: { domain: DomainRow; provider: 'pos
 
     const verifyErrorMessage = verifyMutation.error ? errorToString(verifyMutation.error) : null
 
-    const VerifiedIcon = domain.verified ? CheckCircle : XCircle
-    const verifiedColor = domain.verified ? successColor : dangerColor
+    const isReady = isDomainReady(domain)
+    const VerifiedIcon = isReady ? CheckCircle : XCircle
+    const verifiedColor = isReady ? successColor : dangerColor
 
     return (
         <View className="gap-3 border border-border rounded-xl p-3">
@@ -188,7 +190,7 @@ function DomainRowItem({ domain, provider }: { domain: DomainRow; provider: 'pos
                             {domain.domain}
                         </Text>
                         <Text style={{ fontSize: 11, color: verifiedColor }}>
-                            {domain.verified ? 'Verified' : 'Unverified'}
+                            {isReady ? 'Verified' : 'Unverified'}
                         </Text>
                     </View>
                 </View>

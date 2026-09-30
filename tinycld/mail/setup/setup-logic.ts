@@ -1,28 +1,30 @@
 import type { SendEmailRequest } from '@tinycld/app-generated/mail-api'
 import { appHref } from '@tinycld/core/lib/org-routes'
+import { type DomainChecks, isDomainReady } from '../settings/domain-ready'
+import { testMessageHtml, testMessageSubject, testMessageText } from './test-message'
 
-export function hasVerifiedDomain(rows: ReadonlyArray<{ verified: boolean }>): boolean {
-    return rows.some(row => row.verified)
+export function hasReadyDomain(rows: readonly DomainChecks[]): boolean {
+    return rows.some(isDomainReady)
 }
 
-// Only a verified domain can take a mailbox that sends and receives, so the
+// Only a ready domain can take a mailbox that sends and receives, so the
 // first address is offered on those alone.
-export function verifiedDomainOptions(
-    rows: ReadonlyArray<{ id: string; domain: string; verified: boolean }>
+export function readyDomainOptions(
+    rows: ReadonlyArray<DomainChecks & { id: string; domain: string }>
 ): Array<{ label: string; value: string }> {
-    return rows.filter(row => row.verified).map(row => ({ label: row.domain, value: row.id }))
+    return rows.filter(isDomainReady).map(row => ({ label: row.domain, value: row.id }))
 }
 
 // Which domain the step's DNS + Verify panel is for. The domain added in this
-// visit wins, verified or not, so the person sees it turn green. Otherwise it
-// is the newest unverified domain, so a person who comes back to the wizard
-// can still finish one they added earlier. `rows` are oldest first.
-export function domainPanelTarget<T extends { id: string; verified: boolean }>(
+// visit wins, ready or not, so the person sees it turn green. Otherwise it
+// is the newest domain that is not ready, so a person who comes back to the
+// wizard can still finish one they added earlier. `rows` are oldest first.
+export function domainPanelTarget<T extends DomainChecks & { id: string }>(
     rows: readonly T[],
     addedId: string | undefined
 ): T | undefined {
     if (addedId) return rows.find(row => row.id === addedId)
-    return rows.filter(row => !row.verified).at(-1)
+    return rows.filter(row => !isDomainReady(row)).at(-1)
 }
 
 // The add endpoint answers 503 when this deployment has no mail provider to
@@ -38,30 +40,23 @@ export function setupAddDomainError(error: unknown, isMailManaged: boolean): str
 
 export function testMessageRequest({
     mailboxId,
+    fromAddress,
     to,
     workspaceName,
 }: {
     mailboxId: string
+    fromAddress: string
     to: string
     workspaceName: string
 }): SendEmailRequest {
     const name = workspaceName.trim() || 'your workspace'
-    const text = `This is a test message from ${name}. Your new address can send email.`
     return {
         mailbox_id: mailboxId,
         to: [{ email: to, name: '' }],
-        subject: `Test message from ${name}`,
-        text_body: text,
-        html_body: `<p>${escapeHtml(text)}</p>`,
+        subject: testMessageSubject(name),
+        text_body: testMessageText(name, fromAddress),
+        html_body: testMessageHtml(name, fromAddress),
     }
-}
-
-function escapeHtml(value: string): string {
-    return value
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
 }
 
 export const EMAIL_DOMAIN_STEP_HREF = appHref('setup/mail.email-domain')
