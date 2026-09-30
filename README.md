@@ -20,7 +20,7 @@ User-facing features:
 - **Privacy-preserving image proxy** — all external images in inbound HTML are rewritten to `/api/mail/image-proxy?token=<auth>&url=<original>`. The proxy fetches images server-side with a 1-hour in-memory cache (500-entry LRU), refuses private IPs (SSRF guard), and caps responses at 10 MB. Senders see your server's IP and not your browser.
 - **HTML sanitization** — every inbound HTML body is run through `bluemonday`'s UGC policy with table support enabled, before it touches a client. `<script>`, `<iframe>`, `<form>`, event handlers, and unsafe URL schemes are stripped; tables and inline styles for common elements are preserved so corporate templates still render.
 - **Attachment thumbnails** — server-side thumbnail generation via `core/thumbnails` for PDFs, Office docs, EPUBs, and HEIC photos. Plain images get on-demand `?thumb=` via PocketBase. Generated asynchronously on the same hook that fires for new messages.
-- **Custom domains** — verify your own domain end-to-end (MX → your provider's inbound host, plus SPF / DKIM / Return-Path for outbound) from the Provider settings screen. A background ticker reverifies pending domains every hour so DNS propagation eventually flips them green automatically.
+- **Custom domains** — verify your own domain end-to-end (MX → your provider's inbound host, plus SPF / DKIM / Return-Path for outbound) from the Domains settings screen (Settings → Mail → Domains). A background ticker reverifies pending domains every hour so DNS propagation eventually flips them green automatically.
 - **Providers** — **Postmark**: outbound via the REST API, inbound via a per-domain webhook-secret URL, bounce / spam-complaint callbacks via a parallel webhook. **Self-hosted SMTP**: direct-to-MX delivery, inbound via the built-in SMTP listener (gated by `MAIL_INBOUND_SMTP_ENABLED=true`) or an IMAP polling fetcher; bounces come from synchronous 5xx replies. Both implement the `Provider` interface in `server/provider.go`; the choice and its credentials live in the deployment-wide `system_settings` store.
 - **IMAP server** (port **993** implicit TLS in prod, `:1143` plain in dev) — full read / state-sync support via `github.com/emersion/go-imap/v2`. IDLE for push, UID validity for offline-safe sync, RFC 5322 message fetch, namespacing across mailboxes. Apple Mail, Thunderbird, mutt, mobile clients all work.
 - **SMTP submission** (port **465** implicit TLS in prod, `:1587` plain in dev) — send via any mail client using TinyCld credentials. Validates the envelope `MAIL FROM` address against actual mailbox / alias ownership before submitting to the provider. 25 MB total message size cap.
@@ -234,15 +234,15 @@ The 25 MB limit on submission is `mailproto.StartSMTP`'s default `MaxMessageByte
 
 ### Domain verification
 
-`mail_domains` has a `verification_details` JSON column with four sub-results: MX, Postmark, Outbound (which itself splits SPF / DKIM / Return-Path), plus a top-level `ProviderConfigured` flag. `handleVerifyDomain` (`endpoints_verify_domain.go`) runs all four checks in parallel:
+`mail_domains` has a `verification_details` JSON column with three sub-results: MX, Provider, and Outbound (which itself splits SPF / DKIM / Return-Path), plus top-level `ProviderConfigured` and `ProviderName` fields. `handleVerifyDomain` (`endpoints_verify_domain.go`) calls `verifyDomainRecord` (`domain_verify.go`), which runs the checks in sequence:
 
 - **MX** — `net.LookupMX(domain)`, expected target is `inbound.postmarkapp.com` (Postmark) or the provider's public hostname (self-hosted SMTP, built-in listener mode; skipped in IMAP-poll mode).
-- **Postmark** — calls Postmark's API to confirm a server-side domain record exists for this domain and that inbound is configured.
-- **Outbound** — looks up SPF (`v=spf1 ... include:spf.mtasv.net`), DKIM (CNAME at `<selector>._domainkey`), and Return-Path (CNAME at `pm-bounces`).
+- **Provider** — asks the configured provider (`CheckInboundDomain`) to confirm that inbound is configured for this domain.
+- **Outbound** — reads the provider's domain record (`maildomains.Current().GetDomain`) and copies its SPF, DKIM, and Return-Path verified flags. It also records `Enrolled` (`yes` / `no` / `unknown`). It does no DNS lookups of its own.
 
 Per-domain verify runs are serialized via `verifyLocks` so the user-triggered Verify and the hourly background tick can't race.
 
-`startDomainReverifyLoop` runs every hour: lists every `mail_domains` row whose verification is still incomplete (any of MX, Postmark, SPF, DKIM, Return-Path showing false) and re-runs verification. The result is persisted back to `verification_details`. So DNS records that propagate slowly eventually flip the row green without user intervention.
+`startDomainReverifyLoop` runs every hour: lists every `mail_domains` row with `verified = false` and re-runs verification. `verified` depends on the inbound checks (MX + Provider) only; outbound checks are advisory, so a verified domain with a failing SPF / DKIM / Return-Path check is not re-checked by the loop. The result is persisted back to `verification_details`. So DNS records that propagate slowly eventually flip the row green without user intervention.
 
 ### Image proxy
 
@@ -312,13 +312,13 @@ server/
     thumbnails.go              attachment thumbnail generation
     domain_verify.go           MX / provider / SPF / DKIM / Return-Path checks
     domain_verify_ticker.go    hourly background reverify loop
-    search.go                  fts_mail_threads / fts_mail_messages sync + SearchMail
+    search.go                  fts_mail_threads / fts_mail_messages sync + query helpers
     search_source.go           source for core's federated /api/search
     automation.go              workflow-rules trigger filters + owner resolver
     automation_actions.go      workflow-rules action handlers
     endpoints_send.go          /api/mail/send
     endpoints_draft.go         /api/mail/draft
-    endpoints_search.go        /api/mail/search (FTS + advanced filters)
+    endpoints_search.go        /api/mail/search (FTS + advanced filters) + SearchMail
     endpoints_inbound.go       /api/mail/inbound/{token}
     endpoints_bounce.go        /api/mail/bounces/{token}
     endpoints_verify_domain.go /api/mail/domains/{id}/verify + webhook-urls
@@ -358,7 +358,7 @@ tinycld/mail/
         [id].tsx           thread view + inline reply
         rules.tsx          automation rules
     settings/
-        provider.tsx       domain list + verification (in-app Settings → Mail → Provider)
+        provider.tsx       domain list + verification (in-app Settings → Mail → Domains)
         mailboxes.tsx      mailbox CRUD + member CRUD + alias CRUD (+ Mailbox* parts)
     system-settings/
         provider.tsx       deployment-wide provider credentials (setup console)
