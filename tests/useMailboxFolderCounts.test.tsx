@@ -101,11 +101,15 @@ test('the shipped view declares exactly the columns the hook and these fixtures 
             import.meta.dirname,
             '..',
             'pb-migrations',
-            '1830000000_create_mail_folder_counts_view.js'
+            // The latest migration that (re)defines the view.
+            '1830000011_thread_state_is_sent.js'
         ),
         'utf8'
     )
-    const aliases = [...src.matchAll(/\bAS\s+(\w+)/g)].map(m => m[1])
+    // The up migration's query comes first; the down migration restores the
+    // previous definition after it.
+    const upQuery = src.slice(0, src.indexOf('app => {', src.indexOf('viewQuery')))
+    const aliases = [...new Set([...upQuery.matchAll(/\bAS\s+(\w+)/g)].map(m => m[1]))]
     // The fixture rows above must be keyed by the shipped columns — if the view
     // renames or drops one, this fails loudly instead of the hook silently
     // reading undefined.
@@ -180,4 +184,12 @@ test('a local mail_thread_state change invalidates the counts query (view realti
     })
     await new Promise(resolve => setTimeout(resolve, 50))
     expect(h.invalidateQueries).not.toHaveBeenCalled()
+})
+
+test('the shipped view counts sent from the is_sent flag', () => {
+    const src = readFileSync(
+        join(import.meta.dirname, '..', 'pb-migrations', '1830000011_thread_state_is_sent.js'),
+        'utf8'
+    )
+    expect(src).toContain("s.is_sent AND s.folder NOT IN ('trash', 'spam')")
 })

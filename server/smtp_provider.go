@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"tinycld.org/core/mailer"
@@ -113,12 +112,8 @@ func (p *SMTPProvider) Send(ctx context.Context, req *SendRequest) (*SendResult,
 // ParseInbound parses a raw RFC 5322 message into the InboundMessage shape
 // expected by processInboundForMailbox. We reuse parseRFC5322 (also used by
 // IMAP APPEND) and adapt its storedMessage output to InboundMessage so the
-// downstream pipeline stays unchanged.
-//
-// One important normalization: parseRFC5322 uses go-message's MsgID() helper
-// which strips the angle brackets. Postmark (and the rest of our threading
-// code) stores message identifiers with brackets — re-wrap so the SMTP path
-// matches the Postmark path bit-for-bit.
+// downstream pipeline stays unchanged. parseRFC5322 already returns message
+// ids in the stored "<id@host>" form.
 func (p *SMTPProvider) ParseInbound(body []byte) (*InboundMessage, error) {
 	stored, err := parseRFC5322(body)
 	if err != nil {
@@ -133,38 +128,12 @@ func (p *SMTPProvider) ParseInbound(body []byte) (*InboundMessage, error) {
 		HTMLBody:    stored.HTMLBody,
 		TextBody:    stored.TextBody,
 		Date:        stored.Date,
-		MessageID:   wrapMsgID(stored.MessageID),
-		InReplyTo:   wrapMsgID(stored.InReplyTo),
-		References:  wrapMsgIDList(stored.References),
+		MessageID:   stored.MessageID,
+		InReplyTo:   stored.InReplyTo,
+		References:  stored.References,
 		Attachments: stored.Attachments,
 	}
 	return msg, nil
-}
-
-// wrapMsgID adds angle brackets to a Message-ID if missing. Empty strings
-// pass through unchanged so callers can keep using "" as the absent marker.
-func wrapMsgID(id string) string {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return ""
-	}
-	if strings.HasPrefix(id, "<") && strings.HasSuffix(id, ">") {
-		return id
-	}
-	return "<" + id + ">"
-}
-
-// wrapMsgIDList wraps each space-separated Message-ID in a References header.
-func wrapMsgIDList(s string) string {
-	if s == "" {
-		return ""
-	}
-	parts := strings.Fields(s)
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		out = append(out, wrapMsgID(p))
-	}
-	return strings.Join(out, " ")
 }
 
 // ParseBounce is not used for SMTP — bounces are reported inline by Send via

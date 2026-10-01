@@ -154,8 +154,10 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 		MaxSelect:     1,
 	})
 	messages.Fields.Add(&core.TextField{Name: "message_id"})
+	messages.Fields.Add(&core.TextField{Name: "provider_message_id"})
 	messages.Fields.Add(&core.TextField{Name: "in_reply_to"})
 	messages.Fields.Add(&core.TextField{Name: "alias"})
+	messages.Fields.Add(&core.TextField{Name: "sent_by"})
 	messages.Fields.Add(&core.TextField{Name: "sender_name"})
 	messages.Fields.Add(&core.TextField{Name: "sender_email"})
 	// A real DateField, matching migration 1713000000 — not TextField. The
@@ -189,6 +191,7 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 	threadState.Fields.Add(&core.TextField{Name: "folder"})
 	threadState.Fields.Add(&core.BoolField{Name: "is_read"})
 	threadState.Fields.Add(&core.BoolField{Name: "is_starred"})
+	threadState.Fields.Add(&core.BoolField{Name: "is_sent"})
 	if err := app.Save(threadState); err != nil {
 		t.Fatalf("failed to save mail_thread_state: %v", err)
 	}

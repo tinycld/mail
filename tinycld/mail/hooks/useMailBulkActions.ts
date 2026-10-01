@@ -4,6 +4,7 @@ import { notify } from '@tinycld/core/lib/notify'
 import type { useStore } from '@tinycld/core/lib/pocketbase'
 import { useLabelMutations } from '@tinycld/core/ui/hooks/useLabelMutations'
 import type { ThreadListItem } from '../components/thread-list-item'
+import { moveThreadStateToFolder } from '../lib/thread-folder'
 import type { MailThreadState } from '../types'
 
 type ThreadStateCollection = ReturnType<typeof useStore<['mail_thread_state']>>[0]
@@ -81,9 +82,7 @@ export function useMailBulkActions(
     const moveSelected = useMutation<void, Error, MailThreadState['folder']>({
         mutationFn: mutation(function* (folder) {
             yield selectedItems.map(item =>
-                col.update(item.stateId, draft => {
-                    draft.folder = folder
-                })
+                col.update(item.stateId, draft => moveThreadStateToFolder(draft, folder))
             )
         }),
         onSuccess: clearSelection,

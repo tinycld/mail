@@ -166,22 +166,14 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 	mailboxID := mailbox.Id
 
 	// Idempotency: skip if message with this message_id already exists in a thread for this mailbox
-	if msg.MessageID != "" {
-		existing, err := app.FindRecordsByFilter(
-			"mail_messages",
-			"message_id = {:messageID}",
-			"",
-			1,
-			0,
-			map[string]any{"messageID": msg.MessageID},
-		)
-		if err == nil && len(existing) > 0 {
-			threadID := existing[0].GetString("thread")
-			thread, err := app.FindRecordById("mail_threads", threadID)
-			if err == nil && thread.GetString("mailbox") == mailboxID {
-				return nil // already processed
-			}
+	if existing, existingThread, _ := findMessageInMailbox(app, mailboxID, msg.MessageID); existing != nil {
+		if existing.GetString("sent_by") == "" {
+			return nil // already processed
 		}
+		// Mail this mailbox sent to itself: the send path stored it under the
+		// same Message-ID, so this delivery is that message arriving, and it
+		// belongs in the Inbox as well as Sent.
+		return fileIntoInbox(app, mailboxID, existingThread.Id)
 	}
 
 	stored := &storedMessage{
@@ -263,6 +255,21 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 
 		return nil
 	})
+}
+
+// fileIntoInbox files a thread into every member's Inbox, keeping each
+// member's read state.
+func fileIntoInbox(app core.App, mailboxID, threadID string) error {
+	members, err := getMailboxMembers(app, mailboxID)
+	if err != nil {
+		return fmt.Errorf("getMailboxMembers: %w", err)
+	}
+	for _, member := range members {
+		if err := setThreadFolder(app, threadID, member.GetString("user"), "inbox"); err != nil {
+			return fmt.Errorf("setThreadFolder: %w", err)
+		}
+	}
+	return nil
 }
 
 func splitAddress(email string) (localPart, domain string) {

@@ -83,7 +83,7 @@ set ssl_force_tls = yes
 In every IMAP client you'll see these folder names per mailbox (case may vary by client):
 
 - **INBOX**
-- **Sent** (flagged `\Sent`)
+- **Sent** (flagged `\Sent`): only the messages you sent. The messages you replied to stay in their own folder.
 - **Drafts** (flagged `\Drafts`)
 - **Trash** (flagged `\Trash`)
 - **Spam** (flagged `\Junk`)

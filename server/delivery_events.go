@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"strings"
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -21,13 +22,22 @@ const senderDomainMetadataKey = "sender_domain"
 // Registered as mail's deliveryevents.Sink (register.go) so both paths run
 // the exact same rules.
 func applyDeliveryEvent(app core.App, e deliveryevents.Event) (handled bool, err error) {
+	// An empty id would match every row whose provider_message_id is unset.
+	if strings.TrimSpace(e.ProviderMessageID) == "" {
+		return false, nil
+	}
+
+	// Providers report their own id for the send (provider_message_id), which
+	// for Postmark is not the Message-ID header. The message_id match covers
+	// providers whose id is the header (the self-hosted SMTP sender) and any
+	// row that predates provider_message_id.
 	messages, err := app.FindRecordsByFilter(
 		"mail_messages",
-		"message_id = {:id}",
+		"provider_message_id = {:id} || message_id = {:messageID}",
 		"",
 		1,
 		0,
-		map[string]any{"id": e.ProviderMessageID},
+		map[string]any{"id": e.ProviderMessageID, "messageID": normalizeMessageID(e.ProviderMessageID)},
 	)
 	if err != nil {
 		return false, err

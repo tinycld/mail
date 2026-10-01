@@ -15,6 +15,10 @@ function fixtureFile(name: string, type: string): File {
     return new File([new Uint8Array(bytes)], name, { type })
 }
 
+// The seeded mail is written from Alice's side: her messages are the ones
+// the seeded user sent.
+const SEED_SELF_ADDRESS = 'alice@tinycld.org'
+
 const MIME_BY_EXT: Record<string, string> = {
     jpg: 'image/jpeg',
     jpeg: 'image/jpeg',
@@ -1905,6 +1909,9 @@ async function seedThreadsForMailbox(
             if (msg.in_reply_to) {
                 formData.append('in_reply_to', msg.in_reply_to)
             }
+            if (msg.sender_email === SEED_SELF_ADDRESS) {
+                formData.append('delivery_status', 'sent')
+            }
 
             const msgId = `<${thread.subject
                 .toLowerCase()
@@ -1923,6 +1930,9 @@ async function seedThreadsForMailbox(
             folder: thread.folder,
             is_read: thread.is_read,
             is_starred: thread.is_starred,
+            is_sent:
+                thread.folder === 'sent' ||
+                thread.messages.some(m => m.sender_email === SEED_SELF_ADDRESS),
         })
 
         for (const labelId of labelIds) {

@@ -93,6 +93,14 @@ func folderToUserFilter(app core.App, imapName, userID string) (string, map[stri
 		}
 	}
 
+	// Sent is a flag, not a folder: a reply leaves its thread where it was
+	// (usually the Inbox) and marks it sent. Trash and spam leave Sent, as in
+	// the web view.
+	if folder == "sent" {
+		return "user = {:user} && is_sent = true && folder != 'trash' && folder != 'spam'",
+			map[string]any{"user": userID}
+	}
+
 	// Label folder: Labels/<name> — filter via label_assignments
 	if labelName := extractLabelName(imapName); labelName != "" {
 		return labelFolderFilter(app, labelName, userID)
