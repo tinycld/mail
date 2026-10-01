@@ -39,11 +39,11 @@ describe('mail manifest', () => {
         expect(manifest.setupSteps).toEqual([
             {
                 id: 'email-domain',
-                label: 'Email domain',
+                label: 'Domain',
                 module: 'setup/EmailDomainStep',
                 order: 'a2V',
             },
-            { id: 'address', label: 'Your address', module: 'setup/AddressStep', order: 'a2k' },
+            { id: 'address', label: 'Address', module: 'setup/AddressStep', order: 'a2k' },
         ])
         expect(manifest.slots).toContain('setup-domain-options')
     })

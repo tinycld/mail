@@ -4,6 +4,7 @@ import { SetupContinueButton } from '@tinycld/core/components/setup/wizard/Setup
 import { SetupTabs } from '@tinycld/core/components/setup/wizard/SetupTabs'
 import { StepHeading } from '@tinycld/core/components/setup/wizard/StepHeading'
 import { errorToString } from '@tinycld/core/lib/errors'
+import { log } from '@tinycld/core/lib/logger'
 import { useMutation } from '@tinycld/core/lib/mutations'
 import { packageSidebarContributions } from '@tinycld/core/lib/packages/derive-components'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
@@ -15,15 +16,11 @@ import { Suspense, useState } from 'react'
 import { Text, View } from 'react-native'
 import { AddDomainForm } from '../settings/AddDomainForm'
 import { DnsRecordsPanel, hasUnpublishedDnsRecords } from '../settings/DnsRecordsPanel'
+import { isDomainReady } from '../settings/domain-ready'
 import { assertVerifySaved } from '../settings/verify-domain'
-import {
-    type DomainChoice,
-    domainTabs,
-    initialChoice,
-    showDomainTabs,
-    showOwnDomainForm,
-} from './domain-choice'
-import { domainPanelTarget, hasVerifiedDomain, setupAddDomainError } from './setup-logic'
+import { useDomainChoiceStore } from '../stores/domain-choice-store'
+import { currentChoice, domainTabs, showDomainTabs, showOwnDomainForm } from './domain-choice'
+import { domainPanelTarget, hasReadyDomain, setupAddDomainError } from './setup-logic'
 
 // Adding and verifying domains is an owner/admin action on the server.
 export function useIsStepVisible() {
@@ -34,9 +31,14 @@ export function useIsStepVisible() {
 export function useIsStepDone() {
     const [domainsCollection] = useStore('mail_domains')
     const { data, isReady } = useLiveQuery(query =>
-        query.from({ d: domainsCollection }).select(({ d }) => ({ verified: d.verified }))
+        query.from({ d: domainsCollection }).select(({ d }) => ({
+            verified: d.verified,
+            spf_verified: d.spf_verified,
+            dkim_verified: d.dkim_verified,
+            return_path_verified: d.return_path_verified,
+        }))
     )
-    return isReady ? hasVerifiedDomain(data ?? []) : undefined
+    return isReady ? hasReadyDomain(data ?? []) : undefined
 }
 
 function useDomains() {
@@ -49,10 +51,17 @@ function useDomains() {
                 id: d.id,
                 domain: d.domain,
                 verified: d.verified,
+                spf_verified: d.spf_verified,
+                dkim_verified: d.dkim_verified,
+                return_path_verified: d.return_path_verified,
                 details: d.verification_details,
             }))
     )
-    return data.map(({ details, ...d }) => ({ ...d, outbound: details?.outbound }))
+    return data.map(({ details, ...d }) => ({
+        ...d,
+        isReady: isDomainReady(d),
+        outbound: details?.outbound,
+    }))
 }
 
 type DomainItem = ReturnType<typeof useDomains>[number]
@@ -61,6 +70,8 @@ function useVerifyDomain() {
     const verify = useMutation({
         mutationFn: async (id: string) =>
             assertVerifySaved(await pb.send(`/api/mail/domains/${id}/verify`, { method: 'POST' })),
+        // Shown under the Verify button; the default toast would repeat it.
+        onError: error => log.warn('mail.setup.verify', errorToString(error)),
     })
     return {
         verify: verify.mutate,
@@ -84,7 +95,7 @@ function useDomainPanel(domains: DomainItem[]) {
     const { verify, isPending, errorMessage } = useVerifyDomain()
     const row = domainPanelTarget(domains, added?.id)
     const fromRow: PanelDomain | null = row
-        ? { id: row.id, domain: row.domain, outbound: row.outbound, isVerified: row.verified }
+        ? { id: row.id, domain: row.domain, outbound: row.outbound, isVerified: row.isReady }
         : null
     const fromAdded: PanelDomain | null = added
         ? { id: added.id, domain: added.domain, outbound: added.records, isVerified: false }
@@ -160,7 +171,7 @@ function DomainRow({ domain }: { domain: DomainItem }) {
     return (
         <View className="flex-row items-center justify-between border-b border-border py-2">
             <Text className="text-sm text-foreground">{domain.domain}</Text>
-            <VerifiedLabel isVerified={domain.verified} />
+            <VerifiedLabel isVerified={domain.isReady} />
         </View>
     )
 }
@@ -182,7 +193,9 @@ function DomainList({ domains }: { domains: DomainItem[] }) {
 function useDomainChoice() {
     const contributed = packageSidebarContributions.mail?.['setup-domain-options'] ?? []
     const tabs = domainTabs(contributed)
-    const [choice, setChoice] = useState<DomainChoice>(() => initialChoice(tabs))
+    const picked = useDomainChoiceStore(s => s.choice)
+    const setChoice = useDomainChoiceStore(s => s.setChoice)
+    const choice = currentChoice(tabs, picked)
     return {
         tabs,
         choice,
@@ -244,6 +257,9 @@ export default function EmailDomainStep({ next }: SetupStepProps) {
     const domains = useDomains()
     const panel = useDomainPanel(domains)
     const choice = useDomainChoice()
+    // Continue waits for a domain that can send and receive, so a press meant
+    // for Add cannot leave the step with nothing set up. Skip stays available.
+    const hasUsableDomain = domains.some(d => d.isReady)
     return (
         <View>
             <StepHeading
@@ -255,7 +271,7 @@ export default function EmailDomainStep({ next }: SetupStepProps) {
             <ContributedPanel entry={choice.contributedPanel} />
             <OwnDomainForm isVisible={choice.isOwnSelected} panel={panel} />
             <DomainList domains={domains} />
-            <SetupContinueButton onPress={next} />
+            <SetupContinueButton onPress={next} isDisabled={!hasUsableDomain} />
         </View>
     )
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+    currentChoice,
     domainTabs,
     initialChoice,
     OWN_DOMAIN,
@@ -29,6 +30,22 @@ describe('initialChoice', () => {
 
     it('opens the first contributed option when a package offers one', () => {
         expect(initialChoice(domainTabs([HOSTED]))).toBe('hosting-ui')
+    })
+})
+
+describe('currentChoice', () => {
+    const tabs = domainTabs([HOSTED])
+
+    it('keeps the tab picked on an earlier visit', () => {
+        expect(currentChoice(tabs, OWN_DOMAIN)).toBe(OWN_DOMAIN)
+    })
+
+    it('opens the default tab when nothing was picked', () => {
+        expect(currentChoice(tabs, null)).toBe('hosting-ui')
+    })
+
+    it('falls back to the default when the picked tab is gone', () => {
+        expect(currentChoice(tabs, 'removed-package')).toBe('hosting-ui')
     })
 })
 

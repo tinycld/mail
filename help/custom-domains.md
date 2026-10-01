@@ -22,7 +22,7 @@ Mail enrolls the domain with your mail provider immediately. Mail creates the ro
 
 When an owner or admin sets up the server, the setup wizard has an **Email domain** step. The step asks where your team's email addresses live. Other apps can add ready-made domain choices here as tabs, and each tab has its own setup. If there are no other choices, the step shows the form for your own domain immediately.
 
-To use your own domain, select the **Your own domain** tab, enter the domain, publish the DNS records that the step shows, then click **Verify**. When a domain is verified, the **Your address** step lets you make your first address on it. You can add more domains later in **Settings → Mail → Domains**.
+To use your own domain, select the **Your own domain** tab, enter the domain, publish the DNS records that the step shows, then click **Verify**. The domain shows as verified only when every check passes, for sending (SPF, DKIM, Return-Path) as well as receiving. Then the **Your address** step lets you make your first address on it. You can add more domains later in **Settings → Mail → Domains**.
 
 ### Your first address
 

@@ -1,45 +1,60 @@
 import { describe, expect, it } from 'vitest'
 import {
     domainPanelTarget,
-    hasVerifiedDomain,
+    hasReadyDomain,
+    readyDomainOptions,
     setupAddDomainError,
     testMessageLabel,
     testMessageRequest,
     testMessageState,
-    verifiedDomainOptions,
 } from '~/tinycld/mail/setup/setup-logic'
 
+const ready = {
+    verified: true,
+    spf_verified: true,
+    dkim_verified: true,
+    return_path_verified: true,
+}
+const pending = { ...ready, verified: false }
+// Receives, but the send gate refuses it: the state the wizard used to call verified.
+const noDkim = { ...ready, dkim_verified: false }
+
 const domains = [
-    { id: 'd1', domain: 'pending.test', verified: false },
-    { id: 'd2', domain: 'ready.test', verified: true },
+    { id: 'd1', domain: 'pending.test', ...pending },
+    { id: 'd2', domain: 'ready.test', ...ready },
+    { id: 'd3', domain: 'nodkim.test', ...noDkim },
 ]
 
-describe('hasVerifiedDomain', () => {
+describe('hasReadyDomain', () => {
     it('is false with no rows', () => {
-        expect(hasVerifiedDomain([])).toBe(false)
+        expect(hasReadyDomain([])).toBe(false)
     })
 
-    it('is false when no row is verified', () => {
-        expect(hasVerifiedDomain([domains[0]])).toBe(false)
+    it('is false when no row is ready', () => {
+        expect(hasReadyDomain([domains[0]])).toBe(false)
     })
 
-    it('is true when one row is verified', () => {
-        expect(hasVerifiedDomain(domains)).toBe(true)
+    it('is false when a verified row cannot send yet', () => {
+        expect(hasReadyDomain([domains[2]])).toBe(false)
+    })
+
+    it('is true when one row is ready', () => {
+        expect(hasReadyDomain(domains)).toBe(true)
     })
 })
 
-describe('verifiedDomainOptions', () => {
-    it('offers only verified domains, keyed by record id', () => {
-        expect(verifiedDomainOptions(domains)).toEqual([{ label: 'ready.test', value: 'd2' }])
+describe('readyDomainOptions', () => {
+    it('offers only ready domains, keyed by record id', () => {
+        expect(readyDomainOptions(domains)).toEqual([{ label: 'ready.test', value: 'd2' }])
     })
 })
 
 describe('domainPanelTarget', () => {
     const rows = [
-        { id: 'a', verified: false },
-        { id: 'b', verified: true },
-        { id: 'c', verified: false },
-        { id: 'd', verified: true },
+        { id: 'a', ...pending },
+        { id: 'b', ...ready },
+        { id: 'c', ...noDkim },
+        { id: 'd', ...ready },
     ]
 
     it('picks the domain added in this visit, even once verified', () => {
@@ -50,12 +65,12 @@ describe('domainPanelTarget', () => {
         expect(domainPanelTarget(rows, 'new')).toBeUndefined()
     })
 
-    it('otherwise picks the newest unverified domain', () => {
+    it('otherwise picks the newest domain that is not ready', () => {
         expect(domainPanelTarget(rows, undefined)?.id).toBe('c')
     })
 
-    it('is undefined when every domain is verified', () => {
-        expect(domainPanelTarget([{ id: 'b', verified: true }], undefined)).toBeUndefined()
+    it('is undefined when every domain is ready', () => {
+        expect(domainPanelTarget([{ id: 'b', ...ready }], undefined)).toBeUndefined()
     })
 })
 
@@ -63,25 +78,47 @@ describe('testMessageRequest', () => {
     it('sends from the mailbox to the address, named for the workspace', () => {
         const req = testMessageRequest({
             mailboxId: 'mb1',
+            fromAddress: 'ada@acme.test',
             to: 'owner@example.com',
             workspaceName: 'Acme',
         })
         expect(req.mailbox_id).toBe('mb1')
         expect(req.to).toEqual([{ email: 'owner@example.com', name: '' }])
-        expect(req.subject).toBe('Test message from Acme')
+        expect(req.subject).toBe('It works! Email is ready for Acme')
         expect(req.text_body).toContain('Acme')
         expect(req.html_body).toContain('Acme')
     })
 
+    it('names the new address in both bodies', () => {
+        const req = testMessageRequest({
+            mailboxId: 'mb1',
+            fromAddress: 'ada@acme.test',
+            to: 'owner@example.com',
+            workspaceName: 'Acme',
+        })
+        expect(req.text_body).toContain('ada@acme.test')
+        expect(req.html_body).toContain('ada@acme.test')
+    })
+
     it('escapes the workspace name in the HTML body', () => {
-        const req = testMessageRequest({ mailboxId: 'mb1', to: 'a@b.test', workspaceName: 'A<b>' })
+        const req = testMessageRequest({
+            mailboxId: 'mb1',
+            fromAddress: 'x@b.test',
+            to: 'a@b.test',
+            workspaceName: 'A<b>',
+        })
         expect(req.html_body).toContain('A&lt;b&gt;')
         expect(req.html_body).not.toContain('<b>')
     })
 
     it('falls back when the workspace has no name', () => {
-        const req = testMessageRequest({ mailboxId: 'mb1', to: 'a@b.test', workspaceName: '  ' })
-        expect(req.subject).toBe('Test message from your workspace')
+        const req = testMessageRequest({
+            mailboxId: 'mb1',
+            fromAddress: 'x@b.test',
+            to: 'a@b.test',
+            workspaceName: '  ',
+        })
+        expect(req.subject).toBe('It works! Email is ready for your workspace')
     })
 })
 
