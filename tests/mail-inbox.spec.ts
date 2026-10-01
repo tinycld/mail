@@ -25,6 +25,20 @@ test.describe('Mail — Inbox', () => {
         await expect(inboxItem.getByText(/^\d+$/).first()).toBeVisible()
     })
 
+    // The list is a one-shot page query refreshed by thread-state changes, so
+    // a thread delivered while the Inbox is open must still reach it.
+    test('a thread delivered while the Inbox is open appears without a reload', async ({
+        page,
+        request,
+    }) => {
+        await navigateToPersonalInbox(page)
+
+        const subject = uniqueSubject('LiveArrival')
+        await deliverInbound(request, { subject })
+
+        await expectRowVisible(page, subject)
+    })
+
     test('search filters threads', async ({ page, request }) => {
         const matchSubject = uniqueSubject('SearchHit')
         const otherSubject = uniqueSubject('SearchMiss')

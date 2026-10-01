@@ -35,8 +35,10 @@ func setupDeliveryEventsTestApp(t *testing.T) core.App {
 }
 
 // newDeliveryTestMessage creates a mail_messages row with the given provider
-// message_id and delivery_status, standing in for a message this deployment
-// already sent — the row applyDeliveryEvent must find and update.
+// id and delivery_status, standing in for a message this deployment already
+// sent — the row applyDeliveryEvent must find and update. The provider id is
+// stored in both fields: provider_message_id is what the lookup reads, and
+// the tests reload the row by message_id.
 func newDeliveryTestMessage(t *testing.T, app core.App, threadID, messageID, deliveryStatus string) *core.Record {
 	t.Helper()
 	messages, err := app.FindCollectionByNameOrId("mail_messages")
@@ -46,6 +48,7 @@ func newDeliveryTestMessage(t *testing.T, app core.App, threadID, messageID, del
 	msg := core.NewRecord(messages)
 	msg.Set("thread", threadID)
 	msg.Set("message_id", messageID)
+	msg.Set("provider_message_id", messageID)
 	msg.Set("delivery_status", deliveryStatus)
 	if err := app.Save(msg); err != nil {
 		t.Fatalf("failed to save message: %v", err)
@@ -210,6 +213,76 @@ func TestApplyDeliveryEvent_UnknownProviderIDReturnsFalseNil(t *testing.T) {
 	}
 	if handled {
 		t.Fatal("handled = true, want false for an unknown message_id")
+	}
+}
+
+// Postmark's id is not the Message-ID header, so a sent message is found by
+// its provider_message_id even though its message_id is different.
+func TestApplyDeliveryEvent_MatchesProviderMessageIDNotHeader(t *testing.T) {
+	app := setupDeliveryEventsTestApp(t)
+	seedDomainAndMailbox(t, app, "delivery-events.test", "alice", "mb_delivered0006")
+	thread := newTestThread(t, app, padID("mb_delivered0006"), "hello")
+	msg := newDeliveryTestMessage(t, app, thread.Id, "pm-uuid-6", "sent")
+	msg.Set("message_id", "<1.abc@delivery-events.test>")
+	if err := app.Save(msg); err != nil {
+		t.Fatalf("save message: %v", err)
+	}
+
+	handled, err := applyDeliveryEvent(app, deliveryevents.Event{
+		Kind:              deliveryevents.Delivered,
+		ProviderMessageID: "pm-uuid-6",
+		At:                time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("applyDeliveryEvent returned error: %v", err)
+	}
+	if !handled {
+		t.Fatal("handled = false, want true for a known provider_message_id")
+	}
+}
+
+// A provider whose id is the Message-ID header (the self-hosted SMTP sender),
+// and rows stored before provider_message_id, are still found by message_id.
+func TestApplyDeliveryEvent_FallsBackToMessageID(t *testing.T) {
+	app := setupDeliveryEventsTestApp(t)
+	seedDomainAndMailbox(t, app, "delivery-events.test", "alice", "mb_delivered0007")
+	thread := newTestThread(t, app, padID("mb_delivered0007"), "hello")
+	msg := newDeliveryTestMessage(t, app, thread.Id, "<7.abc@delivery-events.test>", "sent")
+	msg.Set("provider_message_id", "")
+	if err := app.Save(msg); err != nil {
+		t.Fatalf("save message: %v", err)
+	}
+
+	handled, err := applyDeliveryEvent(app, deliveryevents.Event{
+		Kind:              deliveryevents.Delivered,
+		ProviderMessageID: "7.abc@delivery-events.test",
+		At:                time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("applyDeliveryEvent returned error: %v", err)
+	}
+	if !handled {
+		t.Fatal("handled = false, want true for a message_id match")
+	}
+}
+
+// An empty provider id must not match every row that has none.
+func TestApplyDeliveryEvent_EmptyProviderIDMatchesNothing(t *testing.T) {
+	app := setupDeliveryEventsTestApp(t)
+	seedDomainAndMailbox(t, app, "delivery-events.test", "alice", "mb_delivered0008")
+	thread := newTestThread(t, app, padID("mb_delivered0008"), "hello")
+	msg := newDeliveryTestMessage(t, app, thread.Id, "pm-8", "sent")
+	msg.Set("provider_message_id", "")
+	if err := app.Save(msg); err != nil {
+		t.Fatalf("save message: %v", err)
+	}
+
+	handled, err := applyDeliveryEvent(app, deliveryevents.Event{Kind: deliveryevents.Delivered, At: time.Now()})
+	if err != nil {
+		t.Fatalf("applyDeliveryEvent returned error: %v", err)
+	}
+	if handled {
+		t.Fatal("handled = true, want false for an empty provider id")
 	}
 }
 

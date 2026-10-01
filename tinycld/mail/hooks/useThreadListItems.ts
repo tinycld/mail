@@ -6,6 +6,7 @@ import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { useEffect, useMemo, useRef } from 'react'
 import type { ThreadListItem } from '../components/thread-list-item'
 import { toThreadListItem } from '../components/thread-list-item'
+import { buildThreadsFilter, quote } from '../lib/threads-filter'
 import { useThreadListStore } from '../stores/thread-list-store'
 import type { MailMessages, MailThreadState, MailThreads } from '../types'
 import { useLabels } from './useLabels'
@@ -362,55 +363,4 @@ export function useThreadListItems(
         totalPages,
         totalItems,
     }
-}
-
-// Build a PocketBase filter expression for the paginated mail_threads query.
-// Uses back-relation syntax (mail_thread_state_via_thread.<field>) so the
-// server joins state and threads itself — no need to pre-fetch thread ids.
-function buildThreadsFilter(params: {
-    mailboxIds: string[]
-    userIds: string[]
-    folder: string | null
-}): string {
-    const clauses: string[] = []
-
-    if (params.mailboxIds.length === 1) {
-        clauses.push(`mailbox = ${quote(params.mailboxIds[0])}`)
-    } else {
-        clauses.push(`(${params.mailboxIds.map(id => `mailbox = ${quote(id)}`).join(' || ')})`)
-    }
-
-    // Each thread must have a thread_state row owned by one of the relevant
-    // users (just the current user normally; widened to co-members on shared
-    // mailbox sent/drafts views).
-    if (params.userIds.length === 1) {
-        clauses.push(`mail_thread_state_via_thread.user ?= ${quote(params.userIds[0])}`)
-    } else {
-        clauses.push(
-            `(${params.userIds.map(id => `mail_thread_state_via_thread.user ?= ${quote(id)}`).join(' || ')})`
-        )
-    }
-
-    // Folder semantics mirror the mail_folder_counts view:
-    //   inbox    — folder='inbox' (no unread restriction; the row visibility
-    //              isn't a count, the unread is a row-level visual)
-    //   starred  — is_starred=true (any folder)
-    //   all      — every state row for the user, no folder restriction
-    //   <other>  — folder=<value>
-    const folder = params.folder ?? 'inbox'
-    if (folder === 'starred') {
-        clauses.push('mail_thread_state_via_thread.is_starred ?= true')
-    } else if (folder === 'all' || folder === 'all-inboxes') {
-        // No folder restriction beyond having a state row in the right scope.
-    } else {
-        clauses.push(`mail_thread_state_via_thread.folder ?= ${quote(folder)}`)
-    }
-
-    return clauses.join(' && ')
-}
-
-// PocketBase filter values — same shape as pb.filter() but inline so we don't
-// need an extra round-trip through the filter helper.
-function quote(s: string): string {
-    return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 }

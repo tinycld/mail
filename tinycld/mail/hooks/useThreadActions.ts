@@ -2,6 +2,7 @@ import { captureException } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import type { useStore } from '@tinycld/core/lib/pocketbase'
 import { useLabelMutations } from '@tinycld/core/ui/hooks/useLabelMutations'
+import { moveThreadStateToFolder } from '../lib/thread-folder'
 import type { MailThreadState } from '../types'
 
 type ThreadStateCollection = ReturnType<typeof useStore<['mail_thread_state']>>[0]
@@ -54,9 +55,7 @@ export function useThreadActions(
     const moveThread = useMutation({
         mutationFn: mutation(function* (folder: MailThreadState['folder']) {
             if (!threadState) return
-            yield col.update(threadState.id, draft => {
-                draft.folder = folder
-            })
+            yield col.update(threadState.id, draft => moveThreadStateToFolder(draft, folder))
         }),
         onSuccess: onNavigateBack,
         onError,

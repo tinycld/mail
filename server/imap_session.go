@@ -497,6 +497,10 @@ func (s *imapSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, err
 		} else if destFolder != "" {
 			threadID := msg.GetString("thread")
 			ensureThreadState(s.app, threadID, s.user.Id, destFolder, false)
+			if destFolder == "sent" {
+				// The Sent folder lists threads flagged sent (see folderToUserFilter).
+				markThreadSent(s.app, threadID, s.user.Id)
+			}
 		}
 
 		destUIDs.AddNum(srcUID)
@@ -546,6 +550,10 @@ func (s *imapSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest st
 			s.addLabelToThread(threadID, destBareName)
 		} else if destFolder != "" {
 			ensureThreadState(s.app, threadID, s.user.Id, destFolder, false)
+			if destFolder == "sent" {
+				// The Sent folder lists threads flagged sent (see folderToUserFilter).
+				markThreadSent(s.app, threadID, s.user.Id)
+			}
 		}
 	}
 
@@ -596,6 +604,7 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 		msg.DeliveryStatus = "draft"
 	case "sent":
 		msg.DeliveryStatus = "sent"
+		msg.SentBy = s.user.Id
 	default:
 		msg.DeliveryStatus = "delivered"
 	}
@@ -605,6 +614,11 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 	// the existing thread and message. Folder/flag updates below still apply,
 	// so a subsequent APPEND-to-Drafts of the same message correctly retags.
 	existingMsg, existingThread, _ := findMessageInMailbox(s.app, mailboxID, msg.MessageID)
+	if existingMsg != nil && folder == "sent" && !isOutgoingMessage(existingMsg) {
+		// A copy saved to Sent matches only a message this mailbox sent; a
+		// received message with the same id (a redirect) stays as it is.
+		existingMsg, existingThread = nil, nil
+	}
 
 	var thread, record *core.Record
 	// One transaction for the whole ingress, mirroring the inbound endpoint.
@@ -650,8 +664,12 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 			updateThreadMetadata(txApp, thread, msg.SenderName, msg.SenderEmail, snippet, msg.Date)
 		}
 
-		ensureThreadState(txApp, thread.Id, s.user.Id, folder, false)
-		return nil
+		if folder == "sent" {
+			// The client's copy of a message it just sent: a reply must not
+			// move the conversation out of the Inbox.
+			return markThreadSent(txApp, thread.Id, s.user.Id)
+		}
+		return ensureThreadState(txApp, thread.Id, s.user.Id, folder, false)
 	})
 	if err != nil {
 		return nil, err
@@ -711,7 +729,12 @@ func (s *imapSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) er
 			0,
 			map[string]any{"thread": threadID, "user": s.user.Id},
 		)
-		if err == nil && len(states) > 0 {
+		if msg.GetString("delivery_status") == "draft" {
+			// Clients autosave drafts and expunge the older copies as they go.
+			// Trashing the thread would take the whole conversation (a reply
+			// draft shares its thread with the mail it answers) to Trash.
+			s.app.Delete(msg)
+		} else if err == nil && len(states) > 0 {
 			if states[0].GetString("folder") == "trash" {
 				// Already in trash — permanently delete the message
 				s.app.Delete(msg)
@@ -1002,12 +1025,21 @@ func (s *imapSession) messagesForFolder(imapName, mailboxID string) ([]*core.Rec
 		return nil, err
 	}
 
+	// A folder holds whole threads, except Sent, which holds only the
+	// outgoing messages of its threads. Listing the received message a reply
+	// answered as "sent" put it in Sent and All Mail at once, and clients
+	// showed it twice. The filter is isOutgoingMessage as SQL.
+	messageFilter := "thread = {:thread}"
+	if folder, _ := imapNameToFolder(imapName); folder == "sent" {
+		messageFilter += " && (sent_by != '' || delivery_status = 'sent' || delivery_status = 'bounced' || delivery_status = 'spam_complaint')"
+	}
+
 	var messages []*core.Record
 	for _, state := range states {
 		threadID := state.GetString("thread")
 		msgs, err := s.app.FindRecordsByFilter(
 			"mail_messages",
-			"thread = {:thread}",
+			messageFilter,
 			"imap_uid",
 			0,
 			0,
@@ -1146,11 +1178,11 @@ func (s *imapSession) buildEnvelope(msg *core.Record) *imap.Envelope {
 	env := &imap.Envelope{
 		Date:      parseDate(msg.GetString("date")),
 		Subject:   msg.GetString("subject"),
-		MessageID: msg.GetString("message_id"),
+		MessageID: bareMessageID(msg.GetString("message_id")),
 		InReplyTo: []string{},
 	}
 
-	if irt := msg.GetString("in_reply_to"); irt != "" {
+	if irt := bareMessageID(msg.GetString("in_reply_to")); irt != "" {
 		env.InReplyTo = []string{irt}
 	}
 

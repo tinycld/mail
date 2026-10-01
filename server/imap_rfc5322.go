@@ -24,7 +24,7 @@ func buildRFC5322(app core.App, record *core.Record) ([]byte, error) {
 	var h gomail.Header
 	h.SetDate(parseDate(record.GetString("date")))
 	h.SetSubject(record.GetString("subject"))
-	h.SetMessageID(record.GetString("message_id"))
+	h.SetMessageID(bareMessageID(record.GetString("message_id")))
 
 	if inReplyTo := record.GetString("in_reply_to"); inReplyTo != "" {
 		h.Set("In-Reply-To", inReplyTo)
@@ -180,17 +180,23 @@ func parseRFC5322(raw []byte) (*storedMessage, error) {
 	subject, _ := h.Subject()
 	messageID, _ := h.MessageID()
 
+	// go-message returns message ids without their angle brackets; these
+	// values are stored, matched against stored ids, and relayed as headers
+	// by SMTP submission, all of which need the "<id@host>" form.
 	msg := &storedMessage{
-		MessageID: messageID,
+		MessageID: normalizeMessageID(messageID),
 		Subject:   subject,
 		Date:      date.UTC().Format(time.RFC3339),
 	}
 
 	if inReplyTo, err := h.MsgIDList("In-Reply-To"); err == nil && len(inReplyTo) > 0 {
-		msg.InReplyTo = inReplyTo[0]
+		msg.InReplyTo = normalizeMessageID(inReplyTo[0])
 	}
 
 	if refs, err := h.MsgIDList("References"); err == nil && len(refs) > 0 {
+		for i, ref := range refs {
+			refs[i] = normalizeMessageID(ref)
+		}
 		msg.References = strings.Join(refs, " ")
 	}
 

@@ -139,6 +139,12 @@ func buildFolderJoin(f *api.SearchRequest, userID string, params map[string]any)
 		return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.is_starred = 1"
 	}
 
+	// Sent is a flag, not a folder (see markThreadSent): a replied-to thread
+	// stays in its folder and is flagged sent.
+	if f.Folder == "sent" {
+		return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.is_sent = 1 AND ts.folder NOT IN ('trash', 'spam')"
+	}
+
 	params["folder"] = f.Folder
 	return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.folder = {:folder}"
 }

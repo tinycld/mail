@@ -71,6 +71,27 @@ func findOrCreateThread(app core.App, mailboxID, subject, inReplyTo, references 
 	return thread, nil
 }
 
+// normalizeMessageID returns a Message-ID in the one form this package stores
+// and looks up: trimmed and wrapped in angle brackets ("<id@host>"). Each
+// source hands it over differently — go-message's parser strips the
+// brackets, provider webhooks and In-Reply-To headers keep them — and an
+// exact-match lookup between two forms of the same ID silently misses, which
+// is how an IMAP client's APPENDed copy of a sent message was stored twice.
+func normalizeMessageID(messageID string) string {
+	id := strings.Trim(strings.TrimSpace(messageID), "<>")
+	if id == "" {
+		return ""
+	}
+	return "<" + id + ">"
+}
+
+// bareMessageID strips the angle brackets for APIs that add their own
+// (go-message's SetMessageID, go-imap's envelope writer); passing them the
+// stored form emits "<<id@host>>".
+func bareMessageID(messageID string) string {
+	return strings.Trim(strings.TrimSpace(messageID), "<>")
+}
+
 // findMessageInMailbox returns an existing mail_messages record (and its
 // thread) when one with the given Message-ID already exists in the given
 // mailbox. Returns (nil, nil, nil) when no match exists or messageID is
@@ -79,6 +100,7 @@ func findOrCreateThread(app core.App, mailboxID, subject, inReplyTo, references 
 // IMAP clients append a copy of a sent message to the Sent folder after
 // SMTP submission, and without this check we'd store both copies.
 func findMessageInMailbox(app core.App, mailboxID, messageID string) (*core.Record, *core.Record, error) {
+	messageID = normalizeMessageID(messageID)
 	if messageID == "" || mailboxID == "" {
 		return nil, nil, nil
 	}
@@ -106,6 +128,10 @@ func findMessageInMailbox(app core.App, mailboxID, messageID string) (*core.Reco
 }
 
 func findThreadByMessageID(app core.App, mailboxID, messageID string) (*core.Record, error) {
+	messageID = normalizeMessageID(messageID)
+	if messageID == "" {
+		return nil, fmt.Errorf("empty message_id")
+	}
 	messages, err := app.FindRecordsByFilter(
 		"mail_messages",
 		"message_id = {:messageID}",
@@ -141,8 +167,11 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 
 	record := core.NewRecord(collection)
 	record.Set("thread", threadID)
-	record.Set("message_id", msg.MessageID)
-	record.Set("in_reply_to", msg.InReplyTo)
+	record.Set("message_id", normalizeMessageID(msg.MessageID))
+	record.Set("in_reply_to", normalizeMessageID(msg.InReplyTo))
+	if msg.ProviderMessageID != "" {
+		record.Set("provider_message_id", msg.ProviderMessageID)
+	}
 	if msg.Alias != "" {
 		record.Set("alias", msg.Alias)
 	}
@@ -269,8 +298,12 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 // storedMessage is the internal representation passed to storeMessage.
 type storedMessage struct {
 	MessageID string
-	InReplyTo string
-	Alias     string
+	// ProviderMessageID is the outbound provider's own id for the send, which
+	// its delivery and bounce notifications report back. Postmark's differs
+	// from the Message-ID header; empty for anything not sent by us.
+	ProviderMessageID string
+	InReplyTo         string
+	Alias             string
 	// SentBy is the user who sent this message. Empty for inbound mail and
 	// for anything stored before the sent_by migration — a reader must treat
 	// "" as unknown, never as a claim about who sent it. The shared mailbox
@@ -399,6 +432,70 @@ func setThreadFolder(app core.App, threadID, userID, folder string) error {
 		return err
 	}
 	record.Set("folder", folder)
+	return app.Save(record)
+}
+
+// isOutgoingMessage reports whether a stored message is one this mailbox sent.
+// sent_by is empty on messages stored before it existed, so an outgoing
+// delivery status also counts; inbound mail is "delivered", or "sending"
+// (storeMessage's default) when the webhook stored it.
+func isOutgoingMessage(msg *core.Record) bool {
+	if msg.GetString("sent_by") != "" {
+		return true
+	}
+	switch msg.GetString("delivery_status") {
+	case "sent", "bounced", "spam_complaint":
+		return true
+	}
+	return false
+}
+
+// threadHasReceivedMessage reports whether a thread holds any inbound message.
+func threadHasReceivedMessage(app core.App, threadID string) bool {
+	messages, err := app.FindRecordsByFilter("mail_messages", "thread = {:thread}", "", 0, 0,
+		map[string]any{"thread": threadID})
+	if err != nil {
+		return false
+	}
+	for _, msg := range messages {
+		if msg.GetString("delivery_status") != "draft" && !isOutgoingMessage(msg) {
+			return true
+		}
+	}
+	return false
+}
+
+// markThreadSent records that a user sent a message in a thread, which is what
+// puts the thread in their Sent view.
+//
+// It never moves a filed thread: replying to a conversation in the Inbox
+// keeps it in the Inbox (moving it to 'sent' is how received mail ended up
+// visible only in All Mail). A thread with no state row yet is one the user
+// started, so it is filed under 'sent' to keep it out of the Inbox until
+// someone replies.
+//
+// 'drafts' is not a filing: saving a reply draft moves its whole thread
+// there, and once the draft is sent the thread has to go back to where a
+// conversation belongs — the Inbox when someone wrote to the user, Sent when
+// the user started it.
+func markThreadSent(app core.App, threadID, userID string) error {
+	record := findThreadState(app, threadID, userID)
+	if record == nil {
+		var err error
+		record, err = newThreadState(app, threadID, userID)
+		if err != nil {
+			return err
+		}
+		record.Set("folder", "sent")
+	} else if record.GetString("folder") == "drafts" {
+		if threadHasReceivedMessage(app, threadID) {
+			record.Set("folder", "inbox")
+		} else {
+			record.Set("folder", "sent")
+		}
+	}
+	record.Set("is_sent", true)
+	record.Set("is_read", true)
 	return app.Save(record)
 }
 

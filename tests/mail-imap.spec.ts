@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login, navigateToPackage } from '@tinycld/core/e2e-helpers'
+import { clickSidebarItem, login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 import {
     appendMessage,
     deleteMessage,
@@ -10,7 +10,13 @@ import {
     moveMessage,
     withImapClient,
 } from '@tinycld/core/e2e-imap-helpers'
-import { TEST_USER_MAILBOX } from './helpers'
+import {
+    deliverInbound,
+    expectRowVisible,
+    navigateToPersonalInbox,
+    TEST_USER_MAILBOX,
+    uniqueSubject,
+} from './helpers'
 
 test.describe('Mail — IMAP Integration', () => {
     test('lists mailboxes and reads appended messages via IMAP', async () => {
@@ -161,6 +167,47 @@ test.describe('Mail — IMAP Integration', () => {
             const inboxMsgs = await listMessages(client, inbox)
             expect(inboxMsgs.some(m => m.subject === subject)).toBe(false)
         })
+    })
+
+    // A mail client sends a reply and saves its copy to Sent. Replying used to
+    // move the whole conversation to Sent, so the received message left the
+    // Inbox and showed only in All Mail; and IMAP Sent listed the received
+    // message too, so clients showed it in two folders at once.
+    test('a reply saved to Sent keeps its conversation in the Inbox', async ({ page, request }) => {
+        const subject = uniqueSubject('IMAP-reply')
+        const { messageId } = await deliverInbound(request, { subject })
+
+        await withImapClient(async client => {
+            const mailboxes = await listMailboxes(client)
+            const inbox = findPersonalInbox(mailboxes)
+            const sent = inbox.replace('INBOX', 'Sent')
+
+            await appendMessage(client, sent, {
+                from: TEST_USER_MAILBOX,
+                to: 'sender@example.com',
+                subject: `Re: ${subject}`,
+                body: 'Thanks!',
+                messageId: `<reply-${Date.now()}@tinycld.test>`,
+                inReplyTo: `<${messageId}>`,
+            })
+
+            const inboxMsgs = await listMessages(client, inbox)
+            expect(inboxMsgs.some(m => m.subject === subject)).toBe(true)
+
+            const sentMsgs = await listMessages(client, sent)
+            expect(sentMsgs.filter(m => m.subject === `Re: ${subject}`)).toHaveLength(1)
+            expect(sentMsgs.some(m => m.subject === subject)).toBe(false)
+        })
+
+        await login(page)
+        await navigateToPackage(page, 'mail', {
+            waitFor: page.getByTestId('package-sidebar-mounted'),
+        })
+        await navigateToPersonalInbox(page)
+        await expectRowVisible(page, subject)
+
+        await clickSidebarItem(page, 'Sent')
+        await expectRowVisible(page, subject)
     })
 
     test('APPEND deduplicates by Message-ID within a mailbox', async () => {

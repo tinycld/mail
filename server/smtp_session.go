@@ -12,6 +12,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/coreserver"
 	"tinycld.org/core/davauth"
+	"tinycld.org/core/mailer"
 	"tinycld.org/core/pkgaccess"
 )
 
@@ -298,7 +299,16 @@ func (s *smtpSession) Data(r io.Reader) error {
 		referencesHeader = inReplyToHeader
 	}
 
+	// Send under the client's own Message-ID: most clients APPEND their copy
+	// of the message to Sent afterwards, and that copy can only be matched to
+	// the one stored below if both carry the same ID.
+	messageID := normalizeMessageID(msg.MessageID)
+	if messageID == "" {
+		messageID = mailer.GenerateMessageID(domainName)
+	}
+
 	sendReq := &SendRequest{
+		MessageID:   messageID,
 		From:        fromAddr,
 		To:          msg.To,
 		Cc:          msg.Cc,
@@ -331,7 +341,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 	if s.user != nil && coreserver.IsDemoUser(s.app, s.user.Id) {
 		// Demo user: skip relay, synthesize a result so the local Sent-folder
 		// persistence below runs unchanged.
-		result = &SendResult{MessageID: demoMessageID()}
+		result = &SendResult{MessageID: messageID}
 	} else {
 		var sendErr error
 		result, sendErr = provider.Send(ctx, sendReq)
@@ -350,12 +360,21 @@ func (s *smtpSession) Data(r io.Reader) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	mailboxID := s.mailbox.Id
 
-	// Dedup: if the client already APPENDed this Message-ID via IMAP (or this
-	// is an SMTP retry), reuse the existing thread and just retag the folder.
+	// Dedup: if the client already APPENDed this Message-ID to Sent (or this
+	// is an SMTP retry), keep that copy and record the send on it. Only an
+	// outgoing copy counts: a redirected received message or a saved draft
+	// can carry the same Message-ID, and this send must not be recorded on it.
 	existingMsg, existingThread, _ := findMessageInMailbox(s.app, mailboxID, result.MessageID)
-	if existingMsg != nil {
-		if err := ensureThreadState(s.app, existingThread.Id, s.user.Id, "sent", true); err != nil {
-			s.app.Logger().Error("SMTP: failed to create thread state for deduped message", "error", err)
+	if existingMsg != nil && isOutgoingMessage(existingMsg) {
+		existingMsg.Set("sent_by", s.user.Id)
+		if result.ProviderMessageID != "" {
+			existingMsg.Set("provider_message_id", result.ProviderMessageID)
+		}
+		if err := s.app.Save(existingMsg); err != nil {
+			s.app.Logger().Error("SMTP: failed to record the send on the deduped message", "error", err)
+		}
+		if err := markThreadSent(s.app, existingThread.Id, s.user.Id); err != nil {
+			s.app.Logger().Error("SMTP: failed to mark deduped thread sent", "error", err)
 		}
 		globalNotifier.Notify(mailboxID)
 		return nil
@@ -378,21 +397,22 @@ func (s *smtpSession) Data(r io.Reader) error {
 	deliveryStatus, bounceReason := deliveryStatusForResult(result, len(msg.To)+len(msg.Cc)+len(bcc))
 
 	storedMsg := &storedMessage{
-		MessageID:      result.MessageID,
-		InReplyTo:      inReplyToHeader,
-		SentBy:         s.user.Id,
-		SenderName:     displayName,
-		SenderEmail:    fmt.Sprintf("%s@%s", senderAddress, domainName),
-		To:             msg.To,
-		Cc:             msg.Cc,
-		Date:           now,
-		Subject:        msg.Subject,
-		HTMLBody:       msg.HTMLBody,
-		TextBody:       msg.TextBody,
-		DeliveryStatus: deliveryStatus,
-		BounceReason:   bounceReason,
-		Attachments:    msg.Attachments,
-		Alias:          aliasIDFromSession(s),
+		MessageID:         result.MessageID,
+		ProviderMessageID: result.ProviderMessageID,
+		InReplyTo:         inReplyToHeader,
+		SentBy:            s.user.Id,
+		SenderName:        displayName,
+		SenderEmail:       fmt.Sprintf("%s@%s", senderAddress, domainName),
+		To:                msg.To,
+		Cc:                msg.Cc,
+		Date:              now,
+		Subject:           msg.Subject,
+		HTMLBody:          msg.HTMLBody,
+		TextBody:          msg.TextBody,
+		DeliveryStatus:    deliveryStatus,
+		BounceReason:      bounceReason,
+		Attachments:       msg.Attachments,
+		Alias:             aliasIDFromSession(s),
 	}
 
 	if _, err := storeMessage(s.app, thread.Id, storedMsg); err != nil {
@@ -405,8 +425,8 @@ func (s *smtpSession) Data(r io.Reader) error {
 		s.app.Logger().Error("SMTP: failed to update thread metadata", "error", err)
 	}
 
-	if err := ensureThreadState(s.app, thread.Id, s.user.Id, "sent", true); err != nil {
-		s.app.Logger().Error("SMTP: failed to create thread state", "error", err)
+	if err := markThreadSent(s.app, thread.Id, s.user.Id); err != nil {
+		s.app.Logger().Error("SMTP: failed to mark thread sent", "error", err)
 	}
 
 	globalNotifier.Notify(mailboxID)

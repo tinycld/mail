@@ -16,6 +16,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
 	"tinycld.org/core/coreserver"
+	"tinycld.org/core/mailer"
 	"tinycld.org/packages/mail/api"
 )
 
@@ -121,7 +122,7 @@ type sendResultRecord struct {
 // sendMessage performs a send end-to-end with no HTTP dependency: verifies
 // mailbox membership, builds the From address, hands the message to the
 // configured provider, then persists it (message row, thread metadata, and
-// the sender's "sent" thread state).
+// the sender's thread state, marked sent).
 //
 // It is the shared core behind both the /send endpoint (handleSend) and
 // mail's native automation actions (send-message, forward-message), so a
@@ -198,8 +199,11 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 		}
 	}
 
-	// Send via provider
+	// Send via provider. The Message-ID is chosen here, not by the provider,
+	// so the stored copy carries the header recipients see: their replies
+	// thread onto it, and an IMAP client's copy of it matches.
 	sendReq := &SendRequest{
+		MessageID:   mailer.GenerateMessageID(domain),
 		From:        fromAddr,
 		To:          toMailerRecipients(p.To),
 		Cc:          toMailerRecipients(p.Cc),
@@ -259,22 +263,23 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 	deliveryStatus, bounceReason := deliveryStatusForResult(result, len(p.To)+len(p.Cc)+len(p.Bcc))
 
 	msg := &storedMessage{
-		MessageID:      result.MessageID,
-		InReplyTo:      inReplyToHeader,
-		Alias:          p.AliasID,
-		SentBy:         p.UserID,
-		SenderName:     displayName,
-		SenderEmail:    senderEmail,
-		To:             toMailerRecipients(p.To),
-		Cc:             toMailerRecipients(p.Cc),
-		Bcc:            toMailerRecipients(p.Bcc),
-		Date:           now,
-		Subject:        p.Subject,
-		HTMLBody:       p.HTMLBody,
-		TextBody:       p.TextBody,
-		DeliveryStatus: deliveryStatus,
-		BounceReason:   bounceReason,
-		Attachments:    storedAttachments,
+		MessageID:         result.MessageID,
+		ProviderMessageID: result.ProviderMessageID,
+		InReplyTo:         inReplyToHeader,
+		Alias:             p.AliasID,
+		SentBy:            p.UserID,
+		SenderName:        displayName,
+		SenderEmail:       senderEmail,
+		To:                toMailerRecipients(p.To),
+		Cc:                toMailerRecipients(p.Cc),
+		Bcc:               toMailerRecipients(p.Bcc),
+		Date:              now,
+		Subject:           p.Subject,
+		HTMLBody:          p.HTMLBody,
+		TextBody:          p.TextBody,
+		DeliveryStatus:    deliveryStatus,
+		BounceReason:      bounceReason,
+		Attachments:       storedAttachments,
 	}
 
 	record, err := storeMessage(app, thread.Id, msg)
@@ -286,8 +291,7 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 		return nil, &sendError{kind: sendErrInternal, msg: "Failed to update thread", err: err}
 	}
 
-	// Create thread state for the sender
-	if err := ensureThreadState(app, thread.Id, p.UserID, "sent", true); err != nil {
+	if err := markThreadSent(app, thread.Id, p.UserID); err != nil {
 		return nil, &sendError{kind: sendErrInternal, msg: "Failed to create thread state", err: err}
 	}
 
