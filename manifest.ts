@@ -46,9 +46,6 @@ const manifest = {
     // filters the palette does not offer.
     search: { adapter: 'search-adapter' },
     automation: { definitions: 'automation' },
-    // Message bodies are real disk. No ownerField: a mailbox is shared by its
-    // members, so these bytes count toward the deployment-wide ceiling only.
-    quota: [{ collection: 'mail_messages', sizeField: 'total_size' }],
     // mailListeners: asks a supervisor that owns the public ports to hand
     // this package its mail listeners; Register discovers them at boot, and
     // under such a supervisor the package never binds a port itself.
