@@ -46,9 +46,6 @@ const manifest = {
     // filters the palette does not offer.
     search: { adapter: 'search-adapter' },
     automation: { definitions: 'automation' },
-    // Message bodies are real disk. No ownerField: a mailbox is shared by its
-    // members, so these bytes count toward the deployment-wide ceiling only.
-    quota: [{ collection: 'mail_messages', sizeField: 'total_size' }],
     server: { package: 'server', module: 'tinycld.org/packages/mail' },
     // The supervisor that holds the public ports binds these once and hands
     // each one to whichever server child is current, by name; mail's own-ports path
