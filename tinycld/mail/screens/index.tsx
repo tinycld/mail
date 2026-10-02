@@ -11,6 +11,7 @@ import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { markNavMilestone, NAV_PERF } from '@tinycld/core/lib/nav-perf'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { pb, queryClient } from '@tinycld/core/lib/pocketbase'
+import { serverFetch } from '@tinycld/core/lib/server-fetch'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -362,7 +363,7 @@ export default function MailListScreen() {
                 ? await pb.files
                       .getToken()
                       .then(fileToken =>
-                          fetch(
+                          serverFetch(
                               pb.files.getURL(
                                   { collectionId: 'mail_messages', id: draft.id },
                                   draft.body_html,

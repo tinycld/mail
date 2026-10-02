@@ -2,6 +2,7 @@ import { useFileToken } from '@tinycld/core/file-viewer/use-authed-file-url'
 import { captureException } from '@tinycld/core/lib/errors'
 import { pb } from '@tinycld/core/lib/pocketbase'
 import { proxyImageUrls } from '@tinycld/core/lib/proxy-image-urls'
+import { serverFetch } from '@tinycld/core/lib/server-fetch'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Platform, Text, View } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
@@ -36,7 +37,7 @@ function useEmailHtml(
             token: fileToken,
         })
         setFailed(false)
-        fetch(url)
+        serverFetch(url)
             .then(res => {
                 if (!res.ok) throw new Error(`body fetch: HTTP ${res.status}`)
                 return res.text()
