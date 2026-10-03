@@ -403,10 +403,16 @@ func registerShared(app *pocketbase.PocketBase) {
 	})
 }
 
-// registerMailListeners starts the port-binding mail protocol servers on
-// OnServe. Own-ports only: see the tail of Register for why a supervised
-// process must not run
-// these.
+// registerMailListeners starts the mail protocol servers on OnServe. Own-ports
+// only: see the tail of Register for why a process embedded by something else
+// that owns its wiring (EmbeddedContext present) must not run these.
+//
+// This is still the right path under a single-tenant supervisor that merely
+// binds the public ports once and hands them down by name (no
+// EmbeddedContext): StartIMAPServer/StartSMTPServer/StartSMTPInboundServer
+// each check for an inherited listener under their port's name before
+// falling back to binding it themselves, so the process never binds a port
+// the supervisor already holds.
 func registerMailListeners(app *pocketbase.PocketBase) {
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		// In production a failed mail listener is a deploy-breaking

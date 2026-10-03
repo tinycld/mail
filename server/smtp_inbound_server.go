@@ -13,8 +13,21 @@ import (
 	"github.com/emersion/go-smtp"
 	"github.com/pocketbase/pocketbase/core"
 	"golang.org/x/crypto/acme/autocert"
+	"tinycld.org/core/listeners"
 	"tinycld.org/core/mailproto"
 )
+
+// listenInbound checks a single-tenant supervisor's inherited "smtp"
+// listener first before falling back to a plain TCP bind — the same seam
+// StartIMAPServer/StartSMTPServer use for their own names. mail still
+// terminates STARTTLS itself here, unlike the injected-listener path
+// (startSMTPInboundOnListener) a different embedding uses.
+func listenInbound(addr string) (net.Listener, error) {
+	if l, ok := listeners.Inherited("smtp"); ok {
+		return l, nil
+	}
+	return net.Listen("tcp", addr)
+}
 
 // StartSMTPInboundServer starts the public-facing SMTP listener that accepts
 // inbound mail from other MTAs (this is the MX target operators publish in
@@ -65,7 +78,7 @@ func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func()
 	server := newInboundSMTPServer(app, hostname, tlsConfig)
 	server.Addr = addr
 
-	ln, err := net.Listen("tcp", addr)
+	ln, err := listenInbound(addr)
 	if err != nil {
 		return nil, fmt.Errorf("inbound SMTP listen on %s: %w", addr, err)
 	}
