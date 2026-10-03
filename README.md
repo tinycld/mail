@@ -31,7 +31,7 @@ User-facing features:
 - **Notifications** — new-message arrivals are buffered per-user and dispatched in batched core-notify pings every two minutes, so users get one summary notification per cycle instead of one per message.
 - **Storage quota** — `manifest.ts` declares `quota: [{ collection: 'mail_messages', sizeField: 'total_size' }]` and `registerShared` registers the same source with `core/quota`. A mailbox is shared, so there is no `ownerField`: message bytes count toward the deployment-wide ceiling only. A create or growth that would cross it is refused with HTTP 413 `storage limit exceeded`.
 - **Read-only package access** — a user whose mail access level is below full (`pkgaccess.CanWrite`) is enforced over the protocol servers as well as REST: SMTP submission refuses at AUTH with `535 Your mail access is read-only; sending is not permitted` (`smtp_session.go`), and IMAP answers STORE / APPEND / EXPUNGE / COPY / MOVE with `NO Your mail access is read-only` (`requireWritable` in `imap_session.go`).
-- **Hosted listeners** — `server: { mailListeners: true }` in the manifest tells the hosting router to create per-org mail sockets. `Register` detects an injected runtime via `coreserver.GetEmbeddedContext`: a single-org process binds :993 / :465 / :25 itself, while a hosted tenant never binds a port and serves the sockets the router injects (`server/injected_listeners.go`).
+- **Inherited listeners** — the manifest's `ports` field declares `imaps` (993), `submissions` (465), and `smtp` (25), each with the same enable-env and address-override rules `StartIMAPServer` / `StartSMTPServer` / `StartSMTPInboundServer` already read. A single-tenant supervisor binds those ports once and passes them down to the server by name; mail checks for an inherited listener under its port's name before binding anything itself, and still terminates TLS/STARTTLS on its own. Without a supervisor, mail binds the ports itself exactly as before. Separately, `Register` also detects an embedding process via `coreserver.GetEmbeddedContext`: such a process can pass mail pre-opened sockets of its own, in which case mail never binds a port and serves exactly those sockets instead (`server/injected_listeners.go`).
 
 ## Automation rules
 
@@ -441,7 +441,7 @@ cd server && go test ./...        # Go server tests
 
 ## Package anatomy
 
-- `manifest.ts` — single source of truth for capabilities (routes, nav, sidebar, settings + system-settings panels, collections, migrations, server module + `mailListeners`, help, seed, `search` adapter, `automation` definitions, `quota` sources, `payloads` contract, `cli` module)
+- `manifest.ts` — single source of truth for capabilities (routes, nav, sidebar, settings + system-settings panels, collections, migrations, server module, `ports`, help, seed, `search` adapter, `automation` definitions, `quota` sources, `payloads` contract, `cli` module)
 
 ### Sidebar slot
 
