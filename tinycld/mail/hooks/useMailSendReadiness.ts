@@ -1,7 +1,7 @@
 import { eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
+import { log } from '@tinycld/core/lib/logger'
 import { useStore } from '@tinycld/core/lib/pocketbase'
-import { captureMessageToSentry } from '@tinycld/core/lib/sentry'
 import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { useEffect, useRef } from 'react'
 
@@ -95,7 +95,7 @@ export function useMailSendReadiness(): MailSendReadiness {
         const key = which.join(',')
         if (key === lastSuppressionRef.current) return
         lastSuppressionRef.current = key
-        captureMessageToSentry('mail-send-readiness', 'info', 'blocker-suppressed-loading', {
+        log.info('mail-send-readiness', 'blocker-suppressed-loading', {
             loading: which,
             mailboxId,
             domainId,
