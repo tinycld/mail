@@ -50,8 +50,8 @@ const manifest = {
     // members, so these bytes count toward the deployment-wide ceiling only.
     quota: [{ collection: 'mail_messages', sizeField: 'total_size' }],
     server: { package: 'server', module: 'tinycld.org/packages/mail' },
-    // A single-tenant supervisor binds these once and hands each one to
-    // whichever server child is current, by name; mail's own-ports path
+    // The supervisor that holds the public ports binds these once and hands
+    // each one to whichever server child is current, by name; mail's own-ports path
     // (registerMailListeners) asks for them by the same names before it
     // binds anything itself. addrEnv/enabled mirror the env vars
     // server/imap_server.go, server/smtp_server.go and

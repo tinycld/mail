@@ -20,8 +20,8 @@ import (
 	"tinycld.org/core/listeners"
 )
 
-// The inherited-listener seam these tests pin: when a single-tenant
-// supervisor hands this process pre-bound TCP listeners by name ("imaps",
+// The inherited-listener seam these tests pin: when the supervisor that holds
+// the public ports hands this process pre-bound TCP listeners by name ("imaps",
 // "submissions", "smtp"), StartIMAPServer/StartSMTPServer/
 // StartSMTPInboundServer serve on exactly those listeners instead of binding
 // their own — mail still terminates TLS itself, unlike the separate

@@ -1,11 +1,8 @@
 package mail
 
 import (
-	"net"
-
 	"github.com/pocketbase/pocketbase/core"
 	"golang.org/x/crypto/acme/autocert"
-	"tinycld.org/core/listeners"
 	"tinycld.org/core/mailproto"
 )
 
@@ -15,9 +12,9 @@ import (
 // SMTP falls back to the IMAP_TLS_* pair, so a missing SMTP cert is fine as
 // long as IMAP's is set.
 //
-// Listen checks a single-tenant supervisor's inherited "submissions" listener
-// first before falling back to a plain TCP bind — see StartIMAPServer's
-// comment for the own-ports-vs-injected-listener distinction.
+// Listen serves on the supervisor's "submissions" listener, or binds the
+// address itself when there is none — see StartIMAPServer's comment for the
+// own-ports-vs-injected-listener distinction.
 func StartSMTPServer(app core.App, certManager *autocert.Manager) (func(), error) {
 	return mailproto.StartSMTP(app, certManager, mailproto.SMTPOptions{
 		Backend:           &smtpBackend{app: app},
@@ -38,11 +35,6 @@ func StartSMTPServer(app core.App, certManager *autocert.Manager) (func(), error
 			"to readable cert/key files, or enable autocert " +
 			"(AUTOCERT_ENABLED=true + PRIMARY_DOMAIN), " +
 			"or set SMTP_ENABLED=false to run without SMTP submission",
-		Listen: func(addr string) (net.Listener, error) {
-			if l, ok := listeners.Inherited("submissions"); ok {
-				return l, nil
-			}
-			return net.Listen("tcp", addr)
-		},
+		Listen: acceptingListeners.listen("submissions"),
 	})
 }
