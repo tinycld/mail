@@ -7,6 +7,11 @@ import (
 	"tinycld.org/core/mailproto"
 )
 
+// defaultIMAPSAddr must equal the address mailproto.StartIMAP binds when
+// IMAPS_ADDR is unset: the inherited-listener guard compares against it.
+// TestStartIMAPServer_DefaultAddr_UsesInheritedListener fails if they drift.
+const defaultIMAPSAddr = ":993"
+
 // StartIMAPServer starts the IMAP listener. The transport (TLS policy, bind,
 // serve, shutdown) lives in core/mailproto; mail supplies the session, which is
 // the part that speaks mail's schema.
@@ -23,6 +28,6 @@ func StartIMAPServer(app core.App, certManager *autocert.Manager) (func(), error
 		NewSession: func(app core.App, _ *imapserver.Conn) imapserver.Session {
 			return newIMAPSession(app)
 		},
-		Listen: acceptingListeners.listen("imaps", envOrDefault("IMAPS_ADDR", ":993")),
+		Listen: acceptingListeners.listen("imaps", envOrDefault("IMAPS_ADDR", defaultIMAPSAddr)),
 	})
 }

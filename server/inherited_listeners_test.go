@@ -414,3 +414,74 @@ func TestStartSMTPInboundServer_NoInheritedListener_BindsConfiguredAddr(t *testi
 	}
 	t.Cleanup(shutdown)
 }
+
+// dialTLSGreeting reads the first line a TLS server sends on ln. Every step
+// has a deadline, so a listener nobody serves fails the test instead of
+// hanging it in the handshake.
+func dialTLSGreeting(t *testing.T, ln net.Listener) string {
+	t.Helper()
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", ln.Addr().String(), &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		t.Fatalf("TLS dial %s: %v", ln.Addr(), err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	line, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil {
+		t.Fatalf("read greeting: %v", err)
+	}
+	return line
+}
+
+// With IMAPS_ADDR unset, the address mail compares against to claim the
+// inherited listener must be the default mailproto then asks for. If the two
+// defaults drift apart, the inherited listener is never served (and mail
+// binds the port itself), so this test fails.
+func TestStartIMAPServer_DefaultAddr_UsesInheritedListener(t *testing.T) {
+	certPath, keyPath := setupTestCert(t)
+	t.Setenv("IMAP_TLS_CERT", certPath)
+	t.Setenv("IMAP_TLS_KEY", keyPath)
+	t.Setenv("IMAPS_ADDR", "")
+
+	imapsLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore := listeners.SetForTest(map[string]net.Listener{"imaps": imapsLn})
+	t.Cleanup(restore)
+
+	shutdown, err := StartIMAPServer(newProdApp(t), nil)
+	if err != nil {
+		t.Fatalf("StartIMAPServer: %v", err)
+	}
+	t.Cleanup(shutdown)
+
+	if line := dialTLSGreeting(t, imapsLn); !strings.HasPrefix(line, "* OK") {
+		t.Fatalf("IMAP greeting over inherited TLS listener = %q", line)
+	}
+}
+
+// The SMTPS_ADDR-unset case of TestStartIMAPServer_DefaultAddr_UsesInheritedListener.
+func TestStartSMTPServer_DefaultAddr_UsesInheritedListener(t *testing.T) {
+	certPath, keyPath := setupTestCert(t)
+	t.Setenv("SMTP_TLS_CERT", certPath)
+	t.Setenv("SMTP_TLS_KEY", keyPath)
+	t.Setenv("SMTPS_ADDR", "")
+
+	subLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore := listeners.SetForTest(map[string]net.Listener{"submissions": subLn})
+	t.Cleanup(restore)
+
+	shutdown, err := StartSMTPServer(newProdApp(t), nil)
+	if err != nil {
+		t.Fatalf("StartSMTPServer: %v", err)
+	}
+	t.Cleanup(shutdown)
+
+	if line := dialTLSGreeting(t, subLn); !strings.HasPrefix(line, "220 ") {
+		t.Fatalf("submission greeting over inherited TLS listener = %q", line)
+	}
+}
