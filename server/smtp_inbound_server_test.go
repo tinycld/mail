@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/emersion/go-smtp"
+
+	"tinycld.org/core/readonly"
 )
 
 // TestSMTPInboundSession_AcceptsKnownRecipient drives the inbound SMTP
@@ -108,4 +110,44 @@ func buildPlainRFC5322(t *testing.T, from, to, subject, messageIDLocal, body str
 		"",
 		body,
 	}, "\r\n"))
+}
+
+// While this process is read-only it is waiting to be replaced, and a write
+// now is lost if the next build rolls back. Answering 451 makes the sending
+// MTA queue the message and retry, by then against the next server.
+func TestSMTPInboundSession_ReadOnlyDefersWith451(t *testing.T) {
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_smtp_in_ro1")
+	seedMember(t, app, "mb_smtp_in_ro1", "user_alice")
+	t.Cleanup(readonly.Leave)
+
+	assert451 := func(step string, err error) {
+		t.Helper()
+		var smtpErr *smtp.SMTPError
+		if !errors.As(err, &smtpErr) || smtpErr.Code != 451 {
+			t.Fatalf("%s while read-only = %v, want a 451", step, err)
+		}
+	}
+
+	readonly.Enter()
+	sess := &smtpInboundSession{app: app, hostname: "mx.tinycld.test"}
+	assert451("MAIL FROM", sess.Mail("sender@external.example", &smtp.MailOptions{}))
+	readonly.Leave()
+
+	// Read-only can begin mid-session, after the recipients were accepted.
+	sess = &smtpInboundSession{app: app, hostname: "mx.tinycld.test"}
+	if err := sess.Mail("sender@external.example", &smtp.MailOptions{}); err != nil {
+		t.Fatalf("Mail: %v", err)
+	}
+	if err := sess.Rcpt("alice@acme.com", &smtp.RcptOptions{}); err != nil {
+		t.Fatalf("Rcpt: %v", err)
+	}
+	readonly.Enter()
+	raw := buildPlainRFC5322(t, "sender@external.example", "alice@acme.com", "Deferred while read-only", "ro-smtp-inbound", "body")
+	assert451("DATA", sess.Data(bytes.NewReader(raw)))
+
+	msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": "Deferred while read-only"})
+	if len(msgs) != 0 {
+		t.Fatalf("a message was stored while read-only: %d rows", len(msgs))
+	}
 }

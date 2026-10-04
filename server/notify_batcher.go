@@ -10,6 +10,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/approutes"
 	"tinycld.org/core/notify"
+	"tinycld.org/core/readonly"
 )
 
 // mailNotificationURL is the in-app deep link for mail notifications.
@@ -59,8 +60,14 @@ func startMailBatcher(app core.App) {
 	}
 }
 
+// flushMailBuffer leaves the buffer alone while the server is read-only: the
+// notifications it would write are lost if the next build rolls back, and a
+// held buffer goes out at the first flush after the mode ends.
 func flushMailBuffer(app core.App) {
 	mailBuffer.Range(func(key, value any) bool {
+		if readonly.Active() {
+			return false
+		}
 		userID := key.(string)
 		buf := value.(*mailBucket)
 

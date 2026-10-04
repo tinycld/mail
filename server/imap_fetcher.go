@@ -11,6 +11,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/readonly"
 )
 
 // imapFetcherManager runs a SINGLE IMAP polling goroutine for the deployment's
@@ -95,7 +96,7 @@ func (m *imapFetcherManager) run(ctx context.Context) {
 		if cfg.InboundMode != "imap" || cfg.IMAPHost == "" {
 			return
 		}
-		if err := m.tick(ctx, cfg); err != nil {
+		if err := m.tick(ctx, cfg); err != nil && ctx.Err() == nil {
 			m.app.Logger().Warn("imap fetcher: tick failed", "error", err)
 		}
 		select {
@@ -110,6 +111,12 @@ func (m *imapFetcherManager) run(ctx context.Context) {
 // unseen messages, fetch + dispatch each (by recipient domain → org), then mark
 // seen. Returns the first error encountered (the loop logs and retries next tick).
 func (m *imapFetcherManager) tick(ctx context.Context, cfg SMTPConfig) error {
+	// A read-only server is waiting to be replaced; a message it stores now
+	// is lost if the next build rolls back. Waiting leaves it unseen on the
+	// remote server, so a later tick (here or in the next build) pulls it.
+	if err := readonly.WaitInactive(ctx); err != nil {
+		return fmt.Errorf("imap fetcher: wait for read-only to end: %w", err)
+	}
 	addr := imapAddress(cfg)
 
 	client, err := dialIMAP(ctx, addr, cfg.IMAPUseTLS)
@@ -153,6 +160,10 @@ func (m *imapFetcherManager) tick(ctx context.Context, cfg SMTPConfig) error {
 
 	var successUIDs []imap.UID
 	for i, msgBuf := range messages {
+		// Read-only can begin mid-batch; the rest stay unseen for a later tick.
+		if readonly.Active() {
+			break
+		}
 		body := firstBodySection(msgBuf)
 		if len(body) == 0 {
 			continue

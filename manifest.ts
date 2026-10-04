@@ -49,10 +49,33 @@ const manifest = {
     // Message bodies are real disk. No ownerField: a mailbox is shared by its
     // members, so these bytes count toward the deployment-wide ceiling only.
     quota: [{ collection: 'mail_messages', sizeField: 'total_size' }],
-    // mailListeners: asks a supervisor that owns the public ports to hand
-    // this package its mail listeners; Register discovers them at boot, and
-    // under such a supervisor the package never binds a port itself.
-    server: { package: 'server', module: 'tinycld.org/packages/mail', mailListeners: true },
+    server: { package: 'server', module: 'tinycld.org/packages/mail' },
+    // The supervisor that holds the public ports binds these once and hands
+    // each one to whichever server child is current, by name; mail's own-ports path
+    // (registerMailListeners) asks for them by the same names before it
+    // binds anything itself. addrEnv/enabled mirror the env vars
+    // server/imap_server.go, server/smtp_server.go and
+    // server/smtp_inbound_server.go already read.
+    ports: [
+        {
+            name: 'imaps',
+            port: 993,
+            addrEnv: 'IMAPS_ADDR',
+            enabled: { env: 'IMAP_ENABLED', default: true },
+        },
+        {
+            name: 'submissions',
+            port: 465,
+            addrEnv: 'SMTPS_ADDR',
+            enabled: { env: 'SMTP_ENABLED', default: true },
+        },
+        {
+            name: 'smtp',
+            port: 25,
+            addrEnv: 'SMTP_INBOUND_ADDR',
+            enabled: { env: 'MAIL_INBOUND_SMTP_ENABLED', default: false },
+        },
+    ],
     // The API payload contract (server/api) generated into
     // @tinycld/app-generated/mail-api — hooks import those types, so the
     // peerVersions floor below must stay >= the core that ships the emitter.

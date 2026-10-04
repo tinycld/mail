@@ -14,7 +14,19 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"golang.org/x/crypto/acme/autocert"
 	"tinycld.org/core/mailproto"
+	"tinycld.org/core/readonly"
 )
+
+// listenInbound serves on the supervisor's "smtp" listener, or binds the
+// address itself when there is none — the same seam StartIMAPServer and
+// StartSMTPServer use for their own names. mail still terminates STARTTLS
+// itself here, unlike the injected-listener path (startSMTPInboundOnListener)
+// a different embedding uses. Unlike IMAP/submission, this server always
+// binds exactly one address (there is no separate dev address), so the
+// inherited listener is always for the address actually requested.
+func listenInbound(addr string) (net.Listener, error) {
+	return acceptingListeners.listen("smtp", addr)(addr)
+}
 
 // StartSMTPInboundServer starts the public-facing SMTP listener that accepts
 // inbound mail from other MTAs (this is the MX target operators publish in
@@ -65,7 +77,7 @@ func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func()
 	server := newInboundSMTPServer(app, hostname, tlsConfig)
 	server.Addr = addr
 
-	ln, err := net.Listen("tcp", addr)
+	ln, err := listenInbound(addr)
 	if err != nil {
 		return nil, fmt.Errorf("inbound SMTP listen on %s: %w", addr, err)
 	}
@@ -190,7 +202,19 @@ func (s *smtpInboundSession) Auth(_ string) (sasl.Server, error) {
 	}
 }
 
+// errReadOnly defers a message while this process is read-only. It is then
+// only waiting to be replaced, and a message stored now is lost if the next
+// build rolls back; a 451 makes the sending MTA queue it and retry.
+var errReadOnly = &smtp.SMTPError{
+	Code:         451,
+	EnhancedCode: smtp.EnhancedCode{4, 3, 2},
+	Message:      "Mail service is restarting; try again later",
+}
+
 func (s *smtpInboundSession) Mail(from string, _ *smtp.MailOptions) error {
+	if readonly.Active() {
+		return errReadOnly
+	}
 	s.from = from
 	s.mailboxes = nil
 	return nil
@@ -227,6 +251,11 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 // transaction — the sender would retry the whole batch and we'd risk infinite
 // loops; better to surface partial delivery in logs than to bounce the rest.
 func (s *smtpInboundSession) Data(r io.Reader) error {
+	// Read-only can begin after MAIL FROM was accepted, so DATA checks again
+	// before it stores anything.
+	if readonly.Active() {
+		return errReadOnly
+	}
 	if len(s.mailboxes) == 0 {
 		return &smtp.SMTPError{
 			Code:         554,

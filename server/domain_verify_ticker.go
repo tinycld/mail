@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/readonly"
 )
 
 const (
@@ -46,6 +47,11 @@ func startDomainReverifyLoop(ctx context.Context, app core.App) {
 }
 
 func reverifyUnconfirmedDomains(ctx context.Context, app core.App) {
+	// A read-only server is waiting to be replaced; a row it stamps now is
+	// lost if the next build rolls back. The next hourly run re-checks it.
+	if readonly.Active() {
+		return
+	}
 	// The same guard handleVerifyDomain applies, and for the same reason: with
 	// no provider configured every check fails for a cause that is not the
 	// admin's DNS, and persisting those failures stamps each row with a
@@ -72,7 +78,7 @@ func reverifyUnconfirmedDomains(ctx context.Context, app core.App) {
 
 	app.Logger().Info("mail: reverifying unconfirmed domains", "count", len(records))
 	for _, record := range records {
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || readonly.Active() {
 			return
 		}
 		runCtx, cancel := context.WithTimeout(ctx, domainReverifyTimeout)

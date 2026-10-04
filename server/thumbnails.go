@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 
+	"tinycld.org/core/readonly"
 	"tinycld.org/core/thumbnails"
 )
 
@@ -20,6 +22,11 @@ import (
 // only covers the document render: the storage-blob read and core's HEIF
 // decode are not context-aware, so a hang there is not cut off by this.
 const thumbnailTimeout = 60 * time.Second
+
+// thumbnailReadOnlyWait bounds how long finished thumbnails wait for the
+// server to leave read-only mode. A server that stays read-only longer is
+// being replaced and exits, so the wait would end with the process anyway.
+const thumbnailReadOnlyWait = 5 * time.Minute
 
 // attachmentsChanged reports whether the `attachments` field differs from its
 // pre-update snapshot. The thumbnail hook uses it to skip work when an unrelated
@@ -147,19 +154,37 @@ func generateAttachmentThumbnails(app core.App, record *core.Record) {
 	fresh.Set("attachment_thumbnails", mergedThumbnails)
 	fresh.Set("attachment_thumbnail_map", string(thumbMapBytes))
 
-	// Thumbnail generation above is slow; re-check the app/DB is still live
-	// before the write, as the goroutine can outlive an app/DB reset.
-	if !appIsLive(app) {
+	waitCtx, cancelWait := context.WithTimeout(context.Background(), thumbnailReadOnlyWait)
+	defer cancelWait()
+	err = saveWhenWritable(waitCtx, app, fresh)
+	if errors.Is(err, errAppNotLive) {
 		return
 	}
-
-	if err := app.Save(fresh); err != nil {
+	if err != nil {
 		app.Logger().Warn("Mail thumbnail: save failed", "id", record.Id, "error", err)
 		return
 	}
 	app.Logger().Info("Mail thumbnail: saved",
 		"id", record.Id, "added", len(produced), "total", len(thumbMap))
 }
+
+// saveWhenWritable saves record once the server is not read-only. A message
+// can arrive just before the mode begins, and its background work must not
+// write while the mode is on: the write is lost if the next build rolls back.
+//
+// Thumbnail generation is slow and the wait can be long, so the app/DB is
+// re-checked after both: the goroutine can outlive an app/DB reset.
+func saveWhenWritable(ctx context.Context, app core.App, record *core.Record) error {
+	if err := readonly.WaitInactive(ctx); err != nil {
+		return fmt.Errorf("mail: wait for read-only to end: %w", err)
+	}
+	if !appIsLive(app) {
+		return errAppNotLive
+	}
+	return app.Save(record)
+}
+
+var errAppNotLive = errors.New("mail: app is no longer live")
 
 func renderThumbnail(
 	fsys *filesystem.System,
