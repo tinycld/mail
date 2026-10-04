@@ -14,6 +14,7 @@ import (
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/emersion/go-imap/v2/imapserver/imapmemserver"
+	"github.com/pocketbase/pocketbase/tests"
 )
 
 // TestIMAPFetcher_PullsUnseenAndIngests boots an in-memory IMAP server with
@@ -23,54 +24,7 @@ import (
 // proves the dedup contract that protects against duplicate ingestion on
 // every poll.
 func TestIMAPFetcher_PullsUnseenAndIngests(t *testing.T) {
-	app := setupInboundTestApp(t)
-	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_imap_fetch_001")
-	seedMember(t, app, "mb_imap_fetch_001", "user_alice")
-
-	server, addr, cleanup := newMemIMAPServer(t)
-	defer cleanup()
-
-	rawMessage := []byte(strings.Join([]string{
-		"From: sender@external.example",
-		"To: alice@acme.com",
-		"Subject: from imap",
-		"Date: Mon, 02 Jan 2006 15:04:05 +0000",
-		"Message-ID: <imap-fetch-1@example.org>",
-		"Content-Type: text/plain; charset=utf-8",
-		"",
-		"hello via imap",
-	}, "\r\n"))
-
-	memUser := imapmemserver.NewUser("alice", "secret")
-	if err := memUser.Create("INBOX", &imap.CreateOptions{}); err != nil {
-		t.Fatalf("create INBOX: %v", err)
-	}
-	if _, err := memUser.Append("INBOX", literalReader(rawMessage), &imap.AppendOptions{}); err != nil {
-		t.Fatalf("append: %v", err)
-	}
-	server.AddUser(memUser)
-
-	// Swap the dialer to target our in-memory server. Without this the
-	// fetcher would DNS-resolve "imap.test" and (slowly) fail.
-	origDialer := imapDialer
-	imapDialer = func(_ context.Context, _ string, _ bool) (*imapclient.Client, error) {
-		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			return nil, err
-		}
-		return imapclient.New(conn, nil), nil
-	}
-	t.Cleanup(func() { imapDialer = origDialer })
-
-	cfg := SMTPConfig{
-		InboundMode:  "imap",
-		IMAPHost:     "imap.test", // ignored — dialer redirects
-		IMAPPort:     143,
-		IMAPUsername: "alice",
-		IMAPPassword: "secret",
-		IMAPMailbox:  "INBOX",
-	}
-	mgr := &imapFetcherManager{app: app}
+	app, mgr, cfg := setupIMAPFetchTest(t, "from imap")
 
 	if err := mgr.tick(context.Background(), cfg); err != nil {
 		t.Fatalf("tick: %v", err)
@@ -132,6 +86,61 @@ func TestDispatchInbound_RoutesByRecipientDomain(t *testing.T) {
 }
 
 // --- helpers ---
+
+// setupIMAPFetchTest seeds alice@acme.com, starts an in-memory IMAP server
+// holding one unseen message to her with the given subject, and points the
+// fetcher's dialer at it.
+func setupIMAPFetchTest(t *testing.T, subject string) (*tests.TestApp, *imapFetcherManager, SMTPConfig) {
+	t.Helper()
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_imap_fetch_001")
+	seedMember(t, app, "mb_imap_fetch_001", "user_alice")
+
+	server, addr, cleanup := newMemIMAPServer(t)
+	t.Cleanup(cleanup)
+
+	rawMessage := []byte(strings.Join([]string{
+		"From: sender@external.example",
+		"To: alice@acme.com",
+		"Subject: " + subject,
+		"Date: Mon, 02 Jan 2006 15:04:05 +0000",
+		"Message-ID: <imap-fetch-1@example.org>",
+		"Content-Type: text/plain; charset=utf-8",
+		"",
+		"hello via imap",
+	}, "\r\n"))
+
+	memUser := imapmemserver.NewUser("alice", "secret")
+	if err := memUser.Create("INBOX", &imap.CreateOptions{}); err != nil {
+		t.Fatalf("create INBOX: %v", err)
+	}
+	if _, err := memUser.Append("INBOX", literalReader(rawMessage), &imap.AppendOptions{}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	server.AddUser(memUser)
+
+	// Swap the dialer to target our in-memory server. Without this the
+	// fetcher would DNS-resolve "imap.test" and (slowly) fail.
+	origDialer := imapDialer
+	imapDialer = func(_ context.Context, _ string, _ bool) (*imapclient.Client, error) {
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+		return imapclient.New(conn, nil), nil
+	}
+	t.Cleanup(func() { imapDialer = origDialer })
+
+	cfg := SMTPConfig{
+		InboundMode:  "imap",
+		IMAPHost:     "imap.test", // ignored — dialer redirects
+		IMAPPort:     143,
+		IMAPUsername: "alice",
+		IMAPPassword: "secret",
+		IMAPMailbox:  "INBOX",
+	}
+	return app, &imapFetcherManager{app: app}, cfg
+}
 
 // newMemIMAPServer starts an in-memory IMAP server on a random local port
 // and returns the server, its bind address, and a cleanup function.
