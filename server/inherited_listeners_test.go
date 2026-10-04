@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pocketbase/pocketbase"
+
 	"tinycld.org/core/listeners"
 )
 
@@ -69,6 +71,18 @@ func setupTestCert(t *testing.T) (certPath, keyPath string) {
 	keyPath = filepath.Join(dir, "key.pem")
 	writeCertPair(t, certPath, keyPath, "mail.test.example")
 	return certPath, keyPath
+}
+
+// newDevApp builds a dev-mode *pocketbase.PocketBase, mirroring newProdApp in
+// mail_listener_tls_test.go for the --dev case this file's inherited-listener
+// tests guard.
+func newDevApp(t *testing.T) *pocketbase.PocketBase {
+	t.Helper()
+	return pocketbase.NewWithConfig(pocketbase.Config{
+		DefaultDev:      true,
+		DefaultDataDir:  t.TempDir(),
+		HideStartBanner: true,
+	})
 }
 
 func dialAndReadLine(t *testing.T, ln net.Listener, tlsDial bool) string {
@@ -178,6 +192,67 @@ func TestStartIMAPServer_NoInheritedListener_BindsConfiguredAddr(t *testing.T) {
 	// listener somewhere, which it only could have done via net.Listen.
 }
 
+// TestStartIMAPServer_Dev_DoesNotServeInheritedListenerInPlainText pins #7 of
+// the auto-upgrade 4d follow-ups: a supervised --dev child must not serve the
+// production TLS-terminated "imaps" listener in plain text. StartIMAPServer
+// always goes through startIMAPDev in dev mode (app.IsDev() short-circuits
+// before the TLS-only branch), and startIMAPDev calls the same Listen closure
+// for both its plain IMAP_ADDR bind and its optional implicit-TLS IMAPS_ADDR
+// bind. The inherited listener must be claimed only by the IMAPS_ADDR bind —
+// never by the plain one — so a client dialing the inherited listener still
+// needs TLS, and the dev plain listener binds its own configured address
+// instead of being silently starved of a listener.
+func TestStartIMAPServer_Dev_DoesNotServeInheritedListenerInPlainText(t *testing.T) {
+	certPath, keyPath := setupTestCert(t)
+	t.Setenv("IMAP_TLS_CERT", certPath)
+	t.Setenv("IMAP_TLS_KEY", keyPath)
+	// IMAP_ADDR and IMAPS_ADDR must differ: the fix compares the requested
+	// addr against IMAPS_ADDR's literal value to decide whether to hand out
+	// the inherited listener, so a test that gave both the same string could
+	// not tell a correct scoped match from the old unconditional one. A real
+	// :993 bind would need root, so point IMAPS_ADDR at an address this test
+	// is never allowed to actually bind — the only way to pass is via the
+	// inherited listener.
+	t.Setenv("IMAP_ADDR", "127.0.0.1:0")
+	t.Setenv("IMAPS_ADDR", "127.0.0.1:1")
+
+	imapsLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore := listeners.SetForTest(map[string]net.Listener{"imaps": imapsLn})
+	t.Cleanup(restore)
+
+	shutdown, err := StartIMAPServer(newDevApp(t), nil)
+	if err != nil {
+		t.Fatalf("StartIMAPServer: %v", err)
+	}
+	t.Cleanup(shutdown)
+
+	// A plain-text dial against the inherited listener must NOT get an IMAP
+	// greeting: if it did, the dev plain-IMAP bind claimed the production TLS
+	// listener instead of binding its own IMAP_ADDR.
+	conn, err := net.Dial("tcp", imapsLn.Addr().String())
+	if err != nil {
+		t.Fatalf("dial inherited listener: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 64)
+	n, _ := conn.Read(buf)
+	if n > 0 && strings.HasPrefix(string(buf[:n]), "* OK") {
+		t.Fatalf("inherited listener served plain-text IMAP greeting %q; must require TLS", string(buf[:n]))
+	}
+
+	// The same inherited listener, dialed with TLS, must still get the real
+	// greeting — the production-TLS bind (IMAPS_ADDR) is the one that should
+	// have claimed it.
+	line := dialAndReadLine(t, imapsLn, true)
+	if !strings.HasPrefix(line, "* OK") {
+		t.Fatalf("IMAP greeting over inherited TLS dial = %q", line)
+	}
+}
+
 // TestStartSMTPServer_UsesInheritedListener mirrors the IMAP case for the
 // submission server's "submissions" listener.
 func TestStartSMTPServer_UsesInheritedListener(t *testing.T) {
@@ -230,6 +305,62 @@ func TestStartSMTPServer_NoInheritedListener_BindsConfiguredAddr(t *testing.T) {
 		t.Fatalf("StartSMTPServer: %v", err)
 	}
 	t.Cleanup(shutdown)
+}
+
+// TestStartSMTPServer_Dev_DoesNotServeInheritedListenerInPlainText mirrors
+// TestStartIMAPServer_Dev_DoesNotServeInheritedListenerInPlainText for the
+// submission server's "submissions" listener: startSMTPDev shares one Listen
+// closure between its plain SMTP_ADDR bind and its optional implicit-TLS
+// SMTPS_ADDR bind, so the inherited listener must be claimed only by the TLS
+// bind.
+func TestStartSMTPServer_Dev_DoesNotServeInheritedListenerInPlainText(t *testing.T) {
+	certPath, keyPath := setupTestCert(t)
+	t.Setenv("SMTP_TLS_CERT", certPath)
+	t.Setenv("SMTP_TLS_KEY", keyPath)
+	// SMTP_ADDR and SMTPS_ADDR must differ — see the IMAP test's comment for
+	// why — with SMTPS_ADDR pointed at an address this test is never allowed
+	// to actually bind.
+	t.Setenv("SMTP_ADDR", "127.0.0.1:0")
+	t.Setenv("SMTPS_ADDR", "127.0.0.1:1")
+
+	subLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore := listeners.SetForTest(map[string]net.Listener{"submissions": subLn})
+	t.Cleanup(restore)
+
+	shutdown, err := StartSMTPServer(newDevApp(t), nil)
+	if err != nil {
+		t.Fatalf("StartSMTPServer: %v", err)
+	}
+	t.Cleanup(shutdown)
+
+	conn, err := net.Dial("tcp", subLn.Addr().String())
+	if err != nil {
+		t.Fatalf("dial inherited listener: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 64)
+	n, _ := conn.Read(buf)
+	if n > 0 && strings.HasPrefix(string(buf[:n]), "220 ") {
+		t.Fatalf("inherited listener served plain-text SMTP greeting %q; must require TLS", string(buf[:n]))
+	}
+
+	tlsConn, err := tls.Dial("tcp", subLn.Addr().String(), &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		t.Fatalf("TLS dial inherited submission listener: %v", err)
+	}
+	t.Cleanup(func() { tlsConn.Close() })
+	_ = tlsConn.SetDeadline(time.Now().Add(5 * time.Second))
+	greeting, err := bufio.NewReader(tlsConn).ReadString('\n')
+	if err != nil {
+		t.Fatalf("read greeting: %v", err)
+	}
+	if !strings.HasPrefix(greeting, "220 ") {
+		t.Fatalf("submission greeting over inherited TLS dial = %q", greeting)
+	}
 }
 
 // TestStartSMTPInboundServer_UsesInheritedListener confirms the inbound-MX

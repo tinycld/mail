@@ -21,9 +21,11 @@ import (
 // address itself when there is none — the same seam StartIMAPServer and
 // StartSMTPServer use for their own names. mail still terminates STARTTLS
 // itself here, unlike the injected-listener path (startSMTPInboundOnListener)
-// a different embedding uses.
+// a different embedding uses. Unlike IMAP/submission, this server always
+// binds exactly one address (there is no separate dev address), so the
+// inherited listener is always for the address actually requested.
 func listenInbound(addr string) (net.Listener, error) {
-	return acceptingListeners.listen("smtp")(addr)
+	return acceptingListeners.listen("smtp", addr)(addr)
 }
 
 // StartSMTPInboundServer starts the public-facing SMTP listener that accepts

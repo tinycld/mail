@@ -12,9 +12,10 @@ import (
 // SMTP falls back to the IMAP_TLS_* pair, so a missing SMTP cert is fine as
 // long as IMAP's is set.
 //
-// Listen serves on the supervisor's "submissions" listener, or binds the
-// address itself when there is none — see StartIMAPServer's comment for the
-// own-ports-vs-injected-listener distinction.
+// Listen serves on the supervisor's "submissions" listener, but only for the
+// production SMTPS_ADDR request — the dev addresses (:1587, :1465) always
+// bind themselves, even under a supervisor; see StartIMAPServer's comment for
+// both that guard and the own-ports-vs-injected-listener distinction.
 func StartSMTPServer(app core.App, certManager *autocert.Manager) (func(), error) {
 	return mailproto.StartSMTP(app, certManager, mailproto.SMTPOptions{
 		Backend:           &smtpBackend{app: app},
@@ -35,6 +36,6 @@ func StartSMTPServer(app core.App, certManager *autocert.Manager) (func(), error
 			"to readable cert/key files, or enable autocert " +
 			"(AUTOCERT_ENABLED=true + PRIMARY_DOMAIN), " +
 			"or set SMTP_ENABLED=false to run without SMTP submission",
-		Listen: acceptingListeners.listen("submissions"),
+		Listen: acceptingListeners.listen("submissions", envOrDefault("SMTPS_ADDR", ":465")),
 	})
 }
