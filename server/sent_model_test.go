@@ -449,3 +449,68 @@ func TestIMAPAppendToSent_DoesNotMergeIntoReceivedMessage(t *testing.T) {
 		t.Fatalf("%d messages with the id, want the received one and the sent copy", len(copies))
 	}
 }
+
+// In a shared mailbox the Sent view shows the team's outbound mail. The list
+// reads only the caller's own state rows, so a send marks every member's row,
+// not only the sender's. Each member keeps their own folder.
+func TestMarkThreadSent_MarksCoMembersInSharedMailbox(t *testing.T) {
+	env := setupScopeEnv(t)
+	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coMember := newUser(t, env.app, "comember@example.org")
+	seedMember(t, env.app, env.mbA.Id, coMember.Id)
+	if err := setThreadFolder(env.app, thread.Id, coMember.Id, "archive"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := markThreadSent(env.app, thread.Id, env.user.Id); err != nil {
+		t.Fatal(err)
+	}
+
+	mine := findThreadState(env.app, thread.Id, env.user.Id)
+	if mine == nil || !mine.GetBool("is_sent") {
+		t.Fatal("sender's row is not marked sent")
+	}
+	theirs := findThreadState(env.app, thread.Id, coMember.Id)
+	if theirs == nil {
+		t.Fatal("co-member has no state row")
+	}
+	if !theirs.GetBool("is_sent") {
+		t.Error("co-member's row is not marked sent")
+	}
+	if got := theirs.GetString("folder"); got != "archive" {
+		t.Errorf("co-member folder = %q, want their own filing kept (archive)", got)
+	}
+	if theirs.GetBool("is_read") {
+		t.Error("co-member's row was marked read; only the sender's should be")
+	}
+}
+
+func TestMarkThreadSent_CoMemberWithoutRowGetsOne(t *testing.T) {
+	env := setupScopeEnv(t)
+	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coMember := newUser(t, env.app, "norow@example.org")
+	seedMember(t, env.app, env.mbA.Id, coMember.Id)
+
+	if err := markThreadSent(env.app, thread.Id, env.user.Id); err != nil {
+		t.Fatal(err)
+	}
+
+	theirs := findThreadState(env.app, thread.Id, coMember.Id)
+	if theirs == nil {
+		t.Fatal("co-member has no state row")
+	}
+	// The seeded thread holds a received message, so the new row is filed in
+	// the inbox; a thread with no received message would be filed under sent.
+	if got := theirs.GetString("folder"); got != "inbox" {
+		t.Errorf("folder = %q, want inbox", got)
+	}
+	if !theirs.GetBool("is_sent") {
+		t.Error("is_sent = false, want true")
+	}
+}

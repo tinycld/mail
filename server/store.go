@@ -496,7 +496,52 @@ func markThreadSent(app core.App, threadID, userID string) error {
 	}
 	record.Set("is_sent", true)
 	record.Set("is_read", true)
-	return app.Save(record)
+	if err := app.Save(record); err != nil {
+		return err
+	}
+	thread, err := app.FindRecordById("mail_threads", threadID)
+	if err != nil {
+		return fmt.Errorf("thread for sent marking: %w", err)
+	}
+	return markThreadSentForMembers(app, thread, userID)
+}
+
+// markThreadSentForMembers flags the thread sent on every other member's
+// state row. The list reads only the caller's own rows, so a shared mailbox's
+// Sent view can show the team's outbound mail only if each member's row says
+// so. A member's filing and read state are theirs and are left alone; a
+// member with no row yet gets one filed the way markThreadSent files a new
+// thread.
+func markThreadSentForMembers(app core.App, thread *core.Record, senderID string) error {
+	members, err := getMailboxMembers(app, thread.GetString("mailbox"))
+	if err != nil {
+		return err
+	}
+	for _, member := range members {
+		userID := member.GetString("user")
+		if userID == senderID {
+			continue
+		}
+		record := findThreadState(app, thread.Id, userID)
+		if record == nil {
+			record, err = newThreadState(app, thread.Id, userID)
+			if err != nil {
+				return err
+			}
+			if threadHasReceivedMessage(app, thread.Id) {
+				record.Set("folder", "inbox")
+			} else {
+				record.Set("folder", "sent")
+			}
+		} else if record.GetBool("is_sent") {
+			continue
+		}
+		record.Set("is_sent", true)
+		if err := app.Save(record); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // setThreadRead sets a thread's read state for one user, preserving the
