@@ -245,8 +245,14 @@ export async function createSharedMailbox(page: Page, label: string): Promise<st
     // The domain choice renders only when the org has more than one domain
     // (the custom-domain spec adds some), and it defaults to the first one.
     // The inbound webhook delivers to tinycld.org, so pick it explicitly.
+    // The picker and the preview's domain both derive from the loaded domain
+    // list, so wait until the preview names a domain (not the '…' it shows
+    // while the list loads) or the picker is up; only then is the picker's
+    // absence an answer rather than a render not yet reached.
     const domainChoice = page.getByText(MAIL_DOMAIN, { exact: true })
-    if ((await domainChoice.count()) > 0) await domainChoice.click()
+    const domainResolved = page.getByText(/will be: .*@[^…]/)
+    await expect(domainResolved.or(domainChoice).first()).toBeVisible()
+    if (await domainChoice.isVisible()) await domainChoice.click()
     await expect(page.getByText(`will be: ${local}@${MAIL_DOMAIN}`)).toBeVisible()
     await page.getByTestId('display_name').fill(local)
     await page.getByText('Create mailbox', { exact: true }).click()
