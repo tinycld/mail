@@ -56,20 +56,20 @@ func TestHandleSearch_QueryFailureIsAnError(t *testing.T) {
 	}
 }
 
-func TestMapResults_PropagatesHasAttachments(t *testing.T) {
+func TestMapResults_PropagatesStateID(t *testing.T) {
 	rows := []searchResultRow{
-		{ThreadID: "t1", HasAttachments: true},
-		{ThreadID: "t2", HasAttachments: false},
+		{ThreadID: "t1", StateID: "state1"},
+		{ThreadID: "t2", StateID: "state2"},
 	}
 
 	items := mapResults(rows)
 	if len(items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(items))
 	}
-	if !items[0].HasAttachments {
-		t.Errorf("expected items[0].HasAttachments=true, got false")
+	if items[0].StateID != "state1" {
+		t.Errorf("items[0].StateID = %q, want state1", items[0].StateID)
 	}
-	if items[1].HasAttachments {
-		t.Errorf("expected items[1].HasAttachments=false, got true")
+	if items[1].StateID != "state2" {
+		t.Errorf("items[1].StateID = %q, want state2", items[1].StateID)
 	}
 }

@@ -51,14 +51,9 @@ func TestMapResults_CoversEveryAPIField(t *testing.T) {
 	// mapResults fails here even though the field sets match.
 	row := searchResultRow{
 		ThreadID:         "sentinel-thread",
-		Subject:          "sentinel-subject",
+		StateID:          "sentinel-state",
 		SubjectHighlight: "sentinel-subject-hl",
 		SnippetHighlight: "sentinel-snippet-hl",
-		LatestDate:       "sentinel-date",
-		Participants:     "sentinel-participants",
-		MessageCount:     41,
-		MailboxID:        "sentinel-mailbox",
-		HasAttachments:   true,
 	}
 	items := mapResults([]searchResultRow{row})
 	if len(items) != 1 {

@@ -19,14 +19,9 @@ import (
 // together.
 type searchResultRow struct {
 	ThreadID         string `db:"thread_id"`
-	Subject          string `db:"subject"`
+	StateID          string `db:"state_id"`
 	SubjectHighlight string `db:"subject_highlight"`
 	SnippetHighlight string `db:"snippet_highlight"`
-	LatestDate       string `db:"latest_date"`
-	Participants     string `db:"participants"`
-	MessageCount     int    `db:"message_count"`
-	MailboxID        string `db:"mailbox_id"`
-	HasAttachments   bool   `db:"has_attachments"`
 }
 
 func mapResults(rows []searchResultRow) []api.SearchResultItem {
@@ -34,23 +29,13 @@ func mapResults(rows []searchResultRow) []api.SearchResultItem {
 	for i, r := range rows {
 		items[i] = api.SearchResultItem{
 			ThreadID:         r.ThreadID,
-			Subject:          r.Subject,
+			StateID:          r.StateID,
 			SubjectHighlight: r.SubjectHighlight,
 			SnippetHighlight: r.SnippetHighlight,
-			LatestDate:       r.LatestDate,
-			Participants:     r.Participants,
-			MessageCount:     r.MessageCount,
-			MailboxID:        r.MailboxID,
-			HasAttachments:   r.HasAttachments,
 		}
 	}
 	return items
 }
-
-// threadHasAttachmentsExpr returns a SQL expression that evaluates to 1 if any
-// message in thread `t` has attachments, else 0. Aggregated per-thread so the
-// indicator is correct regardless of which message matched the FTS query.
-const threadHasAttachmentsExpr = `EXISTS (SELECT 1 FROM mail_messages WHERE thread = t.id AND has_attachments = 1)`
 
 func hasStructuredFilters(f *api.SearchRequest) bool {
 	return f.From != "" || f.To != "" || f.Subject != "" ||
@@ -125,28 +110,24 @@ func buildMessageWhere(f *api.SearchRequest, params map[string]any) string {
 	return " AND " + strings.Join(clauses, " AND ")
 }
 
-// buildFolderJoin builds an additional JOIN + WHERE clause for folder/starred
-// filtering. Single-org: thread state is keyed by the user directly, so this is
-// a single bound parameter rather than an IN over the caller's memberships.
-func buildFolderJoin(f *api.SearchRequest, userID string, params map[string]any) string {
-	if f.Folder == "" || userID == "" {
-		return ""
-	}
-
+// buildStateJoin joins the caller's own mail_thread_state row to every hit,
+// so each result carries its state id, and narrows by folder when asked.
+// Single-org: state is keyed by the user directly.
+func buildStateJoin(f *api.SearchRequest, userID string, params map[string]any) string {
 	params["stateUser"] = userID
-
-	if f.Folder == "starred" {
-		return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.is_starred = 1"
+	join := " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser}"
+	switch f.Folder {
+	case "":
+		return join
+	case "starred":
+		return join + " AND ts.is_starred = 1"
+	case "sent":
+		// Sent is a flag, not a folder (see markThreadSent).
+		return join + " AND ts.is_sent = 1 AND ts.folder NOT IN ('trash', 'spam')"
+	default:
+		params["folder"] = f.Folder
+		return join + " AND ts.folder = {:folder}"
 	}
-
-	// Sent is a flag, not a folder (see markThreadSent): a replied-to thread
-	// stays in its folder and is flagged sent.
-	if f.Folder == "sent" {
-		return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.is_sent = 1 AND ts.folder NOT IN ('trash', 'spam')"
-	}
-
-	params["folder"] = f.Folder
-	return " JOIN mail_thread_state ts ON ts.thread = t.id AND ts.user = {:stateUser} AND ts.folder = {:folder}"
 }
 
 // handleSearch serves GET /api/mail/search — the in-app advanced search, whose
@@ -214,11 +195,11 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 	maps.Copy(params, mailboxParams)
 
 	messageWhere := buildMessageWhere(&filters, params)
-	folderJoin := buildFolderJoin(&filters, userID, params)
+	stateJoin := buildStateJoin(&filters, userID, params)
 
 	// SQL-only path: no FTS terms, only structured filters
 	if !hasFTSTerms {
-		return structuredSearch(app, inClause, messageWhere, folderJoin, params, limit, offset)
+		return structuredSearch(app, inClause, messageWhere, stateJoin, params, limit, offset)
 	}
 
 	// FTS path (possibly with additional structured filters). The two FTS
@@ -232,7 +213,7 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 		if !hasStructuredFilters(&filters) {
 			return emptyResponse, nil
 		}
-		return structuredSearch(app, inClause, messageWhere, folderJoin, params, limit, offset)
+		return structuredSearch(app, inClause, messageWhere, stateJoin, params, limit, offset)
 	}
 
 	// Only bind a param when its UNION arm is actually present in the SQL — dbx
@@ -254,49 +235,35 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 	threadQuery := `
 		SELECT
 			t.id as thread_id,
-			t.subject,
+			ts.id as state_id,
 			highlight(fts_mail_threads, 1, '<mark>', '</mark>') as subject_highlight,
 			snippet(fts_mail_threads, 2, '<mark>', '</mark>', '...', 40) as snippet_highlight,
-			t.latest_date,
-			t.participants,
-			t.message_count,
-			t.mailbox as mailbox_id,
-			` + threadHasAttachmentsExpr + ` as has_attachments,
 			fts_mail_threads.rank
 		FROM fts_mail_threads
-		JOIN mail_threads t ON t.id = fts_mail_threads.record_id` + folderJoin + `
+		JOIN mail_threads t ON t.id = fts_mail_threads.record_id` + stateJoin + `
 		WHERE fts_mail_threads MATCH {:ftsThreads}
 		AND t.mailbox IN ` + inClause + msgExistsClause
 
 	messageQuery := `
 		SELECT
 			t.id as thread_id,
-			t.subject,
+			ts.id as state_id,
 			'' as subject_highlight,
 			snippet(fts_mail_messages, 5, '<mark>', '</mark>', '...', 40) as snippet_highlight,
-			t.latest_date,
-			t.participants,
-			t.message_count,
-			t.mailbox as mailbox_id,
-			` + threadHasAttachmentsExpr + ` as has_attachments,
 			fts_mail_messages.rank
 		FROM fts_mail_messages
 		JOIN mail_messages m ON m.id = fts_mail_messages.record_id
-		JOIN mail_threads t ON t.id = m.thread` + folderJoin + `
+		JOIN mail_threads t ON t.id = m.thread` + stateJoin + `
 		WHERE fts_mail_messages MATCH {:ftsMessages}
 		AND t.mailbox IN ` + inClause + messageWhere
 
 	unionBody := ftsUnion(ftsThreads != "", threadQuery, ftsMessages != "", messageQuery)
 
 	combinedQuery := `
-		SELECT thread_id, MAX(subject) as subject,
+		SELECT thread_id,
+			   MAX(state_id) as state_id,
 			   MAX(subject_highlight) as subject_highlight,
-			   MAX(snippet_highlight) as snippet_highlight,
-			   MAX(latest_date) as latest_date,
-			   MAX(participants) as participants,
-			   MAX(message_count) as message_count,
-			   MAX(mailbox_id) as mailbox_id,
-			   MAX(has_attachments) as has_attachments
+			   MAX(snippet_highlight) as snippet_highlight
 		FROM (
 			` + unionBody + `
 		)
@@ -318,14 +285,14 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 		countThreadArm := `
 				SELECT t.id as thread_id
 				FROM fts_mail_threads
-				JOIN mail_threads t ON t.id = fts_mail_threads.record_id` + folderJoin + `
+				JOIN mail_threads t ON t.id = fts_mail_threads.record_id` + stateJoin + `
 				WHERE fts_mail_threads MATCH {:ftsThreads}
 				AND t.mailbox IN ` + inClause + msgExistsClause
 		countMessageArm := `
 				SELECT t.id as thread_id
 				FROM fts_mail_messages
 				JOIN mail_messages m ON m.id = fts_mail_messages.record_id
-				JOIN mail_threads t ON t.id = m.thread` + folderJoin + `
+				JOIN mail_threads t ON t.id = m.thread` + stateJoin + `
 				WHERE fts_mail_messages MATCH {:ftsMessages}
 				AND t.mailbox IN ` + inClause + messageWhere
 		var countArms []string
@@ -374,7 +341,7 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 // call it on both the HTTP and in-process paths.
 func structuredSearch(
 	app core.App,
-	inClause, messageWhere, folderJoin string,
+	inClause, messageWhere, stateJoin string,
 	params map[string]any,
 	limit, offset int,
 ) (api.SearchResponse, error) {
@@ -382,16 +349,11 @@ func structuredSearch(
 	query := `
 		SELECT DISTINCT
 			t.id as thread_id,
-			t.subject,
+			ts.id as state_id,
 			'' as subject_highlight,
-			t.snippet as snippet_highlight,
-			t.latest_date,
-			t.participants,
-			t.message_count,
-			t.mailbox as mailbox_id,
-			` + threadHasAttachmentsExpr + ` as has_attachments
+			'' as snippet_highlight
 		FROM mail_threads t
-		JOIN mail_messages m ON m.thread = t.id` + folderJoin + `
+		JOIN mail_messages m ON m.thread = t.id` + stateJoin + `
 		WHERE t.mailbox IN ` + inClause + messageWhere + `
 		ORDER BY t.latest_date DESC
 		LIMIT {:limit} OFFSET {:offset}
@@ -410,7 +372,7 @@ func structuredSearch(
 		countQuery := `
 			SELECT COUNT(DISTINCT t.id) as total
 			FROM mail_threads t
-			JOIN mail_messages m ON m.thread = t.id` + folderJoin + `
+			JOIN mail_messages m ON m.thread = t.id` + stateJoin + `
 			WHERE t.mailbox IN ` + inClause + messageWhere + `
 		`
 		countParams := make(map[string]any)

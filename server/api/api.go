@@ -86,19 +86,14 @@ type SearchRequest struct {
 	HasAttachment bool   `json:"has_attachment,omitempty"`
 }
 
-// SearchResultItem is one thread-level hit in a SearchResponse. Highlight
-// fields carry <mark> markup from FTS; Participants is the thread's stored
-// JSON participant list, passed through as a string.
+// SearchResultItem is one thread-level hit in a SearchResponse. The client
+// renders the row from its live mail_thread_state and mail_threads rows, so
+// a hit carries only the ids to resolve them and the FTS <mark> highlights.
 type SearchResultItem struct {
 	ThreadID         string `json:"thread_id"`
-	Subject          string `json:"subject"`
+	StateID          string `json:"state_id"`
 	SubjectHighlight string `json:"subject_highlight"`
 	SnippetHighlight string `json:"snippet_highlight"`
-	LatestDate       string `json:"latest_date"`
-	Participants     string `json:"participants"`
-	MessageCount     int    `json:"message_count"`
-	MailboxID        string `json:"mailbox_id"`
-	HasAttachments   bool   `json:"has_attachments"`
 }
 
 // SearchResponse is returned by GET /api/mail/search. Items is never null.

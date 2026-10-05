@@ -339,9 +339,9 @@ func TestHandleInbound_DedupeIgnoresBracketForm(t *testing.T) {
 }
 
 // Search's Sent filter must match the Sent view: the flag, not the folder.
-func TestBuildFolderJoin_SentReadsFlag(t *testing.T) {
+func TestBuildStateJoin_SentReadsFlag(t *testing.T) {
 	params := map[string]any{}
-	join := buildFolderJoin(&api.SearchRequest{Folder: "sent"}, "u1", params)
+	join := buildStateJoin(&api.SearchRequest{Folder: "sent"}, "u1", params)
 	if !strings.Contains(join, "ts.is_sent = 1") || strings.Contains(join, "ts.folder = {:folder}") {
 		t.Fatalf("sent join = %q, want the is_sent flag", join)
 	}

@@ -1,7 +1,6 @@
 package mail
 
 import (
-	"encoding/json"
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -55,20 +54,14 @@ func searchMailRows(app core.App, userID string, q search.Query) (search.Result,
 			// exactly this reason.
 			ID: item.ThreadID,
 			// A subject-less thread is still readable, so label it rather than
-			// render a blank row.
-			Title: titleOr(item.Subject, "(no subject)"),
-			// Participants as readable names. The field is the thread's STORED
-			// JSON array, so passing it through — as the old TS adapter did —
-			// rendered `[{"email":"alice@…` in the palette. The highlighted
-			// snippet is deliberately not used instead: it carries <mark>
-			// markup, and a CLI would have to strip tags a server sent purely
-			// for the web.
-			Subtitle: participantNames(item.Participants),
-			Meta:     item.LatestDate,
+			// render a blank row. The hit carries only ids plus highlights (the
+			// client resolves subject/participants/date from its live rows), so
+			// the palette's own row — which has no live store behind it — is
+			// built from the highlight text with its <mark> markup stripped.
+			Title:    titleOr(stripHighlightMarkup(item.SubjectHighlight), "(no subject)"),
+			Subtitle: stripHighlightMarkup(item.SnippetHighlight),
 			Fields: map[string]any{
-				"mailbox_id":      item.MailboxID,
-				"message_count":   item.MessageCount,
-				"has_attachments": item.HasAttachments,
+				"state_id": item.StateID,
 			},
 		})
 	}
@@ -82,42 +75,10 @@ func titleOr(value, fallback string) string {
 	return value
 }
 
-// participantNames turns the thread's stored participants JSON into a readable
-// list: "Alice Smith, bob@example.com". Prefers a name, falls back to the
-// address, and skips entries with neither.
-//
-// Unparseable JSON yields an empty subtitle rather than an error: a row with no
-// subtitle is still useful, and failing the whole search over one malformed
-// column would lose every other result too.
-func participantNames(stored string) string {
-	if stored == "" {
-		return ""
-	}
-	var people []struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-	}
-	if err := json.Unmarshal([]byte(stored), &people); err != nil {
-		return ""
-	}
-	names := make([]string, 0, len(people))
-	for _, p := range people {
-		if label := firstNonEmpty(p.Name, p.Email); label != "" {
-			names = append(names, label)
-		}
-	}
-	const maxShown = 3
-	if len(names) > maxShown {
-		return strings.Join(names[:maxShown], ", ") + ", …"
-	}
-	return strings.Join(names, ", ")
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
+// stripHighlightMarkup removes the <mark>/</mark> tags the search SQL wraps
+// matched terms in. The palette row has no live store to re-derive plain text
+// from, so it renders the highlight text itself, unmarked.
+func stripHighlightMarkup(highlighted string) string {
+	plain := strings.ReplaceAll(highlighted, "<mark>", "")
+	return strings.ReplaceAll(plain, "</mark>", "")
 }
