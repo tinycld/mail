@@ -10,6 +10,13 @@ import {
 
 // Pages are cursor pages: the boundary is part of the query, so page two
 // loads only its rows. The total comes from the folder counts table.
+// PAGE_SIZE (useThreadListItems.ts) plus one: the fewest threads that make a
+// second page exist.
+const THREAD_COUNT = 101
+// Sequential delivery of 101 messages takes minutes; batches keep the spec
+// inside the default test timeout.
+const DELIVERY_BATCH = 20
+
 test.describe('Mail — Paging', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
@@ -22,18 +29,25 @@ test.describe('Mail — Paging', () => {
         page,
         request,
     }) => {
-        // A data-volume budget for 101 webhook deliveries, not a flake workaround.
-        test.setTimeout(240_000)
         const address = await createSharedMailbox(page, 'Paging')
-        const subjects: string[] = []
-        // One second apart: the Date header has one-second resolution, and a
-        // burst of deliveries in the same second would tie on latest_date.
-        const firstDate = Date.now() - 101 * 1000
-        for (let i = 0; i < 101; i++) {
-            const subject = uniqueSubject(`Page${String(i).padStart(3, '0')}`)
-            subjects.push(subject)
-            const date = new Date(firstDate + i * 1000)
-            await deliverInbound(request, { subject, to: address, date })
+        const subjects = Array.from({ length: THREAD_COUNT }, (_, i) =>
+            uniqueSubject(`Page${String(i).padStart(3, '0')}`)
+        )
+        // One second apart and fixed from the index: the Date header has
+        // one-second resolution, so a burst would tie on latest_date, and
+        // concurrent deliveries finish in any order.
+        const firstDate = Date.now() - THREAD_COUNT * 1000
+        for (let start = 0; start < THREAD_COUNT; start += DELIVERY_BATCH) {
+            const batch = subjects.slice(start, start + DELIVERY_BATCH)
+            await Promise.all(
+                batch.map((subject, offset) =>
+                    deliverInbound(request, {
+                        subject,
+                        to: address,
+                        date: new Date(firstDate + (start + offset) * 1000),
+                    })
+                )
+            )
         }
         // The oldest message sorts last, so it alone is on page two.
         const oldest = subjects[0]
