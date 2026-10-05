@@ -87,6 +87,15 @@ func backfillOneThreadState(app core.App, threadID, userID string) error {
 	if findThreadState(app, threadID, userID) != nil {
 		return nil
 	}
+	return createBackfillState(app, threadID, userID)
+}
+
+// createBackfillState saves a read inbox row for a thread the caller found
+// without one. An inbound delivery for the same thread can write the member's
+// row between that find and this save; the unique (thread, user) index then
+// rejects the save. That race is expected and the delivered row is correct,
+// so a failed save with a row now present is success, not an error to report.
+func createBackfillState(app core.App, threadID, userID string) error {
 	state, err := newThreadState(app, threadID, userID)
 	if err != nil {
 		return err
@@ -94,6 +103,9 @@ func backfillOneThreadState(app core.App, threadID, userID string) error {
 	state.Set("folder", "inbox")
 	state.Set("is_read", true)
 	if err := app.Save(state); err != nil {
+		if findThreadState(app, threadID, userID) != nil {
+			return nil
+		}
 		return fmt.Errorf("save state for thread %s: %w", threadID, err)
 	}
 	return nil

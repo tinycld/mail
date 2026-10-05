@@ -25,7 +25,7 @@ func stateRowCount(t *testing.T, app core.App, userID string) int {
 	return len(rows)
 }
 
-func TestBackfillMemberThreadState_CreatesReadInboxRows(t *testing.T) {
+func TestMemberBackfill_CreatesReadInboxRows(t *testing.T) {
 	env := setupScopeEnv(t)
 	thread := firstThreadOf(t, env, env.mbA.Id)
 	joiner := newUser(t, env.app, "joiner@example.org")
@@ -63,7 +63,7 @@ func TestBackfillMemberThreadState_CreatesReadInboxRows(t *testing.T) {
 	}
 }
 
-func TestBackfillMemberThreadState_IsIdempotent(t *testing.T) {
+func TestMemberBackfill_IsIdempotent(t *testing.T) {
 	env := setupScopeEnv(t)
 	joiner := newUser(t, env.app, "twice@example.org")
 
@@ -78,7 +78,7 @@ func TestBackfillMemberThreadState_IsIdempotent(t *testing.T) {
 	}
 }
 
-func TestMemberCreate_BackfillsThreadState(t *testing.T) {
+func TestMemberBackfill_HookRunsOnMemberCreate(t *testing.T) {
 	env := setupScopeEnv(t)
 	registerMemberBackfillHooks(env.app)
 	thread := firstThreadOf(t, env, env.mbA.Id)
@@ -93,5 +93,30 @@ func TestMemberCreate_BackfillsThreadState(t *testing.T) {
 	}
 	if findThreadState(env.app, thread.Id, other.Id) == nil {
 		t.Fatal("no state row 2s after the member was added; the backfill hook did not run")
+	}
+}
+
+// The race with inbound delivery: the backfill found no row, then inbound
+// wrote one before the backfill saved. The shipped schema's unique index
+// rejects the save; the backfill must treat that as success.
+func TestMemberBackfill_LostRaceIsSuccess(t *testing.T) {
+	env := setupScopeEnv(t)
+	states, err := env.app.FindCollectionByNameOrId("mail_thread_state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The shared fixture omits the shipped unique index; the conflict needs it.
+	states.AddIndex("idx_mail_thr_state_unique", true, "`thread`, `user`", "")
+	if err := env.app.Save(states); err != nil {
+		t.Fatal(err)
+	}
+	// setupScopeEnv gave env.user a row on this thread: the row inbound wrote.
+	thread := firstThreadOf(t, env, env.mbA.Id)
+
+	if err := createBackfillState(env.app, thread.Id, env.user.Id); err != nil {
+		t.Fatalf("createBackfillState = %v, want nil when the row already exists", err)
+	}
+	if got := stateRowCount(t, env.app, env.user.Id); got != 2 {
+		t.Errorf("user has %d state rows, want 2 (one per seeded mailbox)", got)
 	}
 }
