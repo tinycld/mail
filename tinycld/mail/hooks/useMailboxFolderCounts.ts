@@ -5,11 +5,28 @@ import { useEffect, useMemo } from 'react'
 
 export interface FolderCounts {
     inbox: number
+    inboxTotal: number
     drafts: number
     sent: number
     starred: number
     trash: number
     spam: number
+    archive: number
+    total: number
+}
+
+// Task 6 needs a zero-value for folders Task 7's aggregation doesn't
+// populate yet (archive, total); Task 7 wires the real values.
+export const EMPTY_COUNTS: FolderCounts = {
+    inbox: 0,
+    inboxTotal: 0,
+    drafts: 0,
+    sent: 0,
+    starred: 0,
+    trash: 0,
+    spam: 0,
+    archive: 0,
+    total: 0,
 }
 
 /**
@@ -45,6 +62,7 @@ export function useMailboxFolderCounts(): Map<string, FolderCounts> {
         const map = new Map<string, FolderCounts>()
         for (const r of rows ?? []) {
             map.set(r.mailbox, {
+                ...EMPTY_COUNTS,
                 inbox: r.inbox ?? 0,
                 drafts: r.drafts ?? 0,
                 sent: r.sent ?? 0,

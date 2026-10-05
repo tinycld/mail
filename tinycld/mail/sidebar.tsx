@@ -19,7 +19,7 @@ import { UnifiedInboxSection } from './components/UnifiedInboxSection'
 import { composeEvents } from './hooks/composeEvents'
 import { useLabels } from './hooks/useLabels'
 import { useMailboxes } from './hooks/useMailboxes'
-import { useMailboxFolderCounts } from './hooks/useMailboxFolderCounts'
+import { EMPTY_COUNTS, useMailboxFolderCounts } from './hooks/useMailboxFolderCounts'
 
 interface MailSidebarProps {
     isCollapsed: boolean
@@ -49,8 +49,6 @@ function useActiveView() {
         isDefaultView,
     }
 }
-
-const EMPTY_COUNTS = { inbox: 0, drafts: 0, sent: 0, starred: 0, trash: 0, spam: 0 }
 
 export default function MailSidebar(_props: MailSidebarProps) {
     const router = useRouter()
