@@ -29,6 +29,9 @@ func setupScopeEnv(t *testing.T) *scopeEnv {
 	app := setupInboundTestApp(t)
 	registerThreadStateSyncHooks(app)
 	registerFolderCountHooks(app)
+	// The member-backfill hook is not registered here: it runs in a goroutine,
+	// so every test that seeds a member would race it for that member's state
+	// rows. member_backfill_test.go registers it where the hook is under test.
 
 	// The shipped schema orders messages by imap_uid; the shared fixture
 	// predates the field, and without it the sort errors and every folder
