@@ -105,3 +105,81 @@ func newUser(t *testing.T, app core.App, email string) *core.Record {
 	}
 	return user
 }
+
+// A client-supplied mailbox or latest_date on create is ignored: a foreign
+// mailbox would create a counts row for a mailbox the user is not in, and a
+// pinned latest_date would float the thread.
+func TestThreadStateCreate_IgnoresSuppliedMailboxAndLatestDate(t *testing.T) {
+	env := setupScopeEnv(t)
+	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := newUser(t, env.app, "second@example.org")
+	seedMember(t, env.app, env.mbA.Id, other.Id)
+
+	states, err := env.app.FindCollectionByNameOrId("mail_thread_state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := core.NewRecord(states)
+	state.Set("thread", thread.Id)
+	state.Set("user", other.Id)
+	state.Set("folder", "inbox")
+	state.Set("mailbox", env.mbB.Id)
+	state.Set("latest_date", "2099-01-01 00:00:00.000Z")
+	if err := env.app.Save(state); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := state.GetString("mailbox"); got != env.mbA.Id {
+		t.Errorf("mailbox = %q, want the thread's %q", got, env.mbA.Id)
+	}
+	if got, want := state.GetString("latest_date"), thread.GetString("latest_date"); got != want {
+		t.Errorf("latest_date = %q, want the thread's %q", got, want)
+	}
+}
+
+// An API update cannot change either column; the stored values stay.
+func TestThreadStateUpdateRequest_KeepsMailboxAndLatestDate(t *testing.T) {
+	env := setupScopeEnv(t)
+	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A real PATCH loads the stored row, so Original() holds the stored
+	// values; mutating an already-saved in-memory record would not.
+	fresh := stateFor(t, env, thread.Id)
+	wantLatestDate := fresh.GetString("latest_date")
+	fresh.Set("mailbox", env.mbB.Id)
+	fresh.Set("latest_date", "2099-01-01 00:00:00.000Z")
+	fresh.Set("is_starred", true)
+
+	states, err := env.app.FindCollectionByNameOrId("mail_thread_state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := &core.RecordRequestEvent{
+		RequestEvent: &core.RequestEvent{Auth: env.user, App: env.app},
+		Record:       fresh,
+	}
+	// Tags() reads the embedded collection; without it the tagged hook skips
+	// the handler and the test passes for the wrong reason.
+	e.Collection = states
+	if err := env.app.OnRecordUpdateRequest("mail_thread_state").Trigger(
+		e,
+		func(e *core.RecordRequestEvent) error { return nil },
+	); err != nil {
+		t.Fatalf("trigger update hook: %v", err)
+	}
+
+	if got := fresh.GetString("mailbox"); got != env.mbA.Id {
+		t.Errorf("mailbox = %q, want it kept at %q", got, env.mbA.Id)
+	}
+	if got := fresh.GetString("latest_date"); got != wantLatestDate {
+		t.Errorf("latest_date = %q, want it kept at %q", got, wantLatestDate)
+	}
+	if !fresh.GetBool("is_starred") {
+		t.Error("the guard dropped an unrelated field the user may change")
+	}
+}

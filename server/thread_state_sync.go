@@ -12,15 +12,30 @@ var threadStateSyncLog = logging.ForPackage("mail")
 // registerThreadStateSyncHooks keeps mail_thread_state.mailbox and
 // .latest_date equal to the thread's. The thread list is one live query on
 // mail_thread_state, and a live query cannot sort or filter through a
-// relation, so the thread's values live on the state row too. Filled on
+// relation, so the thread's values live on the state row too. Copied on
 // create for every writer (Go, the seed, tests), and propagated on every
 // thread save that changes latest_date. Record saves, not SQL, so PocketBase
 // emits the realtime events the list depends on.
+//
+// Both columns are server-owned. The state updateRule lets a user write their
+// own rows, so a client could otherwise point mailbox at a mailbox they are
+// not in (creating a counts row for it) or pin latest_date to float a thread.
+// Create always takes the thread's values; an API update keeps the stored
+// ones. propagateLatestDate is an app.Save, which the ...Request hook does not
+// see, so propagation still writes through.
 func registerThreadStateSyncHooks(app core.App) {
 	app.OnRecordCreate("mail_thread_state").BindFunc(func(e *core.RecordEvent) error {
 		if err := fillThreadStateFromThread(e.App, e.Record); err != nil {
 			return err
 		}
+		return e.Next()
+	})
+	app.OnRecordUpdateRequest("mail_thread_state").BindFunc(func(e *core.RecordRequestEvent) error {
+		// Restore rather than refuse: a client that saves an edited state row
+		// can send the whole record back, both columns included.
+		original := e.Record.Original()
+		e.Record.Set("mailbox", original.GetString("mailbox"))
+		e.Record.Set("latest_date", original.GetString("latest_date"))
 		return e.Next()
 	})
 	app.OnRecordAfterUpdateSuccess("mail_threads").BindFunc(func(e *core.RecordEvent) error {
@@ -37,21 +52,14 @@ func registerThreadStateSyncHooks(app core.App) {
 }
 
 // fillThreadStateFromThread copies mailbox and latest_date from the thread
-// onto a state row that lacks them.
+// onto a new state row, replacing any value the writer supplied.
 func fillThreadStateFromThread(app core.App, state *core.Record) error {
-	if state.GetString("mailbox") != "" && state.GetString("latest_date") != "" {
-		return nil
-	}
 	thread, err := app.FindRecordById("mail_threads", state.GetString("thread"))
 	if err != nil {
 		return fmt.Errorf("thread for state row: %w", err)
 	}
-	if state.GetString("mailbox") == "" {
-		state.Set("mailbox", thread.GetString("mailbox"))
-	}
-	if state.GetString("latest_date") == "" {
-		state.Set("latest_date", thread.GetString("latest_date"))
-	}
+	state.Set("mailbox", thread.GetString("mailbox"))
+	state.Set("latest_date", thread.GetString("latest_date"))
 	return nil
 }
 
