@@ -2,73 +2,77 @@ import { and, eq, inArray } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
+import { materialize } from 'pbtsdb'
 import { useMemo } from 'react'
-import type { ThreadListItem } from '../components/thread-list-item'
-import type { MailThreadState } from '../types'
-import { searchResultToThreadListItem } from './mailListHelpers'
+import {
+    type ThreadListItem,
+    type ThreadListRow,
+    toThreadListItem,
+} from '../components/thread-list-item'
+import { stripHtmlTags } from './mailListHelpers'
 import { useLabels } from './useLabels'
 import type { MailSearchResult } from './useMailSearch'
 
+type LabelInfo = { id: string; name: string; color: string }
+const isLabel = (l: LabelInfo | undefined): l is LabelInfo => l != null
+
 /**
- * Turns raw FTS search hits into list rows backed by real mail_thread_state.
+ * Turns FTS hits into list rows. A hit carries only its state id, thread id,
+ * and highlights; the row renders from the live mail_thread_state and
+ * mail_threads rows, so archive, star, and read changes show in place and a
+ * new message in a hit updates its snippet.
  *
- * Search hits come from a server FTS endpoint that returns thread display data
- * but no thread_state id — so on their own a hit's swipe actions (archive /
- * trash / star) would target `thread_id` as if it were a state id and silently
- * no-op. mail_thread_state is on-demand, so we live-query just the hits' thread
- * ids, index them by thread id, and merge each hit with its resolved state.
- * Hits with no resolvable state (shouldn't happen — a searchable thread the
- * user can see has a state row) are dropped so the list never shows an
- * un-actionable row.
- *
- * Because the merge reads the live thread_state, search rows reflect the real
- * read / starred / folder / label state and update in place as those change.
+ * The state query is a pure id subset: served from the store when the rows
+ * are present, otherwise one batched request. No user term: the state rule is
+ * `user = me` and the endpoint scoped the ids to the caller.
  */
-export function useSearchThreadItems(
-    currentUserId: string,
-    results: MailSearchResult[]
-): ThreadListItem[] {
-    const [threadStateCollection, assignmentsCollection] = useStore(
+export function useSearchThreadItems(results: MailSearchResult[]): ThreadListItem[] {
+    const [threadStateCollection, threadsCollection, assignmentsCollection] = useStore(
         'mail_thread_state',
+        'mail_threads',
         'label_assignments'
     )
     const { labelMap } = useLabels()
 
-    // Bounded to the hits actually being rendered — see the collection note in
-    // collections.ts: mail_thread_state is on-demand, so an unbounded query
-    // here would fetch and subscribe to every state row instead of just these.
-    const resultThreadIds = useMemo(() => results.map(result => result.thread_id), [results])
+    const stateIds = useMemo(() => results.map(r => r.state_id), [results])
 
-    const { data: threadStates } = useLiveQuery({
+    const { data: rows } = useLiveQuery({
         query: query =>
-            resultThreadIds.length === 0
+            stateIds.length === 0
                 ? undefined
                 : query
-                      .from({ mail_thread_state: threadStateCollection })
-                      .where(({ mail_thread_state }) =>
-                          and(
-                              eq(mail_thread_state.user, currentUserId),
-                              inArray(mail_thread_state.thread, resultThreadIds)
-                          )
-                      ),
+                      .from({ mail_thread_state: threadStateCollection.fetchRelations('thread') })
+                      .where(({ mail_thread_state }) => inArray(mail_thread_state.id, stateIds))
+                      .select(({ mail_thread_state }) => ({
+                          ...mail_thread_state,
+                          thread_id: mail_thread_state.thread,
+                          thread: materialize(
+                              query
+                                  .from({ t: threadsCollection })
+                                  .where(({ t }) => eq(t.id, mail_thread_state.thread))
+                                  .findOne()
+                          ),
+                      })),
     })
 
     const { data: allAssignments } = useMyLiveQuery((query, { userId }) =>
-        query
-            .from({ label_assignments: assignmentsCollection })
-            .where(({ label_assignments }) =>
-                and(
-                    eq(label_assignments.collection, 'mail_thread_state'),
-                    eq(label_assignments.user, userId)
-                )
-            )
+        stateIds.length === 0
+            ? null
+            : query
+                  .from({ label_assignments: assignmentsCollection })
+                  .where(({ label_assignments }) =>
+                      and(
+                          eq(label_assignments.collection, 'mail_thread_state'),
+                          eq(label_assignments.user, userId)
+                      )
+                  )
     )
 
-    const stateByThread = useMemo(() => {
-        const map = new Map<string, MailThreadState>()
-        for (const s of (threadStates ?? []) as MailThreadState[]) map.set(s.thread, s)
+    const rowById = useMemo(() => {
+        const map = new Map<string, ThreadListRow>()
+        for (const row of (rows ?? []) as ThreadListRow[]) map.set(row.id, row)
         return map
-    }, [threadStates])
+    }, [rows])
 
     const labelIdsByRecord = useMemo(() => {
         const map = new Map<string, string[]>()
@@ -82,14 +86,15 @@ export function useSearchThreadItems(
 
     return useMemo(() => {
         const out: ThreadListItem[] = []
-        for (const result of results) {
-            const state = stateByThread.get(result.thread_id)
-            if (!state) continue
-            const labels = (labelIdsByRecord.get(state.id) ?? [])
+        for (const hit of results) {
+            const row = rowById.get(hit.state_id)
+            if (!row) continue
+            const labels = (labelIdsByRecord.get(row.id) ?? [])
                 .map(id => labelMap.get(id))
-                .filter((l): l is { id: string; name: string; color: string } => l != null)
-            out.push(searchResultToThreadListItem(result, state, labels))
+                .filter(isLabel)
+            const snippet = stripHtmlTags(hit.snippet_highlight) || undefined
+            out.push(toThreadListItem(row, labels, { snippet }))
         }
         return out
-    }, [results, stateByThread, labelIdsByRecord, labelMap])
+    }, [results, rowById, labelIdsByRecord, labelMap])
 }

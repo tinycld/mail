@@ -4,7 +4,6 @@ import { LoadingState } from '@tinycld/core/components/LoadingState'
 import { ScreenHeader } from '@tinycld/core/components/ScreenHeader'
 import { SwipeableRowProvider } from '@tinycld/core/components/SwipeableRow'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
-import { useAuth } from '@tinycld/core/lib/auth'
 import type { HelpTopicId } from '@tinycld/core/lib/help/types'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { markNavMilestone, NAV_PERF } from '@tinycld/core/lib/nav-perf'
@@ -207,7 +206,6 @@ export default function MailListScreen() {
     const router = useRouter()
     const orgHref = useOrgHref()
     const breakpoint = useBreakpoint()
-    const currentUserId = useAuth().user.id
     const { isScrolled, onScroll } = useScrollShadow()
     const { openDraft } = useCompose()
     const search = useMailSearchState()
@@ -350,7 +348,7 @@ export default function MailListScreen() {
         [openDraft]
     )
 
-    const searchItems = useSearchThreadItems(currentUserId, search.results)
+    const searchItems = useSearchThreadItems(search.results)
 
     const activeLabels = useMemo(
         () =>

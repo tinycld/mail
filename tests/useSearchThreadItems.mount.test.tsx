@@ -14,10 +14,6 @@ afterEach(() => {
 // mount the real hook against real TanStack DB collections so the predicate
 // actually executes — a fixture that never runs the query would certify a
 // filter matching zero rows.
-//
-// The fixture carries two rows the hook must not surface: another user's row
-// on a searched thread (excluded by the user predicate) and this user's row on
-// an unsearched thread (excluded by the id predicate).
 
 const h = vi.hoisted(() => ({
     states: [
@@ -25,9 +21,12 @@ const h = vi.hoisted(() => ({
             id: 'ts_hit1',
             thread: 'thread_hit1',
             user: 'u1',
+            mailbox: 'mb1',
             folder: 'inbox',
             is_read: false,
             is_starred: false,
+            is_sent: false,
+            latest_date: '2026-10-05 10:00:00.000Z',
             created: '',
             updated: '',
         },
@@ -35,20 +34,12 @@ const h = vi.hoisted(() => ({
             id: 'ts_hit2',
             thread: 'thread_hit2',
             user: 'u1',
+            mailbox: 'mb1',
             folder: 'inbox',
             is_read: true,
             is_starred: true,
-            created: '',
-            updated: '',
-        },
-        // Same thread as a hit, but another user's state row.
-        {
-            id: 'ts_other',
-            thread: 'thread_hit1',
-            user: 'u2',
-            folder: 'inbox',
-            is_read: false,
-            is_starred: false,
+            is_sent: false,
+            latest_date: '2026-10-04 10:00:00.000Z',
             created: '',
             updated: '',
         },
@@ -57,9 +48,40 @@ const h = vi.hoisted(() => ({
             id: 'ts_unsearched',
             thread: 'thread_unsearched',
             user: 'u1',
+            mailbox: 'mb1',
             folder: 'inbox',
             is_read: false,
             is_starred: false,
+            is_sent: false,
+            latest_date: '2026-10-03 10:00:00.000Z',
+            created: '',
+            updated: '',
+        },
+    ],
+    threads: [
+        {
+            id: 'thread_hit1',
+            mailbox: 'mb1',
+            subject: 'Hit one',
+            snippet: 'stored snippet one',
+            message_count: 2,
+            latest_date: '2026-10-05 10:00:00.000Z',
+            participants: [{ name: 'Ann', email: 'ann@example.com' }],
+            has_draft: false,
+            has_attachments: true,
+            created: '',
+            updated: '',
+        },
+        {
+            id: 'thread_hit2',
+            mailbox: 'mb1',
+            subject: 'Hit two',
+            snippet: 'stored snippet two',
+            message_count: 1,
+            latest_date: '2026-10-04 10:00:00.000Z',
+            participants: [],
+            has_draft: false,
+            has_attachments: false,
             created: '',
             updated: '',
         },
@@ -75,20 +97,22 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
     const { BasicIndex, createCollection, localOnlyCollectionOptions } = await import(
         '@tanstack/db'
     )
-    // Index like the real collections (core/lib/pocketbase.ts) so joins do not fall back to a scan.
-    const mk = (id: string, initialData: { id: string }[]) =>
-        createCollection({
+    const mk = (id: string, initialData: { id: string }[]) => {
+        const collection = createCollection({
             ...localOnlyCollectionOptions({ id, getKey: (r: { id: string }) => r.id, initialData }),
             autoIndex: 'eager',
             defaultIndexType: BasicIndex,
         })
+        // The real collection is a pbtsdb collection; fetchRelations returns a
+        // view sharing its store. Here the base collection stands in for the view.
+        return Object.assign(collection, { fetchRelations: () => collection })
+    }
     const stores: Record<string, unknown> = {
         mail_thread_state: mk('mail_thread_state', h.states as { id: string }[]),
+        mail_threads: mk('mail_threads', h.threads as { id: string }[]),
         label_assignments: mk('label_assignments', h.assignments as { id: string }[]),
     }
-    return {
-        useStore: (...names: string[]) => names.map(n => stores[n]),
-    }
+    return { useStore: (...names: string[]) => names.map(n => stores[n]) }
 })
 
 vi.mock('~/tinycld/mail/hooks/useLabels', () => ({
@@ -141,83 +165,49 @@ vi.mock('@tanstack/react-db', async () => {
     }
 })
 
-import type { MailSearchResult } from '~/tinycld/mail/hooks/useMailSearch'
 import { useSearchThreadItems } from '~/tinycld/mail/hooks/useSearchThreadItems'
 
-const hit = (threadId: string, subject: string): MailSearchResult => ({
-    thread_id: threadId,
-    subject,
-    subject_highlight: subject,
-    snippet_highlight: '',
-    latest_date: '2024-01-01T00:00:00Z',
-    participants: JSON.stringify([{ name: 'Alice', email: 'alice@acme.com' }]),
-    message_count: 1,
-    mailbox_id: 'mb_me',
-    has_attachments: false,
+const results = [
+    {
+        thread_id: 'thread_hit2',
+        state_id: 'ts_hit2',
+        subject_highlight: '<mark>Hit</mark> two',
+        snippet_highlight: 'two <mark>match</mark>',
+    },
+    { thread_id: 'thread_hit1', state_id: 'ts_hit1', subject_highlight: '', snippet_highlight: '' },
+]
+
+test('rows come from the live state and thread, in hit order, with the highlight snippet', async () => {
+    const { result } = renderHook(() => useSearchThreadItems(results))
+    await waitFor(() => expect(result.current).toHaveLength(2))
+    expect(result.current.map(i => i.stateId)).toEqual(['ts_hit2', 'ts_hit1'])
+    expect(result.current[0]).toMatchObject({
+        threadId: 'thread_hit2',
+        subject: 'Hit two',
+        snippet: 'two match',
+        isRead: true,
+        isStarred: true,
+        folder: 'inbox',
+    })
+    expect(result.current[1]).toMatchObject({
+        subject: 'Hit one',
+        snippet: 'stored snippet one',
+        senderName: 'Ann',
+        hasAttachments: true,
+    })
 })
 
-test('resolves state only for the searched threads, scoped to the signed-in user', async () => {
-    const results = [hit('thread_hit1', 'First'), hit('thread_hit2', 'Second')]
-    const { result } = renderHook(() => useSearchThreadItems('u1', results))
-
-    await waitFor(() => expect(result.current.length).toBe(2))
-
-    // Rows carry the signed-in user's state id, never u2's row on the same
-    // thread. stateId falls back to thread_id when no state resolves, so this
-    // also catches a predicate that matches nothing.
-    const stateIds = result.current.map(r => r.stateId).sort()
-    expect(stateIds).toEqual(['ts_hit1', 'ts_hit2'])
-})
-
-// The assertion above passes whether or not the query is bounded — the hook
-// indexes by thread id, so surplus rows are simply never looked up. What must
-// not regress is the QUERY: on an on-demand collection an unbounded predicate
-// syncs the entire mailbox. Assert on the compiled where-clause so dropping
-// the id predicate fails here.
-test('the thread_state query is restricted to the searched ids', async () => {
-    const results = [hit('thread_hit1', 'First'), hit('thread_hit2', 'Second')]
-    renderHook(() => useSearchThreadItems('u1', results))
-
-    await waitFor(() => expect(seenQueries.length).toBeGreaterThan(0))
-
+test('the state query is bounded to the hit ids and carries no user term', () => {
+    renderHook(() => useSearchThreadItems(results))
     const stateQuery = seenQueries.find(q => q.includes('mail_thread_state'))
     expect(stateQuery).toBeDefined()
-    expect(stateQuery).toContain('thread_hit1')
-    expect(stateQuery).toContain('thread_hit2')
-    // The unsearched thread is never named, so the query cannot pull it down.
-    expect(stateQuery).not.toContain('thread_unsearched')
+    expect(stateQuery).toContain('ts_hit1')
+    expect(stateQuery).toContain('ts_hit2')
+    expect(stateQuery).not.toContain('"user"')
 })
 
-test('an empty result set resolves no rows and issues no unbounded query', async () => {
-    const { result } = renderHook(() => useSearchThreadItems('u1', []))
-
-    await waitFor(() => expect(result.current).toEqual([]))
-})
-
-// The object form derives query identity from the query IR, so new ids in the
-// results must re-run the query without a deps array.
-test('re-runs the thread_state query when the results change', async () => {
-    const { result, rerender } = renderHook(
-        ({ results }: { results: MailSearchResult[] }) => useSearchThreadItems('u1', results),
-        { initialProps: { results: [hit('thread_hit1', 'First')] } }
-    )
-
-    await waitFor(() => expect(result.current.map(r => r.stateId)).toEqual(['ts_hit1']))
-
-    rerender({ results: [hit('thread_hit2', 'Second')] })
-
-    await waitFor(() => expect(result.current.map(r => r.stateId)).toEqual(['ts_hit2']))
-})
-
-test('the thread_state query uses the object form of useLiveQuery', async () => {
-    // Match on the FROM part only: the label query also names mail_thread_state
-    // in its WHERE clause.
-    const readsThreadState = (q: string) => q.split('|')[1]?.includes('mail_thread_state')
-
-    renderHook(() => useSearchThreadItems('u1', [hit('thread_hit1', 'First')]))
-
-    await waitFor(() => expect(seenQueries.some(readsThreadState)).toBe(true))
-
-    const forms = seenQueries.filter(readsThreadState).map(q => q.split('|')[0])
-    expect(new Set(forms)).toEqual(new Set(['object']))
+test('no results, no state query', () => {
+    const { result } = renderHook(() => useSearchThreadItems([]))
+    expect(result.current).toEqual([])
+    expect(seenQueries.some(q => q.includes('mail_thread_state'))).toBe(false)
 })
