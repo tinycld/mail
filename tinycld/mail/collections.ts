@@ -85,15 +85,14 @@ export function registerCollections(
     const mail_thread_state = newCollection('mail_thread_state', {
         ...onDemand,
         omitOnInsert: ['created', 'updated'] as const,
-        // No `expand`, for the same reason as mail_threads and mail_messages:
-        // under on-demand each fetched state row would carry a duplicate copy
-        // of its thread and user. Both are already available — the thread from
-        // useThreadListItems' page query, the user as the signed-in account.
+        // The thread list fetches `thread` per query (`fetchRelations('thread')`);
+        // pbtsdb files the expanded thread into mail_threads and holds it live,
+        // so rows never carry `expand`. Not in alwaysFetchRelations: other
+        // readers of state rows already have their thread.
+        relations: { thread: mail_threads },
         // A state row exists per (user, thread), so this collection grows with
-        // the whole mailbox, not with what's on screen: an imported account
-        // has tens of thousands of rows total, but on-demand + per-query
-        // realtime means only the thread ids being rendered are ever filed
-        // into the store or subscribed to.
+        // the whole mailbox, not with what's on screen. On-demand + per-query
+        // realtime files and subscribes only the rows a query asks for.
         collectionOptions: indexing,
     })
 

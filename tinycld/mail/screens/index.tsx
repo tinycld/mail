@@ -5,18 +5,16 @@ import { ScreenHeader } from '@tinycld/core/components/ScreenHeader'
 import { SwipeableRowProvider } from '@tinycld/core/components/SwipeableRow'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { useAuth } from '@tinycld/core/lib/auth'
-import { captureException } from '@tinycld/core/lib/errors'
 import type { HelpTopicId } from '@tinycld/core/lib/help/types'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { markNavMilestone, NAV_PERF } from '@tinycld/core/lib/nav-perf'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
-import { pb, queryClient } from '@tinycld/core/lib/pocketbase'
-import { serverFetch } from '@tinycld/core/lib/server-fetch'
+import { queryClient } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Archive, Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { Pressable, RefreshControl, Text, View } from 'react-native'
 import { ComposeFAB } from '../components/ComposeFAB'
 import { EmailListToolbar } from '../components/EmailListToolbar'
@@ -26,26 +24,29 @@ import { prettifyFolderKey } from '../hooks/mailListHelpers'
 import { useCompose } from '../hooks/useComposeState'
 import { useMailBulkActions } from '../hooks/useMailBulkActions'
 import { useMailboxes } from '../hooks/useMailboxes'
+import { folderTotal, useMailboxFolderCounts } from '../hooks/useMailboxFolderCounts'
 import { useMailListShortcuts } from '../hooks/useMailListShortcuts'
 import { useMailSelection } from '../hooks/useMailSelection'
 import { useMailSearchState } from '../hooks/useSearchState'
 import { useSearchThreadItems } from '../hooks/useSearchThreadItems'
 import { PAGE_SIZE, UNIFIED_INBOX, useThreadListItems } from '../hooks/useThreadListItems'
+import { decodeCursors, encodeCursors } from '../lib/thread-list-query'
 
 function useQueryParams() {
-    const { folder, label, mailbox, page } = useLocalSearchParams<{
+    const { folder, label, mailbox, cursor } = useLocalSearchParams<{
         folder?: string
         label?: string
         mailbox?: string
-        page?: string
+        cursor?: string
     }>()
     const labels = label ? label.split(',').filter(Boolean) : []
-    const parsedPage = page ? Number.parseInt(page, 10) : 1
+    const cursors = decodeCursors(cursor)
     return {
         folder: folder ?? null,
         labels,
         mailbox: mailbox ?? null,
-        page: Number.isFinite(parsedPage) && parsedPage >= 1 ? parsedPage : 1,
+        cursors,
+        page: cursors.length + 1,
     }
 }
 
@@ -202,7 +203,7 @@ function helpTopicForView(
 
 export default function MailListScreen() {
     if (NAV_PERF) markNavMilestone('mail', 'render-start')
-    const { folder, labels, mailbox, page } = useQueryParams()
+    const { folder, labels, mailbox, cursors, page } = useQueryParams()
     const router = useRouter()
     const orgHref = useOrgHref()
     const breakpoint = useBreakpoint()
@@ -216,60 +217,51 @@ export default function MailListScreen() {
     const isUnifiedView = folder === 'all-inboxes' || (isDefaultView && unifiedAvailable)
     const mailboxId = isUnifiedView ? UNIFIED_INBOX : (mailbox ?? personal?.id ?? '')
 
-    // mail_folder_counts is a view collection (no realtime, on-demand or not).
-    // Refetch on folder/mailbox/label change so the sidebar self-heals on
-    // every nav. The bare key still prefix-matches pbtsdb's on-demand cache
-    // keys (`[name, request]`).
-    const _labelKey = labels.join(',')
-    useEffect(() => {
-        queryClient.invalidateQueries({ queryKey: ['mail_folder_counts'] })
-    }, [])
-
     const {
         items,
         labels: allLabels,
         labelMap,
-        draftByThread,
-        threadMap,
         threadStateCollection,
+        visibleMailboxIds,
         isLoading,
         itemsLoading,
-        totalItems,
-    } = useThreadListItems(
-        currentUserId,
-        {
-            folder,
-            labels,
-            mailboxId,
-        },
-        { page }
-    )
+        nextCursor,
+        hasFullPage,
+    } = useThreadListItems({
+        folder,
+        labels,
+        mailboxId,
+        cursor: cursors[cursors.length - 1] ?? null,
+    })
 
-    const navigateToPage = useCallback(
-        (nextPage: number) => {
+    const counts = useMailboxFolderCounts()
+    const totalItems = folderTotal(counts, visibleMailboxIds, folder)
+
+    const navigateToCursors = useCallback(
+        (next: typeof cursors) => {
             const params: Record<string, string> = {}
             if (folder) params.folder = folder
             if (mailbox) params.mailbox = mailbox
             if (labels.length > 0) params.label = labels.join(',')
-            if (nextPage > 1) params.page = String(nextPage)
+            if (next.length > 0) params.cursor = encodeCursors(next)
             router.replace(orgHref('mail', params))
         },
         [router, orgHref, folder, mailbox, labels]
     )
 
     const handlePrevPage = useCallback(() => {
-        if (page > 1) navigateToPage(page - 1)
-    }, [navigateToPage, page])
+        if (cursors.length > 0) navigateToCursors(cursors.slice(0, -1))
+    }, [navigateToCursors, cursors])
 
     const handleNextPage = useCallback(() => {
-        if (page * PAGE_SIZE < totalItems) navigateToPage(page + 1)
-    }, [navigateToPage, page, totalItems])
+        if (hasFullPage && nextCursor) navigateToCursors([...cursors, nextCursor])
+    }, [navigateToCursors, cursors, hasFullPage, nextCursor])
 
     const [isRefreshing, setIsRefreshing] = useState(false)
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true)
         try {
-            await queryClient.invalidateQueries()
+            await queryClient.invalidateQueries({ queryKey: ['mail_thread_state'] })
         } finally {
             setIsRefreshing(false)
         }
@@ -350,49 +342,10 @@ export default function MailListScreen() {
     })
 
     const handleDraftPress = useCallback(
-        async (item: ThreadListItem) => {
-            const draft = draftByThread.get(item.threadId)
-            if (!draft) return
-
-            // mail_messages' viewRule is member-scoped (not public) — a
-            // plain getURL() 404s in the browser (no Authorization header on
-            // a bare fetch), so the draft body needs the short-lived
-            // `?token=` from pb.files.getToken() (mirrors EmailBody.tsx and
-            // core/file-viewer/use-authed-file-url.ts).
-            const htmlBody = draft.body_html
-                ? await pb.files
-                      .getToken()
-                      .then(fileToken =>
-                          serverFetch(
-                              pb.files.getURL(
-                                  { collectionId: 'mail_messages', id: draft.id },
-                                  draft.body_html,
-                                  { token: fileToken }
-                              )
-                          )
-                      )
-                      .then(r => r.text())
-                      .catch(err => {
-                          captureException('mail.openDraft.fetchBody', err, { messageId: draft.id })
-                          return ''
-                      })
-                : ''
-
-            const draftThread = threadMap.get(draft.thread)
-            openDraft({
-                messageId: draft.id,
-                threadId: item.threadId,
-                subject: draft.subject ?? '',
-                to: draft.recipients_to ?? [],
-                cc: draft.recipients_cc ?? [],
-                bcc: [],
-                htmlBody,
-                textBody: draft.snippet ?? '',
-                mailboxId: draftThread?.mailbox ?? '',
-                aliasId: draft.alias || null,
-            })
+        (item: ThreadListItem) => {
+            openDraft({ threadId: item.threadId, mailboxId: item.mailboxId })
         },
-        [draftByThread, threadMap, openDraft]
+        [openDraft]
     )
 
     const searchItems = useSearchThreadItems(currentUserId, search.results)

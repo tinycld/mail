@@ -12,16 +12,8 @@ export interface ReplyContext {
 }
 
 export interface DraftContext {
-    messageId: string
     threadId: string
-    subject: string
-    to: { name: string; email: string }[]
-    cc: { name: string; email: string }[]
-    bcc: { name: string; email: string }[]
-    htmlBody: string
-    textBody: string
     mailboxId: string
-    aliasId: string | null
 }
 
 export interface ComposeState {
