@@ -52,6 +52,10 @@ Attachments appear as cards below the message body — name, size, and a downloa
 
 Click an attachment to download. There's no in-app preview yet; consider [saving to Drive](help://drive:files) first if you want to preview before downloading.
 
+## Moving through a long list
+
+The list shows 100 conversations at a time, newest first. Use the **Newer** and **Older** arrows at the top right of the list to move between pages; the text beside them shows where you are, for example `101–200 of 342`. New mail lands on the first page. When you are on a later page, go back to the first page or watch the Inbox badge in the sidebar to see new arrivals.
+
 ## See also
 
 - [Composing](help://mail:composing)
