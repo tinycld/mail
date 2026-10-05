@@ -51,7 +51,7 @@ export function MailboxSidebarSection({
     }
 
     return (
-        <View>
+        <View testID="mailbox-section">
             <Pressable
                 onPress={handleHeaderPress}
                 className="flex-row gap-1 items-center pl-1 pr-3 py-2"

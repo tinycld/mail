@@ -1,10 +1,13 @@
 import { expect, test } from '@playwright/test'
 import { clickSidebarItem, login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 import {
+    createSharedMailbox,
     deliverInbound,
     emailRow,
     expectRowVisible,
+    mailboxSection,
     navigateToPersonalInbox,
+    openSharedMailbox,
     uniqueSubject,
 } from './helpers'
 
@@ -25,18 +28,42 @@ test.describe('Mail — Inbox', () => {
         await expect(inboxItem.getByText(/^\d+$/).first()).toBeVisible()
     })
 
-    // The list is a one-shot page query refreshed by thread-state changes, so
-    // a thread delivered while the Inbox is open must still reach it.
-    test('a thread delivered while the Inbox is open appears without a reload', async ({
+    // The list is one live query on mail_thread_state subscribed to
+    // `user && mailbox && folder`, so a new row arrives on its own. A fresh
+    // shared mailbox keeps the inbox at one thread: with a full page the old
+    // id-list filter overflowed PocketBase's topic cap and fell back to a
+    // whole-collection subscription, which hid this exact bug in CI.
+    test('a thread delivered while a one-thread Inbox is open appears without a reload', async ({
         page,
         request,
     }) => {
-        await navigateToPersonalInbox(page)
+        const address = await createSharedMailbox(page, 'LiveOne')
+        const first = uniqueSubject('LiveFirst')
+        await deliverInbound(request, { subject: first, to: address })
+        await openSharedMailbox(page, address)
+        await expectRowVisible(page, first)
 
-        const subject = uniqueSubject('LiveArrival')
-        await deliverInbound(request, { subject })
+        const second = uniqueSubject('LiveSecond')
+        await deliverInbound(request, { subject: second, to: address })
+        await expectRowVisible(page, second)
+    })
 
-        await expectRowVisible(page, subject)
+    test('a thread delivered while viewing Archive bumps the Inbox badge', async ({
+        page,
+        request,
+    }) => {
+        const address = await createSharedMailbox(page, 'BadgeBox')
+        await openSharedMailbox(page, address)
+        // The mailbox section: its Inbox item carries the unread badge.
+        const section = mailboxSection(page, address.split('@')[0])
+        const inboxItem = section.getByText('Inbox', { exact: true }).locator('xpath=..')
+        await expect(inboxItem.getByText(/^\d+$/)).toHaveCount(0)
+
+        await section.getByText('Archive', { exact: true }).click()
+        await expect(page).toHaveURL(/folder=archive/)
+
+        await deliverInbound(request, { subject: uniqueSubject('BadgeArrival'), to: address })
+        await expect(inboxItem.getByText('1', { exact: true })).toBeVisible()
     })
 
     test('search filters threads', async ({ page, request }) => {
