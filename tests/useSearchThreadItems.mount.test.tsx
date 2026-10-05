@@ -121,6 +121,12 @@ vi.mock('~/tinycld/mail/hooks/useLabels', () => ({
 
 // Capture each compiled query so a test can assert on what the hook actually
 // asks the collection for — the bounding lives in the query, not the result.
+// Each entry is `form|from|where`, so a test locates the query it cares about
+// by its FROM segment (the collection's identity) before reading its WHERE
+// segment — the hook's query aliases the collection as `s`, carrying no
+// collection name, so `from` is serialized separately to keep the real
+// collection's `id` (otherwise invisible once the cyclic `collection` object
+// is stripped) while `where` stays alias-shaped.
 const seenQueries: string[] = []
 
 // The IR holds live collection references, so drop `collection` keys and guard
@@ -137,6 +143,18 @@ const serializeWhere = (where: unknown): string => {
     })
 }
 
+// Unlike `serializeWhere`, this keeps the collection's `id` (dropping the rest
+// of the live collection object, which is cyclic) so a test can identify which
+// real collection a query's FROM clause names, even though the query aliases
+// it as something else (`s`).
+const serializeFrom = (from: unknown): string =>
+    JSON.stringify(from, (key, value) => {
+        if (key === 'collection' && value && typeof value === 'object' && 'id' in value) {
+            return { id: (value as { id: unknown }).id }
+        }
+        return value
+    })
+
 // Each entry records the call form too: the hook must use the object form
 // (`{ query }`), while core's useMyLiveQuery may still pass `(fn, deps)`.
 type QueryFn = (q: never) => { query?: { from?: unknown; where?: unknown } } | null | undefined
@@ -145,7 +163,7 @@ const recordQuery = (fn: QueryFn, form: 'object' | 'deps') => (q: never) => {
     const built = fn(q)
     if (built?.query) {
         seenQueries.push(
-            `${form}|${serializeWhere(built.query.from)}|${serializeWhere(built.query.where)}`
+            `${form}|${serializeFrom(built.query.from)}|${serializeWhere(built.query.where)}`
         )
     }
     return built as never
@@ -197,17 +215,25 @@ test('rows come from the live state and thread, in hit order, with the highlight
     })
 })
 
+// The hook's query aliases the state collection as `s`, so a query is "the
+// state query" by what its FROM names, not by any string in the whole entry —
+// the label-assignments query legitimately carries 'mail_thread_state' too,
+// as the VALUE of its `collection` filter, so matching on the whole entry
+// would find the wrong query.
+const readsThreadState = (q: string) => q.split('|')[1]?.includes('mail_thread_state')
+
 test('the state query is bounded to the hit ids and carries no user term', () => {
     renderHook(() => useSearchThreadItems(results))
-    const stateQuery = seenQueries.find(q => q.includes('mail_thread_state'))
+    const stateQuery = seenQueries.find(readsThreadState)
     expect(stateQuery).toBeDefined()
-    expect(stateQuery).toContain('ts_hit1')
-    expect(stateQuery).toContain('ts_hit2')
-    expect(stateQuery).not.toContain('"user"')
+    const whereSegment = stateQuery?.split('|')[2]
+    expect(whereSegment).toContain('ts_hit1')
+    expect(whereSegment).toContain('ts_hit2')
+    expect(whereSegment).not.toContain('"user"')
 })
 
 test('no results, no state query', () => {
     const { result } = renderHook(() => useSearchThreadItems([]))
     expect(result.current).toEqual([])
-    expect(seenQueries.some(q => q.includes('mail_thread_state'))).toBe(false)
+    expect(seenQueries.some(readsThreadState)).toBe(false)
 })

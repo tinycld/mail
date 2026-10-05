@@ -41,31 +41,29 @@ export function useSearchThreadItems(results: MailSearchResult[]): ThreadListIte
             stateIds.length === 0
                 ? undefined
                 : query
-                      .from({ mail_thread_state: threadStateCollection.fetchRelations('thread') })
-                      .where(({ mail_thread_state }) => inArray(mail_thread_state.id, stateIds))
-                      .select(({ mail_thread_state }) => ({
-                          ...mail_thread_state,
-                          thread_id: mail_thread_state.thread,
+                      .from({ s: threadStateCollection.fetchRelations('thread') })
+                      .where(({ s }) => inArray(s.id, stateIds))
+                      .select(({ s }) => ({
+                          ...s,
+                          thread_id: s.thread,
                           thread: materialize(
                               query
                                   .from({ t: threadsCollection })
-                                  .where(({ t }) => eq(t.id, mail_thread_state.thread))
+                                  .where(({ t }) => eq(t.id, s.thread))
                                   .findOne()
                           ),
                       })),
     })
 
     const { data: allAssignments } = useMyLiveQuery((query, { userId }) =>
-        stateIds.length === 0
-            ? null
-            : query
-                  .from({ label_assignments: assignmentsCollection })
-                  .where(({ label_assignments }) =>
-                      and(
-                          eq(label_assignments.collection, 'mail_thread_state'),
-                          eq(label_assignments.user, userId)
-                      )
-                  )
+        query
+            .from({ label_assignments: assignmentsCollection })
+            .where(({ label_assignments }) =>
+                and(
+                    eq(label_assignments.collection, 'mail_thread_state'),
+                    eq(label_assignments.user, userId)
+                )
+            )
     )
 
     const rowById = useMemo(() => {
