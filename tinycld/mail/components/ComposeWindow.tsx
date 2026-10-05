@@ -112,7 +112,17 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         if (!isVisible) return
         let cleanup: (() => void) | undefined
         if (draftContext) {
-            if (!resolvedDraft) return
+            if (!resolvedDraft) {
+                // The previous draft must not linger on screen while the next
+                // one loads (e.g. clicking draft B while draft A is open) —
+                // clear the form and drop the ref so an autosave during the
+                // gap cannot overwrite draft A.
+                draftIdRef.current = null
+                reset({ to: '', cc: '', bcc: '', subject: '' })
+                setHeaderTitle('')
+                editorRef.current.clear()
+                return
+            }
             const { message, htmlBody } = resolvedDraft
             draftIdRef.current = message.id
             setFromIdentity(draftContext.mailboxId, message.alias || null)

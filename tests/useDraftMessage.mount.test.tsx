@@ -119,3 +119,24 @@ test('returns null when the context has no thread id', () => {
 
     expect(result.current).toBeNull()
 })
+
+// Opening a second draft (e.g. clicking draft B while draft A is shown)
+// swaps draftContext to a thread whose draft row has not synced in yet.
+// The hook must drop A's resolved result immediately rather than hold it
+// stale until B resolves — the consuming component's effect relies on this
+// to clear the form instead of leaving A's content on screen.
+test('returns null again when the thread id switches to one with no draft in the store', async () => {
+    const { result, rerender } = renderHook(
+        ({ threadId }: { threadId: string }) => useDraftMessage({ threadId, mailboxId: 'mb1' }),
+        {
+            wrapper: ({ children }) => withQueryClient(children),
+            initialProps: { threadId: 'thread1' },
+        }
+    )
+
+    await waitFor(() => expect(result.current?.message.id).toBe('msg_draft1'))
+
+    rerender({ threadId: 'thread_missing' })
+
+    expect(result.current).toBeNull()
+})
