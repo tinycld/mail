@@ -42,10 +42,10 @@ func TestSearchSendsFlagsAndRendersResults(t *testing.T) {
 	f := mailFixture(t)
 	f.searchResponse = api.SearchResponse{
 		Items: []api.SearchResultItem{{
-			ThreadID: "thr1", Subject: "Quarterly invoice",
+			ThreadID:         "thr1",
 			SubjectHighlight: "Quarterly <mark>invoice</mark>",
 			SnippetHighlight: "the <mark>invoice</mark> attached",
-			LatestDate:       "2026-08-01 10:00:00Z", MessageCount: 2, MailboxID: "mbx1",
+			LatestDate:       "2026-08-01 10:00:00Z", MessageCount: 2,
 		}},
 		Total: 1,
 	}

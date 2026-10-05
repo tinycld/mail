@@ -86,14 +86,18 @@ type SearchRequest struct {
 	HasAttachment bool   `json:"has_attachment,omitempty"`
 }
 
-// SearchResultItem is one thread-level hit in a SearchResponse. The client
-// renders the row from its live mail_thread_state and mail_threads rows, so
-// a hit carries only the ids to resolve them and the FTS <mark> highlights.
+// SearchResultItem is one thread-level hit in a SearchResponse. The web
+// client renders the row from its live mail_thread_state and mail_threads
+// rows, so it needs only the ids to resolve them and the FTS <mark>
+// highlights. The CLI has no store to resolve against, so LatestDate and
+// MessageCount ride along for it to print directly.
 type SearchResultItem struct {
 	ThreadID         string `json:"thread_id"`
 	StateID          string `json:"state_id"`
 	SubjectHighlight string `json:"subject_highlight"`
 	SnippetHighlight string `json:"snippet_highlight"`
+	LatestDate       string `json:"latest_date"`
+	MessageCount     int    `json:"message_count"`
 }
 
 // SearchResponse is returned by GET /api/mail/search. Items is never null.

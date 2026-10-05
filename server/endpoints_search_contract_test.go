@@ -51,14 +51,16 @@ func TestMapResults_CoversEveryAPIField(t *testing.T) {
 	// Sentinel round-trip: distinct values in every WIRE field must surface in
 	// the marshaled item under the same tag name — a crossed-wires copy in
 	// mapResults fails here even though the field sets match. Row-only fields
-	// (subject, latest_date, participants, message_count, mailbox_id,
-	// has_attachments) are deliberately absent from api.SearchResultItem, so
-	// they are not asserted against the wire here.
+	// (subject, participants, mailbox_id, has_attachments) are deliberately
+	// absent from api.SearchResultItem, so they are not asserted against the
+	// wire here.
 	row := searchResultRow{
 		ThreadID:         "sentinel-thread",
 		StateID:          "sentinel-state",
 		SubjectHighlight: "sentinel-subject-hl",
 		SnippetHighlight: "sentinel-snippet-hl",
+		LatestDate:       "sentinel-date",
+		MessageCount:     7,
 	}
 	items := mapResults([]searchResultRow{row})
 	if len(items) != 1 {

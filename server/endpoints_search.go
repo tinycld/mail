@@ -15,12 +15,12 @@ import (
 
 // searchResultRow is the SQL scan target for the search queries. It is wider
 // than the HTTP wire type: the federated search palette (search_source.go)
-// reads the display columns (subject, participants, dates, counts,
-// attachments) straight off the row, while the thin HTTP wire type
-// (api.SearchResultItem) only ever needs ids plus the FTS highlights — the
-// web client resolves display from its own live rows. db tags serve the
-// scan, json tags the wire; TestMapResults_CoversEveryAPIField asserts the
-// wire field set is a subset of the row's.
+// reads the display columns (subject, participants, mailbox, attachments)
+// straight off the row, while the thin HTTP wire type (api.SearchResultItem)
+// carries only ids, the FTS highlights, and the date/count the CLI prints —
+// the web client resolves the rest of its display from its own live rows.
+// db tags serve the scan, json tags the wire; TestMapResults_CoversEveryAPIField
+// asserts the wire field set is a subset of the row's.
 type searchResultRow struct {
 	ThreadID         string `db:"thread_id"`
 	StateID          string `db:"state_id"`
@@ -45,6 +45,8 @@ func mapResults(rows []searchResultRow) []api.SearchResultItem {
 			StateID:          r.StateID,
 			SubjectHighlight: r.SubjectHighlight,
 			SnippetHighlight: r.SnippetHighlight,
+			LatestDate:       r.LatestDate,
+			MessageCount:     r.MessageCount,
 		}
 	}
 	return items
