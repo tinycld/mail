@@ -159,17 +159,14 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 	return re.JSON(http.StatusOK, resp)
 }
 
-// SearchMail runs a mail search for one user and returns the response value.
+// SearchMail runs a mail search for one user and returns the thin HTTP wire
+// shape. It narrows searchMailResultRows to api.SearchResponse; parsing and
+// JSON encoding stay in handleSearch, so the route's behavior — and
+// endpoints_search_contract_test.go — are untouched.
 //
-// Split from the HTTP handler so the federated search source (search_source.go)
-// can call it in-process: the aggregator has no RequestEvent, and duplicating
-// this query to serve it would mean two implementations of mail search that
-// drift. Parsing and JSON encoding stay in handleSearch, so the route's
-// behavior — and endpoints_search_contract_test.go — are untouched.
-//
-// This narrows searchMailResultRows to the thin HTTP wire shape; the
-// federated search palette (search_source.go) calls searchMailResultRows
-// directly so it keeps the display columns the wire type no longer carries.
+// The federated search palette (search_source.go) does not call this: it
+// calls searchMailResultRows directly, because it needs the display columns
+// the wire type no longer carries.
 func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.SearchResponse, error) {
 	rows, total, err := searchMailResultRows(app, userID, filters)
 	if err != nil {
