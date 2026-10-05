@@ -5,6 +5,11 @@
 // and scopes on live on the state row too. Go keeps them equal to the thread's
 // (server/thread_state_sync.go): filled on create, latest_date propagated on
 // every thread save that changes it.
+//
+// The backfill coalesces to '' because PocketBase enforces the thread
+// relation at the application level, not with a SQLite FOREIGN KEY, so a
+// state row left behind by an already-orphaned thread must not abort the
+// install; the Go create hook fills both columns for new rows either way.
 migrate(
     app => {
         const states = app.findCollectionByNameOrId('mail_thread_state')
@@ -33,8 +38,8 @@ migrate(
         app.db()
             .newQuery(
                 `UPDATE mail_thread_state
-                 SET mailbox = (SELECT t.mailbox FROM mail_threads t WHERE t.id = mail_thread_state.thread),
-                     latest_date = (SELECT t.latest_date FROM mail_threads t WHERE t.id = mail_thread_state.thread)`
+                 SET mailbox = COALESCE((SELECT t.mailbox FROM mail_threads t WHERE t.id = mail_thread_state.thread), ''),
+                     latest_date = COALESCE((SELECT t.latest_date FROM mail_threads t WHERE t.id = mail_thread_state.thread), '')`
             )
             .execute()
     },
