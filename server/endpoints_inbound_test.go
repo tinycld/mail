@@ -198,6 +198,7 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 		MaxSelect:    1,
 	})
 	threadState.Fields.Add(&core.TextField{Name: "latest_date"})
+	threadState.Fields.Add(&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true})
 	if err := app.Save(threadState); err != nil {
 		t.Fatalf("failed to save mail_thread_state: %v", err)
 	}

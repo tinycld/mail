@@ -80,6 +80,10 @@ func setupScopeEnv(t *testing.T) *scopeEnv {
 		thread := core.NewRecord(threads)
 		thread.Set("mailbox", mb.Id)
 		thread.Set("subject", subject)
+		// Fixed so the state row's create-time fill has a concrete value to
+		// copy — TestThreadStateCreate_FillsMailboxAndLatestDate asserts
+		// against it directly, before any propagation can occur.
+		thread.Set("latest_date", "2026-10-01 09:00:00.000Z")
 		if err := app.Save(thread); err != nil {
 			t.Fatal(err)
 		}

@@ -26,19 +26,20 @@ func TestThreadStateCreate_FillsMailboxAndLatestDate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	thread.Set("latest_date", "2026-10-05 10:00:00.000Z")
-	if err := env.app.Save(thread); err != nil {
-		t.Fatal(err)
+	wantLatestDate := thread.GetString("latest_date")
+	if wantLatestDate == "" {
+		t.Fatal("seeded thread has no latest_date to copy")
 	}
 
-	// setupScopeEnv seeded the state row with neither column set; the create
-	// hook must have filled both from the thread.
+	// setupScopeEnv seeded the state row with neither column set, before this
+	// test touches the thread at all — so a value on the state row can only
+	// have come from the create hook's fill, not from update propagation.
 	state := stateFor(t, env, thread.Id)
 	if got := state.GetString("mailbox"); got != env.mbA.Id {
 		t.Errorf("mailbox = %q, want %q", got, env.mbA.Id)
 	}
-	if got := state.GetString("latest_date"); got != "2026-10-05 10:00:00.000Z" {
-		t.Errorf("latest_date = %q, want the thread's", got)
+	if got := state.GetString("latest_date"); got != wantLatestDate {
+		t.Errorf("latest_date = %q, want the thread's %q", got, wantLatestDate)
 	}
 }
 
