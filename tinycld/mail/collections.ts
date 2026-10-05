@@ -104,15 +104,9 @@ export function registerCollections(
         collectionOptions: indexing,
     })
 
-    // Server-side aggregation of (user, mailbox) → folder counts. Backed by a
-    // PocketBase VIEW collection (see pb-migrations/1713000020), so on-demand
-    // just turns the `user = me` filter into a view filter — there's no
-    // underlying table row count concern either way. Views emit no realtime
-    // events at all, so the per-query subscription topic is as inert as the
-    // old whole-collection one was; useMailboxFolderCounts.ts and
-    // screens/index.tsx bridge the gap themselves by invalidating the
-    // `['mail_folder_counts']` React Query key (pbtsdb's on-demand cache keys
-    // are `[name, request]`, so the bare key still prefix-matches every one).
+    // One row per (user, mailbox), recomputed by a Go hook on every
+    // mail_thread_state change (server/folder_counts.go). A base collection,
+    // so per-query realtime covers the sidebar's `user = me` query.
     const mail_folder_counts = newCollection('mail_folder_counts', {
         ...onDemand,
         relations: {
