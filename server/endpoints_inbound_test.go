@@ -203,6 +203,22 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 		t.Fatalf("failed to save mail_thread_state: %v", err)
 	}
 
+	counts := core.NewBaseCollection("mail_folder_counts")
+	if idField, ok := counts.Fields.GetByName("id").(*core.TextField); ok {
+		idField.Min = 30
+		idField.Max = 30
+		idField.Pattern = "^[a-z0-9]{30}$"
+		idField.AutogeneratePattern = ""
+	}
+	counts.Fields.Add(&core.TextField{Name: "user", Required: true})
+	counts.Fields.Add(&core.TextField{Name: "mailbox", Required: true})
+	for _, name := range folderCountColumns {
+		counts.Fields.Add(&core.NumberField{Name: name, OnlyInt: true})
+	}
+	if err := app.Save(counts); err != nil {
+		t.Fatalf("failed to save mail_folder_counts: %v", err)
+	}
+
 	return app
 }
 

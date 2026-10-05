@@ -1,10 +1,8 @@
 package mail
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -120,11 +118,11 @@ func TestMigrations_SentModelBackfill(t *testing.T) {
 	if err != nil || len(counts) != 1 {
 		t.Fatalf("mail_folder_counts rows = %d, err = %v", len(counts), err)
 	}
-	// PocketBase types the view's SUM columns as JSON, so read the raw value.
-	if got := fmt.Sprint(counts[0].Get("sent")); got != "1" {
-		t.Errorf("sent count = %s, want 1", got)
+	// The counts backfill reads is_sent, so only the thread filed under sent counts.
+	if got := counts[0].GetInt("sent"); got != 1 {
+		t.Errorf("sent count = %d, want 1", got)
 	}
-	if !strings.Contains(counts[0].Collection().ViewQuery, "is_sent") {
-		t.Error("mail_folder_counts does not read is_sent")
+	if got := counts[0].GetInt("total"); got != 2 {
+		t.Errorf("total count = %d, want 2", got)
 	}
 }

@@ -299,6 +299,7 @@ func registerShared(app *pocketbase.PocketBase) {
 	registerAliasHooks(app)
 	registerThreadMarkerHooks(app)
 	registerThreadStateSyncHooks(app)
+	registerFolderCountHooks(app)
 
 	audit.RegisterCollection(app, "mail_mailbox_aliases", &audit.CollectionConfig{
 		ExtractLabel: audit.LabelFromField("address"),
