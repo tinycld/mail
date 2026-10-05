@@ -122,3 +122,28 @@ func TestFolderCounts_OtherMailboxUntouched(t *testing.T) {
 		t.Errorf("mailbox B inbox=%d trash=%d, want 1 0", other.GetInt("inbox"), other.GetInt("trash"))
 	}
 }
+
+// Deleting a mailbox cascades to its threads, their state rows, and its counts
+// row. The state delete hooks then run with the counts row gone; they must not
+// recreate it, since the new row would point at the deleted mailbox and fail
+// relation validation.
+func TestFolderCounts_MailboxDeleteDoesNotRecreateRow(t *testing.T) {
+	env := setupScopeEnv(t)
+	countsRow(t, env, env.mbA.Id)
+
+	if err := env.app.Delete(env.mbA); err != nil {
+		t.Fatal(err)
+	}
+	id := folderCountsID(env.user.Id, env.mbA.Id)
+	if _, err := env.app.FindRecordById("mail_folder_counts", id); err == nil {
+		t.Fatal("counts row for the deleted mailbox was recreated")
+	}
+	// The hook only logs a failure, so call the recompute directly to see the
+	// error the hook would have swallowed.
+	if err := recomputeFolderCounts(env.app, env.user.Id, env.mbA.Id); err != nil {
+		t.Errorf("recompute after mailbox delete: %v", err)
+	}
+	if _, err := env.app.FindRecordById("mail_folder_counts", id); err == nil {
+		t.Error("recompute created a counts row for a mailbox with no state rows")
+	}
+}

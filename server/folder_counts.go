@@ -4,7 +4,10 @@ import (
 	"fmt"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/logging"
 )
+
+var folderCountsLog = logging.ForPackage("mail")
 
 // folderCountColumns are the per-folder numbers on a mail_folder_counts row.
 // `total` is All Mail; `all` is an SQL keyword.
@@ -62,11 +65,13 @@ func folderCountsID(userID, mailboxID string) string {
 func registerFolderCountHooks(app core.App) {
 	recompute := func(e *core.RecordEvent) error {
 		if err := recomputeFolderCounts(e.App, e.Record.GetString("user"), e.Record.GetString("mailbox")); err != nil {
-			e.App.Logger().Warn("recomputeFolderCounts failed", "state", e.Record.Id, "error", err)
+			folderCountsLog.Warn("recomputeFolderCounts failed", "state", e.Record.Id, "error", err)
 		}
 		return e.Next()
 	}
 	app.OnRecordAfterCreateSuccess("mail_thread_state").BindFunc(recompute)
+	// Only the new (user, mailbox) is recomputed: a state's mailbox is copied
+	// from its thread and never changes.
 	app.OnRecordAfterUpdateSuccess("mail_thread_state").BindFunc(recompute)
 	app.OnRecordAfterDeleteSuccess("mail_thread_state").BindFunc(recompute)
 }
@@ -88,6 +93,12 @@ func recomputeFolderCounts(app core.App, userID, mailboxID string) error {
 	id := folderCountsID(userID, mailboxID)
 	record, err := app.FindRecordById("mail_folder_counts", id)
 	if err != nil {
+		// No state rows and no counts row: nothing to show. This is also the
+		// path after a mailbox or user delete, where the cascade removed the
+		// counts row and creating one would point at the deleted record.
+		if row.Total == 0 {
+			return nil
+		}
 		collection, err := app.FindCollectionByNameOrId("mail_folder_counts")
 		if err != nil {
 			return fmt.Errorf("mail_folder_counts collection: %w", err)

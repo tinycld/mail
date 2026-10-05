@@ -211,7 +211,15 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 		idField.AutogeneratePattern = ""
 	}
 	counts.Fields.Add(&core.TextField{Name: "user", Required: true})
-	counts.Fields.Add(&core.TextField{Name: "mailbox", Required: true})
+	// A relation with cascade delete, as the migration declares, so a mailbox
+	// delete removes its counts row the way production does.
+	counts.Fields.Add(&core.RelationField{
+		Name:          "mailbox",
+		Required:      true,
+		CollectionId:  mailboxesCol.Id,
+		CascadeDelete: true,
+		MaxSelect:     1,
+	})
 	for _, name := range folderCountColumns {
 		counts.Fields.Add(&core.NumberField{Name: name, OnlyInt: true})
 	}

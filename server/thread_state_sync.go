@@ -4,7 +4,10 @@ import (
 	"fmt"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/logging"
 )
+
+var threadStateSyncLog = logging.ForPackage("mail")
 
 // registerThreadStateSyncHooks keeps mail_thread_state.mailbox and
 // .latest_date equal to the thread's. The thread list is one live query on
@@ -27,7 +30,7 @@ func registerThreadStateSyncHooks(app core.App) {
 			return e.Next()
 		}
 		if err := propagateLatestDate(e.App, e.Record.Id, after); err != nil {
-			e.App.Logger().Warn("propagateLatestDate failed", "thread", e.Record.Id, "error", err)
+			threadStateSyncLog.Warn("propagateLatestDate failed", "thread", e.Record.Id, "error", err)
 		}
 		return e.Next()
 	})
