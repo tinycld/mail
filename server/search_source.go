@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -17,8 +18,8 @@ import (
 //
 // Mail keeps its own /api/mail/search route as well: the in-app advanced search
 // offers structured filters (from, to, subject, dates, has_attachment, folder)
-// that a one-box palette does not, and both call SearchMail — so there is one
-// query, not two.
+// that a one-box palette does not, and both call searchMailResultRows — so
+// there is one query, not two.
 func searchSource() search.Source {
 	return search.Source{
 		Slug:  "mail",
@@ -31,7 +32,11 @@ func searchSource() search.Source {
 }
 
 func searchMailRows(app core.App, userID string, q search.Query) (search.Result, error) {
-	resp, err := SearchMail(app, userID, api.SearchRequest{
+	// Reads the full SQL row (not the thin HTTP wire type): the palette needs
+	// the display columns — subject, participants, date, counts, attachments —
+	// that api.SearchResultItem no longer carries now that the web client
+	// resolves display from its own live rows.
+	results, total, err := searchMailResultRows(app, userID, api.SearchRequest{
 		Query: strings.Join(q.Include, " "),
 		// Mail's own search honors exclusions across both its FTS arms, so a
 		// `-term` from the palette reaches SQL rather than being approximated
@@ -46,26 +51,33 @@ func searchMailRows(app core.App, userID string, q search.Query) (search.Result,
 		return search.Result{}, err
 	}
 
-	rows := make([]search.Row, 0, len(resp.Items))
-	for _, item := range resp.Items {
+	rows := make([]search.Row, 0, len(results))
+	for _, item := range results {
 		rows = append(rows, search.Row{
 			// Mail's identity is the THREAD, not a message: opening a result
 			// opens the conversation. api.SearchResultItem has no `id` field for
 			// exactly this reason.
 			ID: item.ThreadID,
 			// A subject-less thread is still readable, so label it rather than
-			// render a blank row. The hit carries only ids plus highlights (the
-			// client resolves subject/participants/date from its live rows), so
-			// the palette's own row — which has no live store behind it — is
-			// built from the highlight text with its <mark> markup stripped.
-			Title:    titleOr(stripHighlightMarkup(item.SubjectHighlight), "(no subject)"),
-			Subtitle: stripHighlightMarkup(item.SnippetHighlight),
+			// render a blank row.
+			Title: titleOr(item.Subject, "(no subject)"),
+			// Participants as readable names. The field is the thread's STORED
+			// JSON array, so passing it through — as the old TS adapter did —
+			// rendered `[{"email":"alice@…` in the palette. The highlighted
+			// snippet is deliberately not used instead: it carries <mark>
+			// markup, and a CLI would have to strip tags a server sent purely
+			// for the web.
+			Subtitle: participantNames(item.Participants),
+			Meta:     item.LatestDate,
 			Fields: map[string]any{
-				"state_id": item.StateID,
+				"state_id":        item.StateID,
+				"mailbox_id":      item.MailboxID,
+				"message_count":   item.MessageCount,
+				"has_attachments": item.HasAttachments,
 			},
 		})
 	}
-	return search.Result{Rows: rows, Total: resp.Total}, nil
+	return search.Result{Rows: rows, Total: total}, nil
 }
 
 func titleOr(value, fallback string) string {
@@ -75,10 +87,42 @@ func titleOr(value, fallback string) string {
 	return value
 }
 
-// stripHighlightMarkup removes the <mark>/</mark> tags the search SQL wraps
-// matched terms in. The palette row has no live store to re-derive plain text
-// from, so it renders the highlight text itself, unmarked.
-func stripHighlightMarkup(highlighted string) string {
-	plain := strings.ReplaceAll(highlighted, "<mark>", "")
-	return strings.ReplaceAll(plain, "</mark>", "")
+// participantNames turns the thread's stored participants JSON into a readable
+// list: "Alice Smith, bob@example.com". Prefers a name, falls back to the
+// address, and skips entries with neither.
+//
+// Unparseable JSON yields an empty subtitle rather than an error: a row with no
+// subtitle is still useful, and failing the whole search over one malformed
+// column would lose every other result too.
+func participantNames(stored string) string {
+	if stored == "" {
+		return ""
+	}
+	var people []struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
+	if err := json.Unmarshal([]byte(stored), &people); err != nil {
+		return ""
+	}
+	names := make([]string, 0, len(people))
+	for _, p := range people {
+		if label := firstNonEmpty(p.Name, p.Email); label != "" {
+			names = append(names, label)
+		}
+	}
+	const maxShown = 3
+	if len(names) > maxShown {
+		return strings.Join(names[:maxShown], ", ") + ", …"
+	}
+	return strings.Join(names, ", ")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

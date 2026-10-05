@@ -13,17 +13,30 @@ import (
 	"tinycld.org/packages/mail/api"
 )
 
-// searchResultRow is the SQL scan target for the search queries. It stays
-// separate from api.SearchResultItem — db tags serve the scan, json tags the
-// wire — and TestMapResults_CoversEveryAPIField pins the two field sets
-// together.
+// searchResultRow is the SQL scan target for the search queries. It is wider
+// than the HTTP wire type: the federated search palette (search_source.go)
+// reads the display columns (subject, participants, dates, counts,
+// attachments) straight off the row, while the thin HTTP wire type
+// (api.SearchResultItem) only ever needs ids plus the FTS highlights — the
+// web client resolves display from its own live rows. db tags serve the
+// scan, json tags the wire; TestMapResults_CoversEveryAPIField asserts the
+// wire field set is a subset of the row's.
 type searchResultRow struct {
 	ThreadID         string `db:"thread_id"`
 	StateID          string `db:"state_id"`
+	Subject          string `db:"subject"`
 	SubjectHighlight string `db:"subject_highlight"`
 	SnippetHighlight string `db:"snippet_highlight"`
+	LatestDate       string `db:"latest_date"`
+	Participants     string `db:"participants"`
+	MessageCount     int    `db:"message_count"`
+	MailboxID        string `db:"mailbox_id"`
+	HasAttachments   bool   `db:"has_attachments"`
 }
 
+// mapResults narrows the SQL rows to the thin HTTP wire shape. The federated
+// search palette needs the fuller row (see searchMailResultRows) — this is
+// only for handleSearch's JSON response.
 func mapResults(rows []searchResultRow) []api.SearchResultItem {
 	items := make([]api.SearchResultItem, len(rows))
 	for i, r := range rows {
@@ -36,6 +49,11 @@ func mapResults(rows []searchResultRow) []api.SearchResultItem {
 	}
 	return items
 }
+
+// threadHasAttachmentsExpr returns a SQL expression that evaluates to 1 if any
+// message in thread `t` has attachments, else 0. Aggregated per-thread so the
+// indicator is correct regardless of which message matched the FTS query.
+const threadHasAttachmentsExpr = `EXISTS (SELECT 1 FROM mail_messages WHERE thread = t.id AND has_attachments = 1)`
 
 func hasStructuredFilters(f *api.SearchRequest) bool {
 	return f.From != "" || f.To != "" || f.Subject != "" ||
@@ -148,13 +166,27 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 // this query to serve it would mean two implementations of mail search that
 // drift. Parsing and JSON encoding stay in handleSearch, so the route's
 // behavior — and endpoints_search_contract_test.go — are untouched.
+//
+// This narrows searchMailResultRows to the thin HTTP wire shape; the
+// federated search palette (search_source.go) calls searchMailResultRows
+// directly so it keeps the display columns the wire type no longer carries.
 func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.SearchResponse, error) {
+	rows, total, err := searchMailResultRows(app, userID, filters)
+	if err != nil {
+		return api.SearchResponse{Items: []api.SearchResultItem{}, Total: 0}, err
+	}
+	return api.SearchResponse{Items: mapResults(rows), Total: total}, nil
+}
+
+// searchMailResultRows runs the mail search and returns the full SQL rows
+// (display columns included) plus the total match count. Both handleSearch
+// (via SearchMail) and the federated search palette (search_source.go) read
+// from this one query so there is one implementation of mail search, not two.
+func searchMailResultRows(app core.App, userID string, filters api.SearchRequest) ([]searchResultRow, int, error) {
 	q := filters.Query
 	mailboxID := filters.MailboxID
 	limit := filters.Limit
 	offset := filters.Offset
-
-	emptyResponse := api.SearchResponse{Items: []api.SearchResultItem{}, Total: 0}
 
 	// FTS terms come from the main query OR the Body (hasWords) field. Without
 	// counting hasWords here, a body-only search (empty main box, Body filled)
@@ -164,7 +196,7 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 	hasFilters := hasAnyFilter(&filters)
 
 	if !hasFTSTerms && !hasFilters {
-		return emptyResponse, nil
+		return nil, 0, nil
 	}
 
 	// A lookup FAILURE must not read as an empty result set — that swallow is
@@ -173,10 +205,10 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 	accessibleMailboxIDs, err := getUserMailboxIDs(app, userID, mailboxID)
 	if err != nil {
 		app.Logger().Error("search: mailbox lookup failed", "error", err, "user", userID)
-		return emptyResponse, router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
+		return nil, 0, router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
 	}
 	if len(accessibleMailboxIDs) == 0 {
-		return emptyResponse, nil
+		return nil, 0, nil
 	}
 
 	mailboxParams := make(map[string]any)
@@ -211,7 +243,7 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 	ftsMessages := buildMessageFTSQuery(q, filters.HasWords, filters.Exclude)
 	if ftsThreads == "" && ftsMessages == "" {
 		if !hasStructuredFilters(&filters) {
-			return emptyResponse, nil
+			return nil, 0, nil
 		}
 		return structuredSearch(app, inClause, messageWhere, stateJoin, params, limit, offset)
 	}
@@ -236,8 +268,14 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 		SELECT
 			t.id as thread_id,
 			ts.id as state_id,
+			t.subject,
 			highlight(fts_mail_threads, 1, '<mark>', '</mark>') as subject_highlight,
 			snippet(fts_mail_threads, 2, '<mark>', '</mark>', '...', 40) as snippet_highlight,
+			t.latest_date,
+			t.participants,
+			t.message_count,
+			t.mailbox as mailbox_id,
+			` + threadHasAttachmentsExpr + ` as has_attachments,
 			fts_mail_threads.rank
 		FROM fts_mail_threads
 		JOIN mail_threads t ON t.id = fts_mail_threads.record_id` + stateJoin + `
@@ -248,8 +286,14 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 		SELECT
 			t.id as thread_id,
 			ts.id as state_id,
+			t.subject,
 			'' as subject_highlight,
 			snippet(fts_mail_messages, 5, '<mark>', '</mark>', '...', 40) as snippet_highlight,
+			t.latest_date,
+			t.participants,
+			t.message_count,
+			t.mailbox as mailbox_id,
+			` + threadHasAttachmentsExpr + ` as has_attachments,
 			fts_mail_messages.rank
 		FROM fts_mail_messages
 		JOIN mail_messages m ON m.id = fts_mail_messages.record_id
@@ -262,8 +306,14 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 	combinedQuery := `
 		SELECT thread_id,
 			   MAX(state_id) as state_id,
+			   MAX(subject) as subject,
 			   MAX(subject_highlight) as subject_highlight,
-			   MAX(snippet_highlight) as snippet_highlight
+			   MAX(snippet_highlight) as snippet_highlight,
+			   MAX(latest_date) as latest_date,
+			   MAX(participants) as participants,
+			   MAX(message_count) as message_count,
+			   MAX(mailbox_id) as mailbox_id,
+			   MAX(has_attachments) as has_attachments
 		FROM (
 			` + unionBody + `
 		)
@@ -276,12 +326,11 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 	err = app.DB().NewQuery(combinedQuery).Bind(dbx.Params(params)).All(&results)
 	if err != nil {
 		app.Logger().Error("FTS: search query failed", "error", err, "query", q)
-		return emptyResponse, router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
+		return nil, 0, router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
 	}
 
-	items := mapResults(results)
-	total := len(items)
-	if len(items) >= limit {
+	total := len(results)
+	if len(results) >= limit {
 		countThreadArm := `
 				SELECT t.id as thread_id
 				FROM fts_mail_threads
@@ -330,28 +379,33 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 			total = countResult.Total
 		}
 	} else if offset > 0 {
-		total = offset + len(items)
+		total = offset + len(results)
 	}
 
-	return api.SearchResponse{Items: items, Total: total}, nil
+	return results, total, nil
 }
 
 // structuredSearch runs a SQL-only search (no FTS) when only structured filters
-// are present. Returns a value rather than writing a response so SearchMail can
-// call it on both the HTTP and in-process paths.
+// are present. Returns rows and a total rather than writing a response so
+// searchMailResultRows can call it on both the HTTP and in-process paths.
 func structuredSearch(
 	app core.App,
 	inClause, messageWhere, stateJoin string,
 	params map[string]any,
 	limit, offset int,
-) (api.SearchResponse, error) {
-	emptyResponse := api.SearchResponse{Items: []api.SearchResultItem{}, Total: 0}
+) ([]searchResultRow, int, error) {
 	query := `
 		SELECT DISTINCT
 			t.id as thread_id,
 			ts.id as state_id,
+			t.subject,
 			'' as subject_highlight,
-			'' as snippet_highlight
+			t.snippet as snippet_highlight,
+			t.latest_date,
+			t.participants,
+			t.message_count,
+			t.mailbox as mailbox_id,
+			` + threadHasAttachmentsExpr + ` as has_attachments
 		FROM mail_threads t
 		JOIN mail_messages m ON m.thread = t.id` + stateJoin + `
 		WHERE t.mailbox IN ` + inClause + messageWhere + `
@@ -363,12 +417,11 @@ func structuredSearch(
 	err := app.DB().NewQuery(query).Bind(dbx.Params(params)).All(&results)
 	if err != nil {
 		app.Logger().Error("Structured search failed", "error", err)
-		return emptyResponse, router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
+		return nil, 0, router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
 	}
 
-	items := mapResults(results)
-	total := len(items)
-	if len(items) >= limit {
+	total := len(results)
+	if len(results) >= limit {
 		countQuery := `
 			SELECT COUNT(DISTINCT t.id) as total
 			FROM mail_threads t
@@ -388,10 +441,10 @@ func structuredSearch(
 			total = countResult.Total
 		}
 	} else if offset > 0 {
-		total = offset + len(items)
+		total = offset + len(results)
 	}
 
-	return api.SearchResponse{Items: items, Total: total}, nil
+	return results, total, nil
 }
 
 // getUserMailboxIDs returns the mailbox IDs the user has access to. If mailboxID
