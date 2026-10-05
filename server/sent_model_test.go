@@ -514,3 +514,42 @@ func TestMarkThreadSent_CoMemberWithoutRowGetsOne(t *testing.T) {
 		t.Error("is_sent = false, want true")
 	}
 }
+
+// A co-member whose row cannot be saved must not fail the sender's send or
+// IMAP APPEND, and must not stop the other co-members from being marked. The
+// broken member row has an empty user (written past validation), so the
+// state row's required user rejects their new row.
+func TestMarkThreadSent_CoMemberFailureDoesNotFailTheSender(t *testing.T) {
+	env := setupScopeEnv(t)
+	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	members, err := env.app.FindCollectionByNameOrId("mail_mailbox_members")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dangling := core.NewRecord(members)
+	dangling.Set("mailbox", env.mbA.Id)
+	dangling.Set("user", "")
+	dangling.Set("role", "member")
+	if err := env.app.SaveNoValidate(dangling); err != nil {
+		t.Fatal(err)
+	}
+	coMember := newUser(t, env.app, "stillmarked@example.org")
+	seedMember(t, env.app, env.mbA.Id, coMember.Id)
+
+	if err := markThreadSent(env.app, thread.Id, env.user.Id); err != nil {
+		t.Fatalf("markThreadSent = %v, want nil when only a co-member's row fails", err)
+	}
+
+	if mine := findThreadState(env.app, thread.Id, env.user.Id); mine == nil || !mine.GetBool("is_sent") {
+		t.Error("sender's row is not marked sent")
+	}
+	if theirs := findThreadState(env.app, thread.Id, coMember.Id); theirs == nil || !theirs.GetBool("is_sent") {
+		t.Error("a healthy co-member's row is not marked sent")
+	}
+	if findThreadState(env.app, thread.Id, "") != nil {
+		t.Error("the broken member got a state row; the fixture no longer forces a save failure")
+	}
+}

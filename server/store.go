@@ -3,13 +3,17 @@ package mail
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
+	"tinycld.org/core/logging"
 )
+
+var storeLog = logging.ForPackage("mail")
 
 // findOrCreateThread finds an existing thread or creates a new one.
 // Thread matching priority:
@@ -499,11 +503,22 @@ func markThreadSent(app core.App, threadID, userID string) error {
 	if err := app.Save(record); err != nil {
 		return err
 	}
+	// The send has already happened (or the IMAP APPEND is being stored), so
+	// a co-member's Sent view lagging is not worth failing the sender's
+	// operation over: an error here would turn a delivered send into a 500 or
+	// roll back the APPEND.
+	if err := markThreadSentForCoMembers(app, threadID, userID); err != nil {
+		storeLog.Warn("marking co-members' rows sent failed", "thread", threadID, "error", err)
+	}
+	return nil
+}
+
+func markThreadSentForCoMembers(app core.App, threadID, senderID string) error {
 	thread, err := app.FindRecordById("mail_threads", threadID)
 	if err != nil {
 		return fmt.Errorf("thread for sent marking: %w", err)
 	}
-	return markThreadSentForMembers(app, thread, userID)
+	return markThreadSentForMembers(app, thread, senderID)
 }
 
 // markThreadSentForMembers flags the thread sent on every other member's
@@ -511,12 +526,14 @@ func markThreadSent(app core.App, threadID, userID string) error {
 // Sent view can show the team's outbound mail only if each member's row says
 // so. A member's filing and read state are theirs and are left alone; a
 // member with no row yet gets one filed the way markThreadSent files a new
-// thread.
+// thread. One member's failed save does not stop the others from being
+// marked; every failure is returned joined.
 func markThreadSentForMembers(app core.App, thread *core.Record, senderID string) error {
 	members, err := getMailboxMembers(app, thread.GetString("mailbox"))
 	if err != nil {
 		return err
 	}
+	var errs []error
 	for _, member := range members {
 		userID := member.GetString("user")
 		if userID == senderID {
@@ -538,10 +555,10 @@ func markThreadSentForMembers(app core.App, thread *core.Record, senderID string
 		}
 		record.Set("is_sent", true)
 		if err := app.Save(record); err != nil {
-			return err
+			errs = append(errs, fmt.Errorf("member %s: %w", userID, err))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // setThreadRead sets a thread's read state for one user, preserving the
