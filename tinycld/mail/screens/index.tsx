@@ -234,6 +234,8 @@ export default function MailListScreen() {
         cursor: cursors[cursors.length - 1] ?? null,
     })
 
+    const hasNext = hasFullPage && nextCursor !== null
+
     const counts = useMailboxFolderCounts()
     const totalItems = folderTotal(counts, visibleMailboxIds, folder)
 
@@ -254,8 +256,8 @@ export default function MailListScreen() {
     }, [navigateToCursors, cursors])
 
     const handleNextPage = useCallback(() => {
-        if (hasFullPage && nextCursor) navigateToCursors([...cursors, nextCursor])
-    }, [navigateToCursors, cursors, hasFullPage, nextCursor])
+        if (hasNext && nextCursor) navigateToCursors([...cursors, nextCursor])
+    }, [navigateToCursors, cursors, hasNext, nextCursor])
 
     const [isRefreshing, setIsRefreshing] = useState(false)
     const handleRefresh = useCallback(async () => {
@@ -529,6 +531,7 @@ export default function MailListScreen() {
                     page={page}
                     pageSize={PAGE_SIZE}
                     totalItems={totalItems}
+                    hasNext={hasNext}
                     onPrevPage={handlePrevPage}
                     onNextPage={handleNextPage}
                     helpTopic={helpTopic}

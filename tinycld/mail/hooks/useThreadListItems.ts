@@ -26,6 +26,9 @@ interface UseThreadListItemsFilter {
 }
 
 type LabelInfo = { id: string; name: string; color: string }
+
+// Stable while the query is disabled, so the items memo does not rerun.
+const EMPTY_ROWS: ThreadListRow[] = []
 const isLabel = (l: LabelInfo | undefined): l is LabelInfo => l != null
 
 /**
@@ -51,7 +54,7 @@ export function useThreadListItems(filter: UseThreadListItemsFilter) {
     )
 
     const { labels, labelMap } = useLabels()
-    const { personal, shared } = useMailboxes()
+    const { personal, shared, isLoading: mailboxesLoading } = useMailboxes()
     const isUnified = filter.mailboxId === UNIFIED_INBOX
 
     const visibleMailboxIds = useMemo(() => {
@@ -121,7 +124,7 @@ export function useThreadListItems(filter: UseThreadListItemsFilter) {
         return map
     }, [isUnified, personal, shared])
 
-    const pageRows = (rows ?? []) as ThreadListRow[]
+    const pageRows: ThreadListRow[] = rows ?? EMPTY_ROWS
 
     const items: ThreadListItem[] = useMemo(() => {
         const out = pageRows.map(row => {
@@ -141,6 +144,10 @@ export function useThreadListItems(filter: UseThreadListItemsFilter) {
     const last = pageRows[pageRows.length - 1]
     const nextCursor: ThreadCursor | null = last ? { date: last.latest_date, id: last.id } : null
 
+    // The query is disabled until a mailbox is known, and a disabled query
+    // reports not-loading; without this the empty state flashes on cold load.
+    const itemsLoading = rowsLoading || (visibleMailboxIds.length === 0 && mailboxesLoading)
+
     const setThreadIds = useThreadListStore(s => s.setThreadIds)
     const prevIdsKeyRef = useRef('')
     useEffect(() => {
@@ -158,8 +165,8 @@ export function useThreadListItems(filter: UseThreadListItemsFilter) {
         labelMap,
         threadStateCollection,
         visibleMailboxIds,
-        isLoading: rowsLoading || assignmentsLoading,
-        itemsLoading: rowsLoading,
+        isLoading: itemsLoading || assignmentsLoading,
+        itemsLoading,
         nextCursor,
         hasFullPage: pageRows.length === PAGE_SIZE,
     }
