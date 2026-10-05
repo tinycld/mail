@@ -21,15 +21,15 @@ var recentlyIndexed sync.Map
 // fts5SpecialChars matches characters that have special meaning in FTS5 queries.
 var fts5SpecialChars = regexp.MustCompile(`[":*^{}()\[\]~\-]`)
 
-// ftsNoMatchArm is a never-matching placeholder arm (10 columns, matching the
-// thread/message SELECT shape). It exists for a subtle SQLite/FTS5 reason: the
+// ftsNoMatchArm is a never-matching placeholder arm (11 columns, matching the
+// thread/message SELECT shape column for column — UNION ALL pairs by position). It exists for a subtle SQLite/FTS5 reason: the
 // snippet()/highlight() auxiliary functions error with "unable to use function
 // snippet in the requested context" when an FTS subquery is the SOLE input to an
 // outer aggregate/GROUP BY. A real UNION ALL forces the FTS rows to materialize
 // first, which legalizes those functions. So when only one real arm is present
 // (e.g. a body-only search, which has no thread arm) we still need a second arm
 // to keep the query a UNION ALL — this no-op arm provides it without adding rows.
-const ftsNoMatchArm = `SELECT '' as thread_id, '' as subject, '' as subject_highlight,
+const ftsNoMatchArm = `SELECT '' as thread_id, '' as state_id, '' as subject, '' as subject_highlight,
 		'' as snippet_highlight, '' as latest_date, '' as participants,
 		0 as message_count, '' as mailbox_id, 0 as has_attachments, 0.0 as rank
 		WHERE 0`
