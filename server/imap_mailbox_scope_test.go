@@ -27,6 +27,7 @@ type scopeEnv struct {
 func setupScopeEnv(t *testing.T) *scopeEnv {
 	t.Helper()
 	app := setupInboundTestApp(t)
+	registerThreadStateSyncHooks(app)
 
 	// The shipped schema orders messages by imap_uid; the shared fixture
 	// predates the field, and without it the sort errors and every folder

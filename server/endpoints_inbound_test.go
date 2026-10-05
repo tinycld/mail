@@ -192,6 +192,12 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 	threadState.Fields.Add(&core.BoolField{Name: "is_read"})
 	threadState.Fields.Add(&core.BoolField{Name: "is_starred"})
 	threadState.Fields.Add(&core.BoolField{Name: "is_sent"})
+	threadState.Fields.Add(&core.RelationField{
+		Name:         "mailbox",
+		CollectionId: mailboxesCol.Id,
+		MaxSelect:    1,
+	})
+	threadState.Fields.Add(&core.TextField{Name: "latest_date"})
 	if err := app.Save(threadState); err != nil {
 		t.Fatalf("failed to save mail_thread_state: %v", err)
 	}
