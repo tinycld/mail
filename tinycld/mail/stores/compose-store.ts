@@ -46,7 +46,7 @@ export const useComposeStore = create<ComposeStoreState>(set => ({
             replyContext: null,
             mode: 'open',
             mailboxId: context.mailboxId,
-            aliasId: context.aliasId,
+            aliasId: null,
         }),
     setFromIdentity: (mailboxId, aliasId) => set({ mailboxId, aliasId }),
 }))

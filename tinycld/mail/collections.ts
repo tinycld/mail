@@ -85,15 +85,14 @@ export function registerCollections(
     const mail_thread_state = newCollection('mail_thread_state', {
         ...onDemand,
         omitOnInsert: ['created', 'updated'] as const,
-        // No `expand`, for the same reason as mail_threads and mail_messages:
-        // under on-demand each fetched state row would carry a duplicate copy
-        // of its thread and user. Both are already available — the thread from
-        // useThreadListItems' page query, the user as the signed-in account.
+        // The thread list fetches `thread` per query (`fetchRelations('thread')`);
+        // pbtsdb files the expanded thread into mail_threads and holds it live,
+        // so rows never carry `expand`. Not in alwaysFetchRelations: other
+        // readers of state rows already have their thread.
+        relations: { thread: mail_threads },
         // A state row exists per (user, thread), so this collection grows with
-        // the whole mailbox, not with what's on screen: an imported account
-        // has tens of thousands of rows total, but on-demand + per-query
-        // realtime means only the thread ids being rendered are ever filed
-        // into the store or subscribed to.
+        // the whole mailbox, not with what's on screen. On-demand + per-query
+        // realtime files and subscribes only the rows a query asks for.
         collectionOptions: indexing,
     })
 
@@ -104,15 +103,9 @@ export function registerCollections(
         collectionOptions: indexing,
     })
 
-    // Server-side aggregation of (user, mailbox) → folder counts. Backed by a
-    // PocketBase VIEW collection (see pb-migrations/1713000020), so on-demand
-    // just turns the `user = me` filter into a view filter — there's no
-    // underlying table row count concern either way. Views emit no realtime
-    // events at all, so the per-query subscription topic is as inert as the
-    // old whole-collection one was; useMailboxFolderCounts.ts and
-    // screens/index.tsx bridge the gap themselves by invalidating the
-    // `['mail_folder_counts']` React Query key (pbtsdb's on-demand cache keys
-    // are `[name, request]`, so the bare key still prefix-matches every one).
+    // One row per (user, mailbox), recomputed by a Go hook on every
+    // mail_thread_state change (server/folder_counts.go). A base collection,
+    // so per-query realtime covers the sidebar's `user = me` query.
     const mail_folder_counts = newCollection('mail_folder_counts', {
         ...onDemand,
         relations: {

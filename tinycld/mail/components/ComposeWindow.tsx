@@ -13,6 +13,7 @@ import { Platform, View } from 'react-native'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
 import { useCompose } from '../hooks/useComposeState'
+import { useDraftMessage } from '../hooks/useDraftMessage'
 import { setContentWhenReady, useMailEditor } from '../hooks/useMailEditor'
 import { useMailSendReadiness } from '../hooks/useMailSendReadiness'
 import { useSaveDraft } from '../hooks/useSaveDraft'
@@ -37,7 +38,9 @@ interface ComposeWindowProps {
 }
 
 export function ComposeWindow({ isVisible }: ComposeWindowProps) {
-    const { mode, replyContext, draftContext, minimize, maximize, open, close } = useCompose()
+    const { mode, replyContext, draftContext, minimize, maximize, open, close, setFromIdentity } =
+        useCompose()
+    const resolvedDraft = useDraftMessage(draftContext)
     const breakpoint = useBreakpoint()
     const insets = useSafeAreaInsets()
     const readiness = useMailSendReadiness()
@@ -109,20 +112,30 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         if (!isVisible) return
         let cleanup: (() => void) | undefined
         if (draftContext) {
-            draftIdRef.current = draftContext.messageId
+            if (!resolvedDraft) {
+                // The previous draft must not linger on screen while the next
+                // one loads (e.g. clicking draft B while draft A is open) —
+                // clear the form and drop the ref so an autosave during the
+                // gap cannot overwrite draft A.
+                draftIdRef.current = null
+                reset({ to: '', cc: '', bcc: '', subject: '' })
+                setHeaderTitle('')
+                editorRef.current.clear()
+                return
+            }
+            const { message, htmlBody } = resolvedDraft
+            draftIdRef.current = message.id
+            setFromIdentity(draftContext.mailboxId, message.alias || null)
             const formatRecipients = (recipients: { name: string; email: string }[]) =>
                 recipients.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ')
             reset({
-                to: formatRecipients(draftContext.to),
-                cc: formatRecipients(draftContext.cc),
-                bcc: formatRecipients(draftContext.bcc),
-                subject: draftContext.subject,
+                to: formatRecipients(message.recipients_to ?? []),
+                cc: formatRecipients(message.recipients_cc ?? []),
+                bcc: formatRecipients(message.recipients_bcc ?? []),
+                subject: message.subject ?? '',
             })
-            setHeaderTitle(draftContext.subject)
-            cleanup = setContentWhenReady(
-                editorRef.current,
-                draftContext.htmlBody || draftContext.textBody || ''
-            )
+            setHeaderTitle(message.subject ?? '')
+            cleanup = setContentWhenReady(editorRef.current, htmlBody || message.snippet || '')
         } else if (replyContext) {
             draftIdRef.current = null
             const toValue =
@@ -143,7 +156,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             editorRef.current.clear()
         }
         return () => cleanup?.()
-    }, [isVisible, replyContext, draftContext, reset])
+    }, [isVisible, replyContext, draftContext, resolvedDraft, reset, setFromIdentity])
 
     const [messagesCollection] = useStore('mail_messages')
 

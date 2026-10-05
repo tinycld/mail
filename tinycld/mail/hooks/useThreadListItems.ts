@@ -1,14 +1,15 @@
 import { and, eq, inArray } from '@tanstack/db'
-import { useLiveQuery } from '@tanstack/react-db'
-import { useQuery } from '@tanstack/react-query'
-import { pb, queryClient, useStore } from '@tinycld/core/lib/pocketbase'
+import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
+import { materialize } from 'pbtsdb'
 import { useEffect, useMemo, useRef } from 'react'
-import type { ThreadListItem } from '../components/thread-list-item'
-import { toThreadListItem } from '../components/thread-list-item'
-import { buildThreadsFilter, quote } from '../lib/threads-filter'
+import {
+    type ThreadListItem,
+    type ThreadListRow,
+    toThreadListItem,
+} from '../components/thread-list-item'
+import { cursorTerms, folderTerms, type ThreadCursor } from '../lib/thread-list-query'
 import { useThreadListStore } from '../stores/thread-list-store'
-import type { MailMessages, MailThreadState, MailThreads } from '../types'
 import { useLabels } from './useLabels'
 import { getMailboxLabel, useMailboxes } from './useMailboxes'
 
@@ -20,51 +21,78 @@ interface UseThreadListItemsFilter {
     folder: string | null
     labels: string[]
     mailboxId: string
+    /** The last row of the previous page, or null on page one. */
+    cursor: ThreadCursor | null
 }
 
-interface UseThreadListItemsOptions {
-    page: number
-}
+type LabelInfo = { id: string; name: string; color: string }
+
+// Stable while the query is disabled, so the items memo does not rerun.
+const EMPTY_ROWS: ThreadListRow[] = []
+const isLabel = (l: LabelInfo | undefined): l is LabelInfo => l != null
 
 /**
- * Loads the thread list for the current folder + filter at the given page,
- * fetching only that page from the server.
+ * The thread list is one live query on mail_thread_state with the thread
+ * expanded: one request per page (`filter`, `sort=-latest_date,-id`,
+ * `perPage=100`, `expand=thread`). mailbox and latest_date are denormalized
+ * onto the state row by the server (thread_state_sync.go), because a live
+ * query cannot sort or filter through a relation.
  *
- * Architecture:
- *   - mail_threads is on-demand. Pagination is driven by a one-shot
- *     pb.collection('mail_threads').getList(page, 100, ...) via React Query —
- *     pbtsdb's useLiveQuery doesn't support offsets. Realtime invalidation
- *     keeps the cached page fresh.
- *   - The server filter uses PocketBase back-relation syntax
- *     (mail_thread_state_via_thread.<field>) so server-side joins decide
- *     which threads belong in the current folder for the current user.
- *   - mail_thread_state is on-demand, queried for the current page's thread
- *     ids only. It supplies the read/starred/folder flags rendered alongside
- *     each row. It is not bounded per user — there is one row per thread the
- *     user can see — so it is scoped to the page rather than synced whole.
- *   - mail_messages is on-demand. Draft / attachment markers fetch only
- *     for the current page's thread ids — small bounded queries.
+ * Realtime subscribes to the where. Page one has no cursor and receives every
+ * new row; a deeper page subscribes to its slice. Filed threads are held live,
+ * so a new message in a listed thread updates its snippet in place.
+ *
+ * Label assignments stay one session-scoped query indexed by record id: a
+ * materialize per row would cost one request per row, and a join yields one
+ * row per assignment.
  */
-export function useThreadListItems(
-    currentUserId: string,
-    filter: UseThreadListItemsFilter,
-    { page }: UseThreadListItemsOptions = { page: 1 }
-) {
-    const [
-        threadStateCollection,
-        _messagesCollection,
-        assignmentsCollection,
-        mailboxesCollection,
-        membersCollection,
-    ] = useStore(
+export function useThreadListItems(filter: UseThreadListItemsFilter) {
+    const [threadStateCollection, threadsCollection, assignmentsCollection] = useStore(
         'mail_thread_state',
-        'mail_messages',
-        'label_assignments',
-        'mail_mailboxes',
-        'mail_mailbox_members'
+        'mail_threads',
+        'label_assignments'
     )
 
     const { labels, labelMap } = useLabels()
+    const { personal, shared, isLoading: mailboxesLoading } = useMailboxes()
+    const isUnified = filter.mailboxId === UNIFIED_INBOX
+
+    const visibleMailboxIds = useMemo(() => {
+        if (!isUnified) return filter.mailboxId ? [filter.mailboxId] : []
+        const ids: string[] = []
+        if (personal) ids.push(personal.id)
+        for (const mb of shared) ids.push(mb.id)
+        return ids
+    }, [isUnified, filter.mailboxId, personal, shared])
+
+    const { folder, cursor } = filter
+    const { data: rows, isLoading: rowsLoading } = useMyLiveQuery((query, { userId }) =>
+        visibleMailboxIds.length === 0
+            ? null
+            : query
+                  .from({ s: threadStateCollection.fetchRelations('thread') })
+                  .where(({ s }) =>
+                      and(
+                          eq(s.user, userId),
+                          inArray(s.mailbox, visibleMailboxIds),
+                          ...folderTerms(s, folder),
+                          ...cursorTerms(s, cursor)
+                      )
+                  )
+                  .orderBy(({ s }) => s.latest_date, 'desc')
+                  .orderBy(({ s }) => s.id, 'desc')
+                  .limit(PAGE_SIZE)
+                  .select(({ s }) => ({
+                      ...s,
+                      thread_id: s.thread,
+                      thread: materialize(
+                          query
+                              .from({ t: threadsCollection })
+                              .where(({ t }) => eq(t.id, s.thread))
+                              .findOne()
+                      ),
+                  }))
+    )
 
     const { data: allAssignments, isLoading: assignmentsLoading } = useMyLiveQuery(
         (query, { userId }) =>
@@ -78,167 +106,6 @@ export function useThreadListItems(
                 )
     )
 
-    // Member-scoped set for unified-inbox label resolution — reusing
-    // useMailboxes() instead of a second whole-collection subscription on
-    // mail_mailboxes for the whole mail session (the member list rule already
-    // bounds it to "my mailboxes", but this drops the extra subscription).
-    const { personal, shared } = useMailboxes()
-
-    const { data: userMemberships } = useMyLiveQuery((query, { userId }) =>
-        query
-            .from({ mail_mailbox_members: membersCollection })
-            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user, userId))
-    )
-
-    const isUnified = filter.mailboxId === UNIFIED_INBOX
-
-    // In unified mode filter.mailboxId is the synthetic UNIFIED_INBOX sentinel,
-    // so these two queries match no rows AND nothing reads their results
-    // (mailboxType falls back to 'personal' → widenSharedTeam is always false →
-    // coMembers is never consulted). Return undefined from the queryFn so the
-    // hook skips the subscription entirely instead of opening two dead live
-    // queries on every unified-inbox mount.
-    const { data: targetMailbox } = useLiveQuery({
-        query: query =>
-            isUnified
-                ? undefined
-                : query
-                      .from({ mail_mailboxes: mailboxesCollection })
-                      .where(({ mail_mailboxes }) => eq(mail_mailboxes.id, filter.mailboxId)),
-    })
-    const mailboxType = targetMailbox?.[0]?.type ?? 'personal'
-
-    const { data: coMembers } = useLiveQuery({
-        query: query =>
-            isUnified
-                ? undefined
-                : query
-                      .from({ mail_mailbox_members: membersCollection })
-                      .where(({ mail_mailbox_members }) =>
-                          eq(mail_mailbox_members.mailbox, filter.mailboxId)
-                      ),
-    })
-
-    // The mailbox-id set the page query restricts threads to. For unified inbox
-    // it's every mailbox the user belongs to; otherwise just the active one.
-    const visibleMailboxIds = useMemo(() => {
-        if (!isUnified) return [filter.mailboxId]
-        const ids = new Set<string>()
-        for (const m of userMemberships ?? []) ids.add(m.mailbox)
-        return [...ids]
-    }, [isUnified, filter.mailboxId, userMemberships])
-
-    const _folderKey = filter.folder ?? 'inbox'
-    const userIdsForFolder = useMemo(() => {
-        // For shared mailboxes' Sent / Drafts views, we widen to co-members
-        // so the team sees each others' outbound activity. Personal folders
-        // and inbox/starred/etc. always scope to the active user.
-        const widenSharedTeam =
-            mailboxType === 'shared' && (filter.folder === 'sent' || filter.folder === 'drafts')
-        if (!widenSharedTeam) return [currentUserId]
-        const ids = new Set<string>([currentUserId])
-        for (const m of coMembers ?? []) ids.add(m.user)
-        return [...ids]
-    }, [mailboxType, filter.folder, currentUserId, coMembers])
-
-    const pageQueryEnabled = visibleMailboxIds.length > 0 && (isUnified ? !!userMemberships : true)
-
-    const pageQueryKey = useMemo(
-        () => [
-            'mail_threads_page',
-            currentUserId,
-            filter.mailboxId,
-            filter.folder ?? 'inbox',
-            visibleMailboxIds.slice().sort().join(','),
-            userIdsForFolder.slice().sort().join(','),
-            page,
-        ],
-        [currentUserId, filter.mailboxId, filter.folder, visibleMailboxIds, userIdsForFolder, page]
-    )
-
-    const { data: pageResult, isLoading: pageLoading } = useQuery({
-        queryKey: pageQueryKey,
-        enabled: pageQueryEnabled,
-        queryFn: async () => {
-            const filterStr = buildThreadsFilter({
-                mailboxIds: visibleMailboxIds,
-                userIds: userIdsForFolder,
-                folder: filter.folder,
-            })
-            // biome-ignore lint/plugin/pbtsdb-no-raw-pb-access: deliberate server-side pagination — fetches only the current page (see file header), which a whole-collection pbtsdb store read would defeat; cached per-page via React Query.
-            return pb.collection('mail_threads').getList<MailThreads>(page, PAGE_SIZE, {
-                filter: filterStr,
-                sort: '-latest_date',
-                skipTotal: false,
-            })
-        },
-    })
-
-    const pageThreads = useMemo(() => pageResult?.items ?? [], [pageResult])
-
-    // Bounded to the rendered page: mail_thread_state is on-demand, so this
-    // translates to a server-side filter over ~PAGE_SIZE ids rather than a
-    // whole-mailbox sync. The query identity hashes the ids, so a page change
-    // refetches but a re-render with the same page does not.
-    const pageThreadIds = useMemo(() => pageThreads.map(thread => thread.id), [pageThreads])
-
-    const { data: threadStates, isLoading: threadStatesLoading } = useLiveQuery({
-        query: query =>
-            pageThreadIds.length === 0
-                ? undefined
-                : query
-                      .from({ mail_thread_state: threadStateCollection })
-                      .where(({ mail_thread_state }) =>
-                          and(
-                              eq(mail_thread_state.user, currentUserId),
-                              inArray(mail_thread_state.thread, pageThreadIds)
-                          )
-                      ),
-    })
-
-    const totalItems = pageResult?.totalItems ?? 0
-    const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE))
-
-    // Draft messages we may need to populate the compose window when the user
-    // clicks a draft row. Scoped to the user's visible mailboxes via the
-    // thread relation — drafts are sparse so the result set stays small.
-    // The "does this thread have a draft?" marker on rows comes from the
-    // mail_threads.has_draft denormalized column, not this query.
-    //
-    // PocketBase's relation-traversal filter (thread.mailbox) isn't expressible
-    // through tanstack/db's query builder, so this query goes direct to PB
-    // through React Query rather than useLiveQuery. Realtime is unnecessary
-    // because we only consult the cache when the user clicks a draft row;
-    // the draft icon itself comes from has_draft on the thread.
-    const draftQueryKey = useMemo(
-        () => ['mail_drafts_for_mailboxes', visibleMailboxIds.slice().sort().join(',')],
-        [visibleMailboxIds]
-    )
-    const { data: draftMessagesResp } = useQuery({
-        queryKey: draftQueryKey,
-        enabled: visibleMailboxIds.length > 0,
-        queryFn: async () => {
-            const mbClause =
-                visibleMailboxIds.length === 1
-                    ? `thread.mailbox = ${quote(visibleMailboxIds[0])}`
-                    : `(${visibleMailboxIds.map(id => `thread.mailbox = ${quote(id)}`).join(' || ')})`
-            // biome-ignore lint/plugin/pbtsdb-no-raw-pb-access: bounded server-side query for draft messages across the visible mailboxes, cached via React Query; not a whole-collection pbtsdb store read.
-            return pb.collection('mail_messages').getFullList<MailMessages>({
-                filter: `delivery_status = "draft" && ${mbClause}`,
-            })
-        },
-    })
-    const draftMessages = draftMessagesResp ?? []
-
-    // Local indexes against the supporting data fetched above.
-    const stateByThread = useMemo(() => {
-        const map = new Map<string, MailThreadState>()
-        for (const s of (threadStates ?? []) as MailThreadState[]) {
-            map.set(s.thread, s)
-        }
-        return map
-    }, [threadStates])
-
     const assignmentsByRecord = useMemo(() => {
         const map = new Map<string, string[]>()
         for (const a of allAssignments ?? []) {
@@ -249,18 +116,6 @@ export function useThreadListItems(
         return map
     }, [allAssignments])
 
-    const draftByThread = useMemo(() => {
-        const map = new Map<string, MailMessages>()
-        for (const msg of draftMessages) map.set(msg.thread, msg)
-        return map
-    }, [draftMessages])
-
-    const threadMap = useMemo(() => {
-        const map = new Map<string, MailThreads>()
-        for (const t of pageThreads) map.set(t.id, t)
-        return map
-    }, [pageThreads])
-
     const mailboxLabelMap = useMemo(() => {
         if (!isUnified) return null
         const map = new Map<string, string>()
@@ -269,76 +124,30 @@ export function useThreadListItems(
         return map
     }, [isUnified, personal, shared])
 
-    // Build the visible items — server already returned them in latest_date
-    // desc order, so we render in iteration order.
+    const pageRows: ThreadListRow[] = rows ?? EMPTY_ROWS
+
     const items: ThreadListItem[] = useMemo(() => {
-        const out: ThreadListItem[] = []
-        for (const thread of pageThreads) {
-            const state = stateByThread.get(thread.id)
-            if (!state) continue // shouldn't happen — server filter requires a state row
-            const labelIds = assignmentsByRecord.get(state.id) ?? []
-            const stateLabels = labelIds
+        const out = pageRows.map(row => {
+            const rowLabels = (assignmentsByRecord.get(row.id) ?? [])
                 .map(id => labelMap.get(id))
-                .filter((l): l is { id: string; name: string; color: string } => l != null)
-            const mailboxLabel = isUnified ? mailboxLabelMap?.get(thread.mailbox) : undefined
-            out.push(
-                toThreadListItem(
-                    state,
-                    thread,
-                    stateLabels,
-                    thread.has_draft ?? false,
-                    thread.has_attachments ?? false,
-                    mailboxLabel
-                )
-            )
-        }
-
-        // Label intersection: filter to threads tagged with all selected labels.
-        if (filter.labels.length > 0) {
-            return out.filter(item => filter.labels.every(id => item.labels.some(l => l.id === id)))
-        }
-        return out
-    }, [
-        pageThreads,
-        stateByThread,
-        assignmentsByRecord,
-        labelMap,
-        isUnified,
-        mailboxLabelMap,
-        filter.labels,
-    ])
-
-    // The paginated mail_threads page query is a one-shot React Query, not a
-    // live query, keyed on `folder` — a param no pbtsdb query filters on, so
-    // per-query realtime (pbtsdb 0.10) can't cover it either. Archiving /
-    // trashing / moving a thread mutates mail_thread_state.folder — which the
-    // page query filters on via the back-relation — but PocketBase emits
-    // realtime events per collection, so a thread_state change fires NO
-    // mail_threads event and the cached page keeps showing the now-moved
-    // thread (the archived email never leaves the inbox). Subscribe to local
-    // thread_state changes (fired on optimistic writes and incoming realtime)
-    // and invalidate the page query so it refetches and the row drops out of
-    // the current folder. Mirrors useMailboxFolderCounts.
-    useEffect(() => {
-        const sub = threadStateCollection.subscribeChanges(() => {
-            queryClient.invalidateQueries({ queryKey: ['mail_threads_page'] })
+                .filter(isLabel)
+            return toThreadListItem(row, rowLabels, {
+                mailboxLabel: mailboxLabelMap?.get(row.mailbox),
+            })
         })
-        return () => sub.unsubscribe()
-    }, [threadStateCollection])
+        if (filter.labels.length === 0) return out
+        return out.filter(item => filter.labels.every(id => item.labels.some(l => l.id === id)))
+    }, [pageRows, assignmentsByRecord, labelMap, mailboxLabelMap, filter.labels])
 
-    // First-load gate: page query + always-needed support queries.
-    const isLoading = pageLoading || threadStatesLoading || assignmentsLoading
+    // The boundary for the next page is the last row of this one, before the
+    // client-side label filter, so paging walks the server order.
+    const last = pageRows[pageRows.length - 1]
+    const nextCursor: ThreadCursor | null = last ? { date: last.latest_date, id: last.id } : null
 
-    // Narrower gate for the list itself: the page query + thread_state determine
-    // which rows EXIST (items skips threads without a state row), so the list is
-    // safe to mount once these settle. Label assignments only enrich existing
-    // rows, so excluding assignmentsLoading lets the list paint without waiting
-    // on label data — and avoids a blank frame where items are present but
-    // isLoading is still true (which would hide both the list and LoadingState).
-    const itemsLoading = pageLoading || threadStatesLoading
+    // The query is disabled until a mailbox is known, and a disabled query
+    // reports not-loading; without this the empty state flashes on cold load.
+    const itemsLoading = rowsLoading || (visibleMailboxIds.length === 0 && mailboxesLoading)
 
-    // Publish the visible thread IDs so the conversation detail screen can
-    // navigate prev/next within the same page.
     const setThreadIds = useThreadListStore(s => s.setThreadIds)
     const prevIdsKeyRef = useRef('')
     useEffect(() => {
@@ -354,13 +163,11 @@ export function useThreadListItems(
         items,
         labels,
         labelMap,
-        draftByThread,
-        threadMap,
         threadStateCollection,
-        isLoading,
+        visibleMailboxIds,
+        isLoading: itemsLoading || assignmentsLoading,
         itemsLoading,
-        page,
-        totalPages,
-        totalItems,
+        nextCursor,
+        hasFullPage: pageRows.length === PAGE_SIZE,
     }
 }

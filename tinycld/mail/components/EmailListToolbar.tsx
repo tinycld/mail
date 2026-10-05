@@ -56,6 +56,8 @@ interface EmailListToolbarProps {
     pageSize: number
     /** Total threads across every page. */
     totalItems: number
+    /** Whether an older page exists; the only input that enables "Older". */
+    hasNext: boolean
     onPrevPage: () => void
     onNextPage: () => void
     helpTopic: HelpTopicId
@@ -86,6 +88,7 @@ function DefaultToolbar({
     page,
     pageSize,
     totalItems,
+    hasNext,
     onPrevPage,
     onNextPage,
     helpTopic,
@@ -120,6 +123,7 @@ function DefaultToolbar({
         page,
         pageSize,
         totalItems,
+        hasNext,
         onPrevPage,
         onNextPage,
     })
@@ -160,6 +164,7 @@ function BulkActionsToolbar({
     page,
     pageSize,
     totalItems,
+    hasNext,
     onPrevPage,
     onNextPage,
     helpTopic,
@@ -271,6 +276,7 @@ function BulkActionsToolbar({
         page,
         pageSize,
         totalItems,
+        hasNext,
         onPrevPage,
         onNextPage,
     })
@@ -287,6 +293,7 @@ interface PaginationParams {
     page: number
     pageSize: number
     totalItems: number
+    hasNext: boolean
     onPrevPage: () => void
     onNextPage: () => void
 }
@@ -296,6 +303,7 @@ function usePaginationRightItems({
     page,
     pageSize,
     totalItems,
+    hasNext,
     onPrevPage,
     onNextPage,
 }: PaginationParams): ToolbarItem[] {
@@ -310,7 +318,6 @@ function usePaginationRightItems({
     }, [emailCount, page, pageSize, totalItems])
 
     const hasPrev = page > 1
-    const hasNext = totalItems > 0 ? page * pageSize < totalItems : false
 
     return useMemo(
         () => [

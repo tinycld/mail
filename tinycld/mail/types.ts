@@ -68,17 +68,7 @@ export interface MailMessages
     attachment_thumbnail_map: Record<string, string> | null
 }
 
-// View collection: the aggregate count columns come back untyped from the
-// schema generator, but they are always numbers.
-export interface MailFolderCounts
-    extends Omit<GenMailFolderCounts, 'inbox' | 'drafts' | 'sent' | 'starred' | 'trash' | 'spam'> {
-    inbox: number
-    drafts: number
-    sent: number
-    starred: number
-    trash: number
-    spam: number
-}
+export type MailFolderCounts = GenMailFolderCounts
 
 export type MailSchema = {
     mail_domains: {

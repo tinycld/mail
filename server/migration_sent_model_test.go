@@ -1,10 +1,8 @@
 package mail
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -120,11 +118,91 @@ func TestMigrations_SentModelBackfill(t *testing.T) {
 	if err != nil || len(counts) != 1 {
 		t.Fatalf("mail_folder_counts rows = %d, err = %v", len(counts), err)
 	}
-	// PocketBase types the view's SUM columns as JSON, so read the raw value.
-	if got := fmt.Sprint(counts[0].Get("sent")); got != "1" {
-		t.Errorf("sent count = %s, want 1", got)
+	// The counts backfill reads is_sent, so only the thread filed under sent counts.
+	if got := counts[0].GetInt("sent"); got != 1 {
+		t.Errorf("sent count = %d, want 1", got)
 	}
-	if !strings.Contains(counts[0].Collection().ViewQuery, "is_sent") {
-		t.Error("mail_folder_counts does not read is_sent")
+	if got := counts[0].GetInt("total"); got != 2 {
+		t.Errorf("total count = %d, want 2", got)
+	}
+}
+
+// Before 1830000012 only the sender's state row of a shared-mailbox thread
+// carried is_sent. The upgrade must flag every co-member's row of that thread,
+// leave threads nobody sent on alone, and the counts backfill (1830000013)
+// must then see the co-member's sent thread.
+func TestMigrations_SharedMailboxSentBackfill(t *testing.T) {
+	app := rlstest.NewApp(t)
+	users, err := app.FindCollectionByNameOrId("users")
+	if err != nil {
+		t.Fatal(err)
+	}
+	users.Fields.Add(&core.SelectField{Name: "role", MaxSelect: 1, Values: []string{"owner", "admin", "member", "guest"}})
+	users.Fields.Add(&core.BoolField{Name: "disabled"})
+	if err := app.Save(users); err != nil {
+		t.Fatal(err)
+	}
+
+	rlstest.Apply(t, app, migrationsBefore(t, "1830000012"))
+
+	newUser := func(email string) *core.Record {
+		t.Helper()
+		u := core.NewRecord(users)
+		u.SetEmail(email)
+		u.SetPassword("Password123!")
+		if err := app.Save(u); err != nil {
+			t.Fatal(err)
+		}
+		return u
+	}
+	sender := newUser("sender@example.org")
+	member := newUser("member@example.org")
+	save := func(collection string, fields map[string]any) *core.Record {
+		t.Helper()
+		col, err := app.FindCollectionByNameOrId(collection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := core.NewRecord(col)
+		for k, v := range fields {
+			r.Set(k, v)
+		}
+		if err := app.SaveNoValidate(r); err != nil {
+			t.Fatalf("seed %s: %v", collection, err)
+		}
+		return r
+	}
+	domain := save("mail_domains", map[string]any{"domain": "example.org"})
+	mailbox := save("mail_mailboxes", map[string]any{"address": "team", "domain": domain.Id, "type": "shared"})
+	sentThread := save("mail_threads", map[string]any{"mailbox": mailbox.Id, "subject": "We replied"})
+	quietThread := save("mail_threads", map[string]any{"mailbox": mailbox.Id, "subject": "Nobody replied"})
+	senderSent := save("mail_thread_state", map[string]any{"thread": sentThread.Id, "user": sender.Id, "folder": "inbox", "is_sent": true})
+	memberSent := save("mail_thread_state", map[string]any{"thread": sentThread.Id, "user": member.Id, "folder": "inbox"})
+	senderQuiet := save("mail_thread_state", map[string]any{"thread": quietThread.Id, "user": sender.Id, "folder": "inbox"})
+	memberQuiet := save("mail_thread_state", map[string]any{"thread": quietThread.Id, "user": member.Id, "folder": "inbox"})
+
+	rlstest.Apply(t, app, rlstest.MigrationsDir(t, "../pb-migrations"))
+
+	isSent := func(id string) bool {
+		t.Helper()
+		r, err := app.FindRecordById("mail_thread_state", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r.GetBool("is_sent")
+	}
+	if !isSent(senderSent.Id) || !isSent(memberSent.Id) {
+		t.Errorf("sent thread: sender is_sent=%v member is_sent=%v, want both true", isSent(senderSent.Id), isSent(memberSent.Id))
+	}
+	if isSent(senderQuiet.Id) || isSent(memberQuiet.Id) {
+		t.Error("a thread nobody sent on was flagged sent")
+	}
+
+	counts, err := app.FindRecordsByFilter("mail_folder_counts", "user = {:u}", "", 0, 0, map[string]any{"u": member.Id})
+	if err != nil || len(counts) != 1 {
+		t.Fatalf("member mail_folder_counts rows = %d, err = %v", len(counts), err)
+	}
+	if got := counts[0].GetInt("sent"); got != 1 {
+		t.Errorf("member sent count = %d, want 1", got)
 	}
 }

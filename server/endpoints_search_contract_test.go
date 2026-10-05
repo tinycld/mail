@@ -25,9 +25,16 @@ func tagSet(t *testing.T, typ reflect.Type, tagKey string) map[string]int {
 }
 
 // searchResultRow (db tags, the SQL scan target) is the one place a search
-// response field can still be silently dropped: mapResults copies it field by
-// field into api.SearchResultItem. Pin the two field sets together and prove
-// every value survives the copy under its wire key.
+// response field can still be silently dropped: mapResults copies a subset of
+// it into api.SearchResultItem. The row is deliberately WIDER than the wire
+// type — it also carries the display columns (subject, participants, dates,
+// counts, attachments) the federated search palette (search_source.go) reads
+// straight off the row, bypassing mapResults entirely, because the web
+// client resolves its own display from live rows but the palette has no live
+// store to fall back on. So the invariant here is one-directional: every
+// api.SearchResultItem json tag must have a matching searchResultRow db tag
+// (wire ⊆ row) — not the other way around — and every value that IS on the
+// wire must survive the copy under its wire key.
 func TestMapResults_CoversEveryAPIField(t *testing.T) {
 	rowType := reflect.TypeOf(searchResultRow{})
 	itemType := reflect.TypeOf(api.SearchResultItem{})
@@ -35,30 +42,25 @@ func TestMapResults_CoversEveryAPIField(t *testing.T) {
 	dbTags := tagSet(t, rowType, "db")
 	jsonTags := tagSet(t, itemType, "json")
 
-	for name := range dbTags {
-		if _, ok := jsonTags[name]; !ok {
-			t.Errorf("searchResultRow db tag %q has no matching api.SearchResultItem json tag", name)
-		}
-	}
 	for name := range jsonTags {
 		if _, ok := dbTags[name]; !ok {
 			t.Errorf("api.SearchResultItem json tag %q has no matching searchResultRow db tag", name)
 		}
 	}
 
-	// Sentinel round-trip: distinct values in every row field must surface in
+	// Sentinel round-trip: distinct values in every WIRE field must surface in
 	// the marshaled item under the same tag name — a crossed-wires copy in
-	// mapResults fails here even though the field sets match.
+	// mapResults fails here even though the field sets match. Row-only fields
+	// (subject, participants, mailbox_id, has_attachments) are deliberately
+	// absent from api.SearchResultItem, so they are not asserted against the
+	// wire here.
 	row := searchResultRow{
 		ThreadID:         "sentinel-thread",
-		Subject:          "sentinel-subject",
+		StateID:          "sentinel-state",
 		SubjectHighlight: "sentinel-subject-hl",
 		SnippetHighlight: "sentinel-snippet-hl",
 		LatestDate:       "sentinel-date",
-		Participants:     "sentinel-participants",
-		MessageCount:     41,
-		MailboxID:        "sentinel-mailbox",
-		HasAttachments:   true,
+		MessageCount:     7,
 	}
 	items := mapResults([]searchResultRow{row})
 	if len(items) != 1 {
@@ -74,7 +76,8 @@ func TestMapResults_CoversEveryAPIField(t *testing.T) {
 	}
 
 	rowValue := reflect.ValueOf(row)
-	for name, fieldIdx := range dbTags {
+	for name := range jsonTags {
+		fieldIdx := dbTags[name]
 		want := fmt.Sprint(rowValue.Field(fieldIdx).Interface())
 		got, ok := wire[name]
 		if !ok {

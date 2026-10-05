@@ -18,8 +18,8 @@ import (
 //
 // Mail keeps its own /api/mail/search route as well: the in-app advanced search
 // offers structured filters (from, to, subject, dates, has_attachment, folder)
-// that a one-box palette does not, and both call SearchMail — so there is one
-// query, not two.
+// that a one-box palette does not, and both call searchMailResultRows — so
+// there is one query, not two.
 func searchSource() search.Source {
 	return search.Source{
 		Slug:  "mail",
@@ -32,7 +32,11 @@ func searchSource() search.Source {
 }
 
 func searchMailRows(app core.App, userID string, q search.Query) (search.Result, error) {
-	resp, err := SearchMail(app, userID, api.SearchRequest{
+	// Reads the full SQL row (not the thin HTTP wire type): the palette needs
+	// the display columns — subject, participants, date, counts, attachments —
+	// that api.SearchResultItem no longer carries now that the web client
+	// resolves display from its own live rows.
+	results, total, err := searchMailResultRows(app, userID, api.SearchRequest{
 		Query: strings.Join(q.Include, " "),
 		// Mail's own search honors exclusions across both its FTS arms, so a
 		// `-term` from the palette reaches SQL rather than being approximated
@@ -47,8 +51,8 @@ func searchMailRows(app core.App, userID string, q search.Query) (search.Result,
 		return search.Result{}, err
 	}
 
-	rows := make([]search.Row, 0, len(resp.Items))
-	for _, item := range resp.Items {
+	rows := make([]search.Row, 0, len(results))
+	for _, item := range results {
 		rows = append(rows, search.Row{
 			// Mail's identity is the THREAD, not a message: opening a result
 			// opens the conversation. api.SearchResultItem has no `id` field for
@@ -66,13 +70,14 @@ func searchMailRows(app core.App, userID string, q search.Query) (search.Result,
 			Subtitle: participantNames(item.Participants),
 			Meta:     item.LatestDate,
 			Fields: map[string]any{
+				"state_id":        item.StateID,
 				"mailbox_id":      item.MailboxID,
 				"message_count":   item.MessageCount,
 				"has_attachments": item.HasAttachments,
 			},
 		})
 	}
-	return search.Result{Rows: rows, Total: resp.Total}, nil
+	return search.Result{Rows: rows, Total: total}, nil
 }
 
 func titleOr(value, fallback string) string {

@@ -27,6 +27,11 @@ type scopeEnv struct {
 func setupScopeEnv(t *testing.T) *scopeEnv {
 	t.Helper()
 	app := setupInboundTestApp(t)
+	registerThreadStateSyncHooks(app)
+	registerFolderCountHooks(app)
+	// The member-backfill hook is not registered here: it runs in a goroutine,
+	// so every test that seeds a member would race it for that member's state
+	// rows. member_backfill_test.go registers it where the hook is under test.
 
 	// The shipped schema orders messages by imap_uid; the shared fixture
 	// predates the field, and without it the sort errors and every folder
@@ -79,6 +84,10 @@ func setupScopeEnv(t *testing.T) *scopeEnv {
 		thread := core.NewRecord(threads)
 		thread.Set("mailbox", mb.Id)
 		thread.Set("subject", subject)
+		// Fixed so the state row's create-time fill has a concrete value to
+		// copy — TestThreadStateCreate_FillsMailboxAndLatestDate asserts
+		// against it directly, before any propagation can occur.
+		thread.Set("latest_date", "2026-10-01 09:00:00.000Z")
 		if err := app.Save(thread); err != nil {
 			t.Fatal(err)
 		}

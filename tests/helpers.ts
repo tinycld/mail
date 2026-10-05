@@ -1,5 +1,6 @@
 import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import { expect } from '@playwright/test'
+import { navigateToPackage } from '@tinycld/core/e2e-helpers'
 import PocketBase from 'pocketbase'
 
 // Mail tests share a few patterns that are sensitive to two layout choices
@@ -164,6 +165,9 @@ export interface DeliverOptions {
     fromEmail?: string
     body?: string
     folder?: 'inbox' | 'spam' | 'trash'
+    // The message Date header, which orders the list. Defaults to now; the
+    // header has one-second resolution, so a burst of deliveries ties.
+    date?: Date
 }
 
 // Inject a fresh inbound message via the Postmark webhook so the test has
@@ -198,7 +202,7 @@ export async function deliverInbound(
         ToFull: [{ Name: 'Test User', Email: opts.to ?? TEST_USER_MAILBOX }],
         CcFull: [],
         Subject: opts.subject,
-        Date: new Date().toUTCString(),
+        Date: (opts.date ?? new Date()).toUTCString(),
         TextBody: opts.body ?? 'Test body',
         HtmlBody: `<p>${opts.body ?? 'Test body'}</p>`,
         StrippedTextReply: opts.body ?? 'Test body',
@@ -222,4 +226,53 @@ export async function deliverInbound(
 // per-test fixture pattern (deliverInbound + assert on this subject).
 export function uniqueSubject(label: string): string {
     return `${label} ${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+const MAIL_DOMAIN = 'tinycld.org'
+
+// Creates a shared mailbox through the Mailboxes settings screen, returns to
+// mail, and returns its address. The display name is the unique local part,
+// so the mailbox's sidebar section is found by that text.
+// A fresh mailbox is the way to get a small, known inbox: the seeded personal
+// mailbox holds many threads, and the live-arrival bug only shows when the
+// inbox is small (a full page accidentally widens the realtime filter).
+export async function createSharedMailbox(page: Page, label: string): Promise<string> {
+    const local = `${label}-${Date.now().toString(36)}`.toLowerCase()
+    await navigateToMailboxSettings(page)
+    await page.getByText('New mailbox', { exact: true }).click()
+    await expect(page.getByText('New shared mailbox')).toBeVisible()
+    await page.getByTestId('address').fill(local)
+    // The domain choice renders only when the org has more than one domain
+    // (the custom-domain spec adds some), and it defaults to the first one.
+    // The inbound webhook delivers to tinycld.org, so pick it explicitly.
+    // The picker and the preview's domain both derive from the loaded domain
+    // list, so wait until the preview names a domain (not the '…' it shows
+    // while the list loads) or the picker is up; only then is the picker's
+    // absence an answer rather than a render not yet reached.
+    const domainChoice = page.getByText(MAIL_DOMAIN, { exact: true })
+    const domainResolved = page.getByText(/will be: .*@[^…]/)
+    await expect(domainResolved.or(domainChoice).first()).toBeVisible()
+    if (await domainChoice.isVisible()) await domainChoice.click()
+    await expect(page.getByText(`will be: ${local}@${MAIL_DOMAIN}`)).toBeVisible()
+    await page.getByTestId('display_name').fill(local)
+    await page.getByText('Create mailbox', { exact: true }).click()
+    await expect(page.getByText('New shared mailbox')).toBeHidden()
+    await expect(page.getByText(local).first()).toBeVisible()
+    await navigateToPackage(page, 'mail', {
+        waitFor: mailboxSection(page, local),
+    })
+    return `${local}@${MAIL_DOMAIN}`
+}
+
+// The sidebar section of the mailbox whose label is `name`. Its header
+// opens the mailbox Inbox; its folder items carry the unread badges.
+export function mailboxSection(page: Page, name: string): Locator {
+    return page.locator('[data-testid="mailbox-section"]:visible').filter({ hasText: name })
+}
+
+// Opens a shared mailbox's Inbox from its collapsed sidebar header.
+export async function openSharedMailbox(page: Page, address: string) {
+    const local = address.split('@')[0]
+    await mailboxSection(page, local).getByText(local, { exact: true }).click()
+    await expect(page).toHaveURL(/mailbox=/)
 }

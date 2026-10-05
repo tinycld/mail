@@ -192,8 +192,39 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 	threadState.Fields.Add(&core.BoolField{Name: "is_read"})
 	threadState.Fields.Add(&core.BoolField{Name: "is_starred"})
 	threadState.Fields.Add(&core.BoolField{Name: "is_sent"})
+	threadState.Fields.Add(&core.RelationField{
+		Name:         "mailbox",
+		CollectionId: mailboxesCol.Id,
+		MaxSelect:    1,
+	})
+	threadState.Fields.Add(&core.TextField{Name: "latest_date"})
+	threadState.Fields.Add(&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true})
 	if err := app.Save(threadState); err != nil {
 		t.Fatalf("failed to save mail_thread_state: %v", err)
+	}
+
+	counts := core.NewBaseCollection("mail_folder_counts")
+	if idField, ok := counts.Fields.GetByName("id").(*core.TextField); ok {
+		idField.Min = 30
+		idField.Max = 30
+		idField.Pattern = "^[a-z0-9]{30}$"
+		idField.AutogeneratePattern = ""
+	}
+	counts.Fields.Add(&core.TextField{Name: "user", Required: true})
+	// A relation with cascade delete, as the migration declares, so a mailbox
+	// delete removes its counts row the way production does.
+	counts.Fields.Add(&core.RelationField{
+		Name:          "mailbox",
+		Required:      true,
+		CollectionId:  mailboxesCol.Id,
+		CascadeDelete: true,
+		MaxSelect:     1,
+	})
+	for _, name := range folderCountColumns {
+		counts.Fields.Add(&core.NumberField{Name: name, OnlyInt: true})
+	}
+	if err := app.Save(counts); err != nil {
+		t.Fatalf("failed to save mail_folder_counts: %v", err)
 	}
 
 	return app
