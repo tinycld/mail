@@ -42,6 +42,20 @@ export function cursorTerms(s: StateRef, cursor: ThreadCursor | null): Term[] {
     ]
 }
 
+// A full page alone cannot tell "more rows" from "exactly pageSize rows", so
+// the live folder total decides; a lagging counts row only disables Older
+// until it catches up.
+export function hasNextPage(args: {
+    hasFullPage: boolean
+    nextCursor: ThreadCursor | null
+    page: number
+    pageSize: number
+    totalItems: number
+}): boolean {
+    const { hasFullPage, nextCursor, page, pageSize, totalItems } = args
+    return hasFullPage && nextCursor !== null && page * pageSize < totalItems
+}
+
 // URL form: one cursor per previous page, `date|id`, comma-joined. Dates and
 // ids contain neither character.
 const FIELD_SEPARATOR = '|'

@@ -29,7 +29,7 @@ import { useMailSelection } from '../hooks/useMailSelection'
 import { useMailSearchState } from '../hooks/useSearchState'
 import { useSearchThreadItems } from '../hooks/useSearchThreadItems'
 import { PAGE_SIZE, UNIFIED_INBOX, useThreadListItems } from '../hooks/useThreadListItems'
-import { decodeCursors, encodeCursors } from '../lib/thread-list-query'
+import { decodeCursors, encodeCursors, hasNextPage } from '../lib/thread-list-query'
 
 function useQueryParams() {
     const { folder, label, mailbox, cursor } = useLocalSearchParams<{
@@ -232,10 +232,9 @@ export default function MailListScreen() {
         cursor: cursors[cursors.length - 1] ?? null,
     })
 
-    const hasNext = hasFullPage && nextCursor !== null
-
     const counts = useMailboxFolderCounts()
     const totalItems = folderTotal(counts, visibleMailboxIds, folder)
+    const hasNext = hasNextPage({ hasFullPage, nextCursor, page, pageSize: PAGE_SIZE, totalItems })
 
     const navigateToCursors = useCallback(
         (next: typeof cursors) => {

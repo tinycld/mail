@@ -7,6 +7,7 @@ import {
     decodeCursors,
     encodeCursors,
     folderTerms,
+    hasNextPage,
 } from '~/tinycld/mail/lib/thread-list-query'
 import type { MailThreadState } from '~/tinycld/mail/types'
 
@@ -79,5 +80,25 @@ describe('countsKeyForFolder', () => {
         expect(countsKeyForFolder('all')).toBe('total')
         expect(countsKeyForFolder('sent')).toBe('sent')
         expect(countsKeyForFolder('archive')).toBe('archive')
+    })
+})
+
+describe('hasNextPage', () => {
+    const cursor = { date: '2026-10-05 10:00:00.000Z', id: 'abc' }
+    const base = { hasFullPage: true, nextCursor: cursor, page: 1, pageSize: 100 }
+    it('a full page with more rows behind it has a next page', () => {
+        expect(hasNextPage({ ...base, totalItems: 101 })).toBe(true)
+    })
+    it('a folder of exactly one full page has no next page', () => {
+        expect(hasNextPage({ ...base, totalItems: 100 })).toBe(false)
+    })
+    it('the last full page of a deeper folder has no next page', () => {
+        expect(hasNextPage({ ...base, page: 2, totalItems: 200 })).toBe(false)
+    })
+    it('a short page has no next page whatever the total says', () => {
+        expect(hasNextPage({ ...base, hasFullPage: false, totalItems: 500 })).toBe(false)
+    })
+    it('no cursor means no next page', () => {
+        expect(hasNextPage({ ...base, nextCursor: null, totalItems: 500 })).toBe(false)
     })
 })
