@@ -14,6 +14,7 @@ type Term = IR.BasicExpression<boolean>
 
 // Folder semantics shared with the server's folder counts (folder_counts.go):
 //   inbox    — folder = 'inbox'
+//   all-inboxes — folder = 'inbox'; the mailbox scope is widened by the caller
 //   starred  — is_starred, any folder
 //   sent     — is_sent, outside trash and spam (a reply flags its thread sent
 //              and leaves it where it was)
@@ -23,7 +24,8 @@ export function folderTerms(s: StateRef, folder: string | null): Term[] {
     const key = folder ?? 'inbox'
     if (key === 'starred') return [eq(s.is_starred, true)]
     if (key === 'sent') return [and(eq(s.is_sent, true), not(inArray(s.folder, ['trash', 'spam'])))]
-    if (key === 'all' || key === 'all-inboxes') return []
+    if (key === 'all') return []
+    if (key === 'all-inboxes') return [eq(s.folder, 'inbox')]
     return [eq(s.folder, key)]
 }
 

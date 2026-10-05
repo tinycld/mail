@@ -33,9 +33,11 @@ describe('folderTerms', () => {
             '(is_sent = true && (folder != "trash" && folder != "spam"))'
         )
     })
-    it('all and all-inboxes add no term', () => {
+    it('all adds no term', () => {
         expect(folderTerms(s, 'all')).toEqual([])
-        expect(folderTerms(s, 'all-inboxes')).toEqual([])
+    })
+    it('all-inboxes filters to the inbox folder', () => {
+        expect(compile(folderTerms(s, 'all-inboxes'))).toBe('folder = "inbox"')
     })
     it('other folders filter by name', () => {
         expect(compile(folderTerms(s, 'archive'))).toBe('folder = "archive"')
