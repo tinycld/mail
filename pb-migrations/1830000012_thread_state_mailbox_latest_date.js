@@ -42,6 +42,20 @@ migrate(
                      latest_date = COALESCE((SELECT t.latest_date FROM mail_threads t WHERE t.id = mail_thread_state.thread), '')`
             )
             .execute()
+
+        // The Sent view reads each member's own state row, but before this
+        // version only the sender's row of a shared-mailbox thread carried
+        // is_sent, so the team's earlier Sent history would vanish for every
+        // other member. Flag every row of a thread any member sent on. A
+        // personal mailbox has one row per thread, so this is a no-op there.
+        app.db()
+            .newQuery(
+                `UPDATE mail_thread_state
+                 SET is_sent = 1
+                 WHERE is_sent = 0
+                   AND thread IN (SELECT thread FROM mail_thread_state WHERE is_sent = 1)`
+            )
+            .execute()
     },
     app => {
         const states = app.findCollectionByNameOrId('mail_thread_state')
