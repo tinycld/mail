@@ -9,11 +9,12 @@ import { captureException, errorToString } from '@tinycld/core/lib/errors'
 import { useMutation } from '@tinycld/core/lib/mutations'
 import { notify } from '@tinycld/core/lib/notify'
 import { PB_SERVER_ADDR, pb } from '@tinycld/core/lib/pocketbase'
+import type { UploadFile } from '@tinycld/core/lib/upload-file'
 import { useState } from 'react'
 
 // The JSON body is the generated server contract; attachments ride alongside
 // as multipart file parts, so they are a client-side extension of it.
-type SendEmailParams = SendEmailRequest & { attachments?: File[] }
+type SendEmailParams = SendEmailRequest & { attachments?: UploadFile[] }
 
 interface UseSendEmailOptions {
     onSuccess?: () => void
