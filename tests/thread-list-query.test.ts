@@ -1,4 +1,4 @@
-import { and, type Ref } from '@tanstack/db'
+import { and, IR, type Ref } from '@tanstack/db'
 import { convertToPocketBaseFilter } from 'pbtsdb/core'
 import { describe, expect, it } from 'vitest'
 import {
@@ -12,10 +12,10 @@ import {
 import type { MailThreadState } from '~/tinycld/mail/types'
 
 // A ref proxy stands in for the row: TanStack's where callbacks receive one,
-// and the converter only reads field paths. The converter is pbtsdb's own,
-// so these assertions pin the PocketBase filter the server receives.
+// and every field read is a property reference. The converter is pbtsdb's
+// own, so these assertions pin the PocketBase filter the server receives.
 const s = new Proxy({} as Record<string, unknown>, {
-    get: (_target, name) => ({ type: 'ref', path: [String(name)] }),
+    get: (_target, name) => new IR.PropRef([String(name)]),
 }) as unknown as Ref<MailThreadState>
 
 const compile = (terms: ReturnType<typeof folderTerms>) =>
