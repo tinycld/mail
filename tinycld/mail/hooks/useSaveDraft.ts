@@ -8,10 +8,11 @@ import { uploadFormDataWithProgress } from '@tinycld/core/file-viewer/upload-fil
 import { captureException, errorToString } from '@tinycld/core/lib/errors'
 import { useMutation } from '@tinycld/core/lib/mutations'
 import { PB_SERVER_ADDR, pb } from '@tinycld/core/lib/pocketbase'
+import type { UploadFile } from '@tinycld/core/lib/upload-file-types'
 
 // The JSON body is the generated server contract; attachments ride alongside
 // as multipart file parts, so they are a client-side extension of it.
-type SaveDraftParams = SaveDraftRequest & { attachments?: File[] }
+type SaveDraftParams = SaveDraftRequest & { attachments?: UploadFile[] }
 
 interface UseSaveDraftOptions {
     onSuccess?: () => void

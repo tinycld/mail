@@ -1,6 +1,7 @@
 import { captureException } from '@tinycld/core/lib/errors'
 import { formatBytes } from '@tinycld/core/lib/format-utils'
 import { notify } from '@tinycld/core/lib/notify'
+import type { UploadFile } from '@tinycld/core/lib/upload-file-types'
 import { useCallback, useRef, useState } from 'react'
 
 // Thrown for the expected too-many/too-big cases so addFilesSafely can tell a
@@ -13,7 +14,10 @@ export interface AttachmentFile {
     name: string
     size: number
     type: string
-    file: File
+    // UploadFile, not File: a picked file on native is an expo-file-system
+    // Blob-alike, not a DOM File, and the picker (usePickFiles) returns that
+    // same cross-platform type — see upload-file-types.ts.
+    file: UploadFile
 }
 
 const MAX_TOTAL_SIZE = 10 * 1024 * 1024 // 10MB (Postmark limit)
@@ -29,7 +33,7 @@ export function useAttachments() {
 
     const totalSize = attachments.reduce((sum, a) => sum + a.size, 0)
 
-    const addFiles = useCallback((files: File[]) => {
+    const addFiles = useCallback((files: UploadFile[]) => {
         const incoming = files.map(file => ({
             id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
             name: file.name,
@@ -55,7 +59,7 @@ export function useAttachments() {
     // Wraps addFiles with the standard "show a toast on validation failure" handling
     // so callers (paperclip picker, drag-drop) don't each need to reimplement it.
     const addFilesSafely = useCallback(
-        (files: File[]) => {
+        (files: UploadFile[]) => {
             try {
                 addFiles(files)
             } catch (err) {
