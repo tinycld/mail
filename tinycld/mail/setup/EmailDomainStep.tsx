@@ -11,7 +11,7 @@ import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import type { SetupStepProps } from '@tinycld/core/lib/setup/types'
 import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
 import { useIsSettingManaged } from '@tinycld/core/lib/use-managed-settings'
-import { Button, ButtonText } from '@tinycld/core/ui/button'
+import { ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import { Suspense, useState } from 'react'
 import { Text, View } from 'react-native'
 import { AddDomainForm } from '../settings/AddDomainForm'
@@ -152,14 +152,14 @@ function DomainPanel({
             <PanelIntro domain={domain} />
             <DnsRecordsPanel outbound={domain.outbound} isVisible />
             <View className="flex-row items-center gap-3">
-                <Button
+                <ServerActionButton
                     variant="outline"
                     className="self-start"
                     onPress={onVerify}
                     isDisabled={isPending}
                 >
                     <ButtonText>{isPending ? 'Verifying…' : 'Verify'}</ButtonText>
-                </Button>
+                </ServerActionButton>
                 <VerifiedLabel isVerified={domain.isVerified} />
             </View>
             <ErrorText message={errorMessage} />
