@@ -3,6 +3,7 @@ import { useLiveQuery } from '@tanstack/react-db'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { useServerActionState } from '@tinycld/core/lib/use-writes-available'
 import { Plus, Tag, X } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
@@ -68,21 +69,14 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
             )}
 
             {items.map(alias => (
-                <View key={alias.id} className="flex-row items-center gap-3 rounded-lg py-2">
-                    <View
-                        className="items-center justify-center rounded-lg"
-                        style={{ width: 28, height: 28, backgroundColor: `${primaryColor}1F` }}
-                    >
-                        <Tag size={14} color={primaryColor} />
-                    </View>
-                    <Text className="flex-1 text-foreground" style={{ fontSize: 13 }}>
-                        {alias.address}
-                        <Text className="text-muted-foreground">@{domainName}</Text>
-                    </Text>
-                    <Pressable onPress={() => remove.mutate(alias.id)} className="p-1">
-                        <X size={14} color={dangerColor} />
-                    </Pressable>
-                </View>
+                <AliasRow
+                    key={alias.id}
+                    address={alias.address}
+                    domainName={domainName}
+                    primaryColor={primaryColor}
+                    dangerColor={dangerColor}
+                    onRemove={() => remove.mutate(alias.id)}
+                />
             ))}
 
             {showForm && (
@@ -92,6 +86,49 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
                     domainName={domainName}
                 />
             )}
+        </View>
+    )
+}
+
+function AliasRow({
+    address,
+    domainName,
+    primaryColor,
+    dangerColor,
+    onRemove,
+}: {
+    address: string
+    domainName: string
+    primaryColor: string
+    dangerColor: string
+    onRemove: () => void
+}) {
+    const removeState = useServerActionState({
+        accessibilityHint: `Removes the alias ${address}@${domainName}`,
+    })
+    return (
+        <View className="flex-row items-center gap-3 rounded-lg py-2">
+            <View
+                className="items-center justify-center rounded-lg"
+                style={{ width: 28, height: 28, backgroundColor: `${primaryColor}1F` }}
+            >
+                <Tag size={14} color={primaryColor} />
+            </View>
+            <Text className="flex-1 text-foreground" style={{ fontSize: 13 }}>
+                {address}
+                <Text className="text-muted-foreground">@{domainName}</Text>
+            </Text>
+            <Pressable
+                onPress={onRemove}
+                disabled={removeState.isDisabled}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove alias ${address}@${domainName}`}
+                accessibilityHint={removeState.accessibilityHint}
+                className="p-1"
+                style={{ opacity: removeState.isDisabled ? 0.4 : 1 }}
+            >
+                <X size={14} color={dangerColor} />
+            </Pressable>
         </View>
     )
 }

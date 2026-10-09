@@ -1,4 +1,5 @@
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { useServerActionState } from '@tinycld/core/lib/use-writes-available'
 import { X } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 
@@ -28,6 +29,10 @@ export function MailboxMemberRow({
     const mutedColor = useThemeColor('muted-foreground')
     const primaryColor = useThemeColor('primary')
     const dangerColor = useThemeColor('danger')
+    const removeState = useServerActionState({
+        isDisabled: !canRemove,
+        accessibilityHint: `Removes ${name} from the mailbox`,
+    })
     const isOwner = role === 'owner'
     const pillBg = isOwner ? `${primaryColor}1F` : `${mutedColor}26`
     const pillFg = isOwner ? primaryColor : mutedColor
@@ -70,9 +75,12 @@ export function MailboxMemberRow({
             </Pressable>
             <Pressable
                 onPress={onRemove}
-                disabled={!canRemove}
+                disabled={removeState.isDisabled}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${name}`}
+                accessibilityHint={removeState.accessibilityHint}
                 className="p-1"
-                style={{ opacity: canRemove ? 1 : 0.35 }}
+                style={{ opacity: removeState.isDisabled ? 0.35 : 1 }}
             >
                 <X size={14} color={dangerColor} />
             </Pressable>

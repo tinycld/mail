@@ -1,7 +1,7 @@
 import { handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { ButtonIcon, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import {
     FormErrorSummary,
     SelectInput,
@@ -12,7 +12,7 @@ import {
 } from '@tinycld/core/ui/form'
 import { Plus } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb/core'
-import { Pressable, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { type MailboxType, newMailboxRecords } from './mailbox-records'
 
 const mailboxSchema = z.object({
@@ -52,8 +52,6 @@ export function MailboxForm(props: Props) {
 }
 
 function CreateForm({ domainOptions, userId, onDone, type = 'shared', defaults }: CreateProps) {
-    const primaryColor = useThemeColor('primary')
-    const primaryFgColor = useThemeColor('primary-foreground')
     const [mailboxesCollection, membersCollection] = useStore(
         'mail_mailboxes',
         'mail_mailbox_members'
@@ -116,15 +114,11 @@ function CreateForm({ domainOptions, userId, onDone, type = 'shared', defaults }
             submitLabel={createMutation.isPending ? 'Creating…' : 'Create mailbox'}
             canSubmit={canSubmit}
             onSubmit={onSubmit}
-            primaryColor={primaryColor}
-            primaryFgColor={primaryFgColor}
         />
     )
 }
 
 function EditForm({ mailboxId, initial, domainName, onDone }: EditProps) {
-    const primaryColor = useThemeColor('primary')
-    const primaryFgColor = useThemeColor('primary-foreground')
     const [mailboxesCollection] = useStore('mail_mailboxes')
 
     const {
@@ -171,8 +165,6 @@ function EditForm({ mailboxId, initial, domainName, onDone }: EditProps) {
             submitLabel={editMutation.isPending ? 'Saving…' : 'Save changes'}
             canSubmit={canSubmit}
             onSubmit={onSubmit}
-            primaryColor={primaryColor}
-            primaryFgColor={primaryFgColor}
         />
     )
 }
@@ -187,8 +179,6 @@ interface FormLayoutProps {
     submitLabel: string
     canSubmit: boolean
     onSubmit: () => void
-    primaryColor: string
-    primaryFgColor: string
 }
 
 function FormLayout({
@@ -201,8 +191,6 @@ function FormLayout({
     submitLabel,
     canSubmit,
     onSubmit,
-    primaryColor,
-    primaryFgColor,
 }: FormLayoutProps) {
     const previewInitial = (preview.displayName || preview.address || '?')
         .trim()
@@ -270,15 +258,10 @@ function FormLayout({
                     Preview
                 </Text>
             </View>
-            <Pressable
-                onPress={onSubmit}
-                disabled={!canSubmit}
-                className="flex-row items-center justify-center gap-2 rounded-lg h-11"
-                style={{ backgroundColor: primaryColor, opacity: canSubmit ? 1 : 0.5 }}
-            >
-                <Plus size={16} color={primaryFgColor} />
-                <Text style={{ fontWeight: '600', color: primaryFgColor }}>{submitLabel}</Text>
-            </Pressable>
+            <ServerActionButton className="h-11" onPress={onSubmit} isDisabled={!canSubmit}>
+                <ButtonIcon as={Plus} />
+                <ButtonText>{submitLabel}</ButtonText>
+            </ServerActionButton>
         </View>
     )
 }

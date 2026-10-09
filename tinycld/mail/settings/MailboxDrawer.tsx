@@ -1,6 +1,7 @@
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { Button, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import {
     Drawer,
     DrawerBackdrop,
@@ -518,34 +519,23 @@ function MembersTab({
                         })}
                     </View>
                     <View className="flex-row gap-2">
-                        <Pressable
+                        <ServerActionButton
+                            size="sm"
                             onPress={() => addMutation.mutate()}
-                            disabled={!selected || addMutation.isPending}
-                            className="rounded-md"
-                            style={{
-                                paddingVertical: 7,
-                                paddingHorizontal: 12,
-                                backgroundColor: primaryColor,
-                                opacity: !selected || addMutation.isPending ? 0.5 : 1,
-                            }}
+                            isDisabled={!selected || addMutation.isPending}
                         >
-                            <Text
-                                className="text-white"
-                                style={{ fontSize: 12.5, fontWeight: '600' }}
-                            >
-                                Add
-                            </Text>
-                        </Pressable>
-                        <Pressable
+                            <ButtonText>Add</ButtonText>
+                        </ServerActionButton>
+                        <Button
+                            variant="outline"
+                            size="sm"
                             onPress={() => {
                                 setAdding(false)
                                 setSelected('')
                             }}
-                            className="rounded-md"
-                            style={{ paddingVertical: 7, paddingHorizontal: 10 }}
                         >
-                            <Text style={{ fontSize: 12.5 }}>Cancel</Text>
-                        </Pressable>
+                            <ButtonText>Cancel</ButtonText>
+                        </Button>
                     </View>
                 </View>
             )}
@@ -598,26 +588,16 @@ function DangerZone({ mailboxId, onDeleted }: { mailboxId: string; onDeleted: ()
                 </Pressable>
             ) : (
                 <View className="flex-row gap-2">
-                    <Pressable
-                        onPress={() => setConfirming(false)}
-                        className="rounded-md"
-                        style={{ paddingVertical: 6, paddingHorizontal: 10 }}
-                    >
-                        <Text style={{ fontSize: 12, fontWeight: '600' }}>Cancel</Text>
-                    </Pressable>
-                    <Pressable
+                    <Button variant="outline" size="sm" onPress={() => setConfirming(false)}>
+                        <ButtonText>Cancel</ButtonText>
+                    </Button>
+                    <ServerActionButton
+                        variant="destructive"
+                        size="sm"
                         onPress={() => deleteMutation.mutate()}
-                        className="rounded-md"
-                        style={{
-                            paddingVertical: 6,
-                            paddingHorizontal: 10,
-                            backgroundColor: dangerColor,
-                        }}
                     >
-                        <Text className="text-white" style={{ fontSize: 12, fontWeight: '600' }}>
-                            Really delete
-                        </Text>
-                    </Pressable>
+                        <ButtonText>Really delete</ButtonText>
+                    </ServerActionButton>
                 </View>
             )}
         </View>

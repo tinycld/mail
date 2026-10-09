@@ -3,11 +3,11 @@ import { useLiveQuery } from '@tanstack/react-db'
 import { handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { ButtonIcon, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import { FormErrorSummary, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
 import { Plus } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb/core'
-import { Pressable, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 
 const schema = z.object({
     address: z
@@ -24,9 +24,6 @@ interface Props {
 }
 
 export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) {
-    const primaryColor = useThemeColor('primary')
-    const primaryFgColor = useThemeColor('primary-foreground')
-
     const [aliasesCollection, mailboxesCollection] = useStore(
         'mail_mailbox_aliases',
         'mail_mailboxes'
@@ -109,24 +106,10 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
                 <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
                     @{domainName}
                 </Text>
-                <Pressable
-                    onPress={onSubmit}
-                    disabled={!canSubmit}
-                    className="rounded-md"
-                    style={{
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        backgroundColor: primaryColor,
-                        opacity: canSubmit ? 1 : 0.5,
-                    }}
-                >
-                    <View className="flex-row gap-1 items-center">
-                        <Plus size={12} color={primaryFgColor} />
-                        <Text style={{ color: primaryFgColor, fontSize: 12, fontWeight: '600' }}>
-                            Add
-                        </Text>
-                    </View>
-                </Pressable>
+                <ServerActionButton size="sm" onPress={onSubmit} isDisabled={!canSubmit}>
+                    <ButtonIcon as={Plus} />
+                    <ButtonText>Add</ButtonText>
+                </ServerActionButton>
             </View>
         </View>
     )
