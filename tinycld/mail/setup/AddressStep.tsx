@@ -11,7 +11,7 @@ import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import type { SetupStepProps } from '@tinycld/core/lib/setup/types'
 import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { useOrgInfo } from '@tinycld/core/lib/use-org-info'
-import { Button, ButtonText } from '@tinycld/core/ui/button'
+import { Button, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import { useRouter } from 'expo-router'
 import { Text, View } from 'react-native'
 import { MailboxForm } from '../settings/MailboxForm'
@@ -200,14 +200,14 @@ function CreatedMailbox({ mailbox }: { mailbox: { id: string; email: string } })
                 To check that it can send, send a test message to {to}.
             </Text>
             <View className="flex-row items-center gap-3">
-                <Button
+                <ServerActionButton
                     variant="outline"
                     className="self-start"
                     onPress={send}
                     isDisabled={isPending}
                 >
                     <ButtonText>{isPending ? 'Sending…' : 'Send a test message'}</ButtonText>
-                </Button>
+                </ServerActionButton>
             </View>
             <TestMessageStatus senderEmail={mailbox.email} />
             <ErrorText message={errorMessage} />

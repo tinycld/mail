@@ -2,7 +2,7 @@ import { like } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
-import { Button, ButtonText } from '@tinycld/core/ui/button'
+import { ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import {
     type Control,
     NumberInput,
@@ -190,9 +190,9 @@ export default function MailSystemProvider() {
                 imapPasswordSet={imapPasswordSet}
             />
             <View className="flex-row justify-end">
-                <Button testID="mail-system-provider-save" onPress={onSubmit} size="sm">
+                <ServerActionButton testID="mail-system-provider-save" onPress={onSubmit} size="sm">
                     <ButtonText>{upsert.isPending ? 'Saving…' : 'Save'}</ButtonText>
-                </Button>
+                </ServerActionButton>
             </View>
         </View>
     )

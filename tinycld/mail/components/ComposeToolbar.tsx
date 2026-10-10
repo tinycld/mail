@@ -1,6 +1,7 @@
 import { ResponsiveToolbar, type ToolbarItem } from '@tinycld/core/components/ResponsiveToolbar'
 import type { EditorCommands, EditorToolbarState } from '@tinycld/core/lib/editor/types'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { ButtonSpinner, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import {
     Bold,
     Italic,
@@ -13,7 +14,7 @@ import {
     Underline,
 } from 'lucide-react-native'
 import { useCallback, useMemo } from 'react'
-import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from 'react-native'
+import { Alert, Platform, Pressable, View } from 'react-native'
 
 interface ComposeToolbarProps {
     commands: EditorCommands
@@ -36,7 +37,6 @@ export function ComposeToolbar({
 }: ComposeToolbarProps) {
     const iconColor = useThemeColor('muted-foreground')
     const activeColor = useThemeColor('primary')
-    const primaryFgColor = useThemeColor('primary-foreground')
 
     const handleLink = useCallback(() => {
         const defaultUrl = toolbarState.currentLink ?? 'https://'
@@ -75,30 +75,21 @@ export function ComposeToolbar({
                 type: 'custom',
                 key: 'send',
                 element: (
-                    <Pressable
-                        className="rounded-full items-center bg-primary"
-                        style={[
-                            {
-                                paddingHorizontal: 20,
-                                paddingVertical: 6,
-                                minWidth: 72,
-                            },
-                            (isPending || isSendDisabled) && { opacity: 0.6 },
-                        ]}
+                    <ServerActionButton
+                        className="rounded-full"
+                        style={{ paddingHorizontal: 20, paddingVertical: 6, minWidth: 72 }}
                         onPress={onSend}
-                        disabled={isPending || isSendDisabled}
+                        isDisabled={isPending || isSendDisabled}
+                        accessibilityHint="Sends this email"
                     >
                         {isPending ? (
-                            <ActivityIndicator size="small" color={primaryFgColor} />
+                            <ButtonSpinner />
                         ) : (
-                            <Text
-                                className="text-primary-foreground"
-                                style={{ fontSize: 14, fontWeight: '600' }}
-                            >
+                            <ButtonText style={{ fontSize: 14, fontWeight: '600' }}>
                                 Send
-                            </Text>
+                            </ButtonText>
                         )}
-                    </Pressable>
+                    </ServerActionButton>
                 ),
             },
             {
@@ -227,7 +218,6 @@ export function ComposeToolbar({
             },
         ],
         [
-            primaryFgColor,
             isPending,
             isSendDisabled,
             onSend,

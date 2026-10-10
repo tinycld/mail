@@ -1,10 +1,10 @@
 import type { AddDomainResponse } from '@tinycld/app-generated/mail-api'
 import { useMutation } from '@tinycld/core/lib/mutations'
 import { pb } from '@tinycld/core/lib/pocketbase'
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { ButtonIcon, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import { TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
 import { Plus } from 'lucide-react-native'
-import { Pressable, Text, View } from 'react-native'
+import { View } from 'react-native'
 import { addDomainErrorMessage } from './add-domain-error'
 
 const addDomainSchema = z.object({
@@ -28,8 +28,6 @@ export function AddDomainForm({
     onAdded?: (added: AddDomainResponse) => void
     describeError?: (error: unknown) => string | null
 }) {
-    const primaryFgColor = useThemeColor('primary-foreground')
-
     const {
         control,
         handleSubmit,
@@ -64,16 +62,10 @@ export function AddDomainForm({
     const canSubmit = !addMutation.isPending && isDirty
 
     const addButton = (
-        <Pressable
-            onPress={onSubmit}
-            disabled={!canSubmit}
-            className={`flex-row items-center gap-1 px-4 rounded-lg py-2.5 bg-primary ${canSubmit ? 'opacity-100' : 'opacity-50'}`}
-        >
-            <Plus size={16} color={primaryFgColor} />
-            <Text className="text-primary-foreground" style={{ fontWeight: '600' }}>
-                {addMutation.isPending ? 'Adding...' : 'Add'}
-            </Text>
-        </Pressable>
+        <ServerActionButton onPress={onSubmit} isDisabled={!canSubmit}>
+            <ButtonIcon as={Plus} />
+            <ButtonText>{addMutation.isPending ? 'Adding...' : 'Add'}</ButtonText>
+        </ServerActionButton>
     )
 
     // No FormErrorSummary: every error lands on the one field, so a summary

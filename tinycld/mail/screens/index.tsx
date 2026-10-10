@@ -8,7 +8,6 @@ import type { HelpTopicId } from '@tinycld/core/lib/help/types'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { markNavMilestone, NAV_PERF } from '@tinycld/core/lib/nav-perf'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
-import { queryClient } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -260,11 +259,11 @@ export default function MailListScreen() {
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true)
         try {
-            await queryClient.invalidateQueries({ queryKey: ['mail_thread_state'] })
+            await threadStateCollection.reload()
         } finally {
             setIsRefreshing(false)
         }
-    }, [])
+    }, [threadStateCollection])
 
     const selection = useMailSelection(items, folder, labels)
     const bulkActions = useMailBulkActions(

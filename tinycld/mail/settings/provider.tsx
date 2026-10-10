@@ -11,6 +11,7 @@ import { errorToString } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { Button, ButtonIcon, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import * as Clipboard from 'expo-clipboard'
 import { CheckCircle, Copy, Globe, Loader2, RefreshCw, Trash2, XCircle } from 'lucide-react-native'
 import { useState } from 'react'
@@ -346,19 +347,16 @@ function WebhookURLRow({
 }
 
 function VerifyButton({ isPending, onPress }: { isPending: boolean; onPress: () => void }) {
-    const primaryFgColor = useThemeColor('primary-foreground')
     const Icon = isPending ? Loader2 : RefreshCw
     return (
-        <Pressable
+        <ServerActionButton
+            size="sm"
             onPress={isPending ? undefined : onPress}
-            disabled={isPending}
-            className={`flex-row items-center gap-1 px-3 rounded-md py-1.5 bg-primary ${isPending ? 'opacity-60' : 'opacity-100'}`}
+            isDisabled={isPending}
         >
-            <Icon size={14} color={primaryFgColor} />
-            <Text className="text-primary-foreground" style={{ fontSize: 12, fontWeight: '600' }}>
-                {isPending ? 'Verifying…' : 'Verify'}
-            </Text>
-        </Pressable>
+            <ButtonIcon as={Icon} />
+            <ButtonText>{isPending ? 'Verifying…' : 'Verify'}</ButtonText>
+        </ServerActionButton>
     )
 }
 
@@ -559,24 +557,12 @@ function RemoveDomainConfirm({
                 {warning}
             </Text>
             <View className="flex-row gap-2">
-                <Pressable
-                    onPress={onConfirm}
-                    className="px-3 rounded-md bg-danger"
-                    style={{ paddingVertical: 6 }}
-                >
-                    <Text className="text-danger-foreground" style={{ fontSize: 13 }}>
-                        Remove domain
-                    </Text>
-                </Pressable>
-                <Pressable
-                    onPress={onCancel}
-                    className="px-3 rounded-md"
-                    style={{ paddingVertical: 6 }}
-                >
-                    <Text className="text-foreground" style={{ fontSize: 13 }}>
-                        Cancel
-                    </Text>
-                </Pressable>
+                <ServerActionButton size="sm" variant="destructive" onPress={onConfirm}>
+                    <ButtonText>Remove domain</ButtonText>
+                </ServerActionButton>
+                <Button size="sm" variant="outline" onPress={onCancel}>
+                    <ButtonText>Cancel</ButtonText>
+                </Button>
             </View>
         </View>
     )
