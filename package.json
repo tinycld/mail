@@ -27,5 +27,8 @@
     },
     "devDependencies": {
         "@tinycld/package-scripts": "*"
+    },
+    "peerDependencies": {
+        "imapflow": "^1.3.1"
     }
 }

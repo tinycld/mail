@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test'
 import { clickSidebarItem, login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 import {
+    deliverInbound,
+    expectRowVisible,
+    navigateToPersonalInbox,
+    TEST_USER_MAILBOX,
+    uniqueSubject,
+} from './helpers'
+import {
     appendMessage,
     deleteMessage,
     fetchMessageBySubject,
@@ -9,14 +16,7 @@ import {
     listMessages,
     moveMessage,
     withImapClient,
-} from '@tinycld/core/e2e-imap-helpers'
-import {
-    deliverInbound,
-    expectRowVisible,
-    navigateToPersonalInbox,
-    TEST_USER_MAILBOX,
-    uniqueSubject,
-} from './helpers'
+} from './imap-helpers'
 
 test.describe('Mail — IMAP Integration', () => {
     test('lists mailboxes and reads appended messages via IMAP', async () => {
