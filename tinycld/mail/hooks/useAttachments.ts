@@ -1,7 +1,7 @@
 import { captureException } from '@tinycld/core/lib/errors'
 import { formatBytes } from '@tinycld/core/lib/format-utils'
 import { notify } from '@tinycld/core/lib/notify'
-import type { UploadFile } from '@tinycld/core/lib/upload-file-types'
+import type { UploadFile } from '@tinycld/core/lib/upload-file'
 import { useCallback, useRef, useState } from 'react'
 
 // Thrown for the expected too-many/too-big cases so addFilesSafely can tell a
@@ -14,9 +14,6 @@ export interface AttachmentFile {
     name: string
     size: number
     type: string
-    // UploadFile, not File: a picked file on native is an expo-file-system
-    // Blob-alike, not a DOM File, and the picker (usePickFiles) returns that
-    // same cross-platform type — see upload-file-types.ts.
     file: UploadFile
 }
 

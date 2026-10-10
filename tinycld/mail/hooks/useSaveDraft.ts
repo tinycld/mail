@@ -6,9 +6,12 @@ import {
 } from '@tinycld/app-generated/mail-api'
 import { uploadFormDataWithProgress } from '@tinycld/core/file-viewer/upload-file'
 import { captureException, errorToString } from '@tinycld/core/lib/errors'
+import { log } from '@tinycld/core/lib/logger'
 import { useMutation } from '@tinycld/core/lib/mutations'
 import { PB_SERVER_ADDR, pb } from '@tinycld/core/lib/pocketbase'
-import type { UploadFile } from '@tinycld/core/lib/upload-file-types'
+import { useConnectivityStore } from '@tinycld/core/lib/stores/connectivity-store'
+import type { UploadFile } from '@tinycld/core/lib/upload-file'
+import { writesAvailability } from '@tinycld/core/lib/writes-available'
 
 // The JSON body is the generated server contract; attachments ride alongside
 // as multipart file parts, so they are a client-side extension of it.
@@ -47,6 +50,18 @@ export function useSaveDraft({ onSuccess, onError }: UseSaveDraftOptions = {}) {
         },
         onSuccess,
         onError: (error: unknown) => {
+            // Autosave fires on a timer, independent of any explicit user
+            // action, so a known outage must not nag with a toast or an error
+            // on every tick — the connection banner already says the server
+            // is unreachable. Checked here (not just left to useMutation's
+            // own default) because this hook supplies its own onError, which
+            // bypasses that default entirely. A real failure (validation,
+            // 4xx) still reaches Sentry and the caller exactly as before.
+            const writes = writesAvailability(useConnectivityStore.getState())
+            if (!writes.available) {
+                log.info('mail.draft.save.offline', errorToString(error))
+                return
+            }
             // Same contract as the useSendEmail sibling: a lost draft is real
             // data loss and must reach Sentry, not just the caller's toast.
             captureException('mail.draft.save', error)

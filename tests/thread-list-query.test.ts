@@ -1,11 +1,4 @@
-import {
-    and,
-    createCollection,
-    eq,
-    localOnlyCollectionOptions,
-    Query,
-    type Ref,
-} from '@tanstack/db'
+import { and, IR, type Ref } from '@tanstack/db'
 import { convertToPocketBaseFilter } from 'pbtsdb/core'
 import { describe, expect, it } from 'vitest'
 import {
@@ -18,51 +11,37 @@ import {
 } from '~/tinycld/mail/lib/thread-list-query'
 import type { MailThreadState } from '~/tinycld/mail/types'
 
-// A hand-rolled `{ type: 'ref', path }` Proxy used to stand in for the row,
-// but @tanstack/db's eq()/and() now only recognize a ref proxy carrying its
-// own private brand symbol (query/builder/ref-proxy-identity.ts), which is
-// not exported — so a hand-rolled stand-in silently stopped being treated as
-// a ref and broke every assertion here. Getting a REAL ref means going
-// through the public query builder: wiring a throwaway collection via
-// `.from()` and capturing the row `.where()` hands back. This also means the
-// compiled filter carries the alias prefix ("s.folder", not "folder") that
-// useThreadListItems' real query produces — the alias there is the same `s`.
-const stateCollection = createCollection(
-    localOnlyCollectionOptions<MailThreadState>({
-        id: 'thread-list-query-test-stub',
-        getKey: row => row.id,
-    })
-)
-let s!: Ref<MailThreadState>
-new Query().from({ s: stateCollection }).where(row => {
-    s = row.s
-    return eq(row.s.id, 'unused-sentinel')
-})
+// A ref proxy stands in for the row: TanStack's where callbacks receive one,
+// and every field read is a property reference. The converter is pbtsdb's
+// own, so these assertions pin the PocketBase filter the server receives.
+const s = new Proxy({} as Record<string, unknown>, {
+    get: (_target, name) => new IR.PropRef([String(name)]),
+}) as unknown as Ref<MailThreadState>
 
 const compile = (terms: ReturnType<typeof folderTerms>) =>
     convertToPocketBaseFilter(terms.length === 1 ? terms[0] : and(...terms))
 
 describe('folderTerms', () => {
     it('inbox and null both filter folder = inbox', () => {
-        expect(compile(folderTerms(s, 'inbox'))).toBe('s.folder = "inbox"')
-        expect(compile(folderTerms(s, null))).toBe('s.folder = "inbox"')
+        expect(compile(folderTerms(s, 'inbox'))).toBe('folder = "inbox"')
+        expect(compile(folderTerms(s, null))).toBe('folder = "inbox"')
     })
     it('starred reads the flag, any folder', () => {
-        expect(compile(folderTerms(s, 'starred'))).toBe('s.is_starred = true')
+        expect(compile(folderTerms(s, 'starred'))).toBe('is_starred = true')
     })
     it('sent reads the flag and excludes trash and spam', () => {
         expect(compile(folderTerms(s, 'sent'))).toBe(
-            '(s.is_sent = true && (s.folder != "trash" && s.folder != "spam"))'
+            '(is_sent = true && (folder != "trash" && folder != "spam"))'
         )
     })
     it('all adds no term', () => {
         expect(folderTerms(s, 'all')).toEqual([])
     })
     it('all-inboxes filters to the inbox folder', () => {
-        expect(compile(folderTerms(s, 'all-inboxes'))).toBe('s.folder = "inbox"')
+        expect(compile(folderTerms(s, 'all-inboxes'))).toBe('folder = "inbox"')
     })
     it('other folders filter by name', () => {
-        expect(compile(folderTerms(s, 'archive'))).toBe('s.folder = "archive"')
+        expect(compile(folderTerms(s, 'archive'))).toBe('folder = "archive"')
     })
 })
 
@@ -73,7 +52,7 @@ describe('cursorTerms', () => {
     it('a cursor selects rows strictly after it in (latest_date desc, id desc) order', () => {
         const filter = compile(cursorTerms(s, { date: '2026-10-05 10:00:00.000Z', id: 'abc' }))
         expect(filter).toBe(
-            '(s.latest_date < "2026-10-05 10:00:00.000Z" || (s.latest_date = "2026-10-05 10:00:00.000Z" && s.id < "abc"))'
+            '(latest_date < "2026-10-05 10:00:00.000Z" || (latest_date = "2026-10-05 10:00:00.000Z" && id < "abc"))'
         )
     })
 })
