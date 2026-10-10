@@ -6,6 +6,7 @@ import { serverFetch } from '@tinycld/core/lib/server-fetch'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Platform, Text, View } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
+import { measureContentHeight } from '../lib/email-frame-height'
 import { rewriteCidReferences } from './rewrite-cid-references'
 
 interface EmailBodyProps {
@@ -76,16 +77,20 @@ function BodyLoadFailed() {
     )
 }
 
-function useIframeAutoHeight(html: string) {
+function useIframeAutoHeight() {
     const iframeRef = useRef<HTMLIFrameElement>(null)
+    const observerRef = useRef<ResizeObserver | null>(null)
     const [height, setHeight] = useState(300)
+
+    // srcDoc loads once empty and again with the fetched body, and onLoad
+    // ignores a returned cleanup, so the observer lives here: replaced on each
+    // load, disconnected on unmount.
+    useEffect(() => () => observerRef.current?.disconnect(), [])
 
     const handleLoad = useCallback(() => {
         const doc = iframeRef.current?.contentDocument
         if (!doc) return
 
-        // Prevent infinite resize loop: without this, setting the iframe
-        // height to scrollHeight can cause the content to grow to match
         const style = doc.createElement('style')
         style.textContent = `
             html, body { height: auto !important; }
@@ -99,40 +104,22 @@ function useIframeAutoHeight(html: string) {
         doc.head.appendChild(style)
 
         const updateHeight = () => {
-            const scrollH = doc.documentElement.scrollHeight
-            const bodyStyle = doc.defaultView?.getComputedStyle(doc.body)
-            const marginTop = parseInt(bodyStyle?.marginTop || '0', 10)
-            const marginBottom = parseInt(bodyStyle?.marginBottom || '0', 10)
-            const h = scrollH + marginTop + marginBottom
+            const h = measureContentHeight(doc)
             if (h > 0) setHeight(h)
         }
-
         updateHeight()
 
-        const observer = new ResizeObserver(updateHeight)
-        observer.observe(doc.documentElement)
-        return () => observer.disconnect()
+        observerRef.current?.disconnect()
+        observerRef.current = new ResizeObserver(updateHeight)
+        observerRef.current.observe(doc.documentElement)
     }, [])
-
-    // Re-measure when the body content changes after the iframe is already
-    // loaded. `html` is read here (not just listed as a trigger) so the effect
-    // is honestly keyed to it: an empty body has nothing to measure, and any
-    // change re-runs the DOM read below.
-    useEffect(() => {
-        if (!html) return
-        const doc = iframeRef.current?.contentDocument
-        if (doc?.documentElement) {
-            const h = doc.documentElement.scrollHeight
-            if (h > 0) setHeight(h)
-        }
-    }, [html])
 
     return { iframeRef, height, handleLoad }
 }
 
 export function EmailBody({ collectionId, recordId, filename, cidMap }: EmailBodyProps) {
     const { html, failed } = useEmailHtml(collectionId, recordId, filename, cidMap)
-    const { iframeRef, height, handleLoad } = useIframeAutoHeight(html)
+    const { iframeRef, height, handleLoad } = useIframeAutoHeight()
 
     if (!filename) return null
     if (failed) return <BodyLoadFailed />
@@ -163,10 +150,10 @@ export function EmailBody({ collectionId, recordId, filename, cidMap }: EmailBod
 const HEIGHT_REPORTER_SCRIPT = `
 (function() {
     function report() {
-        // Use scrollHeight on the documentElement: it accounts for collapsed
-        // margins and absolutely-positioned content. body.scrollHeight clips
-        // when the body has any layout overflow.
-        var h = document.documentElement.scrollHeight;
+        // The <html> box, not documentElement.scrollHeight: scrollHeight
+        // never drops below the WebView's own height, so a body that shrinks
+        // would keep its old height (see measureContentHeight).
+        var h = Math.ceil(document.documentElement.getBoundingClientRect().height);
         window.ReactNativeWebView.postMessage(String(h));
     }
     report();
