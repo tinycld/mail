@@ -29,16 +29,16 @@ Open the **Advanced** drop-down next to the search box for structured filters. T
 | **From** | Substring match on sender name or email |
 | **To** | Substring match on To / Cc recipients |
 | **Subject** | Substring match on the subject line |
+| **Body** | All listed words must appear in the message body |
+| **Date within** | Messages dated within the chosen period (1 day to 1 year) of a `YYYY-MM-DD` date |
+| **Search** | Limit to one folder: All Mail, Inbox, Sent, Drafts, Trash, Spam, or Starred |
 | **Has attachment** | Only threads with at least one attached file |
-| **Before / After** | Date range filters on message dates |
-| **Has words** | All listed words must appear in the indexed text (extra AND terms) |
-| **Doesn't have** | None of the listed words may appear (excluded via FTS `NOT`) |
 
-Filters can also be typed directly into the search box using `key:value` syntax (e.g. `from:alice@example.com has:attachment`) — the Advanced panel and the typed-syntax are equivalent.
+Text typed in the search box is always searched as literal words. Use the Advanced panel to set filters.
 
 ## Scope
 
-Search is scoped to every mailbox you have access to — your personal mailbox plus every shared mailbox you're a member of. There's no per-mailbox switch yet; if you want to narrow it, combine with a `to:` filter pointing at one mailbox's primary address.
+Search is scoped to every mailbox you have access to — your personal mailbox plus every shared mailbox you're a member of. There's no per-mailbox switch yet; if you want to narrow it, combine with a **To** filter pointing at one mailbox's primary address.
 
 ## Match highlighting
 
