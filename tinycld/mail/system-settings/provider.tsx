@@ -10,12 +10,11 @@ import {
     TextInput,
     Toggle,
     useForm,
-    z,
     zodResolver,
 } from '@tinycld/core/ui/form'
 import { newRecordId } from 'pbtsdb/core'
-import { useWatch } from 'react-hook-form'
 import { Text, View } from 'react-native'
+import { type ProviderFormValues, providerSchema } from './providerSchema'
 
 // System-wide mail provider config, contributed to the in-app Settings area's
 // System group via the manifest `systemSettings`. These values are
@@ -42,23 +41,7 @@ const INBOUND_MODE_OPTIONS = [
     { label: 'Poll IMAP mailbox', value: 'imap' },
 ]
 
-const schema = z.object({
-    provider: z.enum(['postmark', 'smtp']),
-    // Secrets — blank means "leave the stored value unchanged" (write-only).
-    postmark_server_token: z.string(),
-    postmark_account_token: z.string(),
-    smtp_public_hostname: z.string(),
-    smtp_dkim_selector: z.string(),
-    smtp_inbound_mode: z.enum(['', 'smtp', 'imap']),
-    smtp_imap_host: z.string(),
-    smtp_imap_port: z.number().int().min(0).max(65535),
-    smtp_imap_username: z.string(),
-    smtp_imap_password: z.string(), // secret
-    smtp_imap_mailbox: z.string(),
-    smtp_imap_poll_interval_seconds: z.number().int().min(0),
-    smtp_imap_use_tls: z.boolean(),
-})
-type FormValues = z.infer<typeof schema>
+type FormValues = ProviderFormValues
 
 // Which keys are secrets (write-only) vs always-persisted, and how each maps to a
 // stored string under `mail.<key>`. Numbers/booleans are stored as the strings
@@ -95,8 +78,8 @@ export default function MailSystemProvider() {
         return Number.isNaN(n) ? dflt : n
     }
 
-    const { control, handleSubmit } = useForm({
-        resolver: zodResolver(schema),
+    const { control, handleSubmit, watch } = useForm({
+        resolver: zodResolver(providerSchema),
         // Secrets are never seeded back (write-only); everything else reflects the
         // stored value so the form reactively shows current config.
         values: {
@@ -185,6 +168,8 @@ export default function MailSystemProvider() {
             />
             <ProviderFields
                 control={control}
+                provider={watch('provider')}
+                inboundMode={watch('smtp_inbound_mode')}
                 serverTokenSet={serverTokenSet}
                 accountTokenSet={accountTokenSet}
                 imapPasswordSet={imapPasswordSet}
@@ -202,18 +187,27 @@ export default function MailSystemProvider() {
 // the per-org mail settings panel.
 function ProviderFields({
     control,
+    provider,
+    inboundMode,
     serverTokenSet,
     accountTokenSet,
     imapPasswordSet,
 }: {
     control: Control<FormValues>
+    provider: FormValues['provider']
+    inboundMode: FormValues['smtp_inbound_mode']
     serverTokenSet: boolean
     accountTokenSet: boolean
     imapPasswordSet: boolean
 }) {
-    const provider = useWatch({ control, name: 'provider' })
     if (provider === 'smtp') {
-        return <SmtpFields control={control} imapPasswordSet={imapPasswordSet} />
+        return (
+            <SmtpFields
+                control={control}
+                inboundMode={inboundMode}
+                imapPasswordSet={imapPasswordSet}
+            />
+        )
     }
     return (
         <PostmarkFields
@@ -269,12 +263,13 @@ function PostmarkFields({
 
 function SmtpFields({
     control,
+    inboundMode,
     imapPasswordSet,
 }: {
     control: Control<FormValues>
+    inboundMode: FormValues['smtp_inbound_mode']
     imapPasswordSet: boolean
 }) {
-    const inboundMode = useWatch({ control, name: 'smtp_inbound_mode' })
     return (
         <>
             <TextInput

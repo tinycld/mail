@@ -1,9 +1,14 @@
-import { zodResolver } from '@hookform/resolvers/zod'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import {
+    type Control,
+    Controller,
+    FormErrorSummary,
+    useForm,
+    zodResolver,
+} from '@tinycld/core/ui/form'
 import { PlainInput } from '@tinycld/core/ui/PlainInput'
 import { ChevronDown, Search, Square, SquareCheck, X } from 'lucide-react-native'
 import { useCallback, useMemo, useState } from 'react'
-import { useController, useForm } from 'react-hook-form'
 import {
     Platform,
     Pressable,
@@ -14,21 +19,11 @@ import {
     type TextStyle,
     View,
 } from 'react-native'
-import { z } from 'zod'
 import type { AdvancedSearchFilters } from '../hooks/useSearchState'
+import { type AdvancedSearchFormValues, advancedSearchSchema } from './advancedSearchSchema'
 
-const schema = z.object({
-    from: z.string(),
-    to: z.string(),
-    subject: z.string(),
-    hasWords: z.string(),
-    dateWithin: z.enum(['', '1d', '3d', '1w', '2w', '1m', '2m', '6m', '1y']),
-    dateAnchor: z.string(),
-    folder: z.enum(['all', 'inbox', 'sent', 'drafts', 'trash', 'spam', 'starred']),
-    hasAttachment: z.boolean(),
-})
-
-type FormValues = z.infer<typeof schema>
+type FormValues = AdvancedSearchFormValues
+type FormControl = Control<FormValues>
 
 function makeDefaultValues(): FormValues {
     return {
@@ -83,8 +78,13 @@ export function AdvancedSearchDropdown({
         [initialFilters]
     )
 
-    const { control, handleSubmit, setValue, watch, reset } = useForm<FormValues>({
-        resolver: zodResolver(schema),
+    const {
+        control,
+        handleSubmit,
+        reset,
+        formState: { errors, isSubmitted },
+    } = useForm({
+        resolver: zodResolver(advancedSearchSchema),
         defaultValues: defaults,
     })
 
@@ -98,12 +98,6 @@ export function AdvancedSearchDropdown({
         onApply({})
         onClose()
     }, [reset, onApply, onClose])
-
-    const hasAttachment = watch('hasAttachment')
-
-    const toggleAttachment = useCallback(() => {
-        setValue('hasAttachment', !hasAttachment)
-    }, [hasAttachment, setValue])
 
     const inputStyle = [
         styles.input,
@@ -150,6 +144,11 @@ export function AdvancedSearchDropdown({
                 ]}
             >
                 <ScrollView style={{ padding: 16 }} keyboardShouldPersistTaps="handled">
+                    <FormErrorSummary
+                        errors={errors}
+                        isEnabled={isSubmitted}
+                        testID="advanced-search-errors"
+                    />
                     <FieldRow label="From" labelColor={mutedColor}>
                         <FormInput
                             control={control}
@@ -210,16 +209,11 @@ export function AdvancedSearchDropdown({
                         />
                     </FieldRow>
                     <FieldRow label="Has attachment" labelColor={mutedColor}>
-                        <Pressable
-                            onPress={toggleAttachment}
-                            className="flex-row items-center py-1"
-                        >
-                            {hasAttachment ? (
-                                <SquareCheck size={20} color={primaryColor} />
-                            ) : (
-                                <Square size={20} color={mutedColor} />
-                            )}
-                        </Pressable>
+                        <AttachmentCheckbox
+                            control={control}
+                            checkedColor={primaryColor}
+                            uncheckedColor={mutedColor}
+                        />
                     </FieldRow>
                 </ScrollView>
                 <View
@@ -275,6 +269,34 @@ function FieldRow({
     )
 }
 
+function AttachmentCheckbox({
+    control,
+    checkedColor,
+    uncheckedColor,
+}: {
+    control: FormControl
+    checkedColor: string
+    uncheckedColor: string
+}) {
+    return (
+        <Controller
+            control={control}
+            name="hasAttachment"
+            render={({ field: { value, onChange } }) => (
+                <Pressable onPress={() => onChange(!value)} className="flex-row items-center py-1">
+                    {value ? (
+                        <SquareCheck size={20} color={checkedColor} />
+                    ) : (
+                        <Square size={20} color={uncheckedColor} />
+                    )}
+                </Pressable>
+            )}
+        />
+    )
+}
+
+type TextFieldName = 'from' | 'to' | 'subject' | 'hasWords' | 'dateAnchor'
+
 function FormInput({
     control,
     name,
@@ -282,22 +304,26 @@ function FormInput({
     placeholder,
     keyboardType,
 }: {
-    control: ReturnType<typeof useForm<FormValues>>['control']
-    name: keyof FormValues
+    control: FormControl
+    name: TextFieldName
     style: StyleProp<TextStyle>
     placeholder: string
     keyboardType?: 'numeric' | 'default'
 }) {
-    const { field } = useController({ control, name })
-
     return (
-        <PlainInput
-            testID={`advanced-search-input-${name}`}
-            style={style}
-            value={String(field.value ?? '')}
-            onChangeText={field.onChange}
-            placeholder={placeholder}
-            keyboardType={keyboardType}
+        <Controller
+            control={control}
+            name={name}
+            render={({ field: { value, onChange } }) => (
+                <PlainInput
+                    testID={`advanced-search-input-${name}`}
+                    style={style}
+                    value={value}
+                    onChangeText={onChange}
+                    placeholder={placeholder}
+                    keyboardType={keyboardType}
+                />
+            )}
         />
     )
 }
@@ -339,8 +365,8 @@ function PickerButton({
     backgroundColor,
     focusBgColor,
 }: {
-    control: ReturnType<typeof useForm<FormValues>>['control']
-    name: keyof FormValues
+    control: FormControl
+    name: 'dateWithin' | 'folder'
     options: PickerOption[]
     foregroundColor: string
     mutedColor: string
@@ -348,10 +374,47 @@ function PickerButton({
     backgroundColor: string
     focusBgColor: string
 }) {
-    const { field } = useController({ control, name })
-    const [isOpen, setIsOpen] = useState(false)
+    return (
+        <Controller
+            control={control}
+            name={name}
+            render={({ field: { value, onChange } }) => (
+                <PickerField
+                    options={options}
+                    value={value}
+                    onChange={onChange}
+                    foregroundColor={foregroundColor}
+                    mutedColor={mutedColor}
+                    borderColor={borderColor}
+                    backgroundColor={backgroundColor}
+                    focusBgColor={focusBgColor}
+                />
+            )}
+        />
+    )
+}
 
-    const selectedLabel = options.find(o => o.value === field.value)?.label ?? options[0].label
+function PickerField({
+    options,
+    value,
+    onChange,
+    foregroundColor,
+    mutedColor,
+    borderColor,
+    backgroundColor,
+    focusBgColor,
+}: {
+    options: PickerOption[]
+    value: string
+    onChange: (value: string) => void
+    foregroundColor: string
+    mutedColor: string
+    borderColor: string
+    backgroundColor: string
+    focusBgColor: string
+}) {
+    const [isOpen, setIsOpen] = useState(false)
+    const selectedLabel = options.find(o => o.value === value)?.label ?? options[0].label
 
     return (
         <View className="relative">
@@ -372,9 +435,9 @@ function PickerButton({
             {isOpen ? (
                 <PickerMenu
                     options={options}
-                    value={String(field.value)}
+                    value={value}
                     onSelect={val => {
-                        field.onChange(val)
+                        onChange(val)
                         setIsOpen(false)
                     }}
                     onClose={() => setIsOpen(false)}

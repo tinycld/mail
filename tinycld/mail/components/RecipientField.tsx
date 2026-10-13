@@ -1,7 +1,7 @@
 import { Avatar as ContactAvatar } from '@tinycld/core/components/Avatar'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { type Control, type Path, useController } from '@tinycld/core/ui/form'
 import { PlainInput } from '@tinycld/core/ui/PlainInput'
-import { type Control, type Path, useController } from 'react-hook-form'
 import { Pressable, Text, View } from 'react-native'
 import type { ComposeFormData } from '../hooks/composeSchema'
 import { type ContactSuggestion, useParsedRecipients } from '../hooks/useRecipientSuggestions'

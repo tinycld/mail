@@ -1,7 +1,7 @@
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { type Control, type FieldErrors, useController } from '@tinycld/core/ui/form'
 import { PlainInput } from '@tinycld/core/ui/PlainInput'
 import { useState } from 'react'
-import { type Control, type FieldErrors, useController } from 'react-hook-form'
 import { Pressable, Text, View } from 'react-native'
 import type { ComposeFormData } from '../hooks/composeSchema'
 import { RecipientField } from './RecipientField'

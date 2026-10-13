@@ -11,6 +11,7 @@ import {
     DrawerFooter,
     DrawerHeader,
 } from '@tinycld/core/ui/drawer'
+import { Controller, useForm, z, zodResolver } from '@tinycld/core/ui/form'
 import { Pencil, Trash2, UserPlus, X } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb/core'
 import { useState } from 'react'
@@ -398,26 +399,8 @@ function MembersTab({
     orgMembers: OrgMemberRow[]
 }) {
     const mutedColor = useThemeColor('muted-foreground')
-    const primaryColor = useThemeColor('primary')
-    const borderColor = useThemeColor('border')
     const [membersCollection] = useStore('mail_mailbox_members')
     const [adding, setAdding] = useState(false)
-    const [selected, setSelected] = useState('')
-
-    const addMutation = useMutation({
-        mutationFn: mutation(function* () {
-            yield membersCollection.insert({
-                id: newRecordId(),
-                mailbox: mailboxId,
-                user: selected,
-                role: 'member',
-            })
-        }),
-        onSuccess: () => {
-            setAdding(false)
-            setSelected('')
-        },
-    })
 
     const removeMutation = useMutation({
         mutationFn: mutation(function* (id: string) {
@@ -488,57 +471,125 @@ function MembersTab({
                 </Pressable>
             )}
 
-            {adding && (
-                <View
-                    className="gap-2 rounded-lg p-3 border border-border"
-                    style={{ borderStyle: 'dashed' }}
+            <AddMemberPicker
+                isVisible={adding}
+                mailboxId={mailboxId}
+                available={available}
+                onDone={() => setAdding(false)}
+            />
+        </View>
+    )
+}
+
+const addMemberSchema = z.object({ user: z.string().min(1, 'Pick a member') })
+
+function AddMemberPicker({
+    isVisible,
+    mailboxId,
+    available,
+    onDone,
+}: {
+    isVisible: boolean
+    mailboxId: string
+    available: OrgMemberRow[]
+    onDone: () => void
+}) {
+    const [membersCollection] = useStore('mail_mailbox_members')
+    const {
+        control,
+        handleSubmit,
+        reset,
+        formState: { isValid },
+    } = useForm({
+        mode: 'onChange',
+        resolver: zodResolver(addMemberSchema),
+        defaultValues: { user: '' },
+    })
+
+    const close = () => {
+        reset()
+        onDone()
+    }
+
+    const addMutation = useMutation({
+        mutationFn: mutation(function* ({ user }: z.infer<typeof addMemberSchema>) {
+            yield membersCollection.insert({
+                id: newRecordId(),
+                mailbox: mailboxId,
+                user,
+                role: 'member',
+            })
+        }),
+        onSuccess: close,
+    })
+
+    const onSubmit = handleSubmit(data => addMutation.mutate(data))
+
+    if (!isVisible) return null
+
+    return (
+        <View
+            className="gap-2 rounded-lg p-3 border border-border"
+            style={{ borderStyle: 'dashed' }}
+        >
+            <Text className="text-muted-foreground" style={{ fontSize: 12 }}>
+                Select a member:
+            </Text>
+            <Controller
+                control={control}
+                name="user"
+                render={({ field: { value, onChange } }) => (
+                    <MemberChoices available={available} selected={value} onSelect={onChange} />
+                )}
+            />
+            <View className="flex-row gap-2">
+                <ServerActionButton
+                    size="sm"
+                    onPress={onSubmit}
+                    isDisabled={!isValid || addMutation.isPending}
                 >
-                    <Text className="text-muted-foreground" style={{ fontSize: 12 }}>
-                        Select a member:
-                    </Text>
-                    <View className="flex-row gap-1 flex-wrap">
-                        {available.map(o => {
-                            const isSelected = selected === o.userId
-                            return (
-                                <Pressable
-                                    key={o.userId}
-                                    onPress={() => setSelected(o.userId)}
-                                    className="rounded-md px-3"
-                                    style={{
-                                        paddingVertical: 6,
-                                        borderWidth: 1,
-                                        borderColor: isSelected ? primaryColor : borderColor,
-                                        backgroundColor: isSelected
-                                            ? `${primaryColor}14`
-                                            : undefined,
-                                    }}
-                                >
-                                    <Text style={{ fontSize: 12.5 }}>{o.userName}</Text>
-                                </Pressable>
-                            )
-                        })}
-                    </View>
-                    <View className="flex-row gap-2">
-                        <ServerActionButton
-                            size="sm"
-                            onPress={() => addMutation.mutate()}
-                            isDisabled={!selected || addMutation.isPending}
-                        >
-                            <ButtonText>Add</ButtonText>
-                        </ServerActionButton>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onPress={() => {
-                                setAdding(false)
-                                setSelected('')
-                            }}
-                        >
-                            <ButtonText>Cancel</ButtonText>
-                        </Button>
-                    </View>
-                </View>
-            )}
+                    <ButtonText>Add</ButtonText>
+                </ServerActionButton>
+                <Button variant="outline" size="sm" onPress={close}>
+                    <ButtonText>Cancel</ButtonText>
+                </Button>
+            </View>
+        </View>
+    )
+}
+
+function MemberChoices({
+    available,
+    selected,
+    onSelect,
+}: {
+    available: OrgMemberRow[]
+    selected: string
+    onSelect: (userId: string) => void
+}) {
+    const primaryColor = useThemeColor('primary')
+    const borderColor = useThemeColor('border')
+
+    return (
+        <View className="flex-row gap-1 flex-wrap">
+            {available.map(o => {
+                const isSelected = selected === o.userId
+                return (
+                    <Pressable
+                        key={o.userId}
+                        onPress={() => onSelect(o.userId)}
+                        className="rounded-md px-3"
+                        style={{
+                            paddingVertical: 6,
+                            borderWidth: 1,
+                            borderColor: isSelected ? primaryColor : borderColor,
+                            backgroundColor: isSelected ? `${primaryColor}14` : undefined,
+                        }}
+                    >
+                        <Text style={{ fontSize: 12.5 }}>{o.userName}</Text>
+                    </Pressable>
+                )
+            })}
         </View>
     )
 }

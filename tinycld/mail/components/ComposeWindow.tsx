@@ -260,6 +260,8 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     }
     const windowStyle = isNotDesktop ? fullscreenStyle : modeStyles[mode]
 
+    // Send is disabled without a mailbox, but ⌘Enter reaches this handler
+    // directly, so it must still refuse.
     const onSend = handleSubmit(async data => {
         if (!mailboxId) return
 

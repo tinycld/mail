@@ -51,7 +51,6 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
         control,
         handleSubmit,
         reset,
-        setError,
         formState: { errors },
     } = useForm({
         resolver: zodResolver(composeSchema),
@@ -68,11 +67,10 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
         },
     })
 
+    // Send is disabled without a mailbox (matching ComposeWindow); the guard
+    // only narrows the type.
     const onSend = handleSubmit(async data => {
-        if (!mailboxId) {
-            setError('to', { message: 'No mailbox configured — contact your admin' })
-            return
-        }
+        if (!mailboxId) return
 
         const htmlBody = await editor.getHTML()
         const textBody = await editor.getText()
@@ -135,6 +133,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
                     onSend={onSend}
                     onAttach={handleAttach}
                     isPending={isPending}
+                    isSendDisabled={!mailboxId}
                 />
                 <DropOverlay isVisible={isDragging} />
             </View>
