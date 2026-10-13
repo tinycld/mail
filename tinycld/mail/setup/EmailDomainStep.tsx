@@ -17,6 +17,8 @@ import { Text, View } from 'react-native'
 import { AddDomainForm } from '../settings/AddDomainForm'
 import { DnsRecordsPanel, hasUnpublishedDnsRecords } from '../settings/DnsRecordsPanel'
 import { isDomainReady } from '../settings/domain-ready'
+import { DeleteDomainButton, RemoveDomainConfirm, useRemoveDomain } from '../settings/RemoveDomain'
+import { type VerificationProblem, verificationProblems } from '../settings/verification-problems'
 import { assertVerifySaved } from '../settings/verify-domain'
 import { useDomainChoiceStore } from '../stores/domain-choice-store'
 import { currentChoice, domainTabs, showDomainTabs, showOwnDomainForm } from './domain-choice'
@@ -51,9 +53,12 @@ function useDomains() {
                 id: d.id,
                 domain: d.domain,
                 verified: d.verified,
+                mx_verified: d.mx_verified,
+                inbound_domain_verified: d.inbound_domain_verified,
                 spf_verified: d.spf_verified,
                 dkim_verified: d.dkim_verified,
                 return_path_verified: d.return_path_verified,
+                lastCheckedAt: d.last_checked_at,
                 details: d.verification_details,
             }))
     )
@@ -61,6 +66,7 @@ function useDomains() {
         ...d,
         isReady: isDomainReady(d),
         outbound: details?.outbound,
+        problems: verificationProblems(d, details),
     }))
 }
 
@@ -85,6 +91,8 @@ interface PanelDomain {
     domain: string
     outbound: OutboundCheckResult | undefined
     isVerified: boolean
+    problems: VerificationProblem[]
+    lastCheckedAt: string
 }
 
 // The domain the DNS + Verify panel is for. A just-added domain shows the add
@@ -95,15 +103,35 @@ function useDomainPanel(domains: DomainItem[]) {
     const { verify, isPending, errorMessage } = useVerifyDomain()
     const row = domainPanelTarget(domains, added?.id)
     const fromRow: PanelDomain | null = row
-        ? { id: row.id, domain: row.domain, outbound: row.outbound, isVerified: row.isReady }
+        ? {
+              id: row.id,
+              domain: row.domain,
+              outbound: row.outbound,
+              isVerified: row.isReady,
+              problems: row.problems,
+              lastCheckedAt: row.lastCheckedAt,
+          }
         : null
+    // Not checked yet: the add response carries the records, not a verify.
     const fromAdded: PanelDomain | null = added
-        ? { id: added.id, domain: added.domain, outbound: added.records, isVerified: false }
+        ? {
+              id: added.id,
+              domain: added.domain,
+              outbound: added.records,
+              isVerified: false,
+              problems: [],
+              lastCheckedAt: '',
+          }
         : null
     const domain = fromRow ?? fromAdded
     return {
         domain,
         setAdded,
+        // A removed domain must not live on in the panel through the add
+        // response the panel falls back to before the row syncs.
+        onDomainRemoved: (id: string) => {
+            if (added?.id === id) setAdded(null)
+        },
         onVerify: () => {
             if (domain) verify(domain.id)
         },
@@ -140,12 +168,51 @@ function PanelIntro({ domain }: { domain: PanelDomain }) {
     )
 }
 
+function ProblemLine({ problem }: { problem: VerificationProblem }) {
+    return (
+        <Text className="text-sm text-foreground">
+            <Text className="font-semibold">{problem.label}: </Text>
+            {problem.detail}
+        </Text>
+    )
+}
+
+// After a Verify that did not pass, say which checks failed and what usually
+// fixes them, so the person is not left with an unchanged "Not verified".
+function VerifyProblems({ domain, isVisible }: { domain: PanelDomain; isVisible: boolean }) {
+    if (!isVisible || domain.isVerified || domain.problems.length === 0) return null
+    const checkedAt = domain.lastCheckedAt
+        ? new Date(domain.lastCheckedAt).toLocaleTimeString([], {
+              hour: 'numeric',
+              minute: '2-digit',
+          })
+        : null
+    const lines = domain.problems.map(p => <ProblemLine key={p.label} problem={p} />)
+    return (
+        <View
+            testID="setup-domain-problems"
+            className="gap-1.5 rounded-lg border border-warning bg-warning/10 p-3"
+        >
+            <Text className="text-sm font-semibold text-foreground">
+                {checkedAt ? `The check at ${checkedAt} found:` : 'The last check found:'}
+            </Text>
+            {lines}
+            <Text className="mt-1 text-xs text-muted-foreground">{VERIFY_HELP}</Text>
+        </View>
+    )
+}
+
+const VERIFY_HELP =
+    'DNS changes can take from a few minutes to a few hours to show. Check that each record ' +
+    'matches exactly. Many DNS providers add your domain to the host name for you, so enter ' +
+    'only the part before your domain. Then select Verify again.'
+
 function DomainPanel({
     domain,
     onVerify,
     isPending,
     errorMessage,
-}: Omit<ReturnType<typeof useDomainPanel>, 'setAdded'>) {
+}: Omit<ReturnType<typeof useDomainPanel>, 'setAdded' | 'onDomainRemoved'>) {
     if (!domain) return null
     return (
         <View testID="setup-new-domain" className="mb-4 gap-2 rounded-xl border border-border p-3">
@@ -163,22 +230,41 @@ function DomainPanel({
                 <VerifiedLabel isVerified={domain.isVerified} />
             </View>
             <ErrorText message={errorMessage} />
+            <VerifyProblems domain={domain} isVisible={!isPending} />
         </View>
     )
 }
 
-function DomainRow({ domain }: { domain: DomainItem }) {
+// A mistyped domain can never verify, so every row can be removed here rather
+// than only from Settings after the wizard.
+function DomainRow({ domain, onRemoved }: { domain: DomainItem; onRemoved: (id: string) => void }) {
+    const removal = useRemoveDomain(domain.id, () => onRemoved(domain.id))
     return (
-        <View className="flex-row items-center justify-between border-b border-border py-2">
-            <Text className="text-sm text-foreground">{domain.domain}</Text>
-            <VerifiedLabel isVerified={domain.isReady} />
+        <View className="gap-2 border-b border-border py-2">
+            <View className="flex-row items-center justify-between gap-3">
+                <Text className="flex-1 text-sm text-foreground">{domain.domain}</Text>
+                <VerifiedLabel isVerified={domain.isReady} />
+                <DeleteDomainButton isVisible={!removal.isConfirming} onPress={removal.onStart} />
+            </View>
+            <RemoveDomainConfirm
+                isVisible={removal.isConfirming}
+                domain={domain.domain}
+                onConfirm={removal.onConfirm}
+                onCancel={removal.onCancel}
+            />
         </View>
     )
 }
 
-function DomainList({ domains }: { domains: DomainItem[] }) {
+function DomainList({
+    domains,
+    onRemoved,
+}: {
+    domains: DomainItem[]
+    onRemoved: (id: string) => void
+}) {
     if (domains.length === 0) return null
-    const rows = domains.map(d => <DomainRow key={d.id} domain={d} />)
+    const rows = domains.map(d => <DomainRow key={d.id} domain={d} onRemoved={onRemoved} />)
     return (
         <View className="mb-4">
             <Text className="text-sm font-semibold text-foreground">Your domains</Text>
@@ -270,7 +356,7 @@ export default function EmailDomainStep({ next }: SetupStepProps) {
             <DomainTabBar state={choice} />
             <ContributedPanel entry={choice.contributedPanel} />
             <OwnDomainForm isVisible={choice.isOwnSelected} panel={panel} />
-            <DomainList domains={domains} />
+            <DomainList domains={domains} onRemoved={panel.onDomainRemoved} />
             <SetupContinueButton onPress={next} isDisabled={!hasUsableDomain} />
         </View>
     )

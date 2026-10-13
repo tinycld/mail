@@ -266,7 +266,7 @@ export default function AddressStep({ next }: SetupStepProps) {
             <StepHeading
                 title="Your email address"
                 lead="Make the address you will send and receive email from."
-                helpTopic="mail:delivery-tracking"
+                helpTopic="mail:mailboxes"
             />
             <AddressBody mailbox={mailbox} />
             <SetupContinueButton onPress={next} isDisabled={!mailbox} />
