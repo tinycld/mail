@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, expect, test, vi } from 'vitest'
 
@@ -111,4 +111,46 @@ test('the alias-collision query is scoped to the mailbox domain, not every alias
     expect(aliasQuery).toContain('mb_d1_b')
     // ...and never names the other domain's mailbox, so it cannot pull its alias.
     expect(aliasQuery).not.toContain('mb_d2_a')
+})
+
+async function typeAddress(container: HTMLElement, value: string) {
+    const input = container.querySelector<HTMLInputElement>('rn-textinput')
+    if (!input) throw new Error('no input rendered')
+    // mode: 'onChange' validates asynchronously; let it settle.
+    await act(async () => {
+        fireEvent.input(input, { target: { value } })
+    })
+}
+
+test('an address already used by a mailbox on the domain is rejected as you type', async () => {
+    const { container, findByText } = render(
+        withQueryClient(
+            <AddAliasForm mailboxId="mb_d1_b" mailboxDomainId="d1" domainName="acme.com" />
+        )
+    )
+    // Wait for the scoped alias query so both collision sets are loaded.
+    await waitFor(() =>
+        expect(seenQueries.some(q => q.includes('mail_mailbox_aliases'))).toBe(true)
+    )
+
+    await typeAddress(container, ' Alice ')
+    expect(await findByText('Address is already a primary mailbox on this domain')).toBeTruthy()
+
+    await typeAddress(container, 'HELP')
+    expect(await findByText('Address is already an alias on this domain')).toBeTruthy()
+})
+
+test("another domain's addresses do not collide", async () => {
+    const { container, queryByText } = render(
+        withQueryClient(
+            <AddAliasForm mailboxId="mb_d1_b" mailboxDomainId="d1" domainName="acme.com" />
+        )
+    )
+    await waitFor(() =>
+        expect(seenQueries.some(q => q.includes('mail_mailbox_aliases'))).toBe(true)
+    )
+
+    await typeAddress(container, 'sales')
+    expect(queryByText('Address is already an alias on this domain')).toBeNull()
+    expect(queryByText('Address is already a primary mailbox on this domain')).toBeNull()
 })

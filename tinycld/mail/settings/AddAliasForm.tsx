@@ -4,18 +4,12 @@ import { handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { ButtonIcon, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
-import { FormErrorSummary, TextInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
+import { FormErrorSummary, TextInput, useForm, zodResolver } from '@tinycld/core/ui/form'
 import { Plus } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb/core'
+import { useMemo } from 'react'
 import { Text, View } from 'react-native'
-
-const schema = z.object({
-    address: z
-        .string()
-        .min(1, 'Address is required')
-        .max(64)
-        .regex(/^[a-z0-9._-]+$/, 'Only lowercase letters, numbers, dots, hyphens, underscores'),
-})
+import { type AliasFormValues, aliasSchemaFor } from './aliasSchema'
 
 interface Props {
     mailboxId: string
@@ -52,13 +46,22 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
                       ),
     })
 
+    const schema = useMemo(
+        () =>
+            aliasSchemaFor({
+                mailboxAddresses: new Set((mailboxesInDomain ?? []).map(m => m.address)),
+                aliasAddresses: new Set((aliasesInDomain ?? []).map(a => a.address)),
+            }),
+        [mailboxesInDomain, aliasesInDomain]
+    )
+
     const {
         control,
         handleSubmit,
         reset,
         setError,
         getValues,
-        formState: { errors, isSubmitted, isDirty },
+        formState: { errors, isSubmitted, isValid },
     } = useForm({
         mode: 'onChange',
         resolver: zodResolver(schema),
@@ -66,22 +69,11 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
     })
 
     const create = useMutation({
-        mutationFn: mutation(function* (data: z.infer<typeof schema>) {
-            const addr = data.address.toLowerCase().trim()
-
-            const primaryCollision = (mailboxesInDomain ?? []).some(m => m.address === addr)
-            if (primaryCollision) {
-                throw new Error('Address is already a primary mailbox on this domain')
-            }
-            const aliasCollision = (aliasesInDomain ?? []).some(a => a.address === addr)
-            if (aliasCollision) {
-                throw new Error('Address is already an alias on this domain')
-            }
-
+        mutationFn: mutation(function* (data: AliasFormValues) {
             yield aliasesCollection.insert({
                 id: newRecordId(),
                 mailbox: mailboxId,
-                address: addr,
+                address: data.address,
                 created: '',
                 updated: '',
             })
@@ -91,7 +83,6 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
     })
 
     const onSubmit = handleSubmit(d => create.mutate(d))
-    const canSubmit = !create.isPending && isDirty
 
     return (
         <View className="gap-2">
@@ -106,7 +97,11 @@ export function AddAliasForm({ mailboxId, mailboxDomainId, domainName }: Props) 
                 <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
                     @{domainName}
                 </Text>
-                <ServerActionButton size="sm" onPress={onSubmit} isDisabled={!canSubmit}>
+                <ServerActionButton
+                    size="sm"
+                    onPress={onSubmit}
+                    isDisabled={!isValid || create.isPending}
+                >
                     <ButtonIcon as={Plus} />
                     <ButtonText>Add</ButtonText>
                 </ServerActionButton>
