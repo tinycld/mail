@@ -8,19 +8,18 @@ import type {
 } from '@tinycld/app-generated/mail-api'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { errorToString } from '@tinycld/core/lib/errors'
-import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { Button, ButtonIcon, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
+import { ButtonIcon, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import * as Clipboard from 'expo-clipboard'
-import { CheckCircle, Copy, Globe, Loader2, RefreshCw, Trash2, XCircle } from 'lucide-react-native'
+import { CheckCircle, Copy, Globe, Loader2, RefreshCw, XCircle } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { MONOSPACE_FONT } from '../lib/monospace-font'
 import { AddDomainForm } from './AddDomainForm'
 import { DnsRecordsPanel, hasUnpublishedDnsRecords } from './DnsRecordsPanel'
 import { isDomainReady } from './domain-ready'
-import { domainRemovalWarning } from './domain-removal'
+import { DeleteDomainButton, RemoveDomainConfirm, useRemoveDomain } from './RemoveDomain'
 import { assertVerifySaved } from './verify-domain'
 
 export default function ProviderSettings() {
@@ -155,15 +154,7 @@ function DomainRowItem({ domain, provider }: { domain: DomainRow; provider: 'pos
     const mutedColor = useThemeColor('muted-foreground')
     const successColor = useThemeColor('success')
     const dangerColor = useThemeColor('danger')
-    const [domainsCollection] = useStore('mail_domains')
-    const [confirming, setConfirming] = useState(false)
-
-    const deleteMutation = useMutation({
-        mutationFn: mutation(function* () {
-            yield domainsCollection.delete(domain.id)
-        }),
-        onSuccess: () => setConfirming(false),
-    })
+    const removal = useRemoveDomain(domain.id)
 
     const verifyMutation = useReactQueryMutation({
         mutationFn: async () => {
@@ -202,17 +193,17 @@ function DomainRowItem({ domain, provider }: { domain: DomainRow; provider: 'pos
                         onPress={() => verifyMutation.mutate()}
                     />
                     <DeleteDomainButton
-                        isVisible={!confirming}
-                        onPress={() => setConfirming(true)}
+                        isVisible={!removal.isConfirming}
+                        onPress={removal.onStart}
                     />
                 </View>
             </View>
 
             <RemoveDomainConfirm
-                isVisible={confirming}
-                domain={domain}
-                onConfirm={() => deleteMutation.mutate()}
-                onCancel={() => setConfirming(false)}
+                isVisible={removal.isConfirming}
+                domain={domain.domain}
+                onConfirm={removal.onConfirm}
+                onCancel={removal.onCancel}
             />
 
             <DomainVerificationPanel domain={domain} provider={provider} />
@@ -523,46 +514,6 @@ function CheckRow({
                 <Text className="text-muted-foreground" style={{ fontSize: 11 }}>
                     {hint}
                 </Text>
-            </View>
-        </View>
-    )
-}
-
-function DeleteDomainButton({ isVisible, onPress }: { isVisible: boolean; onPress: () => void }) {
-    const dangerColor = useThemeColor('danger')
-    if (!isVisible) return null
-    return (
-        <Pressable className="p-1" onPress={onPress} accessibilityLabel="Remove domain">
-            <Trash2 size={16} color={dangerColor} />
-        </Pressable>
-    )
-}
-
-function RemoveDomainConfirm({
-    isVisible,
-    domain,
-    onConfirm,
-    onCancel,
-}: {
-    isVisible: boolean
-    domain: DomainRow
-    onConfirm: () => void
-    onCancel: () => void
-}) {
-    if (!isVisible) return null
-    const warning = domainRemovalWarning(domain.domain)
-    return (
-        <View testID="remove-domain-confirm" className="gap-2 rounded-md border border-danger p-3">
-            <Text className="text-foreground" style={{ fontSize: 13 }}>
-                {warning}
-            </Text>
-            <View className="flex-row gap-2">
-                <ServerActionButton size="sm" variant="destructive" onPress={onConfirm}>
-                    <ButtonText>Remove domain</ButtonText>
-                </ServerActionButton>
-                <Button size="sm" variant="outline" onPress={onCancel}>
-                    <ButtonText>Cancel</ButtonText>
-                </Button>
             </View>
         </View>
     )
