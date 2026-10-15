@@ -12,6 +12,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/coreserver"
 	"tinycld.org/core/davauth"
+	"tinycld.org/core/logging"
 	"tinycld.org/core/mailer"
 	"tinycld.org/core/pkgaccess"
 )
@@ -36,6 +37,28 @@ type smtpSession struct {
 	alias      *core.Record
 	domain     *core.Record
 	recipients []string
+}
+
+var smtpLog = logging.ForPackage("mail")
+
+// refuse logs a submission refusal and returns it. The client sees only the
+// SMTP reply, which a mail app usually hides behind "cannot send"; without
+// this record an operator has nothing to read. Never pass a password in
+// attrs.
+func (s *smtpSession) refuse(stage string, reply *smtp.SMTPError, cause error, attrs ...any) error {
+	args := []any{"stage", stage, "code", reply.Code, "reply", reply.Message}
+	if s.user != nil {
+		args = append(args, "user", s.user.Id)
+	}
+	if s.from != "" {
+		args = append(args, "from", s.from)
+	}
+	if cause != nil {
+		args = append(args, "error", cause.Error())
+	}
+	args = append(args, attrs...)
+	smtpLog.Warn("smtp submission refused", args...)
+	return reply
 }
 
 // AuthMechanisms returns supported SASL mechanisms.
@@ -92,22 +115,22 @@ func (s *loginServer) Next(response []byte) (challenge []byte, done bool, err er
 func (s *smtpSession) authenticate(username, password string) error {
 	record, err := davauth.VerifyCredentials(s.app, username, password)
 	if err != nil {
-		return &smtp.SMTPError{
+		return s.refuse("auth", &smtp.SMTPError{
 			Code:         535,
 			EnhancedCode: smtp.EnhancedCode{5, 7, 8},
 			Message:      "Authentication credentials invalid",
-		}
+		}, err, "username", username)
 	}
 
 	// SMTP submission exists only to send, and sending is a write: an
 	// org_pkg_access level below full refuses at AUTH. (IMAP still logs the
 	// same user in — readonly means read.)
 	if !pkgaccess.CanWrite(s.app, record, "mail") {
-		return &smtp.SMTPError{
+		return s.refuse("auth", &smtp.SMTPError{
 			Code:         535,
 			EnhancedCode: smtp.EnhancedCode{5, 7, 8},
 			Message:      "Your mail access is read-only; sending is not permitted",
-		}
+		}, nil, "username", username)
 	}
 
 	s.user = record
@@ -117,46 +140,46 @@ func (s *smtpSession) authenticate(username, password string) error {
 // Mail handles MAIL FROM command — validates the sender is authorized.
 func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 	if s.user == nil {
-		return &smtp.SMTPError{
+		return s.refuse("mail", &smtp.SMTPError{
 			Code:         530,
 			EnhancedCode: smtp.EnhancedCode{5, 7, 0},
 			Message:      "Authentication required",
-		}
+		}, nil, "from", from)
 	}
 
 	local, domainStr := splitAddress(from)
 	if local == "" || domainStr == "" {
-		return &smtp.SMTPError{
+		return s.refuse("mail", &smtp.SMTPError{
 			Code:         550,
 			EnhancedCode: smtp.EnhancedCode{5, 1, 0},
 			Message:      "Sender address not recognized",
-		}
+		}, nil, "from", from)
 	}
 
 	mailbox, alias, err := resolveMailboxByAddress(s.app, local, domainStr)
 	if err != nil {
-		return &smtp.SMTPError{
+		return s.refuse("mail", &smtp.SMTPError{
 			Code:         550,
 			EnhancedCode: smtp.EnhancedCode{5, 1, 0},
 			Message:      "Sender address not recognized",
-		}
+		}, err, "from", from)
 	}
 
 	domainRecord, err := s.app.FindRecordById("mail_domains", mailbox.GetString("domain"))
 	if err != nil {
-		return &smtp.SMTPError{
+		return s.refuse("mail", &smtp.SMTPError{
 			Code:         550,
 			EnhancedCode: smtp.EnhancedCode{5, 1, 0},
 			Message:      "Sender address not recognized",
-		}
+		}, err, "from", from)
 	}
 
 	if _, err := verifyMailboxMembership(s.app, mailbox.Id, s.user.Id); err != nil {
-		return &smtp.SMTPError{
+		return s.refuse("mail", &smtp.SMTPError{
 			Code:         550,
 			EnhancedCode: smtp.EnhancedCode{5, 7, 1},
 			Message:      "Not authorized to send from this address",
-		}
+		}, err, "from", from)
 	}
 
 	s.from = from
@@ -171,34 +194,34 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 // Rcpt handles RCPT TO command — collects recipients.
 func (s *smtpSession) Rcpt(to string, opts *smtp.RcptOptions) error {
 	if s.user == nil {
-		return &smtp.SMTPError{
+		return s.refuse("rcpt", &smtp.SMTPError{
 			Code:         530,
 			EnhancedCode: smtp.EnhancedCode{5, 7, 0},
 			Message:      "Authentication required",
-		}
+		}, nil, "to", to)
 	}
 	if s.from == "" {
-		return &smtp.SMTPError{
+		return s.refuse("rcpt", &smtp.SMTPError{
 			Code:         503,
 			EnhancedCode: smtp.EnhancedCode{5, 5, 1},
 			Message:      "Bad sequence of commands",
-		}
+		}, nil, "to", to)
 	}
 
 	if !strings.Contains(to, "@") {
-		return &smtp.SMTPError{
+		return s.refuse("rcpt", &smtp.SMTPError{
 			Code:         553,
 			EnhancedCode: smtp.EnhancedCode{5, 1, 3},
 			Message:      "Invalid recipient address",
-		}
+		}, nil, "to", to)
 	}
 
 	if len(s.recipients) >= 100 {
-		return &smtp.SMTPError{
+		return s.refuse("rcpt", &smtp.SMTPError{
 			Code:         452,
 			EnhancedCode: smtp.EnhancedCode{4, 5, 3},
 			Message:      "Too many recipients",
-		}
+		}, nil, "to", to)
 	}
 
 	s.recipients = append(s.recipients, to)
@@ -223,36 +246,36 @@ func buildOutgoingFrom(s *smtpSession) string {
 // through the existing provider pipeline.
 func (s *smtpSession) Data(r io.Reader) error {
 	if s.user == nil {
-		return &smtp.SMTPError{
+		return s.refuse("data", &smtp.SMTPError{
 			Code:         530,
 			EnhancedCode: smtp.EnhancedCode{5, 7, 0},
 			Message:      "Authentication required",
-		}
+		}, nil)
 	}
 	if s.from == "" || len(s.recipients) == 0 {
-		return &smtp.SMTPError{
+		return s.refuse("data", &smtp.SMTPError{
 			Code:         503,
 			EnhancedCode: smtp.EnhancedCode{5, 5, 1},
 			Message:      "Bad sequence of commands",
-		}
+		}, nil)
 	}
 
 	raw, err := io.ReadAll(r)
 	if err != nil {
-		return &smtp.SMTPError{
+		return s.refuse("data", &smtp.SMTPError{
 			Code:         451,
 			EnhancedCode: smtp.EnhancedCode{4, 7, 0},
 			Message:      "Temporary delivery failure",
-		}
+		}, err)
 	}
 
 	msg, err := parseRFC5322(raw)
 	if err != nil {
-		return &smtp.SMTPError{
+		return s.refuse("data", &smtp.SMTPError{
 			Code:         554,
 			EnhancedCode: smtp.EnhancedCode{5, 6, 0},
 			Message:      "Message could not be parsed",
-		}
+		}, err)
 	}
 
 	// Build From address from the mailbox record — we intentionally use the
@@ -334,7 +357,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 	// the send, so refusing and returning nil would accept the message from
 	// the client and silently drop it.
 	if refusal := checkSendAllowed(s.app, s.user.Id, s.mailbox.Id, s.domain, len(msg.To)+len(msg.Cc)+len(bcc)); refusal != nil {
-		return smtpErrorForRefusal(refusal)
+		return s.refuse("data", smtpErrorForRefusal(refusal), nil, "gate", refusal.msg)
 	}
 
 	var result *SendResult
@@ -346,11 +369,11 @@ func (s *smtpSession) Data(r io.Reader) error {
 		var sendErr error
 		result, sendErr = provider.Send(ctx, sendReq)
 		if sendErr != nil {
-			return &smtp.SMTPError{
+			return s.refuse("data", &smtp.SMTPError{
 				Code:         451,
 				EnhancedCode: smtp.EnhancedCode{4, 7, 0},
 				Message:      "Temporary delivery failure",
-			}
+			}, sendErr, "recipients", len(s.recipients))
 		}
 	}
 
