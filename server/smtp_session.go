@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -46,6 +47,16 @@ var smtpLog = logging.ForPackage("mail")
 // this record an operator has nothing to read. Never pass a password in
 // attrs.
 func (s *smtpSession) refuse(stage string, reply *smtp.SMTPError, cause error, attrs ...any) error {
+	return s.logRefusal(slog.LevelInfo, stage, reply, cause, attrs...)
+}
+
+// refuseServerSide logs a refusal the client did not cause: a read or
+// provider failure, or the send gate. An operator needs to see these.
+func (s *smtpSession) refuseServerSide(stage string, reply *smtp.SMTPError, cause error, attrs ...any) error {
+	return s.logRefusal(slog.LevelWarn, stage, reply, cause, attrs...)
+}
+
+func (s *smtpSession) logRefusal(level slog.Level, stage string, reply *smtp.SMTPError, cause error, attrs ...any) error {
 	args := []any{"stage", stage, "code", reply.Code, "reply", reply.Message}
 	if s.user != nil {
 		args = append(args, "user", s.user.Id)
@@ -57,7 +68,7 @@ func (s *smtpSession) refuse(stage string, reply *smtp.SMTPError, cause error, a
 		args = append(args, "error", cause.Error())
 	}
 	args = append(args, attrs...)
-	smtpLog.Warn("smtp submission refused", args...)
+	smtpLog.Log(context.Background(), level, "smtp submission refused", args...)
 	return reply
 }
 
@@ -139,6 +150,9 @@ func (s *smtpSession) authenticate(username, password string) error {
 
 // Mail handles MAIL FROM command — validates the sender is authorized.
 func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
+	// A new MAIL FROM starts a new transaction even when it is refused;
+	// otherwise the old sender stays live and appears in the refusal log.
+	s.Reset()
 	if s.user == nil {
 		return s.refuse("mail", &smtp.SMTPError{
 			Code:         530,
@@ -262,7 +276,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 
 	raw, err := io.ReadAll(r)
 	if err != nil {
-		return s.refuse("data", &smtp.SMTPError{
+		return s.refuseServerSide("data", &smtp.SMTPError{
 			Code:         451,
 			EnhancedCode: smtp.EnhancedCode{4, 7, 0},
 			Message:      "Temporary delivery failure",
@@ -357,7 +371,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 	// the send, so refusing and returning nil would accept the message from
 	// the client and silently drop it.
 	if refusal := checkSendAllowed(s.app, s.user.Id, s.mailbox.Id, s.domain, len(msg.To)+len(msg.Cc)+len(bcc)); refusal != nil {
-		return s.refuse("data", smtpErrorForRefusal(refusal), nil, "gate", refusal.msg)
+		return s.refuseServerSide("data", smtpErrorForRefusal(refusal), nil, "gate", refusal.msg)
 	}
 
 	var result *SendResult
@@ -369,7 +383,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 		var sendErr error
 		result, sendErr = provider.Send(ctx, sendReq)
 		if sendErr != nil {
-			return s.refuse("data", &smtp.SMTPError{
+			return s.refuseServerSide("data", &smtp.SMTPError{
 				Code:         451,
 				EnhancedCode: smtp.EnhancedCode{4, 7, 0},
 				Message:      "Temporary delivery failure",

@@ -2,6 +2,8 @@ package mail
 
 import (
 	"bytes"
+	"errors"
+	"github.com/emersion/go-smtp"
 	"log/slog"
 	"strings"
 	"testing"
@@ -77,7 +79,10 @@ func TestSMTPRefusal_RcptWithoutMailIsLogged(t *testing.T) {
 	app := setupAliasTestApp(t)
 	logs := captureLogs(t)
 
-	users, _ := app.FindCollectionByNameOrId("users")
+	users, err := app.FindCollectionByNameOrId("users")
+	if err != nil {
+		t.Fatal(err)
+	}
 	user := core.NewRecord(users)
 	user.SetEmail("rcpt@example.org")
 	user.SetPassword("Password123!")
@@ -92,4 +97,96 @@ func TestSMTPRefusal_RcptWithoutMailIsLogged(t *testing.T) {
 	if !strings.Contains(logs.String(), `"stage":"rcpt"`) {
 		t.Fatalf("rcpt refusal not logged:\n%s", logs.String())
 	}
+}
+
+func newRefusalUser(t *testing.T, app core.App) *core.Record {
+	t.Helper()
+	return saveRealRecord(t, app, "users", map[string]any{
+		"email": "lvl@example.org", "username": "lvl", "name": "Lvl", "role": "member",
+	})
+}
+
+func TestSMTPRefusal_ClientCausedLogsInfo(t *testing.T) {
+	app := setupAliasTestApp(t)
+	logs := captureLogs(t)
+
+	s := &smtpSession{app: app}
+	if err := s.authenticate("ghost@example.org", "wrong"); err == nil {
+		t.Fatal("AUTH for an unknown account must be refused")
+	}
+	if out := logs.String(); !strings.Contains(out, `"level":"INFO"`) || strings.Contains(out, `"level":"WARN"`) {
+		t.Fatalf("a bad login is the client's mistake and must log at INFO:\n%s", out)
+	}
+}
+
+func TestSMTPRefusal_SendGateLogsWarn(t *testing.T) {
+	app := newRealSchemaApp(t)
+	mailbox := seedRealMailbox(t, app)
+	domain, err := app.FindRecordById("mail_domains", mailbox.GetString("domain"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := newRefusalUser(t, app)
+	logs := captureLogs(t)
+
+	// The domain has no verified DNS records, so the send gate refuses.
+	s := &smtpSession{
+		app: app, user: user, from: "owner@example.org",
+		mailbox: mailbox, domain: domain, recipients: []string{"to@example.net"},
+	}
+	raw := "From: owner@example.org\r\nTo: to@example.net\r\nSubject: hi\r\nMessage-ID: <gate@example.org>\r\n\r\nbody\r\n"
+	if err := s.Data(strings.NewReader(raw)); err == nil {
+		t.Fatal("an unverified sending domain must be refused")
+	}
+	out := logs.String()
+	if !strings.Contains(out, `"gate"`) {
+		t.Fatalf("send-gate refusal not logged:\n%s", out)
+	}
+	if !strings.Contains(out, `"level":"WARN","msg":"smtp submission refused"`) {
+		t.Fatalf("a send-gate refusal is server policy and must log at WARN:\n%s", out)
+	}
+}
+
+func TestSMTPRefusal_ServerSideHelperLogsWarn(t *testing.T) {
+	app := setupAliasTestApp(t)
+	logs := captureLogs(t)
+
+	s := &smtpSession{app: app}
+	_ = s.refuseServerSide("data", &smtp.SMTPError{Code: 451, Message: "Temporary delivery failure"}, errors.New("boom"))
+	if !strings.Contains(logs.String(), `"level":"WARN"`) {
+		t.Fatalf("server-side refusal must log at WARN:\n%s", logs.String())
+	}
+}
+
+func TestSMTPRefusal_SecondMailResetsTransaction(t *testing.T) {
+	app := newRealSchemaApp(t)
+	mailbox := seedRealMailbox(t, app)
+	user := newRefusalUser(t, app)
+	saveRealRecord(t, app, "mail_mailbox_members", map[string]any{
+		"mailbox": mailbox.Id, "user": user.Id, "role": "owner",
+	})
+	logs := captureLogs(t)
+
+	s := &smtpSession{app: app, user: user}
+	if err := s.Mail("owner@example.org", nil); err != nil {
+		t.Fatalf("first MAIL: %v", err)
+	}
+	if err := s.Mail("nobody@unhosted.example", nil); err == nil {
+		t.Fatal("second MAIL from an unknown sender must be refused")
+	}
+	err := s.Rcpt("to@example.net", nil)
+	if err == nil || !strings.Contains(err.Error(), "Bad sequence of commands") {
+		t.Fatalf("RCPT after a refused MAIL must be a bad sequence, got %v", err)
+	}
+
+	for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
+		if !strings.Contains(line, `"from":"nobody@unhosted.example"`) {
+			continue
+		}
+		if n := strings.Count(line, `"from"`); n != 1 {
+			t.Fatalf("want exactly one from key, got %d:\n%s", n, line)
+		}
+		return
+	}
+	t.Fatalf("second MAIL refusal not logged:\n%s", logs.String())
 }
