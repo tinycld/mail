@@ -60,7 +60,7 @@ func searchMailRows(app core.App, userID string, q search.Query) (search.Result,
 			ID: item.ThreadID,
 			// A subject-less thread is still readable, so label it rather than
 			// render a blank row.
-			Title: titleOr(item.Subject, "(no subject)"),
+			Title: titleOr(item.Subject, noSubject),
 			// Participants as readable names. The field is the thread's STORED
 			// JSON array, so passing it through — as the old TS adapter did —
 			// rendered `[{"email":"alice@…` in the palette. The highlighted

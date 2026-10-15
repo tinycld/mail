@@ -320,7 +320,7 @@ func actionForwardMessage(app core.App, req automation.ActionRequest) error {
 
 	subject := req.Record.GetString("subject")
 	if subject == "" {
-		subject = "(no subject)"
+		subject = noSubject
 	}
 
 	body := forwardedBody(app, req.Record)

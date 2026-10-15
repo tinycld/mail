@@ -78,7 +78,7 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 
 	subject := req.Subject
 	if subject == "" {
-		subject = "(no subject)"
+		subject = noSubject
 	}
 
 	senderAddress := resolveSenderAddressRecords(mailbox, alias)

@@ -15,6 +15,10 @@ import (
 
 var storeLog = logging.ForPackage("mail")
 
+// noSubject is the subject shown for, and stored on, a thread whose messages
+// have none. mail_threads.subject is required, so a thread cannot be blank.
+const noSubject = "(no subject)"
+
 // findOrCreateThread finds an existing thread or creates a new one.
 // Thread matching priority:
 //  1. In-Reply-To header → match against mail_messages.message_id in the same mailbox
@@ -63,7 +67,11 @@ func findOrCreateThread(app core.App, mailboxID, subject, inReplyTo, references 
 	}
 	thread := core.NewRecord(collection)
 	thread.Set("mailbox", mailboxID)
-	thread.Set("subject", normalized)
+	threadSubject := normalized
+	if threadSubject == "" {
+		threadSubject = noSubject
+	}
+	thread.Set("subject", threadSubject)
 	thread.Set("snippet", "")
 	thread.Set("message_count", 0)
 	thread.Set("latest_date", time.Now().UTC().Format(time.RFC3339))
