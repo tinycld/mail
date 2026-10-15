@@ -46,7 +46,9 @@ func findOrCreateThread(app core.App, mailboxID, subject, inReplyTo, references 
 
 	// 3. Match by normalized subject
 	normalized := normalizeSubject(subject)
-	if normalized != subject && normalized != "" {
+	// A placeholder is not a subject: matching on it would merge unrelated
+	// messages that merely both lack one.
+	if normalized != subject && normalized != "" && normalized != noSubject {
 		threads, err := app.FindRecordsByFilter(
 			"mail_threads",
 			"mailbox = {:mailbox} && subject = {:subject}",
@@ -606,19 +608,33 @@ func setThreadStarred(app core.App, threadID, userID string, isStarred bool) err
 // mail_mailbox_aliases. When a match is via an alias, the alias record is
 // returned as the second value; for a primary-address match, alias is nil.
 // Addresses are compared case-insensitively.
-func resolveMailboxByAddress(app core.App, localPart, domainStr string) (*core.Record, *core.Record, error) {
-	normalizedLocal := strings.ToLower(strings.TrimSpace(localPart))
-	normalizedDomain := strings.ToLower(strings.TrimSpace(domainStr))
-
-	// First find the domain record
-	domains, err := app.FindRecordsByFilter(
+// findMailDomains looks a domain up with the normalization every address
+// lookup shares, so "Acme.COM " and "acme.com" are one domain.
+func findMailDomains(app core.App, domainStr string) ([]*core.Record, error) {
+	return app.FindRecordsByFilter(
 		"mail_domains",
 		"domain = {:domain}",
 		"",
 		1,
 		0,
-		map[string]any{"domain": normalizedDomain},
+		map[string]any{"domain": strings.ToLower(strings.TrimSpace(domainStr))},
 	)
+}
+
+// mailDomainHosted reports whether the domain is a row in mail_domains. A
+// failed lookup counts as hosted so a database error becomes the usual
+// mailbox refusal rather than a claim that this server does not host the
+// domain.
+func mailDomainHosted(app core.App, domainStr string) bool {
+	domains, err := findMailDomains(app, domainStr)
+	return err != nil || len(domains) > 0
+}
+
+func resolveMailboxByAddress(app core.App, localPart, domainStr string) (*core.Record, *core.Record, error) {
+	normalizedLocal := strings.ToLower(strings.TrimSpace(localPart))
+
+	// First find the domain record
+	domains, err := findMailDomains(app, domainStr)
 	if err != nil || len(domains) == 0 {
 		return nil, nil, fmt.Errorf("domain %s not found", domainStr)
 	}
