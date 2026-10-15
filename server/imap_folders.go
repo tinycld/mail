@@ -116,10 +116,16 @@ func folderToUserFilter(app core.App, imapName, userID string) (string, map[stri
 	return "id = ''", nil
 }
 
-// labelFolderFilter resolves a label name to a mail_thread_state id-membership
-// filter by joining through label_assignments. Matches both shared labels
+// labelFolderFilter resolves a label name to a mail_thread_state filter that
+// keeps the rows the user assigned that label to. Matches both shared labels
 // (user = "") and the user's personal labels. Returns an impossible filter
-// if the label doesn't exist or has no assignments.
+// if the label does not exist.
+//
+// The join is one @collection alias, so its size does not grow with the
+// label: a filter with one clause per assigned thread passed PocketBase's
+// 200-expression limit and failed every folder with more threads than that.
+// All four conditions share the alias `la`, so they test the same assignment
+// row.
 func labelFolderFilter(app core.App, labelName, userID string) (string, map[string]any) {
 	labels, err := app.FindRecordsByFilter(
 		"labels",
@@ -133,31 +139,12 @@ func labelFolderFilter(app core.App, labelName, userID string) (string, map[stri
 		return "id = ''", nil
 	}
 
-	assignments, err := app.FindRecordsByFilter(
-		"label_assignments",
-		`label = {:label} && collection = "mail_thread_state" && user = {:user}`,
-		"",
-		0,
-		0,
-		map[string]any{"label": labels[0].Id, "user": userID},
-	)
-	if err != nil || len(assignments) == 0 {
-		return "id = ''", nil
-	}
-
-	ids := make([]string, 0, len(assignments))
-	for _, a := range assignments {
-		ids = append(ids, a.GetString("record_id"))
-	}
-	// Emit `id ~ {:i0} || id ~ {:i1} ...` to match the set of thread_state ids.
-	params := map[string]any{"user": userID}
-	var clauses []string
-	for i, id := range ids {
-		key := fmt.Sprintf("tid%d", i)
-		clauses = append(clauses, fmt.Sprintf("id = {:%s}", key))
-		params[key] = id
-	}
-	return "user = {:user} && (" + strings.Join(clauses, " || ") + ")", params
+	return `user = {:user}` +
+			` && @collection.label_assignments:la.record_id ?= id` +
+			` && @collection.label_assignments:la.label ?= {:label}` +
+			` && @collection.label_assignments:la.collection ?= "mail_thread_state"` +
+			` && @collection.label_assignments:la.user ?= {:user}`,
+		map[string]any{"user": userID, "label": labels[0].Id}
 }
 
 // extractLabelName returns the label name from a "Labels/<name>" folder path,
