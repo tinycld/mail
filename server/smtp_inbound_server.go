@@ -220,6 +220,15 @@ func (s *smtpInboundSession) Mail(from string, _ *smtp.MailOptions) error {
 	return nil
 }
 
+// errMXRelayDenied refuses a recipient on a domain this server does not host.
+// The MX is only for inbound mail; a mail app that reaches it by mistake
+// (Apple Mail tries port 25 first) shows this text, so it says how to send.
+var errMXRelayDenied = &smtp.SMTPError{
+	Code:         550,
+	EnhancedCode: smtp.EnhancedCode{5, 7, 1},
+	Message:      "Relaying denied. To send mail, log in on port 465.",
+}
+
 // Rcpt resolves each recipient to a local mailbox. Unknown recipients get
 // 550 5.1.1 so the sending MTA generates a clean bounce instead of
 // silently accepting and discarding. Plus-tags are stripped (support+tag@
@@ -234,6 +243,9 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 		}
 	}
 	localPart = stripPlusTag(localPart)
+	if !mailDomainHosted(s.app, domain) {
+		return errMXRelayDenied
+	}
 	mailbox, _, err := resolveMailboxByAddress(s.app, localPart, domain)
 	if err != nil {
 		return &smtp.SMTPError{

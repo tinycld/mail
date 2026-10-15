@@ -67,6 +67,30 @@ func TestSMTPInboundSession_RejectsUnknownRecipient(t *testing.T) {
 	if smtpErr.Code != 550 {
 		t.Errorf("expected 550, got %d", smtpErr.Code)
 	}
+	if smtpErr.EnhancedCode != (smtp.EnhancedCode{5, 1, 1}) || smtpErr.Message != "No such mailbox" {
+		t.Errorf("a hosted domain with no such mailbox keeps 5.1.1, got %v", smtpErr)
+	}
+}
+
+// A mail app that reaches the MX by mistake (it tries port 25 first) shows
+// this text, so a domain we do not host says how to send instead.
+func TestSMTPInboundSession_RefusesUnhostedDomainAsRelay(t *testing.T) {
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_smtp_in_003")
+
+	sess := &smtpInboundSession{app: app, hostname: "mx.tinycld.test"}
+	if err := sess.Mail("sender@external.example", &smtp.MailOptions{}); err != nil {
+		t.Fatalf("Mail: %v", err)
+	}
+	err := sess.Rcpt("someone@Elsewhere.example", &smtp.RcptOptions{})
+	var smtpErr *smtp.SMTPError
+	if !errors.As(err, &smtpErr) {
+		t.Fatalf("expected *smtp.SMTPError, got %T: %v", err, err)
+	}
+	if smtpErr.Code != 550 || smtpErr.EnhancedCode != (smtp.EnhancedCode{5, 7, 1}) ||
+		smtpErr.Message != "Relaying denied. To send mail, log in on port 465." {
+		t.Errorf("unhosted domain must be refused as relaying, got %v", smtpErr)
+	}
 }
 
 // AUTH must not be advertised — this listener is the MX endpoint for other
