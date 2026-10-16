@@ -267,8 +267,7 @@ func registerRuleAddressHooks(app core.App) {
 	app.OnRecordAfterUpdateSuccess("mail_domains").BindFunc(func(e *core.RecordEvent) error {
 		original := e.Record.Original()
 		becameVerified := !original.GetBool("verified") && e.Record.GetBool("verified")
-		if becameVerified || original.GetString("coverage") != e.Record.GetString("coverage") ||
-			!slices.Equal(original.GetStringSlice("coverage_groups"), e.Record.GetStringSlice("coverage_groups")) {
+		if becameVerified || coverageRuleChanged(e.Record) {
 			domainChanged(e, becameVerified)
 		}
 		return e.Next()
@@ -282,9 +281,14 @@ func registerRuleAddressHooks(app core.App) {
 		}
 		return e.Next()
 	})
+	// An update is checked only when it changes the rule. A groups domain
+	// whose last group was deleted has no group, and a save of any other
+	// field (a reorder sets rank on every domain) must still go through.
 	app.OnRecordUpdateRequest("mail_domains").BindFunc(func(e *core.RecordRequestEvent) error {
-		if err := checkCoverageGroups(e.Record); err != nil {
-			return err
+		if coverageRuleChanged(e.Record) {
+			if err := checkCoverageGroups(e.Record); err != nil {
+				return err
+			}
 		}
 		return e.Next()
 	})
@@ -315,6 +319,14 @@ func registerRuleAddressHooks(app core.App) {
 		}
 		return e.Next()
 	})
+}
+
+// coverageRuleChanged reports whether a domain save changes who gets an
+// address on it: its coverage or its group list.
+func coverageRuleChanged(domain *core.Record) bool {
+	original := domain.Original()
+	return original.GetString("coverage") != domain.GetString("coverage") ||
+		!slices.Equal(original.GetStringSlice("coverage_groups"), domain.GetStringSlice("coverage_groups"))
 }
 
 // reconcileInboxOwner reconciles the rule addresses of the person whose

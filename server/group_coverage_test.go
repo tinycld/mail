@@ -404,19 +404,24 @@ func TestGroupMembership_LastGroupDeleted(t *testing.T) {
 
 // Offboarding removes the leaver from every group inside its transaction, so
 // the leave events arrive after the identity is retired and the inbox is
-// gone. The listener must make nothing and return no error. A recorder bound
-// after it sees an event only when the mail listener returned nil, because
-// the first error stops the chain.
+// gone. The listener must make nothing and return no error. Core logs a
+// listener's error and goes on, so the test binds the listener through a
+// recorder that keeps each event and what the listener returned.
 func TestGroupMembership_OffboardCreatesNothing(t *testing.T) {
 	app := newRegisteredMailApp(t)
 	groups.ResetForTesting()
 	t.Cleanup(groups.ResetForTesting)
 	groups.Register(&pocketbase.PocketBase{App: app})
-	bindGroupMembershipListener(app)
+	listener := membershipListener(app)
 	var passed []groups.MembershipEvent
 	groups.OnMembershipChange(func(e groups.MembershipEvent) error {
-		passed = append(passed, e)
-		return nil
+		err := listener(e)
+		if err != nil {
+			t.Errorf("mail listener for %+v: %v", e, err)
+		} else {
+			passed = append(passed, e)
+		}
+		return err
 	})
 
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
@@ -480,4 +485,74 @@ func TestGroupCoverage_APICreateClearsViaGroup(t *testing.T) {
 		}
 	}
 	scenario.Test(t)
+}
+
+// runGroupsDomainPatch PATCHes a groups domain as an admin. The domain's one
+// group is deleted first when dropGroup is true, as an admin does in the
+// groups settings, which leaves coverage=groups with no group.
+func runGroupsDomainPatch(t *testing.T, body string, dropGroup bool, status int, expect []string) {
+	t.Helper()
+	var seed *ruleAPISeed
+	scenario := tests.ApiScenario{
+		Name:            "PATCH groups domain " + body,
+		Method:          http.MethodPatch,
+		Body:            strings.NewReader(body),
+		ExpectedStatus:  status,
+		ExpectedContent: expect,
+		Headers:         map[string]string{"Content-Type": "application/json"},
+	}
+	scenario.TestAppFactory = func(_ testing.TB) *tests.TestApp {
+		app := newRuleTestApp(t)
+		seed = seedRuleAPI(t, app)
+		sales := seedGroup(t, app, "Sales", seed.sam)
+		q := saveGroupsDomain(t, app, "q.example", sales)
+		if dropGroup {
+			if err := app.Delete(reloaded(t, app, sales)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		scenario.URL = "/api/collections/mail_domains/records/" + q.Id
+		return app
+	}
+	scenario.BeforeTestFunc = func(_ testing.TB, _ *tests.TestApp, _ *core.ServeEvent) {
+		scenario.Headers["Authorization"] = authTokenFor(t, seed.admin)
+	}
+	scenario.Test(t)
+}
+
+// A groups domain whose last group was deleted must still save when the
+// group list does not change, or reordering the domain list fails for all.
+func TestGroupCoverage_NoGroupLeftStillSavesOtherFields(t *testing.T) {
+	runGroupsDomainPatch(t, `{"rank":7}`, true, http.StatusOK, []string{`"rank":7`})
+}
+
+func TestGroupCoverage_ClearingTheGroupsIsRefused(t *testing.T) {
+	runGroupsDomainPatch(t, `{"coverage_groups":[]}`, false, http.StatusBadRequest,
+		[]string{`"coverage_groups":{"code":"coverage_groups_required"`})
+}
+
+// A leave from one of two covering groups reaches the reconciler through the
+// listener alone, and the row moves to the other group in place.
+func TestGroupMembership_LeaveOneOfTwoGroupsKeepsTheRow(t *testing.T) {
+	app := newMembershipTestApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	ann := seedGroupUser(t, app, "ann")
+	sales := seedGroup(t, app, "Sales", ann)
+	support := seedGroup(t, app, "Support", ann)
+	q := saveGroupsDomain(t, app, "q.example", sales, support)
+	before := ruleRow(t, app, "ann", q.Id)
+	if before == nil || before.GetString("via_group") != sales.Id {
+		t.Fatalf("ann@q.example = %v, want via_group sales", before)
+	}
+
+	if err := app.Delete(membershipOf(t, app, sales, ann)); err != nil {
+		t.Fatal(err)
+	}
+	after := ruleRow(t, app, "ann", q.Id)
+	if after == nil || after.GetString("via_group") != support.Id {
+		t.Fatalf("ann@q.example after leaving sales = %v, want via_group support", after)
+	}
+	if after.Id != before.Id {
+		t.Fatalf("the rule row was made again (id %s, was %s); the move must keep the row", after.Id, before.Id)
+	}
 }

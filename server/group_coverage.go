@@ -91,10 +91,15 @@ func registerGroupMembershipListener(app core.App) {
 }
 
 // bindGroupMembershipListener adds the listener with no once-guard, for a
-// test that has cleared core's registry with groups.ResetForTesting. The
-// reconcile error goes back to core, which logs it.
+// test that has cleared core's registry with groups.ResetForTesting.
 func bindGroupMembershipListener(app core.App) {
-	groups.OnMembershipChange(func(e groups.MembershipEvent) error {
+	groups.OnMembershipChange(membershipListener(app))
+}
+
+// membershipListener reconciles the rule addresses of the person who joined
+// or left. The reconcile error goes back to core, which logs it.
+func membershipListener(app core.App) func(groups.MembershipEvent) error {
+	return func(e groups.MembershipEvent) error {
 		return reconcileRuleAddresses(app, ruleScope{UserID: e.UserID})
-	})
+	}
 }
