@@ -79,7 +79,7 @@ set realname = "Your Name"
 When your SMTP client submits a message, TinyCld validates the `From:` header is one you actually have access to. Specifically, the address must be:
 
 - The primary address of a mailbox you're a member of, OR
-- An [alias](help://mail:mailboxes) of a mailbox you're a member of.
+- One of the other [addresses](help://mail:mailboxes) of a mailbox you're a member of.
 
 If you try to send from an address you don't own, the SMTP server rejects with `550 You don't own this address`.
 

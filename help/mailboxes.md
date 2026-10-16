@@ -7,7 +7,7 @@ order: 20
 
 ## Personal mailboxes
 
-When your account is created on a server that has Mail installed, a personal mailbox is created automatically. The address is derived from your **username**; you can rename it from **Settings → Mailboxes**. You're the **owner** of your personal mailbox and you're the only member — nobody else on the server can read it.
+When your account is created on a server that has Mail installed, a personal mailbox is created automatically. The address is derived from your **username**; you can rename it from **Settings → Mail → Mailboxes**. You're the **owner** of your personal mailbox and you're the only member — nobody else on the server can read it.
 
 If your account is deleted, your personal mailbox and all its messages are deleted. This also applies if you shared the mailbox with other people: they lose access to it. Its messages do not go to the person who takes over your content.
 
@@ -15,7 +15,7 @@ If your account is deleted, your personal mailbox and all its messages are delet
 
 A shared mailbox is for an address that multiple people work out of — `support@`, `sales@`, `team@`. To create one:
 
-1. Open **Settings → Mailboxes**.
+1. Open **Settings → Mail → Mailboxes**.
 2. Click **+ New mailbox**.
 3. Pick **Shared** as the type and fill in the local part of the address, display name, and domain.
 4. Click **Save**.

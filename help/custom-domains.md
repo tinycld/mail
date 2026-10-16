@@ -62,14 +62,14 @@ Mail also re-verifies any not-yet-fully-verified domain automatically once per h
 
 Each domain has a setting **Who gets an address here?**:
 
-- **Everyone** — each person gets their email name on this domain. For example, if Nathan's email name is `nathan`, Nathan gets `nathan@` this domain. People who join later get it too.
+- **Everyone** — each person gets their email name on this domain. For example, if Nathan's email name is `nathan`, Nathan gets `nathan@` on this domain. People who join later get it too.
 - **Only people I add** — nobody gets an address automatically. Add addresses to a mailbox in **Settings → Mail → Mailboxes**.
 
 The first domain you add is set to **Everyone**. Each domain you add after that starts as **Only people I add**, so adding a domain never gives out addresses until you choose to.
 
 Before a change is applied, TinyCld shows which addresses it adds or which addresses stop receiving mail. To apply it, click **Apply**.
 
-The setting, not the verification, decides which addresses exist. If a domain fails verification for a short time, its addresses stay. You cannot send from an unverified domain until it is verified. The **From** list marks such addresses **domain not verified**.
+The setting, not the verification, decides which addresses exist. If a domain loses verification, its addresses stay. The domain cannot send mail until it is verified again. The **From** list marks such addresses **domain not verified**.
 
 ## The order of domains
 
@@ -78,7 +78,7 @@ Drag the domains to set their order. The first verified domain in the order is t
 ## What "fully verified" enables
 
 - **Send** — outbound from any address on this domain works.
-- **Receive** — inbound mail to any address on this domain delivered to a matching [mailbox or alias](help://mail:mailboxes) appears in that mailbox's Inbox.
+- **Receive** — inbound mail to an [address](help://mail:mailboxes) on this domain appears in the Inbox of the mailbox that has the address.
 - **Bounce tracking** — delivery callbacks update each sent message's status. A delivered message shows "Delivered" and keeps `delivery_status` "sent". A failed message gets `delivery_status` "bounced" or "spam_complaint". See [Delivery tracking](help://mail:delivery-tracking).
 
 ## Inbound routing
@@ -116,7 +116,8 @@ Removing a domain also does these things:
 
 - It releases the domain at your email provider.
 - If the service manages DNS for the domain, it removes the domain's DNS records.
-- It deletes every mailbox and alias on the domain, and all their mail.
+- It deletes every address on the domain.
+- It deletes every mailbox whose main address is on the domain, and all their mail.
 
 You cannot undo this. Make sure that no one uses the addresses before you remove the domain. If you manage the DNS records yourself, remove them at your DNS provider.
 
