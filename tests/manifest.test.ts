@@ -57,12 +57,24 @@ describe('mail manifest', () => {
         }
     })
 
-    it("contributes the removal notice to core's group-member-removal slot", () => {
+    it("contributes the removal notice and the Email panels to core's slots", () => {
         expect(manifest.sidebarContributions).toEqual([
             {
                 target: 'core',
                 slot: 'group-member-removal',
                 component: 'settings/GroupRemovalNotice',
+            },
+            {
+                target: 'core',
+                slot: 'member-drawer',
+                component: 'settings/MemberEmailPanel',
+                label: 'Email',
+            },
+            {
+                target: 'core',
+                slot: 'group-drawer',
+                component: 'settings/GroupEmailPanel',
+                label: 'Email',
             },
         ])
     })

@@ -11,6 +11,18 @@ const manifest = {
     // group: names the addresses the person or the members lose.
     sidebarContributions: [
         { target: 'core', slot: 'group-member-removal', component: 'settings/GroupRemovalNotice' },
+        {
+            target: 'core',
+            slot: 'member-drawer',
+            component: 'settings/MemberEmailPanel',
+            label: 'Email',
+        },
+        {
+            target: 'core',
+            slot: 'group-drawer',
+            component: 'settings/GroupEmailPanel',
+            label: 'Email',
+        },
     ],
     setupSteps: [
         {
