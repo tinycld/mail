@@ -2,7 +2,13 @@ import { eq } from '@tanstack/db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { useMemo } from 'react'
-import { countsKeyForFolder } from '../lib/thread-list-query'
+import { addressViewId, countsKeyForFolder } from '../lib/thread-list-query'
+
+/** One address's numbers in the personal inbox. */
+export interface AddressCount {
+    unread: number
+    total: number
+}
 
 export interface FolderCounts {
     /** Unread threads in the inbox: the sidebar badge. */
@@ -17,6 +23,8 @@ export interface FolderCounts {
     spam: number
     /** All Mail. */
     total: number
+    /** The personal inbox's threads per address id; empty for a shared inbox. */
+    inboxByAddress: Record<string, AddressCount>
 }
 
 export const EMPTY_COUNTS: FolderCounts = {
@@ -29,6 +37,7 @@ export const EMPTY_COUNTS: FolderCounts = {
     trash: 0,
     spam: 0,
     total: 0,
+    inboxByAddress: {},
 }
 
 /**
@@ -59,10 +68,18 @@ export function useMailboxFolderCounts(): Map<string, FolderCounts> {
                 trash: r.trash,
                 spam: r.spam,
                 total: r.total,
+                inboxByAddress: r.inbox_by_address ?? {},
             })
         }
         return map
     }, [rows])
+}
+
+// An address view's total sits in inboxByAddress under the address id.
+function rowTotal(row: FolderCounts, folder: string | null): number {
+    const key = countsKeyForFolder(folder)
+    if (key !== 'inboxByAddress') return row[key]
+    return row.inboxByAddress[addressViewId(folder) ?? '']?.total ?? 0
 }
 
 /** The folder's thread total across the given mailboxes. */
@@ -71,8 +88,10 @@ export function folderTotal(
     mailboxIds: string[],
     folder: string | null
 ): number {
-    const key = countsKeyForFolder(folder)
     let sum = 0
-    for (const id of mailboxIds) sum += counts.get(id)?.[key] ?? 0
+    for (const id of mailboxIds) {
+        const row = counts.get(id)
+        if (row) sum += rowTotal(row, folder)
+    }
     return sum
 }

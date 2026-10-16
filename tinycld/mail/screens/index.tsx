@@ -11,7 +11,17 @@ import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Archive, Inbox, Send, Star, Tag, Trash2, TriangleAlert, X } from 'lucide-react-native'
+import {
+    Archive,
+    AtSign,
+    Inbox,
+    Send,
+    Star,
+    Tag,
+    Trash2,
+    TriangleAlert,
+    X,
+} from 'lucide-react-native'
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { Pressable, RefreshControl, Text, View } from 'react-native'
 import { ComposeFAB } from '../components/ComposeFAB'
@@ -19,6 +29,7 @@ import { EmailListToolbar } from '../components/EmailListToolbar'
 import { EmailRow } from '../components/EmailRow'
 import type { ThreadListItem } from '../components/thread-list-item'
 import { prettifyFolderKey } from '../hooks/mailListHelpers'
+import { type AddressView, useAddressViews } from '../hooks/useAddressViews'
 import { useCompose } from '../hooks/useComposeState'
 import { useMailBulkActions } from '../hooks/useMailBulkActions'
 import { useMailboxes } from '../hooks/useMailboxes'
@@ -28,7 +39,7 @@ import { useMailSelection } from '../hooks/useMailSelection'
 import { useMailSearchState } from '../hooks/useSearchState'
 import { useSearchThreadItems } from '../hooks/useSearchThreadItems'
 import { PAGE_SIZE, UNIFIED_INBOX, useThreadListItems } from '../hooks/useThreadListItems'
-import { decodeCursors, encodeCursors, hasNextPage } from '../lib/thread-list-query'
+import { addressViewId, decodeCursors, encodeCursors, hasNextPage } from '../lib/thread-list-query'
 
 function useQueryParams() {
     const { folder, label, mailbox, cursor } = useLocalSearchParams<{
@@ -73,6 +84,21 @@ const FOLDER_ICONS: Record<string, typeof Inbox> = {
     'all-inboxes': Inbox,
 }
 
+function folderIcon(folder: string | null) {
+    if (!folder) return Tag
+    if (addressViewId(folder)) return AtSign
+    return FOLDER_ICONS[folder] ?? Tag
+}
+
+// An address view is titled by its address. A view that is no longer in the
+// list (the switch went off, or the address was hidden) still filters by its
+// id, so it keeps a plain title.
+function folderTitleFor(folderKey: string, views: AddressView[]) {
+    const addressId = addressViewId(folderKey)
+    if (!addressId) return prettifyFolderKey(folderKey)
+    return views.find(view => view.id === addressId)?.email ?? 'Address'
+}
+
 function LabelChip({
     label,
     onDismiss,
@@ -108,11 +134,13 @@ function LabelChip({
 function ActiveViewBanner({
     isVisible,
     folder,
+    folderTitle,
     labels,
     onDismissLabel,
 }: {
     isVisible: boolean
     folder: string | null
+    folderTitle: string
     labels: { id: string; name: string; color: string }[]
     onDismissLabel: (labelId: string) => void
 }) {
@@ -138,9 +166,7 @@ function ActiveViewBanner({
         )
     }
 
-    const folderKey = folder ?? ''
-    const displayName = prettifyFolderKey(folderKey)
-    const FolderIcon = folder ? (FOLDER_ICONS[folder] ?? Tag) : Tag
+    const FolderIcon = folderIcon(folder)
 
     return (
         <View className="flex-row px-4 py-2 items-center gap-2">
@@ -154,7 +180,7 @@ function ActiveViewBanner({
             >
                 <FolderIcon size={14} color={accentColor} />
                 <Text className="text-primary" style={{ fontSize: 13, fontWeight: '600' }}>
-                    {displayName}
+                    {folderTitle}
                 </Text>
                 <Pressable onPress={() => router.replace(orgHref('mail'))} hitSlop={8}>
                     <X size={14} color={accentColor} />
@@ -194,6 +220,7 @@ function helpTopicForView(
 ): HelpTopicId {
     if (isSearchActive) return 'mail:search'
     if (labelCount > 0) return 'mail:labels'
+    if (addressViewId(folder)) return 'mail:addresses'
     if (folder === null || folder === 'inbox' || folder === 'all-inboxes')
         return 'mail:reading-threads'
     return 'mail:folders'
@@ -347,6 +374,7 @@ export default function MailListScreen() {
     )
 
     const searchItems = useSearchThreadItems(search.results)
+    const addressViews = useAddressViews()
 
     const activeLabels = useMemo(
         () =>
@@ -360,7 +388,7 @@ export default function MailListScreen() {
     const folderTitle =
         activeLabels.length > 0
             ? activeLabels.map(l => l.name).join(', ')
-            : prettifyFolderKey(folderKey)
+            : folderTitleFor(folderKey, addressViews)
 
     const tabLeaf = search.isActive ? 'Search' : folderTitle
     const isMobile = breakpoint === 'mobile'
@@ -496,6 +524,7 @@ export default function MailListScreen() {
             <ActiveViewBanner
                 isVisible={showActiveViewBanner}
                 folder={folder}
+                folderTitle={folderTitle}
                 labels={activeLabels}
                 onDismissLabel={dismissLabel}
             />

@@ -86,7 +86,12 @@ export function registerCollections(
     const mail_identities = newCollection('mail_identities', {
         ...onDemand,
         omitOnInsert: ['created', 'updated'] as const,
-        relations: { user: coreStores.users, inbox: mail_mailboxes, default_from: mail_addresses },
+        relations: {
+            user: coreStores.users,
+            inbox: mail_mailboxes,
+            default_from: mail_addresses,
+            hidden_address_views: mail_addresses,
+        },
         collectionOptions: indexing,
     })
 

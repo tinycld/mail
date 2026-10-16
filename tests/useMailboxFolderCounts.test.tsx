@@ -27,6 +27,7 @@ const h = vi.hoisted(() => ({
             trash: 0,
             spam: 1,
             total: 20,
+            inbox_by_address: { a1: { unread: 2, total: 6 }, a2: { unread: 1, total: 4 } },
         },
         {
             id: 'u1mb2',
@@ -41,6 +42,7 @@ const h = vi.hoisted(() => ({
             trash: 2,
             spam: 0,
             total: 7,
+            inbox_by_address: null,
         },
         {
             id: 'u2mb3',
@@ -89,7 +91,7 @@ test('the shipped migration declares exactly the number columns the hook reads',
     const upSection = src.slice(0, src.indexOf('app => {', src.indexOf('INSERT INTO')))
     const columns = [...upSection.matchAll(/number\('mail_fc_\w+', '(\w+)'\)/g)].map(m => m[1])
     const fixtureNumbers = Object.keys(h.rows[0]).filter(
-        k => !['id', 'user', 'mailbox'].includes(k)
+        k => !['id', 'user', 'mailbox', 'inbox_by_address'].includes(k)
     )
     expect(columns.sort()).toEqual(fixtureNumbers.sort())
 })
@@ -107,7 +109,9 @@ test('returns only the signed-in user’s rows, keyed by mailbox', async () => {
         trash: 0,
         spam: 1,
         total: 20,
+        inboxByAddress: { a1: { unread: 2, total: 6 }, a2: { unread: 1, total: 4 } },
     })
+    expect(result.current.get('mb2')?.inboxByAddress).toEqual({})
     expect(result.current.has('mb3')).toBe(false)
 })
 
@@ -119,5 +123,8 @@ test('folderTotal sums the folder column across the given mailboxes', async () =
     expect(folderTotal(result.current, ['mb1', 'mb2'], 'all')).toBe(27)
     expect(folderTotal(result.current, ['mb2'], 'trash')).toBe(2)
     expect(folderTotal(result.current, ['missing'], 'inbox')).toBe(0)
+    expect(folderTotal(result.current, ['mb1'], 'address:a1')).toBe(6)
+    expect(folderTotal(result.current, ['mb1', 'mb2'], 'address:a2')).toBe(4)
+    expect(folderTotal(result.current, ['mb1'], 'address:gone')).toBe(0)
     expect(EMPTY_COUNTS.total).toBe(0)
 })

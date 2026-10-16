@@ -469,3 +469,38 @@ func TestIdentityEdit_RenameRefusedByAnotherIdentityName(t *testing.T) {
 		},
 	})
 }
+
+func TestIdentityEdit_SelfSetsAddressViews(t *testing.T) {
+	runIdentityEdit(t, identityEditCase{
+		name: "self address views", actor: asAnn, status: http.StatusOK, content: `"address_views":true`,
+		prepare: addAnnManual,
+		body: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) string {
+			return `{"address_views":true,"hidden_address_views":["` + s.manualID(t, app) + `"]}`
+		},
+		after: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
+			identity := mustRecord(t, app, "mail_identities", s.annID.Id)
+			if !identity.GetBool("address_views") {
+				t.Fatal("address_views = false, want true")
+			}
+			hidden := identity.GetStringSlice("hidden_address_views")
+			if len(hidden) != 1 || hidden[0] != s.manualID(t, app) {
+				t.Fatalf("hidden_address_views = %v, want [%s]", hidden, s.manualID(t, app))
+			}
+		},
+	})
+}
+
+func TestIdentityEdit_HiddenMustBeOwnAddress(t *testing.T) {
+	runIdentityEdit(t, identityEditCase{
+		name: "foreign hidden address", actor: asAnn, status: http.StatusBadRequest, content: `"hidden_address_views"`,
+		body: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) string {
+			return `{"hidden_address_views":["` + addressRowID(t, app, "team", s.domain) + `"]}`
+		},
+		after: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
+			hidden := mustRecord(t, app, "mail_identities", s.annID.Id).GetStringSlice("hidden_address_views")
+			if len(hidden) != 0 {
+				t.Fatalf("hidden_address_views = %v, want none", hidden)
+			}
+		},
+	})
+}

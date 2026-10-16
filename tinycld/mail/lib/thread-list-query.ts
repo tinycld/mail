@@ -1,4 +1,4 @@
-import { and, eq, type IR, inArray, lt, not, or, type Ref } from '@tanstack/db'
+import { and, eq, type IR, inArray, like, lt, not, or, type Ref } from '@tanstack/db'
 import type { FolderCounts } from '../hooks/useMailboxFolderCounts'
 import type { MailThreadState } from '../types'
 
@@ -19,9 +19,14 @@ type Term = IR.BasicExpression<boolean>
 //   sent     — is_sent, outside trash and spam (a reply flags its thread sent
 //              and leaves it where it was)
 //   all      — every row for the user in scope
+//   address:<id> — folder = 'inbox' and the thread used the address
+//              (address_keys holds space-separated 15-character ids, so a
+//              substring match is a whole id)
 //   <other>  — folder = <name>
 export function folderTerms(s: StateRef, folder: string | null): Term[] {
     const key = folder ?? 'inbox'
+    const addressId = addressViewId(key)
+    if (addressId) return [eq(s.folder, 'inbox'), like(s.address_keys, `%${addressId}%`)]
     if (key === 'starred') return [eq(s.is_starred, true)]
     if (key === 'sent') return [and(eq(s.is_sent, true), not(inArray(s.folder, ['trash', 'spam'])))]
     if (key === 'all') return []
@@ -76,8 +81,23 @@ export function decodeCursors(raw: string | undefined): ThreadCursor[] {
     return out
 }
 
-// Which counts column is the page indicator's total for a folder view.
+const ADDRESS_VIEW_PREFIX = 'address:'
+
+/** The folder key of the personal inbox's view of one address. */
+export function addressViewFolder(addressId: string): string {
+    return `${ADDRESS_VIEW_PREFIX}${addressId}`
+}
+
+/** The address id of an `address:<id>` folder key, or null for any other folder. */
+export function addressViewId(folder: string | null): string | null {
+    if (!folder?.startsWith(ADDRESS_VIEW_PREFIX)) return null
+    return folder.slice(ADDRESS_VIEW_PREFIX.length) || null
+}
+
+// Which counts column is the page indicator's total for a folder view. An
+// address view's total is inside inboxByAddress, keyed by the address id.
 export function countsKeyForFolder(folder: string | null): keyof FolderCounts {
+    if (addressViewId(folder)) return 'inboxByAddress'
     switch (folder ?? 'inbox') {
         case 'inbox':
         case 'all-inboxes':

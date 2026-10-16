@@ -73,7 +73,11 @@ export interface MailMessages
     attachment_thumbnail_map: Record<string, string> | null
 }
 
-export type MailFolderCounts = GenMailFolderCounts
+// inbox_by_address: per address id, the personal inbox's unread and total
+// threads (server/folder_counts.go). Null on a row written before the column.
+export interface MailFolderCounts extends Omit<GenMailFolderCounts, 'inbox_by_address'> {
+    inbox_by_address: Record<string, { unread: number; total: number }> | null
+}
 
 export type MailSchema = {
     mail_domains: {
@@ -116,6 +120,7 @@ export type MailSchema = {
             user: Users
             inbox: MailMailboxes
             default_from: MailAddresses
+            hidden_address_views: MailAddresses
         }
     }
     mail_threads: {

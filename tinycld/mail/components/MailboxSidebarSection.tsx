@@ -3,6 +3,7 @@ import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import {
     AlertTriangle,
     Archive,
+    AtSign,
     ChevronDown,
     ChevronRight,
     File,
@@ -13,12 +14,49 @@ import {
     Trash2,
 } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
+import { useAddressViews } from '../hooks/useAddressViews'
 import type { FolderCounts } from '../hooks/useMailboxFolderCounts'
+import { addressViewFolder } from '../lib/thread-list-query'
 import { useMailSidebarStore } from '../stores/sidebar-store'
+
+interface AddressViewItemsProps {
+    isVisible: boolean
+    mailboxId: string
+    isActive: (folder: string) => boolean
+    onNavigate: (mailboxId: string, folder: string) => void
+}
+
+function AddressViewList({ mailboxId, isActive, onNavigate }: AddressViewItemsProps) {
+    const views = useAddressViews()
+    const items = views.map(view => {
+        const folder = addressViewFolder(view.id)
+        return (
+            <SidebarItem
+                key={view.id}
+                testID={`address-view-${view.email}`}
+                label={view.email}
+                icon={AtSign}
+                badge={view.unread || undefined}
+                isActive={isActive(folder)}
+                closesDrawer
+                onPress={() => onNavigate(mailboxId, folder)}
+            />
+        )
+    })
+    return <View className="pl-4">{items}</View>
+}
+
+/** A folder for each address of the personal inbox, under its Inbox item. */
+function AddressViewItems(props: AddressViewItemsProps) {
+    if (!props.isVisible) return null
+    return <AddressViewList {...props} />
+}
 
 interface Props {
     mailboxId: string
     mailboxLabel: string
+    /** The personal inbox, the only one with address views. */
+    isPersonal?: boolean
     defaultExpanded: boolean
     counts: FolderCounts
     activeMailboxId: string
@@ -29,6 +67,7 @@ interface Props {
 export function MailboxSidebarSection({
     mailboxId,
     mailboxLabel,
+    isPersonal = false,
     defaultExpanded,
     counts,
     activeMailboxId,
@@ -81,6 +120,12 @@ export function MailboxSidebarSection({
                         isActive={isActive('inbox')}
                         closesDrawer
                         onPress={() => onNavigate(mailboxId, 'inbox')}
+                    />
+                    <AddressViewItems
+                        isVisible={isPersonal}
+                        mailboxId={mailboxId}
+                        isActive={isActive}
+                        onNavigate={onNavigate}
                     />
                     <SidebarItem
                         label="Starred"
