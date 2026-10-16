@@ -1,6 +1,6 @@
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useState } from 'react'
-import { Modal, Pressable, Text, View } from 'react-native'
+import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native'
 import type { SendableIdentity } from '../hooks/groupSendableIdentities'
 
 interface Props {
@@ -14,6 +14,10 @@ export function FromIdentityPicker({ identities, selectedAddressId, onSelect }: 
     const primaryColor = useThemeColor('primary')
     const surfaceBg = useThemeColor('surface-secondary')
     const backdropColor = useThemeColor('overlay-backdrop')
+    // Many mailboxes or addresses must scroll inside the panel, not run off
+    // the screen.
+    const { height } = useWindowDimensions()
+    const listMaxHeight = Math.min(480, height * 0.7)
 
     const choose = (mailboxId: string, addressId: string) => {
         onSelect(mailboxId, addressId)
@@ -37,17 +41,22 @@ export function FromIdentityPicker({ identities, selectedAddressId, onSelect }: 
                     onPress={() => setIsOpen(false)}
                 >
                     <View
-                        className="rounded-xl p-3 gap-3"
+                        className="rounded-xl p-3"
                         style={{ backgroundColor: surfaceBg, minWidth: 320 }}
                     >
-                        {identities.map(identity => (
-                            <IdentityGroup
-                                key={identity.mailboxId}
-                                identity={identity}
-                                selectedAddressId={selectedAddressId}
-                                onChoose={choose}
-                            />
-                        ))}
+                        <ScrollView
+                            style={{ maxHeight: listMaxHeight }}
+                            contentContainerClassName="gap-3"
+                        >
+                            {identities.map(identity => (
+                                <IdentityGroup
+                                    key={identity.mailboxId}
+                                    identity={identity}
+                                    selectedAddressId={selectedAddressId}
+                                    onChoose={choose}
+                                />
+                            ))}
+                        </ScrollView>
                     </View>
                 </Pressable>
             </Modal>
