@@ -290,7 +290,7 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 		return nil, &sendError{kind: sendErrInternal, msg: "Failed to store message", err: err}
 	}
 
-	if err := updateThreadMetadata(app, thread, displayName, msg.SenderEmail, msg.TextBody, now); err != nil {
+	if err := updateThreadMetadata(app, thread.Id, displayName, msg.SenderEmail, msg.TextBody, now); err != nil {
 		return nil, &sendError{kind: sendErrInternal, msg: "Failed to update thread", err: err}
 	}
 

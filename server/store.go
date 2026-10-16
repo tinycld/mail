@@ -356,7 +356,17 @@ type storedMessage struct {
 }
 
 // updateThreadMetadata updates the thread's snippet, latest_date, message_count, and participants.
-func updateThreadMetadata(app core.App, thread *core.Record, senderName, senderEmail, snippet, date string) error {
+//
+// It loads its own copy of the thread. Callers load the thread before
+// storeMessage, and storeMessage and the message hooks save it after that
+// (address_keys, has_draft, has_attachments). A save of the caller's copy
+// would write those stale values back, and realtime broadcasts the saved
+// record as it is, so clients would get them even where the database did not.
+func updateThreadMetadata(app core.App, threadID, senderName, senderEmail, snippet, date string) error {
+	thread, err := app.FindRecordById("mail_threads", threadID)
+	if err != nil {
+		return fmt.Errorf("thread for metadata: %w", err)
+	}
 	count := thread.GetInt("message_count") + 1
 	thread.Set("message_count", count)
 	thread.Set("snippet", truncateSnippet(snippet, 200))
@@ -385,11 +395,6 @@ func updateThreadMetadata(app core.App, thread *core.Record, senderName, senderE
 		thread.Set("participants", string(pJSON))
 	}
 
-	// Callers load the thread before storeMessage, and storeMessage and the
-	// message hooks save it too (address_keys, has_draft, has_attachments).
-	// Writing only the fields set here keeps this stale copy from overwriting
-	// those saves.
-	thread.IgnoreUnchangedFields(true)
 	if err := app.Save(thread); err != nil {
 		return fmt.Errorf("failed to update thread: %w", err)
 	}

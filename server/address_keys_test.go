@@ -2,6 +2,7 @@ package mail
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -35,6 +36,7 @@ func setupAddressKeysEnv(t *testing.T) *addressKeysEnv {
 	registerAddressHooks(app)
 	registerThreadStateSyncHooks(app)
 	registerAddressKeysGuard(app)
+	registerThreadMarkerHooks(app)
 	q := saveRealRecord(t, app, "mail_domains", map[string]any{
 		"domain": "q.example", "verified": true,
 		"spf_verified": true, "dkim_verified": true, "return_path_verified": true,
@@ -375,4 +377,126 @@ func TestAddressKeys_ClientCannotWriteThread(t *testing.T) {
 		return env.app
 	}
 	create.Test(t)
+}
+
+// threadBroadcast is what the last mail_threads update carried. The realtime
+// broadcast sends that in-memory record as it is, so a stale copy saved last
+// would show clients stale markers and keys although the database is right.
+type threadBroadcast struct {
+	hasDraft, hasAttachments bool
+	addressKeys              string
+}
+
+func captureLastThreadUpdate(app core.App) map[string]threadBroadcast {
+	last := map[string]threadBroadcast{}
+	app.OnRecordAfterUpdateSuccess("mail_threads").BindFunc(func(e *core.RecordEvent) error {
+		last[e.Record.Id] = threadBroadcast{
+			hasDraft:       e.Record.GetBool("has_draft"),
+			hasAttachments: e.Record.GetBool("has_attachments"),
+			addressKeys:    e.Record.GetString("address_keys"),
+		}
+		return e.Next()
+	})
+	return last
+}
+
+func TestAddressKeys_SendBroadcastCarriesMarkersAndKeys(t *testing.T) {
+	env := setupAddressKeysEnv(t)
+	syscfg.SetResolver(func(key string) string {
+		if key == "mail.postmark_server_token" {
+			return "test-token"
+		}
+		return ""
+	})
+	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
+	last := captureLastThreadUpdate(env.app)
+
+	result, err := sendMessage(env.app, sendParams{
+		Ctx:           context.Background(),
+		UserID:        env.ann.Id,
+		MailboxID:     env.desk.Id,
+		FromAddressID: env.salesAddr.Id,
+		To:            []api.Recipient{{Email: "friend@example.net"}},
+		Subject:       "Report",
+		TextBody:      "attached",
+		Attachments: []Attachment{{
+			Name: "report.txt", ContentType: "text/plain", Content: base64.StdEncoding.EncodeToString([]byte("numbers")),
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, ok := last[result.ThreadID]
+	if !ok {
+		t.Fatal("the send never updated the thread")
+	}
+	if !got.hasAttachments {
+		t.Error("the last thread update carried has_attachments=false; clients would show no attachment marker")
+	}
+	if got.addressKeys != env.salesAddr.Id {
+		t.Errorf("the last thread update carried address_keys %q, want %q", got.addressKeys, env.salesAddr.Id)
+	}
+}
+
+func TestAddressKeys_NewDraftBroadcastCarriesMarkersAndKeys(t *testing.T) {
+	env := setupAddressKeysEnv(t)
+	last := captureLastThreadUpdate(env.app)
+	re, rec := draftEvent(t, env.app, env.ann, map[string]any{
+		"mailbox_id": env.desk.Id, "from_address_id": env.annAddr.Id, "subject": "Plan", "text_body": "draft",
+	})
+	if err := handleDraft(env.app, re); err != nil {
+		t.Fatal(err)
+	}
+	var created api.SendEmailResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+
+	got, ok := last[created.ThreadID]
+	if !ok {
+		t.Fatal("the draft save never updated the thread")
+	}
+	if !got.hasDraft {
+		t.Error("the last thread update carried has_draft=false; clients would show no draft marker")
+	}
+	if got.addressKeys != env.annAddr.Id {
+		t.Errorf("the last thread update carried address_keys %q, want %q", got.addressKeys, env.annAddr.Id)
+	}
+}
+
+// The draft update in place saves the thread too; its last update must carry
+// the marker and the new From address.
+func TestAddressKeys_DraftUpdateBroadcastCarriesMarkersAndKeys(t *testing.T) {
+	env := setupAddressKeysEnv(t)
+	re, rec := draftEvent(t, env.app, env.ann, map[string]any{
+		"mailbox_id": env.desk.Id, "from_address_id": env.annAddr.Id, "subject": "Plan", "text_body": "draft",
+	})
+	if err := handleDraft(env.app, re); err != nil {
+		t.Fatal(err)
+	}
+	var created api.SendEmailResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	last := captureLastThreadUpdate(env.app)
+
+	re, _ = draftEvent(t, env.app, env.ann, map[string]any{
+		"mailbox_id": env.desk.Id, "message_id": created.MessageID, "from_address_id": env.salesAddr.Id,
+		"subject": "Plan", "text_body": "draft 2",
+	})
+	if err := handleDraft(env.app, re); err != nil {
+		t.Fatal(err)
+	}
+
+	got, ok := last[created.ThreadID]
+	if !ok {
+		t.Fatal("the draft update never updated the thread")
+	}
+	if !got.hasDraft {
+		t.Error("the last thread update carried has_draft=false")
+	}
+	if want := sortedKeys(env.annAddr.Id, env.salesAddr.Id); got.addressKeys != want {
+		t.Errorf("the last thread update carried address_keys %q, want %q", got.addressKeys, want)
+	}
 }

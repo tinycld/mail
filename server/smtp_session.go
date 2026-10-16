@@ -451,7 +451,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 		return nil
 	}
 
-	if err := updateThreadMetadata(s.app, thread, displayName, storedMsg.SenderEmail, storedMsg.TextBody, now); err != nil {
+	if err := updateThreadMetadata(s.app, thread.Id, displayName, storedMsg.SenderEmail, storedMsg.TextBody, now); err != nil {
 		s.app.Logger().Error("SMTP: failed to update thread metadata", "error", err)
 	}
 

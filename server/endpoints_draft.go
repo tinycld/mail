@@ -100,16 +100,21 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 		if err := updateDraftRecord(app, record, req, subject, senderEmail, from.Address.Id, now, uploadedFiles); err != nil {
 			return re.InternalServerError("Failed to update draft", err)
 		}
-		thread.Set("snippet", truncateSnippet(req.TextBody, 200))
-		thread.Set("subject", subject)
-		thread.Set("latest_date", now)
-		if err := app.Save(thread); err != nil {
+		// The draft save above runs the message hooks, which can save the
+		// thread (has_draft, has_attachments). Change a fresh copy so this save
+		// neither writes nor broadcasts the values from before them.
+		fresh, err := app.FindRecordById("mail_threads", thread.Id)
+		if err != nil {
+			return re.InternalServerError("Failed to reload thread", err)
+		}
+		fresh.Set("snippet", truncateSnippet(req.TextBody, 200))
+		fresh.Set("subject", subject)
+		fresh.Set("latest_date", now)
+		if err := app.Save(fresh); err != nil {
 			return re.InternalServerError("Failed to update thread", err)
 		}
-		// After the thread save above: that copy was loaded before this
-		// change and would overwrite it.
 		if err := addAddressKeys(app, thread.Id, from.Address.Id); err != nil {
-			return re.InternalServerError("Failed to update thread", err)
+			return re.InternalServerError("Failed to record the thread's addresses", err)
 		}
 
 		return re.JSON(http.StatusOK, api.SendEmailResponse{
@@ -149,7 +154,7 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 		return re.InternalServerError("Failed to store attachments", err)
 	}
 
-	if err := updateThreadMetadata(app, thread, displayName, senderEmail, msg.TextBody, now); err != nil {
+	if err := updateThreadMetadata(app, thread.Id, displayName, senderEmail, msg.TextBody, now); err != nil {
 		return re.InternalServerError("Failed to update thread", err)
 	}
 

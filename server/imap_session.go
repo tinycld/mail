@@ -644,7 +644,7 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 			if snippet == "" {
 				snippet = msg.Subject
 			}
-			updateThreadMetadata(txApp, thread, msg.SenderName, msg.SenderEmail, snippet, msg.Date)
+			updateThreadMetadata(txApp, thread.Id, msg.SenderName, msg.SenderEmail, snippet, msg.Date)
 		}
 
 		if folder == "sent" {
