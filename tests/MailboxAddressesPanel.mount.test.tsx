@@ -53,10 +53,6 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
     return { useStore: (...names: string[]) => names.map(n => stores[n]) }
 })
 
-// The shared lucide stub binds only the icon names it seeds; these are not
-// among them, so the named imports would be undefined.
-vi.mock('lucide-react-native', () => ({ AtSign: () => null, Plus: () => null, X: () => null }))
-
 import { MailboxAddressesPanel } from '~/tinycld/mail/settings/MailboxAddressesPanel'
 
 test('a rule address names the group that gave it; a domain rule address does not', async () => {

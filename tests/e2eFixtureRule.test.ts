@@ -67,8 +67,27 @@ function readSpec(name: string) {
     return readFileSync(path.join(TESTS_DIR, name), 'utf8')
 }
 
-function seedsWithSuperuserWrite(source: string) {
+function writesAsSuperuser(source: string) {
     return source.includes('_superusers') && WRITE_CALL.test(source)
+}
+
+// A spec can take the exception through a shared helper in helpers.ts, so the
+// superuser write is not in the spec's own source. Each top-level function of
+// helpers.ts that writes as the superuser is a seed helper, and a call to it
+// counts as the spec's own write.
+function sharedSeedHelpers() {
+    const source = readFileSync(path.join(TESTS_DIR, 'helpers.ts'), 'utf8')
+    return source
+        .split(/\n(?=(?:export )?(?:async )?function )/)
+        .filter(writesAsSuperuser)
+        .map(chunk => chunk.match(/function (\w+)/)?.[1])
+        .filter(name => name !== undefined)
+}
+
+const SEED_HELPER_CALLS = sharedSeedHelpers().map(name => new RegExp(`\\b${name}\\s*\\(`))
+
+function seedsWithSuperuserWrite(source: string) {
+    return writesAsSuperuser(source) || SEED_HELPER_CALLS.some(call => call.test(source))
 }
 
 function headerComment(source: string) {
@@ -101,6 +120,14 @@ describe('e2e superuser-seeding exception', () => {
         // A guard on the detector itself: if this drops to zero the assertions
         // below start vacuously passing and pin nothing.
         expect(seedingSpecs.length).toBeGreaterThan(0)
+    })
+
+    it('counts a call to a shared seed helper as a superuser write', () => {
+        expect(sharedSeedHelpers()).toEqual(['seedVerifiedDomain'])
+        expect(seedsWithSuperuserWrite("await seedVerifiedDomain('q.example')")).toBe(true)
+        expect(seedingSpecs).toEqual(
+            expect.arrayContaining(['mail-domain-rules.spec.ts', 'mail-group-domains.spec.ts'])
+        )
     })
 
     it.each(seedingSpecs)('%s documents why the real path is unreachable', name => {

@@ -10,28 +10,7 @@
 // away — is driven through the UI.
 import { expect, type Page, test } from '@playwright/test'
 import { login, navigateToPackage, TEST_USER_EMAIL } from '@tinycld/core/e2e-helpers'
-import PocketBase from 'pocketbase'
-import { navigateToMailboxSettings, TEST_USER_MAILBOX } from './helpers'
-
-// PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
-// through to PB transparently — see scripts/dev.ts::isPbPath.
-const PB_URL = 'http://127.0.0.1:7200'
-const SUPERUSER_EMAIL = process.env.POCKETBASE_EMAIL || 'admin@tinycld.org'
-const SUPERUSER_PASSWORD = process.env.POCKETBASE_PASSWORD || 'AdminPass1234!'
-
-async function seedVerifiedDomain(domain: string) {
-    const pb = new PocketBase(PB_URL)
-    await pb.collection('_superusers').authWithPassword(SUPERUSER_EMAIL, SUPERUSER_PASSWORD)
-    await pb.collection('mail_domains').create({
-        domain,
-        verified: true,
-        mx_verified: true,
-        inbound_domain_verified: true,
-        spf_verified: true,
-        dkim_verified: true,
-        return_path_verified: true,
-    })
-}
+import { navigateToMailboxSettings, seedVerifiedDomain, TEST_USER_MAILBOX } from './helpers'
 
 async function openGroupsSettings(page: Page) {
     await page.getByTestId('nav-settings').click()
