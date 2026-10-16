@@ -68,6 +68,23 @@ export function registerCollections(
         collectionOptions: indexing,
     })
 
+    // Every address, on any domain, that delivers to a mailbox. Rows with
+    // source = 'rule' are written by the server from the domain's rule.
+    const mail_addresses = newCollection('mail_addresses', {
+        ...onDemand,
+        omitOnInsert: ['created', 'updated'] as const,
+        relations: { domain: mail_domains, mailbox: mail_mailboxes },
+        collectionOptions: indexing,
+    })
+
+    // One row per person: their personal inbox and email name. Server-owned.
+    const mail_identities = newCollection('mail_identities', {
+        ...onDemand,
+        omitOnInsert: ['created', 'updated'] as const,
+        relations: { user: coreStores.users, inbox: mail_mailboxes, default_from: mail_addresses },
+        collectionOptions: indexing,
+    })
+
     const mail_messages = newCollection('mail_messages', {
         ...onDemand,
         omitOnInsert: ['created', 'updated'] as const,
@@ -125,5 +142,7 @@ export function registerCollections(
         mail_thread_state,
         mail_imap_mailbox_state,
         mail_folder_counts,
+        mail_addresses,
+        mail_identities,
     }
 }

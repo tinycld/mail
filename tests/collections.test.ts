@@ -19,6 +19,8 @@ const EXPECTED_COLLECTION_NAMES = [
     'mail_thread_state',
     'mail_imap_mailbox_state',
     'mail_folder_counts',
+    'mail_addresses',
+    'mail_identities',
 ]
 
 describe('mail collections', () => {
