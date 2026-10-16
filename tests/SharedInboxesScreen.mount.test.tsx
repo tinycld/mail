@@ -54,6 +54,7 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
         mail_mailbox_members: mk('mail_mailbox_members', []),
         mail_addresses: mk('mail_addresses', []),
         users: mk('users', []),
+        groups: mk('groups', []),
     }
     return { useStore: (...names: string[]) => names.map(n => stores[n]) }
 })

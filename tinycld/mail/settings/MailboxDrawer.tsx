@@ -1,3 +1,6 @@
+import { GroupShareSection } from '@tinycld/core/components/groups/GroupShareSection'
+import type { GroupRoleOption } from '@tinycld/core/lib/groups/types'
+import { useGroupGrants } from '@tinycld/core/lib/groups/use-group-grants'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
@@ -19,16 +22,8 @@ import { Pressable, Text, View } from 'react-native'
 import { MailboxAddressesPanel } from './MailboxAddressesPanel'
 import { MailboxForm, type MailboxFormValues } from './MailboxForm'
 import { MailboxMemberRow, type Role } from './MailboxMemberRow'
+import type { MemberRow } from './member-rows'
 import { viewerIsOwner } from './viewer-is-owner'
-
-interface MemberRow {
-    id: string
-    userId: string
-    userName: string
-    userEmail: string
-    role: Role
-    isYou: boolean
-}
 
 interface OrgMemberRow {
     userId: string
@@ -392,7 +387,10 @@ function TabButton({
     )
 }
 
-function MembersTab({
+// The column also holds 'owner', but a group only ever grants member: the server forces it.
+const GROUP_ROLES: readonly GroupRoleOption<Role>[] = [{ value: 'member', label: 'Member' }]
+
+export function MembersTab({
     mailboxId,
     members,
     orgMembers,
@@ -406,6 +404,12 @@ function MembersTab({
     const mutedColor = useThemeColor('muted-foreground')
     const [membersCollection] = useStore('mail_mailbox_members')
     const [adding, setAdding] = useState(false)
+    const groupGrants = useGroupGrants({
+        collection: membersCollection,
+        roles: GROUP_ROLES,
+        isForResource: row => row.mailbox === mailboxId,
+        buildRow: grant => ({ ...grant, mailbox: mailboxId }),
+    })
 
     const removeMutation = useMutation({
         mutationFn: mutation(function* (id: string) {
@@ -454,6 +458,7 @@ function MembersTab({
                         canRemove={!isLastOwner}
                         canToggleRole={canChange}
                         canEdit={canWrite}
+                        viaGroupName={m.viaGroupName}
                         onToggleRole={() =>
                             toggleRoleMutation.mutate({
                                 id: m.id,
@@ -484,6 +489,8 @@ function MembersTab({
                 available={available}
                 onDone={() => setAdding(false)}
             />
+
+            <GroupShareSection {...groupGrants} roles={GROUP_ROLES} canManage={canWrite} />
         </View>
     )
 }

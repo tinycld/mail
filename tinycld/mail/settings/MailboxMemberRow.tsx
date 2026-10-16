@@ -14,6 +14,8 @@ interface Props {
     canToggleRole: boolean
     /** False for a viewer who cannot change members: the remove control is not shown. */
     canEdit?: boolean
+    /** Set when a group gives this access: it can only change by changing the group grant. */
+    viaGroupName?: string | null
     onToggleRole: () => void
     onRemove: () => void
 }
@@ -26,6 +28,7 @@ export function MailboxMemberRow({
     canRemove,
     canToggleRole,
     canEdit = true,
+    viaGroupName = null,
     onToggleRole,
     onRemove,
 }: Props) {
@@ -37,6 +40,7 @@ export function MailboxMemberRow({
         accessibilityHint: `Removes ${name} from the inbox`,
     })
     const isOwner = role === 'owner'
+    const isDerived = viaGroupName !== null
     const pillBg = isOwner ? `${primaryColor}1F` : `${mutedColor}26`
     const pillFg = isOwner ? primaryColor : mutedColor
 
@@ -60,16 +64,17 @@ export function MailboxMemberRow({
                         {email}
                     </Text>
                 ) : null}
+                <ViaGroupNote isVisible={isDerived} groupName={viaGroupName} />
             </View>
             <Pressable
                 onPress={onToggleRole}
-                disabled={!canToggleRole}
+                disabled={!canToggleRole || isDerived}
                 className="rounded-md"
                 style={{
                     paddingVertical: 3,
                     paddingHorizontal: 8,
                     backgroundColor: pillBg,
-                    opacity: canToggleRole ? 1 : 0.5,
+                    opacity: canToggleRole && !isDerived ? 1 : 0.5,
                 }}
             >
                 <Text style={{ fontSize: 11, fontWeight: '600', color: pillFg }}>
@@ -77,13 +82,22 @@ export function MailboxMemberRow({
                 </Text>
             </Pressable>
             <RemoveButton
-                isVisible={canEdit}
+                isVisible={canEdit && !isDerived}
                 name={name}
                 state={removeState}
                 color={dangerColor}
                 onRemove={onRemove}
             />
         </View>
+    )
+}
+
+function ViaGroupNote({ isVisible, groupName }: { isVisible: boolean; groupName: string | null }) {
+    if (!isVisible) return null
+    return (
+        <Text className="text-muted-foreground" style={{ fontSize: 11.5, marginTop: 1 }}>
+            Through group {groupName}
+        </Text>
     )
 }
 

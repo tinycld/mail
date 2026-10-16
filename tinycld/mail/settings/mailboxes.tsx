@@ -1,4 +1,4 @@
-import { and, eq, inArray } from '@tanstack/db'
+import { and, coalesce, eq, inArray } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { useAuth } from '@tinycld/core/lib/auth'
@@ -14,15 +14,7 @@ import { filterAndGroupMailboxes, type MailboxListItem } from '../hooks/filterMa
 import { type DrawerMode, MailboxDrawer } from './MailboxDrawer'
 import { MailboxListRow } from './MailboxListRow'
 import { MailboxSearchBar } from './MailboxSearchBar'
-
-interface MemberRow {
-    id: string
-    userId: string
-    userName: string
-    userEmail: string
-    role: 'owner' | 'member'
-    isYou: boolean
-}
+import { foldMembers, type MemberRow } from './member-rows'
 
 interface OrgMemberRow {
     userId: string
@@ -37,12 +29,14 @@ function useMailboxData(currentUserId: string) {
         membersCollection,
         addressesCollection,
         usersCollection,
+        groupsCollection,
     ] = useStore(
         'mail_domains',
         'mail_mailboxes',
         'mail_mailbox_members',
         'mail_addresses',
-        'users'
+        'users',
+        'groups'
     )
 
     // Standalone: gates the whole screen and feeds the create-form's domain
@@ -65,7 +59,9 @@ function useMailboxData(currentUserId: string) {
     })
 
     // Membership rows carry their user in the same expression; a row whose
-    // user is gone drops out via the inner join.
+    // user is gone drops out via the inner join, which also drops the group
+    // grant rows (no user). A row a group gave names that group through the
+    // left join.
     const { data: memberRows } = useLiveQuery({
         queryKey: ['mail_settings_mailbox_members'],
         query: query =>
@@ -73,7 +69,15 @@ function useMailboxData(currentUserId: string) {
                 .from({ member: membersCollection })
                 .innerJoin({ user: usersCollection }, ({ member, user }) =>
                     eq(member.user, user.id)
-                ),
+                )
+                .join({ group: groupsCollection }, ({ member, group }) =>
+                    eq(member.group, group.id)
+                )
+                .select(({ member, user, group }) => ({
+                    member,
+                    user,
+                    viaGroupName: coalesce(group?.name, null),
+                })),
     })
 
     const { data: extraAddresses } = useLiveQuery({
@@ -110,8 +114,8 @@ function useMailboxData(currentUserId: string) {
                 ),
     })
 
-    const membersByMailbox = new Map<string, MemberRow[]>()
-    for (const { member, user } of memberRows ?? []) {
+    const rowsByMailbox = new Map<string, MemberRow[]>()
+    for (const { member, user, viaGroupName } of memberRows ?? []) {
         const row: MemberRow = {
             id: member.id,
             userId: user.id,
@@ -119,11 +123,15 @@ function useMailboxData(currentUserId: string) {
             userEmail: user.email ?? '',
             role: member.role as 'owner' | 'member',
             isYou: user.id === currentUserId,
+            viaGroupName,
         }
-        const list = membersByMailbox.get(member.mailbox) ?? []
+        const list = rowsByMailbox.get(member.mailbox) ?? []
         list.push(row)
-        membersByMailbox.set(member.mailbox, list)
+        rowsByMailbox.set(member.mailbox, list)
     }
+    const membersByMailbox = new Map(
+        [...rowsByMailbox].map(([mailboxId, rows]) => [mailboxId, foldMembers(rows)])
+    )
 
     const otherAddressesByMailbox = new Map<string, string[]>()
     for (const a of extraAddresses ?? []) {
