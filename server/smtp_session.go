@@ -124,7 +124,7 @@ func (s *loginServer) Next(response []byte) (challenge []byte, done bool, err er
 // REST tokens a protocol login never expires). One opaque failure keeps the
 // account's state invisible to a prober.
 func (s *smtpSession) authenticate(username, password string) error {
-	record, err := davauth.VerifyCredentials(s.app, username, password)
+	record, err := davauth.VerifyCredentials(s.app, loginIdentifier(s.app, username), password)
 	if err != nil {
 		return s.refuse("auth", &smtp.SMTPError{
 			Code:         535,

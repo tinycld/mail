@@ -74,7 +74,7 @@ func (s *imapSession) Close() error {
 // tokens a protocol login never expires). One opaque failure keeps the
 // account's state invisible to a prober.
 func (s *imapSession) Login(username, password string) error {
-	record, err := davauth.VerifyCredentials(s.app, username, password)
+	record, err := davauth.VerifyCredentials(s.app, loginIdentifier(s.app, username), password)
 	if err != nil {
 		return imapserver.ErrAuthFailed
 	}
