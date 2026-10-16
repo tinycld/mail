@@ -8,10 +8,7 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/groups"
-	"tinycld.org/core/logging"
 )
-
-var memberAccessLog = logging.ForPackage("mail")
 
 const memberCleanupBatch = 500
 
@@ -115,12 +112,12 @@ func userHasMailboxRow(app core.App, mailboxID, userID string, exceptID string) 
 // grant was deleted. A person with a direct row who leaves a group, or who
 // is in two groups and leaves one, keeps their state.
 //
-// The cleanup runs in a goroutine for the reason the backfill does
-// (member_backfill.go): an inbox can hold many thousands of threads, and one
-// delete per row must not hold up the member delete. The root app is captured
-// at registration because the goroutine outlives the request, and the event's
-// app can be a finished transaction. For the same reason the access check
-// runs in the goroutine with the root app, not in the hook.
+// The cleanup runs as a member job (member_jobs.go) for the reason the
+// backfill does (member_backfill.go): an inbox can hold many thousands of
+// threads, and one delete per row must not hold up the member delete. The
+// root app is captured at registration because the job outlives the request,
+// and the event's app can be a finished transaction. For the same reason the
+// access check runs in the job with the root app, not in the hook.
 func registerMemberAccessCleanup(app core.App) {
 	app.OnRecordAfterDeleteSuccess("mail_mailbox_members").BindFunc(func(e *core.RecordEvent) error {
 		mailboxID := e.Record.GetString("mailbox")
@@ -128,18 +125,9 @@ func registerMemberAccessCleanup(app core.App) {
 		if userID == "" {
 			return e.Next()
 		}
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					memberAccessLog.Error("member access cleanup panicked",
-						"mailbox", mailboxID, "user", userID, "panic", r)
-				}
-			}()
-			if err := cleanupLostMailboxAccess(app, mailboxID, userID); err != nil {
-				memberAccessLog.Error("member access cleanup failed",
-					"mailbox", mailboxID, "user", userID, "error", err)
-			}
-		}()
+		runMemberJob(memberJobs, "access cleanup", mailboxID, userID, func() error {
+			return cleanupLostMailboxAccess(app, mailboxID, userID)
+		})
 		return e.Next()
 	})
 }
