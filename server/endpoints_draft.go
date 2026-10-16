@@ -53,36 +53,31 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 		return re.NotFoundError("Mailbox not found", err)
 	}
 
-	domainRecord, err := app.FindRecordById("mail_domains", mailbox.GetString("domain"))
-	if err != nil {
-		return re.NotFoundError("Domain not found", err)
-	}
-
 	if _, err := verifyMailboxMembership(app, req.MailboxID, userID); err != nil {
 		return re.ForbiddenError("Not a member of this mailbox", err)
 	}
 
-	var alias *core.Record
-	if req.AliasID != "" {
-		alias, err = app.FindRecordById("mail_mailbox_aliases", req.AliasID)
-		if err != nil {
-			return re.NotFoundError("Alias not found", err)
-		}
-		if err := verifyAliasBelongsToMailbox(alias, req.MailboxID); err != nil {
-			return re.ForbiddenError("Alias does not belong to this mailbox", err)
+	from, err := resolveSendAddress(app, mailbox, req.FromAddressID, req.AliasID)
+	if err != nil {
+		e := sendErrorForAddress(err)
+		switch e.kind {
+		case sendErrForbidden:
+			return re.ForbiddenError(e.msg, err)
+		case sendErrBadRequest:
+			return re.BadRequestError(e.msg, err)
+		default:
+			return re.NotFoundError(e.msg, err)
 		}
 	}
 
 	displayName := mailbox.GetString("display_name")
-	domain := domainRecord.GetString("domain")
 
 	subject := req.Subject
 	if subject == "" {
 		subject = noSubject
 	}
 
-	senderAddress := resolveSenderAddressRecords(mailbox, alias)
-	senderEmail := fmt.Sprintf("%s@%s", senderAddress, domain)
+	senderEmail := from.Email()
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	// Update existing draft in-place
@@ -100,7 +95,7 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 			return re.ForbiddenError("Draft does not belong to this mailbox", nil)
 		}
 
-		if err := updateDraftRecord(app, record, req, subject, senderEmail, now, uploadedFiles); err != nil {
+		if err := updateDraftRecord(app, record, req, subject, senderEmail, from.Address.Id, now, uploadedFiles); err != nil {
 			return re.InternalServerError("Failed to update draft", err)
 		}
 		thread.Set("snippet", truncateSnippet(req.TextBody, 200))
@@ -125,6 +120,7 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 	msg := &storedMessage{
 		MessageID:      fmt.Sprintf("draft-%s-%d", userID, time.Now().UnixNano()),
 		Alias:          req.AliasID,
+		SentFrom:       from.Address.Id,
 		SenderName:     displayName,
 		SenderEmail:    senderEmail,
 		To:             toMailerRecipients(req.To),
@@ -160,11 +156,12 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 	})
 }
 
-func updateDraftRecord(app core.App, record *core.Record, req api.SaveDraftRequest, subject, senderEmail, date string, uploadedFiles []*multipart.FileHeader) error {
+func updateDraftRecord(app core.App, record *core.Record, req api.SaveDraftRequest, subject, senderEmail, sentFromID, date string, uploadedFiles []*multipart.FileHeader) error {
 	record.Set("subject", subject)
 	record.Set("date", date)
 	record.Set("sender_email", senderEmail)
 	record.Set("alias", req.AliasID)
+	record.Set("sent_from", sentFromID)
 
 	snippetSource := req.TextBody
 	record.Set("snippet", truncateSnippet(snippetSource, 200))

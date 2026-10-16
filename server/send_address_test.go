@@ -1,0 +1,113 @@
+package mail
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/pocketbase/pocketbase/core"
+)
+
+type sendAddressEnv struct {
+	app            core.App
+	inbox          *core.Record
+	org, com, test *core.Record
+}
+
+func setupSendAddressEnv(t *testing.T) *sendAddressEnv {
+	t.Helper()
+	app := newAddressTestApp(t)
+	org := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true})
+	com := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.com", "verified": true})
+	unverified := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "test.example", "verified": false})
+	inbox := saveRealRecord(t, app, "mail_mailboxes", map[string]any{
+		"address": "nathan", "domain": org.Id, "type": "personal", "display_name": "Nathan Stitt", "name": "Nathan",
+	})
+	saveRealRecord(t, app, "mail_addresses", map[string]any{"local_part": "nathan", "domain": com.Id, "mailbox": inbox.Id, "source": addressSourceManual})
+	return &sendAddressEnv{app: app, inbox: inbox, org: org, com: com, test: unverified}
+}
+
+func TestSendAddress_ExplicitAddressOnASecondDomain(t *testing.T) {
+	env := setupSendAddressEnv(t)
+	com, _ := findAddressRow(env.app, "nathan", env.com.Id)
+
+	from, err := resolveSendAddress(env.app, env.inbox, com.Id, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if from.Email() != "nathan@tinycld.com" || from.Domain.Id != env.com.Id {
+		t.Fatalf("sending as %s on domain %s; want nathan@tinycld.com", from.Email(), from.Domain.Id)
+	}
+}
+
+func TestSendAddress_RefusesAnotherInboxsAddress(t *testing.T) {
+	env := setupSendAddressEnv(t)
+	other := saveRealRecord(t, env.app, "mail_mailboxes", map[string]any{
+		"address": "support", "domain": env.org.Id, "type": "shared", "display_name": "Support", "name": "Support",
+	})
+	supportRow, _ := findAddressRow(env.app, "support", env.org.Id)
+	_ = other
+
+	_, err := resolveSendAddress(env.app, env.inbox, supportRow.Id, "")
+	if !errors.Is(err, errAddressNotInMailbox) {
+		t.Fatalf("want errAddressNotInMailbox, got %v", err)
+	}
+}
+
+// A released client sends alias_id; it must still send from that alias.
+func TestSendAddress_LegacyAliasID(t *testing.T) {
+	env := setupSendAddressEnv(t)
+	alias := saveRealRecord(t, env.app, "mail_mailbox_aliases", map[string]any{"mailbox": env.inbox.Id, "address": "admin"})
+
+	from, err := resolveSendAddress(env.app, env.inbox, "", alias.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if from.Email() != "admin@tinycld.org" {
+		t.Fatalf("legacy alias sends as %s, want admin@tinycld.org", from.Email())
+	}
+}
+
+func TestSendAddress_DefaultPrefersVerifiedThenRank(t *testing.T) {
+	env := setupSendAddressEnv(t)
+	from, err := defaultSendAddress(env.app, env.inbox)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if from.Email() != "nathan@tinycld.org" {
+		t.Fatalf("default = %s, want the rank-1 verified domain nathan@tinycld.org", from.Email())
+	}
+
+	org, err := env.app.FindRecordById("mail_domains", env.org.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	org.Set("rank", 5)
+	if err := env.app.Save(org); err != nil {
+		t.Fatal(err)
+	}
+	from, _ = defaultSendAddress(env.app, env.inbox)
+	if from.Email() != "nathan@tinycld.com" {
+		t.Fatalf("after reordering, default = %s, want nathan@tinycld.com", from.Email())
+	}
+}
+
+func TestSendAddress_DefaultFromIdentityWins(t *testing.T) {
+	env := setupSendAddressEnv(t)
+	user := saveRealRecord(t, env.app, "users", map[string]any{"email": "n@ext.example", "username": "nathan", "name": "Nathan", "role": "owner"})
+	com, _ := findAddressRow(env.app, "nathan", env.com.Id)
+	saveRealRecord(t, env.app, "mail_identities", map[string]any{"user": user.Id, "inbox": env.inbox.Id, "email_name": "nathan", "default_from": com.Id})
+
+	from, err := defaultSendAddress(env.app, env.inbox)
+	if err != nil || from.Email() != "nathan@tinycld.com" {
+		t.Fatalf("default = %v, %v; want the identity's default_from", from, err)
+	}
+}
+
+func TestFormatFromAddress(t *testing.T) {
+	if got := formatFromAddress("Nathan Stitt", "nathan@tinycld.com"); got != "Nathan Stitt <nathan@tinycld.com>" {
+		t.Fatalf("got %q", got)
+	}
+	if got := formatFromAddress("", "nathan@tinycld.com"); got != "<nathan@tinycld.com>" {
+		t.Fatalf("got %q", got)
+	}
+}

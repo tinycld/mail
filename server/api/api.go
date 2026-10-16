@@ -29,14 +29,17 @@ type Recipient struct {
 
 // SendEmailRequest is the body of POST /api/mail/send.
 type SendEmailRequest struct {
-	MailboxID string      `json:"mailbox_id"`
-	AliasID   string      `json:"alias_id,omitempty"`
-	To        []Recipient `json:"to"`
-	Cc        []Recipient `json:"cc,omitempty"`
-	Bcc       []Recipient `json:"bcc,omitempty"`
-	Subject   string      `json:"subject"`
-	HTMLBody  string      `json:"html_body"`
-	TextBody  string      `json:"text_body"`
+	MailboxID string `json:"mailbox_id"`
+	AliasID   string `json:"alias_id,omitempty"`
+	// FromAddressID is the mail_addresses row to send as. Empty sends as the
+	// mailbox's default address. AliasID is the older form, still accepted.
+	FromAddressID string      `json:"from_address_id,omitempty"`
+	To            []Recipient `json:"to"`
+	Cc            []Recipient `json:"cc,omitempty"`
+	Bcc           []Recipient `json:"bcc,omitempty"`
+	Subject       string      `json:"subject"`
+	HTMLBody      string      `json:"html_body"`
+	TextBody      string      `json:"text_body"`
 	// InReplyToMessageID is the PocketBase record ID of the message being
 	// replied to — not an RFC 822 Message-ID header value.
 	InReplyToMessageID string `json:"in_reply_to_message_id,omitempty"`
@@ -46,6 +49,9 @@ type SendEmailRequest struct {
 type SaveDraftRequest struct {
 	MailboxID string `json:"mailbox_id"`
 	AliasID   string `json:"alias_id,omitempty"`
+	// FromAddressID is the mail_addresses row to send as. Empty sends as the
+	// mailbox's default address. AliasID is the older form, still accepted.
+	FromAddressID string `json:"from_address_id,omitempty"`
 	// MessageID is the existing draft's PocketBase record ID; empty creates
 	// a new draft.
 	MessageID string      `json:"message_id,omitempty"`

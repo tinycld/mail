@@ -248,42 +248,25 @@ func ruleRecipient(app core.App, to, mailboxID string) (string, error) {
 	return recipient, nil
 }
 
-// mailboxAddresses returns every address that delivers to a mailbox: its
-// primary address plus each of its aliases, all as "local@domain".
+// mailboxAddresses returns every address that delivers to a mailbox (every
+// mail_addresses row of the mailbox), as "local@domain".
 //
-// Aliases have to be in the set. Inbound routing falls back to an alias
-// lookup when no mailbox matches the primary address (findMailboxViaAlias,
-// via store.go's recipient resolution), so mail addressed to an alias lands
-// in this same mailbox — a rule forwarding to one of its own aliases is as
-// much a loop as forwarding to the primary address, just harder to spot.
+// All of them have to be in the set: a rule forwarding to one of its own
+// addresses is as much a loop as forwarding to the primary address, just
+// harder to spot.
 func mailboxAddresses(app core.App, mailboxID string) ([]string, error) {
-	mailbox, err := app.FindRecordById("mail_mailboxes", mailboxID)
+	rows, err := app.FindRecordsByFilter("mail_addresses", "mailbox = {:mailbox}", "", 0, 0,
+		map[string]any{"mailbox": mailboxID})
 	if err != nil {
-		return nil, fmt.Errorf("mailbox %s not found: %w", mailboxID, err)
+		return nil, fmt.Errorf("address lookup for mailbox %s: %w", mailboxID, err)
 	}
-	domain, err := app.FindRecordById("mail_domains", mailbox.GetString("domain"))
-	if err != nil {
-		return nil, fmt.Errorf("domain for mailbox %s not found: %w", mailboxID, err)
-	}
-	domainName := domain.GetString("domain")
-
-	addresses := []string{mailbox.GetString("address") + "@" + domainName}
-
-	aliases, err := app.FindRecordsByFilter(
-		"mail_mailbox_aliases",
-		"mailbox = {:mailbox}",
-		"",
-		0,
-		0,
-		map[string]any{"mailbox": mailboxID},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("alias lookup for mailbox %s: %w", mailboxID, err)
-	}
-	for _, alias := range aliases {
-		if address := alias.GetString("address"); address != "" {
-			addresses = append(addresses, address+"@"+domainName)
+	addresses := make([]string, 0, len(rows))
+	for _, row := range rows {
+		domain, err := app.FindRecordById("mail_domains", row.GetString("domain"))
+		if err != nil {
+			continue
 		}
+		addresses = append(addresses, row.GetString("local_part")+"@"+domain.GetString("domain"))
 	}
 	return addresses, nil
 }

@@ -613,11 +613,6 @@ func setThreadStarred(app core.App, threadID, userID string, isStarred bool) err
 	return app.Save(record)
 }
 
-// resolveMailboxByAddress finds a mailbox matching a local part and domain.
-// It first checks primary addresses on mail_mailboxes, then falls back to
-// mail_mailbox_aliases. When a match is via an alias, the alias record is
-// returned as the second value; for a primary-address match, alias is nil.
-// Addresses are compared case-insensitively.
 // findMailDomains looks a domain up with the normalization every address
 // lookup shares, so "Acme.COM " and "acme.com" are one domain.
 func findMailDomains(app core.App, domainStr string) ([]*core.Record, error) {
@@ -638,39 +633,6 @@ func findMailDomains(app core.App, domainStr string) ([]*core.Record, error) {
 func mailDomainHosted(app core.App, domainStr string) bool {
 	domains, err := findMailDomains(app, domainStr)
 	return err != nil || len(domains) > 0
-}
-
-func resolveMailboxByAddress(app core.App, localPart, domainStr string) (*core.Record, *core.Record, error) {
-	normalizedLocal := strings.ToLower(strings.TrimSpace(localPart))
-
-	// First find the domain record
-	domains, err := findMailDomains(app, domainStr)
-	if err != nil || len(domains) == 0 {
-		return nil, nil, fmt.Errorf("domain %s not found", domainStr)
-	}
-
-	domainID := domains[0].Id
-
-	// Then find a mailbox with a matching primary address on this domain
-	mailboxes, err := app.FindRecordsByFilter(
-		"mail_mailboxes",
-		"address = {:address} && domain = {:domain}",
-		"",
-		1,
-		0,
-		map[string]any{"address": normalizedLocal, "domain": domainID},
-	)
-	if err == nil && len(mailboxes) > 0 {
-		return mailboxes[0], nil, nil
-	}
-
-	// Fall back to alias lookup
-	mailbox, alias, err := findMailboxViaAlias(app, domainID, normalizedLocal)
-	if err == nil {
-		return mailbox, alias, nil
-	}
-
-	return nil, nil, fmt.Errorf("mailbox %s@%s not found", localPart, domainStr)
 }
 
 // getMailboxMembers returns all mail_mailbox_members for a given mailbox.

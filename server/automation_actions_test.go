@@ -513,7 +513,7 @@ func TestCheckSendRateLimit_BouncedSendsCount(t *testing.T) {
 	}
 }
 
-// Mail to an alias is delivered to the same mailbox (findMailboxViaAlias), so
+// Mail to an alias is delivered to the same mailbox (resolveAddress), so
 // forwarding to one of the mailbox's own aliases is a self-loop — just a
 // less obvious one than using the primary address.
 func TestRuleRecipient_RejectsTheMailboxsAliases(t *testing.T) {

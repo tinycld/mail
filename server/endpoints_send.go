@@ -102,6 +102,7 @@ type sendParams struct {
 	UserID             string
 	MailboxID          string
 	AliasID            string
+	FromAddressID      string
 	Subject            string
 	HTMLBody           string
 	TextBody           string
@@ -117,6 +118,19 @@ type sendParams struct {
 type sendResultRecord struct {
 	MessageRecordID string
 	ThreadID        string
+}
+
+// sendErrorForAddress maps a sender-address failure onto the endpoint's
+// status codes.
+func sendErrorForAddress(err error) *sendError {
+	switch {
+	case errors.Is(err, errAddressNotInMailbox):
+		return &sendError{kind: sendErrForbidden, msg: "The sender address does not belong to this mailbox", err: err}
+	case errors.Is(err, errNoSendAddress):
+		return &sendError{kind: sendErrBadRequest, msg: "This mailbox has no address to send from", err: err}
+	default:
+		return &sendError{kind: sendErrNotFound, msg: "Sender address not found", err: err}
+	}
 }
 
 // sendMessage performs a send end-to-end with no HTTP dependency: verifies
@@ -146,11 +160,6 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 		return nil, &sendError{kind: sendErrNotFound, msg: "Mailbox not found", err: err}
 	}
 
-	domainRecord, err := app.FindRecordById("mail_domains", mailbox.GetString("domain"))
-	if err != nil {
-		return nil, &sendError{kind: sendErrNotFound, msg: "Domain not found", err: err}
-	}
-
 	// Resolve the deployment-wide provider from system settings
 	provider := newProviderFromSystem(app)
 
@@ -170,24 +179,15 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 		}
 	}
 
-	var alias *core.Record
-	if p.AliasID != "" {
-		alias, err = app.FindRecordById("mail_mailbox_aliases", p.AliasID)
-		if err != nil {
-			return nil, &sendError{kind: sendErrNotFound, msg: "Alias not found", err: err}
-		}
-		if err := verifyAliasBelongsToMailbox(alias, p.MailboxID); err != nil {
-			return nil, &sendError{kind: sendErrForbidden, msg: "Alias does not belong to this mailbox", err: err}
-		}
+	from, err := resolveSendAddress(app, mailbox, p.FromAddressID, p.AliasID)
+	if err != nil {
+		return nil, sendErrorForAddress(err)
 	}
-
-	// Build From address
+	domainRecord := from.Domain
 	displayName := mailbox.GetString("display_name")
 	domain := domainRecord.GetString("domain")
-	fromAddr := buildFromAddress(mailbox, domainRecord, alias)
-
-	senderAddress := resolveSenderAddressRecords(mailbox, alias)
-	senderEmail := fmt.Sprintf("%s@%s", senderAddress, domain)
+	senderEmail := from.Email()
+	fromAddr := formatFromAddress(displayName, senderEmail)
 
 	// Build threading headers if replying
 	var inReplyToHeader, referencesHeader string
@@ -217,7 +217,7 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 
 		// Echoed back on the provider's delivery and bounce notifications,
 		// which carry no From address for a receiver to attribute them by.
-		// fromAddr is "Name <addr@domain>" or "<addr@domain>" (buildFromAddress),
+		// fromAddr is "Name <addr@domain>" or "<addr@domain>" (formatFromAddress),
 		// not a bare address — the domain record itself is the reliable source.
 		Metadata: map[string]string{senderDomainMetadataKey: strings.ToLower(domain)},
 	}
@@ -267,6 +267,7 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 		ProviderMessageID: result.ProviderMessageID,
 		InReplyTo:         inReplyToHeader,
 		Alias:             p.AliasID,
+		SentFrom:          from.Address.Id,
 		SentBy:            p.UserID,
 		SenderName:        displayName,
 		SenderEmail:       senderEmail,
@@ -334,6 +335,7 @@ func handleSend(app core.App, re *core.RequestEvent) error {
 		UserID:             userID,
 		MailboxID:          req.MailboxID,
 		AliasID:            req.AliasID,
+		FromAddressID:      req.FromAddressID,
 		Subject:            req.Subject,
 		HTMLBody:           req.HTMLBody,
 		TextBody:           req.TextBody,

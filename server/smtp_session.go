@@ -35,7 +35,7 @@ type smtpSession struct {
 	// Transaction state (reset between MAIL FROM commands)
 	from       string
 	mailbox    *core.Record
-	alias      *core.Record
+	address    *core.Record // the mail_addresses row the session sends as
 	domain     *core.Record
 	recipients []string
 }
@@ -170,7 +170,7 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 		}, nil, "from", from)
 	}
 
-	mailbox, alias, err := resolveMailboxByAddress(s.app, local, domainStr)
+	target, err := resolveAddress(s.app, local, domainStr)
 	if err != nil {
 		return s.refuse("mail", &smtp.SMTPError{
 			Code:         550,
@@ -179,16 +179,7 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 		}, err, "from", from)
 	}
 
-	domainRecord, err := s.app.FindRecordById("mail_domains", mailbox.GetString("domain"))
-	if err != nil {
-		return s.refuse("mail", &smtp.SMTPError{
-			Code:         550,
-			EnhancedCode: smtp.EnhancedCode{5, 1, 0},
-			Message:      "Sender address not recognized",
-		}, err, "from", from)
-	}
-
-	if _, err := verifyMailboxMembership(s.app, mailbox.Id, s.user.Id); err != nil {
+	if _, err := verifyMailboxMembership(s.app, target.Mailbox.Id, s.user.Id); err != nil {
 		return s.refuse("mail", &smtp.SMTPError{
 			Code:         550,
 			EnhancedCode: smtp.EnhancedCode{5, 7, 1},
@@ -197,9 +188,9 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 	}
 
 	s.from = from
-	s.mailbox = mailbox
-	s.alias = alias
-	s.domain = domainRecord
+	s.mailbox = target.Mailbox
+	s.address = target.Address
+	s.domain = target.Domain
 	s.recipients = nil
 
 	return nil
@@ -240,20 +231,6 @@ func (s *smtpSession) Rcpt(to string, opts *smtp.RcptOptions) error {
 
 	s.recipients = append(s.recipients, to)
 	return nil
-}
-
-// resolveSenderAddress returns the local part of the outgoing From address,
-// preferring the alias address when the session authenticated via an alias.
-// Precondition: s.mailbox is non-nil (enforced by Mail() handler).
-func resolveSenderAddress(s *smtpSession) string {
-	return resolveSenderAddressRecords(s.mailbox, s.alias)
-}
-
-// buildOutgoingFrom builds the outgoing From header for this session, using
-// the alias address when the session authenticated via an alias.
-// Precondition: s.mailbox and s.domain are non-nil.
-func buildOutgoingFrom(s *smtpSession) string {
-	return buildFromAddress(s.mailbox, s.domain, s.alias)
 }
 
 // Data handles the DATA command — parses the RFC 5322 message and sends it
@@ -297,8 +274,8 @@ func (s *smtpSession) Data(r io.Reader) error {
 	// to enforce consistent sender identity across all channels.
 	displayName := s.mailbox.GetString("display_name")
 	domainName := s.domain.GetString("domain")
-	senderAddress := resolveSenderAddress(s)
-	fromAddr := buildOutgoingFrom(s)
+	senderEmail := s.address.GetString("local_part") + "@" + domainName
+	fromAddr := formatFromAddress(displayName, senderEmail)
 
 	// Build To/Cc from parsed headers, derive Bcc from RCPT TO envelope
 	toMap := make(map[string]bool)
@@ -439,7 +416,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 		InReplyTo:         inReplyToHeader,
 		SentBy:            s.user.Id,
 		SenderName:        displayName,
-		SenderEmail:       fmt.Sprintf("%s@%s", senderAddress, domainName),
+		SenderEmail:       senderEmail,
 		To:                msg.To,
 		Cc:                msg.Cc,
 		Date:              now,
@@ -449,7 +426,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 		DeliveryStatus:    deliveryStatus,
 		BounceReason:      bounceReason,
 		Attachments:       msg.Attachments,
-		Alias:             aliasIDFromSession(s),
+		SentFrom:          s.address.Id,
 	}
 
 	if _, err := storeMessage(s.app, thread.Id, storedMsg); err != nil {
@@ -475,7 +452,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 func (s *smtpSession) Reset() {
 	s.from = ""
 	s.mailbox = nil
-	s.alias = nil
+	s.address = nil
 	s.domain = nil
 	s.recipients = nil
 }
@@ -489,10 +466,3 @@ func (s *smtpSession) Logout() error {
 
 // Ensure smtpSession implements the AuthSession interface.
 var _ smtp.AuthSession = (*smtpSession)(nil)
-
-func aliasIDFromSession(s *smtpSession) string {
-	if s.alias == nil {
-		return ""
-	}
-	return s.alias.Id
-}
