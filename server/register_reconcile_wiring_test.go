@@ -154,3 +154,32 @@ func TestRegister_UnrelatedSystemSettingDoesNotReconcile(t *testing.T) {
 			"(a non-mail.* key must not churn the registrar)", maildomains.Current())
 	}
 }
+
+// Register's OnServe hook must repair identities at boot, so a user who has
+// none (a crash, or an install from before identities existed) gets one.
+func TestRegister_OnServeEnsuresIdentitiesAtBoot(t *testing.T) {
+	t.Setenv("IMAP_ENABLED", "false")
+	t.Setenv("SMTP_ENABLED", "false")
+
+	app := newRealSchemaApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "boot.example", "verified": true})
+	user := saveRealRecord(t, app, "users", map[string]any{"email": "b@ext.example", "username": "bo", "name": "Bo", "role": "member"})
+	// Registered after the seed so the user starts with no identity.
+	Register(&pocketbase.PocketBase{App: app})
+	if identityOf(t, app, user.Id) != nil {
+		t.Fatal("precondition: the user already has an identity")
+	}
+
+	router, err := apis.NewRouter(app)
+	if err != nil {
+		t.Fatalf("new router: %v", err)
+	}
+	serveEvent := &core.ServeEvent{App: app, Router: router}
+	if err := app.OnServe().Trigger(serveEvent, func(*core.ServeEvent) error { return nil }); err != nil {
+		t.Fatalf("OnServe trigger: %v", err)
+	}
+
+	if identityOf(t, app, user.Id) == nil {
+		t.Fatal("OnServe did not ensure the user's mail identity")
+	}
+}

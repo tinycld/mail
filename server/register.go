@@ -165,6 +165,7 @@ func registerShared(app *pocketbase.PocketBase) {
 
 	// Every non-guest user gets one personal inbox and one email name.
 	registerIdentityHooks(app)
+	registerRuleAddressHooks(app)
 
 	// Clean up orphaned personal mailboxes when a user is deleted.
 	app.OnRecordAfterDeleteSuccess("users").BindFunc(func(e *core.RecordEvent) error {
@@ -343,6 +344,15 @@ func registerShared(app *pocketbase.PocketBase) {
 		// which only runs once and cannot react to a later provider switch.
 		// A no-op when a delegating registrar already claimed the seam.
 		reconcileMailDomainsRegistrar(app)
+
+		// Repair identities and rule addresses that a crash or an older
+		// release left out of step.
+		if err := ensureIdentities(app); err != nil {
+			addressLog.Error("boot: could not ensure mail identities", "error", err)
+		}
+		if err := reconcileRuleAddresses(app, ruleScope{}); err != nil {
+			addressLog.Error("boot: rule address reconcile failed", "error", err)
+		}
 
 		// Draft endpoint (requires auth, saves without sending)
 		e.Router.POST("/api/mail/draft", func(re *core.RequestEvent) error {
