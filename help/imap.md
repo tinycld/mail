@@ -24,12 +24,12 @@ IMAP is **read + state**, not send. To also send from your client, set up [SMTP]
 | **Port** | **993** |
 | **Encryption** | SSL / TLS (implicit) |
 | **Username** | your TinyCld username, your sign-in email, or any address of your own mailbox (not a shared mailbox address) |
-| **Password** | your TinyCld password |
+| **Password** | your TinyCld password, or an [app password](help://core:security-app-passwords) if two-step verification is on |
 | **Authentication** | Normal password |
 
 > **The server is your TinyCld web address** — the hostname in your browser's address bar, shown above. It is *not* your mail domain: even if your address is `you@yourdomain.com`, the server to enter is `{{server-host}}`, never `mail.yourdomain.com`. TinyCld identifies your workspace by the hostname your client connects with, so any other name (or an IP address) is refused with "service unavailable".
 
-There is no separate "IMAP password" — use your regular TinyCld login.
+There is no separate "IMAP password" — use your regular TinyCld login. If you turned on [two-step verification](help://core:security-mfa), use an [app password](help://core:security-app-passwords) instead: your account password no longer works in these apps.
 
 ## Connecting Apple Mail (macOS)
 
