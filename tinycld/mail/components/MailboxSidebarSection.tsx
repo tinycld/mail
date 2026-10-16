@@ -26,8 +26,16 @@ interface AddressViewItemsProps {
     onNavigate: (mailboxId: string, folder: string) => void
 }
 
+// An empty, zero-size marker that tells e2e the views query has loaded, as
+// package-sidebar-mounted does for the sidebar: with it, no entries is an
+// answer and not a query still loading.
+function ViewsReadyMarker({ isVisible }: { isVisible: boolean }) {
+    if (!isVisible) return null
+    return <View testID="address-views-ready" />
+}
+
 function AddressViewList({ mailboxId, isActive, onNavigate }: AddressViewItemsProps) {
-    const { views } = useAddressViews()
+    const { views, isReady } = useAddressViews()
     const items = views.map(view => {
         const folder = addressViewFolder(view.id)
         return (
@@ -43,7 +51,12 @@ function AddressViewList({ mailboxId, isActive, onNavigate }: AddressViewItemsPr
             />
         )
     })
-    return <View className="pl-4">{items}</View>
+    return (
+        <View className="pl-4">
+            <ViewsReadyMarker isVisible={isReady} />
+            {items}
+        </View>
+    )
 }
 
 /** A folder for each address of the personal inbox, under its Inbox item. */

@@ -136,7 +136,7 @@ test('pressing a view navigates to its address folder', async () => {
 
 test('with the switch off, no entries render', async () => {
     const { container } = renderSection('u2', 'mb2')
-    await waitFor(() => expect(byTestId(container, 'mailbox-section')).toBeTruthy())
+    await waitFor(() => expect(byTestId(container, 'address-views-ready')).toBeTruthy())
     expect(container.querySelector('[testid^="address-view-"]')).toBeNull()
 
     // The same person with the switch on gets the entries: the absence above
@@ -154,4 +154,22 @@ test('with the switch off, no entries render', async () => {
     expect(byTestId(container, 'address-view-ann@tinycld.com')?.textContent).toBe(
         'ann@tinycld.com1'
     )
+})
+
+test('the ready marker waits for the views query to load', async () => {
+    const { createCollection } = await import('@tanstack/db')
+    const loaded = h.stores.mail_identities
+    // A collection whose sync never marks it ready: the query stays loading.
+    h.stores.mail_identities = createCollection({
+        id: 'mail_identities_loading',
+        getKey: (r: { id: string }) => r.id,
+        sync: { sync: () => {} },
+    })
+    try {
+        const { container } = renderSection('u1', 'mb1')
+        await waitFor(() => expect(byTestId(container, 'mailbox-section')).toBeTruthy())
+        expect(byTestId(container, 'address-views-ready')).toBeNull()
+    } finally {
+        h.stores.mail_identities = loaded
+    }
 })
