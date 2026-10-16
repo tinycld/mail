@@ -32,7 +32,7 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
 
 import { OverlayProvider } from '@tinycld/core/ui/overlay'
 import { MembersTab } from '~/tinycld/mail/settings/MailboxDrawer'
-import { foldMembers, type MemberRow } from '~/tinycld/mail/settings/member-rows'
+import { foldMembers, type MemberRow, viaGroupLabel } from '~/tinycld/mail/settings/member-rows'
 
 function row(over: Partial<MemberRow>): MemberRow {
     return {
@@ -42,7 +42,8 @@ function row(over: Partial<MemberRow>): MemberRow {
         userEmail: '',
         role: 'member',
         isYou: false,
-        viaGroupName: null,
+        groupId: null,
+        groupNames: [],
         ...over,
     }
 }
@@ -68,7 +69,16 @@ const derived = row({
     id: 'm_ann',
     userId: 'ann',
     userName: 'Ann',
-    viaGroupName: 'Sales',
+    groupId: 'g_sales',
+    groupNames: ['Sales'],
+})
+// The group row is not loaded, or the viewer cannot read groups: the row is
+// still group access, known from its group id.
+const derivedNoName = row({
+    id: 'm_ann',
+    userId: 'ann',
+    userName: 'Ann',
+    groupId: 'g_hidden',
 })
 
 // react-native-web under happy-dom renders testID as a plain `testid` attribute.
@@ -129,16 +139,66 @@ test('a person with only group access is offered in the picker and gets a direct
     )
 })
 
+test('a group row that is not loaded still shows as group access', async () => {
+    const { findByText, queryAllByText, container } = mountDrawer([me, derivedNoName])
+    expect(await findByText('Through a group')).toBeTruthy()
+    expect(container.querySelector('[accessibilitylabel="Remove Ann"]')).toBeNull()
+    fireEvent.click(await findByText('Add member'))
+    expect(await findByText('Zed')).toBeTruthy()
+    expect(queryAllByText('Ann')).toHaveLength(2)
+})
+
+test('a person with access through two groups names both groups', async () => {
+    const both = foldMembers([
+        derived,
+        row({
+            id: 'm_ann2',
+            userId: 'ann',
+            userName: 'Ann',
+            groupId: 'g_ops',
+            groupNames: ['Ops'],
+        }),
+    ])
+    const { findByText } = mountDrawer([me, ...both])
+    expect(await findByText('Through groups Sales, Ops')).toBeTruthy()
+})
+
 test('foldMembers: one row per person, the direct row wins, group-only rows name their groups', () => {
     const rows = [
-        row({ id: 'a1', userId: 'ann', userName: 'Ann', viaGroupName: 'Sales' }),
-        row({ id: 'a2', userId: 'ann', userName: 'Ann', viaGroupName: null, role: 'owner' }),
-        row({ id: 'b1', userId: 'bob', userName: 'Bob', viaGroupName: 'Sales' }),
-        row({ id: 'b2', userId: 'bob', userName: 'Bob', viaGroupName: 'Ops' }),
+        row({
+            id: 'a1',
+            userId: 'ann',
+            userName: 'Ann',
+            groupId: 'g_sales',
+            groupNames: ['Sales'],
+        }),
+        row({ id: 'a2', userId: 'ann', userName: 'Ann', role: 'owner' }),
+        row({
+            id: 'b1',
+            userId: 'bob',
+            userName: 'Bob',
+            groupId: 'g_sales',
+            groupNames: ['Sales'],
+        }),
+        row({ id: 'b2', userId: 'bob', userName: 'Bob', groupId: 'g_ops', groupNames: ['Ops'] }),
     ]
     const folded = foldMembers(rows)
-    expect(folded.map(r => [r.id, r.role, r.viaGroupName])).toEqual([
-        ['a2', 'owner', null],
-        ['b1', 'member', 'Sales, Ops'],
+    expect(folded.map(r => [r.id, r.role, r.groupId, r.groupNames])).toEqual([
+        ['a2', 'owner', null, []],
+        ['b1', 'member', 'g_sales', ['Sales', 'Ops']],
     ])
+})
+
+test('foldMembers: a derived row with no group name never wins over the direct row', () => {
+    const folded = foldMembers([
+        row({ id: 'a1', userId: 'ann', groupId: 'g_hidden' }),
+        row({ id: 'a2', userId: 'ann' }),
+    ])
+    expect(folded.map(r => [r.id, r.groupId])).toEqual([['a2', null]])
+})
+
+test('viaGroupLabel names one group, several groups, or an unknown group', () => {
+    expect(viaGroupLabel(['Sales'])).toBe('Through group Sales')
+    expect(viaGroupLabel(['Sales', 'Ops'])).toBe('Through groups Sales, Ops')
+    expect(viaGroupLabel([])).toBe('Through a group')
 })

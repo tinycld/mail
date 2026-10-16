@@ -60,8 +60,8 @@ function useMailboxData(currentUserId: string) {
 
     // Membership rows carry their user in the same expression; a row whose
     // user is gone drops out via the inner join, which also drops the group
-    // grant rows (no user). A row a group gave names that group through the
-    // left join.
+    // grant rows (no user). A row a group gave carries its group id; the left
+    // join adds the group name for display, when the group row is loaded.
     const { data: memberRows } = useLiveQuery({
         queryKey: ['mail_settings_mailbox_members'],
         query: query =>
@@ -76,7 +76,7 @@ function useMailboxData(currentUserId: string) {
                 .select(({ member, user, group }) => ({
                     member,
                     user,
-                    viaGroupName: coalesce(group?.name, null),
+                    groupName: coalesce(group?.name, null),
                 })),
     })
 
@@ -115,7 +115,7 @@ function useMailboxData(currentUserId: string) {
     })
 
     const rowsByMailbox = new Map<string, MemberRow[]>()
-    for (const { member, user, viaGroupName } of memberRows ?? []) {
+    for (const { member, user, groupName } of memberRows ?? []) {
         const row: MemberRow = {
             id: member.id,
             userId: user.id,
@@ -123,7 +123,8 @@ function useMailboxData(currentUserId: string) {
             userEmail: user.email ?? '',
             role: member.role as 'owner' | 'member',
             isYou: user.id === currentUserId,
-            viaGroupName,
+            groupId: member.group || null,
+            groupNames: groupName ? [groupName] : [],
         }
         const list = rowsByMailbox.get(member.mailbox) ?? []
         list.push(row)

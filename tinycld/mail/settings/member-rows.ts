@@ -7,8 +7,14 @@ export interface MemberRow {
     userEmail: string
     role: MemberRole
     isYou: boolean
-    /** Names of the groups that give this person access, when no direct row does. */
-    viaGroupName: string | null
+    /**
+     * The group whose grant gave this row, or null for a direct row. This,
+     * not the group name, decides whether the access comes from a group: the
+     * group row can be missing (not loaded, or the viewer cannot read groups).
+     */
+    groupId: string | null
+    /** Names of the groups that give this access, for display only. */
+    groupNames: string[]
 }
 
 /**
@@ -26,12 +32,19 @@ export function foldMembers(rows: MemberRow[]): MemberRow[] {
     }
     return [...byUser.values()].map(list => {
         const ordered = [...list].sort(
-            (a, b) => Number(a.viaGroupName !== null) - Number(b.viaGroupName !== null)
+            (a, b) => Number(a.groupId !== null) - Number(b.groupId !== null)
         )
         const [first] = ordered
         const role = ordered.some(r => r.role === 'owner') ? 'owner' : 'member'
-        if (first.viaGroupName === null) return { ...first, role }
-        const names = [...new Set(ordered.map(r => r.viaGroupName))]
-        return { ...first, role, viaGroupName: names.join(', ') }
+        if (first.groupId === null) return { ...first, role }
+        const groupNames = [...new Set(ordered.flatMap(r => r.groupNames))]
+        return { ...first, role, groupNames }
     })
+}
+
+/** The note under a person who has access through groups. */
+export function viaGroupLabel(groupNames: string[]): string {
+    if (groupNames.length === 0) return 'Through a group'
+    if (groupNames.length === 1) return `Through group ${groupNames[0]}`
+    return `Through groups ${groupNames.join(', ')}`
 }

@@ -2,6 +2,7 @@ import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useServerActionState } from '@tinycld/core/lib/use-writes-available'
 import { X } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
+import { viaGroupLabel } from './member-rows'
 
 export type Role = 'owner' | 'member'
 
@@ -14,8 +15,10 @@ interface Props {
     canToggleRole: boolean
     /** False for a viewer who cannot change members: the remove control is not shown. */
     canEdit?: boolean
-    /** Set when a group gives this access: it can only change by changing the group grant. */
-    viaGroupName?: string | null
+    /** True when a group gives this access: it can only change by changing the group grant. */
+    isDerived?: boolean
+    /** Names of the groups that give this access, for the note under the name. */
+    groupNames?: string[]
     onToggleRole: () => void
     onRemove: () => void
 }
@@ -28,7 +31,8 @@ export function MailboxMemberRow({
     canRemove,
     canToggleRole,
     canEdit = true,
-    viaGroupName = null,
+    isDerived = false,
+    groupNames = [],
     onToggleRole,
     onRemove,
 }: Props) {
@@ -40,7 +44,6 @@ export function MailboxMemberRow({
         accessibilityHint: `Removes ${name} from the inbox`,
     })
     const isOwner = role === 'owner'
-    const isDerived = viaGroupName !== null
     const pillBg = isOwner ? `${primaryColor}1F` : `${mutedColor}26`
     const pillFg = isOwner ? primaryColor : mutedColor
 
@@ -67,7 +70,7 @@ export function MailboxMemberRow({
                         {email}
                     </Text>
                 ) : null}
-                <ViaGroupNote isVisible={isDerived} groupName={viaGroupName} />
+                <ViaGroupNote isVisible={isDerived} groupNames={groupNames} />
             </View>
             <Pressable
                 onPress={onToggleRole}
@@ -95,11 +98,11 @@ export function MailboxMemberRow({
     )
 }
 
-function ViaGroupNote({ isVisible, groupName }: { isVisible: boolean; groupName: string | null }) {
+function ViaGroupNote({ isVisible, groupNames }: { isVisible: boolean; groupNames: string[] }) {
     if (!isVisible) return null
     return (
         <Text className="text-muted-foreground" style={{ fontSize: 11.5, marginTop: 1 }}>
-            Through group {groupName}
+            {viaGroupLabel(groupNames)}
         </Text>
     )
 }

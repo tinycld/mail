@@ -426,7 +426,7 @@ export function MembersTab({
     })
 
     // A person who has access only through a group can still get a direct row.
-    const existingIds = new Set(members.filter(m => m.viaGroupName === null).map(m => m.userId))
+    const existingIds = new Set(members.filter(m => m.groupId === null).map(m => m.userId))
     const available = orgMembers.filter(o => !existingIds.has(o.userId))
     const ownerCount = members.filter(m => m.role === 'owner').length
 
@@ -459,7 +459,8 @@ export function MembersTab({
                         canRemove={!isLastOwner}
                         canToggleRole={canChange}
                         canEdit={canWrite}
-                        viaGroupName={m.viaGroupName}
+                        isDerived={m.groupId !== null}
+                        groupNames={m.groupNames}
                         onToggleRole={() =>
                             toggleRoleMutation.mutate({
                                 id: m.id,
