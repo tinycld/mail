@@ -87,6 +87,53 @@ test.describe('Mail — Compose attachments', () => {
         ).toBeVisible()
     })
 
+    // A resumed draft used to lose its saved files: compose showed none, the
+    // send named no draft, and deleting the draft after the send deleted the
+    // only copy. Reopening must show the file, and the send must name the
+    // draft so the server sends its saved files.
+    test('a reopened draft shows its saved file, and its send names the draft', async ({
+        page,
+    }) => {
+        const subject = uniqueSubject('compose-resume')
+
+        await openCompose(page)
+        await page.getByTestId('mail-compose-to').fill('friend@example.net, ')
+        await page.getByTestId('mail-compose-subject').fill(subject)
+        await page.locator('.tinycld-mail-editor .ProseMirror').click()
+        await page.keyboard.type('Body text, so closing saves a draft.')
+        await attachHippo(page)
+        await closeCompose(page)
+
+        await navigateToPersonalInbox(page)
+        await clickSidebarItem(page, 'Drafts')
+        const row = emailRow(page, subject)
+        await expect(row.getByRole('img', { name: 'Has attachments' })).toBeVisible({
+            timeout: 20_000,
+        })
+
+        // The ribbon was empty here before: compose read only the draft row's
+        // text, never its saved files.
+        await row.click()
+        await expect(page.getByTestId('mail-compose-subject')).toHaveValue(subject)
+        await expect(page.getByText('hippo.jpg', { exact: true })).toBeVisible()
+
+        const sendRequest = page.waitForRequest(
+            req => req.url().includes('/api/mail/send') && req.method() === 'POST'
+        )
+        await page.getByText('Send', { exact: true }).click()
+        const body = (await sendRequest).postDataJSON()
+        expect(body.draft_id).toBeTruthy()
+        expect(body.remove_attachments).toBeUndefined()
+
+        // e2e has no mail provider, so the server refuses the send (see the
+        // note at the end of this file). A refused send must keep the draft
+        // and its file.
+        await expect(page.getByText('Send failed')).toBeVisible()
+        await expect(page.getByText('hippo.jpg', { exact: true })).toBeVisible()
+        await closeCompose(page)
+        await expect(row.getByRole('img', { name: 'Has attachments' })).toBeVisible()
+    })
+
     test('no progress bar renders before anything is uploading', async ({ page }) => {
         await openCompose(page)
         await page.getByTestId('mail-compose-subject').fill(uniqueSubject('compose-idle'))
@@ -103,6 +150,13 @@ test.describe('Mail — Compose attachments', () => {
 })
 
 // NOT covered here, deliberately, so nobody assumes it is:
+//
+// A resumed draft's saved files arriving on the sent message. The send is
+// refused for want of a provider (below) before the server copies them, so
+// this spec proves only the client half: compose shows the file and the send
+// names the draft. The server half — copy, refusals, an unreadable file, and
+// deleting the draft only after the send — is covered by
+// server/endpoints_send_draft_test.go.
 //
 // The bar itself, mid-upload. It renders inside the compose window's ribbon,
 // and only the SEND path keeps that window mounted while bytes move — the

@@ -37,7 +37,7 @@ Drag an image into the body to embed it inline (vs as a separate attachment). Th
 
 ## Drafts
 
-Drafts auto-save every few seconds while you type. They live in the **Drafts** folder of the inbox you're sending from. If you close the compose window, the draft stays — reopen it from Drafts to keep working. To discard, open the draft and click **Delete draft** (or **Move to trash** from the list).
+Drafts auto-save every few seconds while you type. They live in the **Drafts** folder of the inbox you're sending from. If you close the compose window, the draft stays — reopen it from Drafts to keep working. A reopened draft shows the files you attached to it. When you send the draft, these files go with the message. If you remove a file, it is removed from the draft when the draft is saved again. If a saved file cannot be read, the message is not sent and the draft stays. To discard, open the draft and click **Delete draft** (or **Move to trash** from the list).
 
 ## Sending
 

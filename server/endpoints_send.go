@@ -111,6 +111,9 @@ type sendParams struct {
 	Bcc                []api.Recipient
 	InReplyToMessageID string
 	Attachments        []Attachment
+	// DraftID is the draft this send resumes; see api.SendEmailRequest.
+	DraftID                string
+	RemoveDraftAttachments []string
 }
 
 // sendResultRecord is what a completed send produces: the stored message and
@@ -185,6 +188,23 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 	if err != nil {
 		return nil, sendErrorForAddress(err)
 	}
+
+	// A resumed draft's saved files are read before anything is sent, so a
+	// file that cannot be read stops the send and the draft is kept.
+	attachments := p.Attachments
+	var draft *core.Record
+	if p.DraftID != "" {
+		draft, err = loadSendDraft(app, p.DraftID, p.MailboxID)
+		if err != nil {
+			return nil, err
+		}
+		saved, err := draftAttachments(app, draft, p.RemoveDraftAttachments)
+		if err != nil {
+			return nil, err
+		}
+		attachments = append(saved, p.Attachments...)
+	}
+
 	domainRecord := from.Domain
 	displayName := mailbox.GetString("display_name")
 	domain := domainRecord.GetString("domain")
@@ -215,7 +235,7 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 		TextBody:    p.TextBody,
 		InReplyTo:   inReplyToHeader,
 		References:  referencesHeader,
-		Attachments: p.Attachments,
+		Attachments: attachments,
 
 		// Echoed back on the provider's delivery and bounce notifications,
 		// which carry no From address for a receiver to attribute them by.
@@ -254,7 +274,7 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 
 	// Convert Attachment (base64) → InboundAttachment for storage
 	var storedAttachments []InboundAttachment
-	for _, att := range p.Attachments {
+	for _, att := range attachments {
 		storedAttachments = append(storedAttachments, InboundAttachment{
 			Name:        att.Name,
 			ContentType: att.ContentType,
@@ -298,6 +318,10 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 		return nil, &sendError{kind: sendErrInternal, msg: "Failed to create thread state", err: err}
 	}
 
+	if draft != nil {
+		deleteSentDraft(app, draft)
+	}
+
 	return &sendResultRecord{MessageRecordID: record.Id, ThreadID: thread.Id}, nil
 }
 
@@ -333,19 +357,21 @@ func handleSend(app core.App, re *core.RequestEvent) error {
 	}
 
 	result, err := sendMessage(app, sendParams{
-		Ctx:                re.Request.Context(),
-		UserID:             userID,
-		MailboxID:          req.MailboxID,
-		AliasID:            req.AliasID,
-		FromAddressID:      req.FromAddressID,
-		Subject:            req.Subject,
-		HTMLBody:           req.HTMLBody,
-		TextBody:           req.TextBody,
-		To:                 req.To,
-		Cc:                 req.Cc,
-		Bcc:                req.Bcc,
-		InReplyToMessageID: req.InReplyToMessageID,
-		Attachments:        fileAttachments,
+		Ctx:                    re.Request.Context(),
+		UserID:                 userID,
+		MailboxID:              req.MailboxID,
+		AliasID:                req.AliasID,
+		FromAddressID:          req.FromAddressID,
+		Subject:                req.Subject,
+		HTMLBody:               req.HTMLBody,
+		TextBody:               req.TextBody,
+		To:                     req.To,
+		Cc:                     req.Cc,
+		Bcc:                    req.Bcc,
+		InReplyToMessageID:     req.InReplyToMessageID,
+		Attachments:            fileAttachments,
+		DraftID:                req.DraftID,
+		RemoveDraftAttachments: req.RemoveAttachments,
 	})
 	if err != nil {
 		var sendErr *sendError

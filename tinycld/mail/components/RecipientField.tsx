@@ -95,6 +95,10 @@ export function RecipientField({ control, name, placeholder, autoFocus }: Recipi
                     )
                 })}
                 <PlainInput
+                    // Same addressing as the other compose inputs: the label
+                    // is a sibling Text, not a bound <label>.
+                    testID={`mail-compose-${name}`}
+                    accessibilityLabel={name}
                     className="flex-1 px-1 min-w-[80px]"
                     style={{
                         fontSize: 13,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
     composeFromRowView,
     composeSendBlocker,
+    composeSendRequest,
     draftSaveRequest,
     resolveComposeFrom,
     resolveComposeState,
@@ -249,5 +250,54 @@ describe('draftSaveRequest', () => {
         const from = resolveComposeFrom(identities, '', null, '')
         if (!from) throw new Error('expected a From')
         expect(draftSaveRequest(from, null, { subject: '' }).message_id).toBeUndefined()
+    })
+})
+
+describe('draftSaveRequest with removed saved attachments', () => {
+    it('asks the server to drop the removed files from the open draft', () => {
+        const from = resolveComposeFrom(identities, '', null, '')
+        if (!from) throw new Error('expected a From')
+        const request = draftSaveRequest(from, 'd1', { subject: 's' }, ['hippo_ab12cd34ef.jpg'])
+        expect(request.remove_attachments).toEqual(['hippo_ab12cd34ef.jpg'])
+    })
+
+    it('sends no removals for a new draft', () => {
+        const from = resolveComposeFrom(identities, '', null, '')
+        if (!from) throw new Error('expected a From')
+        const request = draftSaveRequest(from, null, { subject: 's' }, ['hippo_ab12cd34ef.jpg'])
+        expect(request.remove_attachments).toBeUndefined()
+    })
+})
+
+describe('composeSendRequest', () => {
+    const fields = {
+        to: [{ name: '', email: 'a@b.example' }],
+        subject: 's',
+        html_body: '',
+        text_body: '',
+    }
+
+    it('names the resumed draft and the saved files the sender removed', () => {
+        const { from } = resolveComposeState({
+            identities,
+            storeMailboxId: '',
+            storeAddressId: null,
+            fallbackMailboxId: 'mb_support',
+            lockedMailboxId: 'mb_support',
+        })
+        if (!from) throw new Error('expected a From')
+        const request = composeSendRequest(from, 'd1', ['drop_ab12cd34ef.txt'], fields)
+        expect(request.mailbox_id).toBe('mb_support')
+        expect(request.from_address_id).toBe('sup')
+        expect(request.draft_id).toBe('d1')
+        expect(request.remove_attachments).toEqual(['drop_ab12cd34ef.txt'])
+    })
+
+    it('names no draft for a new message', () => {
+        const from = resolveComposeFrom(identities, '', null, '')
+        if (!from) throw new Error('expected a From')
+        const request = composeSendRequest(from, null, [], fields)
+        expect(request.draft_id).toBeUndefined()
+        expect(request.remove_attachments).toBeUndefined()
     })
 })

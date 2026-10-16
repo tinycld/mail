@@ -205,6 +205,10 @@ func updateDraftRecord(app core.App, record *core.Record, req api.SaveDraftReque
 		record.Set("body_html", htmlFile)
 	}
 
+	if len(req.RemoveAttachments) > 0 {
+		record.Set("attachments-", req.RemoveAttachments)
+	}
+
 	if err := appendFileAttachments(record, uploadedFiles); err != nil {
 		return err
 	}
