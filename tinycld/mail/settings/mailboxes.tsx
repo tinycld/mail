@@ -113,16 +113,16 @@ function useMailboxData(currentUserId: string) {
         membersByMailbox.set(member.mailbox, list)
     }
 
-    const aliasesByMailbox = new Map<string, string[]>()
+    const otherAddressesByMailbox = new Map<string, string[]>()
     for (const a of extraAddresses ?? []) {
-        const list = aliasesByMailbox.get(a.mailbox) ?? []
+        const list = otherAddressesByMailbox.get(a.mailbox) ?? []
         list.push(`${a.localPart}@${a.domainName}`)
-        aliasesByMailbox.set(a.mailbox, list)
+        otherAddressesByMailbox.set(a.mailbox, list)
     }
 
     const items: MailboxListItem[] = (mailboxRows ?? []).map(({ mailbox, domain }) => {
         const mbMembers = membersByMailbox.get(mailbox.id) ?? []
-        const mbAliases = aliasesByMailbox.get(mailbox.id) ?? []
+        const mbOtherAddresses = otherAddressesByMailbox.get(mailbox.id) ?? []
         return {
             id: mailbox.id,
             address: mailbox.address,
@@ -130,10 +130,10 @@ function useMailboxData(currentUserId: string) {
             displayName: mailbox.display_name || mailbox.name || '',
             type: mailbox.type,
             memberCount: mbMembers.length,
-            aliasCount: mbAliases.length,
+            otherAddressCount: mbOtherAddresses.length,
             memberNames: mbMembers.map(m => m.userName),
             memberEmails: mbMembers.map(m => m.userEmail).filter(Boolean),
-            aliasAddresses: mbAliases,
+            otherAddresses: mbOtherAddresses,
         }
     })
 
@@ -225,7 +225,7 @@ export default function MailboxesSettings() {
                                 <HelpIcon topic="mail:mailboxes" size={18} />
                             </View>
                             <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
-                                Manage shared mailboxes, members, and aliases for your organization.
+                                Manage shared mailboxes, members, and addresses for your organization.
                             </Text>
                         </View>
                         <Pressable
