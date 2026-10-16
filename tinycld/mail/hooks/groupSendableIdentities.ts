@@ -18,7 +18,7 @@ export interface SendableIdentity {
     defaultAddressId: string
 }
 
-/** One row per (membership × address) from useSendableIdentities' joined query. */
+/** One row per (membership × address), from useSendableIdentities' query. */
 export interface SendableIdentityRow {
     mailbox: MailMailboxes
     address: MailAddresses
@@ -69,7 +69,7 @@ function toIdentity(entry: MailboxEntry): SendableIdentity {
 }
 
 /**
- * Pure: group the joined rows into one identity per mailbox, personal first,
+ * Pure: group the rows into one identity per mailbox, personal first,
  * then shared by `created` ascending — the order pickers present them in.
  */
 export function groupSendableIdentities(rows: SendableIdentityRow[]): SendableIdentity[] {
