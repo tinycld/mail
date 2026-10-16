@@ -45,7 +45,10 @@ export function MailboxMemberRow({
     const pillFg = isOwner ? primaryColor : mutedColor
 
     return (
-        <View className="flex-row items-center gap-3 py-2">
+        <View
+            testID={`mailbox-member-row-${email || name}`}
+            className="flex-row items-center gap-3 py-2"
+        >
             <View className="flex-1" style={{ minWidth: 0 }}>
                 <Text className="text-foreground" style={{ fontSize: 13, fontWeight: '600' }}>
                     {name}

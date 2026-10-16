@@ -63,20 +63,28 @@ test.describe('Mail — Groups in shared inboxes', () => {
             await expect(picker).toBeHidden()
             await expect(groups.getByText(groupName, { exact: true })).toBeVisible()
 
-            // The nearest ancestor holding the invitee's email and the group
-            // note, so the note cannot belong to another member's row.
-            const inviteeRow = drawer
-                .locator('div')
-                .filter({ has: page.getByText(user.email, { exact: true }) })
-                .filter({ has: page.getByText(`Through group ${groupName}`, { exact: true }) })
-                .last()
-            await expect(inviteeRow).toBeVisible()
+            const inviteeRow = drawer.getByTestId(`mailbox-member-row-${user.email}`)
+            await expect(
+                inviteeRow.getByText(`Through group ${groupName}`, { exact: true })
+            ).toBeVisible()
             await closeDrawer(page)
 
             await navigateToPackage(inviteePage, 'mail', {
                 waitFor: inviteePage.getByTestId('package-sidebar-mounted'),
             })
             await expect(mailboxSection(inviteePage, local)).toBeVisible()
+
+            // The compose From choices offer the inbox too. Picking the
+            // invitee's own address closes the picker without changing From.
+            await inviteePage.getByText('Compose', { exact: true }).click()
+            await expect(inviteePage.getByText('To', { exact: true })).toBeVisible()
+            await inviteePage.getByText('Change', { exact: true }).click()
+            await expect(inviteePage.getByText(inboxAddress, { exact: true })).toBeVisible()
+            await inviteePage
+                .getByText(`${user.username}@tinycld.org`, { exact: true })
+                .last()
+                .click()
+            await expect(inviteePage.getByText(inboxAddress, { exact: true })).toBeHidden()
 
             await openGroupsSettings(page)
             await page.getByTestId(`group-row-${groupName}`).click()
