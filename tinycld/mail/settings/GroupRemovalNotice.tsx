@@ -16,36 +16,41 @@ function useRemovalNotice({ groupId, userId }: GroupMemberRemovalNoticeProps) {
     ] = useStore('mail_addresses', 'mail_domains', 'mail_identities', 'users', 'group_members')
     // One row per (address, owner's group membership): the memberships tell
     // whether another of the domain's groups keeps the address.
-    const { data: rows } = useLiveQuery(query =>
-        query
-            .from({ address: addressesCollection })
-            .innerJoin({ domain: domainsCollection }, ({ address, domain }) =>
-                eq(address.domain, domain.id)
-            )
-            .innerJoin({ identity: identitiesCollection }, ({ address, identity }) =>
-                eq(address.mailbox, identity.inbox)
-            )
-            .innerJoin({ user: usersCollection }, ({ identity, user }) =>
-                eq(identity.user, user.id)
-            )
-            .join({ member: membersCollection }, ({ identity, member }) =>
-                eq(identity.user, member.user)
-            )
-            .where(({ address, identity }) => {
-                const fromGroup = and(eq(address.via_group, groupId), eq(address.source, 'rule'))
-                if (userId === null) return fromGroup
-                return and(fromGroup, eq(identity.user, userId))
-            })
-            .select(({ address, domain, identity, user, member }) => ({
-                localPart: address.local_part,
-                domainName: domain.domain,
-                coverageGroups: domain.coverage_groups,
-                userId: identity.user,
-                name: user.name,
-                email: user.email,
-                memberGroup: member?.group,
-            }))
-    )
+    const { data: rows } = useLiveQuery({
+        queryKey: ['mail_group_removal_addresses', groupId, userId],
+        query: query =>
+            query
+                .from({ address: addressesCollection })
+                .innerJoin({ domain: domainsCollection }, ({ address, domain }) =>
+                    eq(address.domain, domain.id)
+                )
+                .innerJoin({ identity: identitiesCollection }, ({ address, identity }) =>
+                    eq(address.mailbox, identity.inbox)
+                )
+                .innerJoin({ user: usersCollection }, ({ identity, user }) =>
+                    eq(identity.user, user.id)
+                )
+                .join({ member: membersCollection }, ({ identity, member }) =>
+                    eq(identity.user, member.user)
+                )
+                .where(({ address, identity }) => {
+                    const fromGroup = and(
+                        eq(address.via_group, groupId),
+                        eq(address.source, 'rule')
+                    )
+                    if (userId === null) return fromGroup
+                    return and(fromGroup, eq(identity.user, userId))
+                })
+                .select(({ address, domain, identity, user, member }) => ({
+                    localPart: address.local_part,
+                    domainName: domain.domain,
+                    coverageGroups: domain.coverage_groups,
+                    userId: identity.user,
+                    name: user.name,
+                    email: user.email,
+                    memberGroup: member?.group,
+                })),
+    })
     return useMemo(() => {
         const addressRows: GroupAddressRow[] = []
         const memberships = new Map<string, string[]>()

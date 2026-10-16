@@ -23,6 +23,7 @@ export function useDraftMessage(
     const threadId = context?.threadId ?? ''
 
     const { data: drafts } = useLiveQuery({
+        queryKey: ['mail_draft', threadId],
         query: query =>
             threadId
                 ? query

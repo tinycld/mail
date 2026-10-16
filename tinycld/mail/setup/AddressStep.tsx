@@ -28,19 +28,21 @@ import {
 
 function useDomainRows() {
     const [domainsCollection] = useStore('mail_domains')
-    const { data, isReady } = useLiveQuery(query =>
-        query
-            .from({ d: domainsCollection })
-            .orderBy(({ d }) => d.created, 'asc')
-            .select(({ d }) => ({
-                id: d.id,
-                domain: d.domain,
-                verified: d.verified,
-                spf_verified: d.spf_verified,
-                dkim_verified: d.dkim_verified,
-                return_path_verified: d.return_path_verified,
-            }))
-    )
+    const { data, isReady } = useLiveQuery({
+        queryKey: ['mail_setup_domain_rows'],
+        query: query =>
+            query
+                .from({ d: domainsCollection })
+                .orderBy(({ d }) => d.created, 'asc')
+                .select(({ d }) => ({
+                    id: d.id,
+                    domain: d.domain,
+                    verified: d.verified,
+                    spf_verified: d.spf_verified,
+                    dkim_verified: d.dkim_verified,
+                    return_path_verified: d.return_path_verified,
+                })),
+    })
     return { rows: data ?? [], isReady }
 }
 
@@ -57,13 +59,15 @@ export function useIsStepVisible() {
 // the user can see, and this hook runs on each wizard render.
 export function useIsStepDone() {
     const [messagesCollection] = useStore('mail_messages')
-    const { data, isReady } = useLiveQuery(query =>
-        query
-            .from({ msg: messagesCollection })
-            .where(({ msg }) => gt(msg.delivered_at, ''))
-            .select(({ msg }) => ({ id: msg.id }))
-            .findOne()
-    )
+    const { data, isReady } = useLiveQuery({
+        queryKey: ['mail_setup_delivered_message'],
+        query: query =>
+            query
+                .from({ msg: messagesCollection })
+                .where(({ msg }) => gt(msg.delivered_at, ''))
+                .select(({ msg }) => ({ id: msg.id }))
+                .findOne(),
+    })
     return isReady ? data !== undefined : undefined
 }
 
@@ -75,14 +79,16 @@ function useMyNewestMailbox() {
         'mail_mailboxes',
         'mail_domains'
     )
-    const { data } = useMyLiveQuery((query, { userId }) =>
-        query
-            .from({ m: membersCollection })
-            .innerJoin({ mb: mailboxesCollection }, ({ m, mb }) => eq(m.mailbox, mb.id))
-            .innerJoin({ d: domainsCollection }, ({ mb, d }) => eq(mb.domain, d.id))
-            .where(({ m }) => eq(m.user, userId))
-            .orderBy(({ mb }) => mb.created, 'desc')
-            .select(({ mb, d }) => ({ id: mb.id, address: mb.address, domain: d.domain }))
+    const { data } = useMyLiveQuery(
+        (query, { userId }) =>
+            query
+                .from({ m: membersCollection })
+                .innerJoin({ mb: mailboxesCollection }, ({ m, mb }) => eq(m.mailbox, mb.id))
+                .innerJoin({ d: domainsCollection }, ({ mb, d }) => eq(mb.domain, d.id))
+                .where(({ m }) => eq(m.user, userId))
+                .orderBy(({ mb }) => mb.created, 'desc')
+                .select(({ mb, d }) => ({ id: mb.id, address: mb.address, domain: d.domain })),
+        { queryKey: ['mail_setup_newest_mailbox'] }
     )
     const newest = data?.[0]
     if (!newest) return null
@@ -129,20 +135,22 @@ const OUTBOUND_STATUSES = ['sending', 'sent', 'bounced', 'spam_complaint']
 // case normalization on either side.
 function useTestMessageState(senderEmail: string) {
     const [messagesCollection] = useStore('mail_messages')
-    const { data } = useMyLiveQuery((query, { userId }) =>
-        query
-            .from({ msg: messagesCollection })
-            .where(({ msg }) => eq(msg.sent_by, userId))
-            .where(({ msg }) => eq(msg.sender_email, senderEmail))
-            .where(({ msg }) => inArray(msg.delivery_status, OUTBOUND_STATUSES))
-            .orderBy(({ msg }) => msg.created, 'desc')
-            .select(({ msg }) => ({
-                delivery_status: msg.delivery_status,
-                delivered_at: msg.delivered_at,
-                bounce_class: msg.bounce_class,
-                bounce_reason: msg.bounce_reason,
-            }))
-            .findOne()
+    const { data } = useMyLiveQuery(
+        (query, { userId }) =>
+            query
+                .from({ msg: messagesCollection })
+                .where(({ msg }) => eq(msg.sent_by, userId))
+                .where(({ msg }) => eq(msg.sender_email, senderEmail))
+                .where(({ msg }) => inArray(msg.delivery_status, OUTBOUND_STATUSES))
+                .orderBy(({ msg }) => msg.created, 'desc')
+                .select(({ msg }) => ({
+                    delivery_status: msg.delivery_status,
+                    delivered_at: msg.delivered_at,
+                    bounce_class: msg.bounce_class,
+                    bounce_reason: msg.bounce_reason,
+                }))
+                .findOne(),
+        { queryKey: ['mail_setup_test_message', senderEmail] }
     )
     return testMessageState(data)
 }
@@ -219,11 +227,13 @@ function CreatedMailbox({ mailbox }: { mailbox: { id: string; email: string } })
 // gives a later user their own address.
 function useMe() {
     const [usersCollection] = useStore('users')
-    const { data } = useMyLiveQuery((query, { userId }) =>
-        query
-            .from({ u: usersCollection })
-            .where(({ u }) => eq(u.id, userId))
-            .select(({ u }) => ({ id: u.id, username: u.username, name: u.name }))
+    const { data } = useMyLiveQuery(
+        (query, { userId }) =>
+            query
+                .from({ u: usersCollection })
+                .where(({ u }) => eq(u.id, userId))
+                .select(({ u }) => ({ id: u.id, username: u.username, name: u.name })),
+        { queryKey: ['mail_setup_me'] }
     )
     return data?.[0]
 }

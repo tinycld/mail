@@ -37,6 +37,7 @@ export function useSearchThreadItems(results: MailSearchResult[]): ThreadListIte
     const stateIds = useMemo(() => results.map(r => r.state_id), [results])
 
     const { data: rows } = useLiveQuery({
+        queryKey: ['mail_search_thread_rows', stateIds],
         query: query =>
             stateIds.length === 0
                 ? undefined
@@ -55,15 +56,17 @@ export function useSearchThreadItems(results: MailSearchResult[]): ThreadListIte
                       })),
     })
 
-    const { data: allAssignments } = useMyLiveQuery((query, { userId }) =>
-        query
-            .from({ label_assignments: assignmentsCollection })
-            .where(({ label_assignments }) =>
-                and(
-                    eq(label_assignments.collection, 'mail_thread_state'),
-                    eq(label_assignments.user, userId)
-                )
-            )
+    const { data: allAssignments } = useMyLiveQuery(
+        (query, { userId }) =>
+            query
+                .from({ label_assignments: assignmentsCollection })
+                .where(({ label_assignments }) =>
+                    and(
+                        eq(label_assignments.collection, 'mail_thread_state'),
+                        eq(label_assignments.user, userId)
+                    )
+                ),
+        { queryKey: ['mail_thread_label_assignments'] }
     )
 
     const rowById = useMemo(() => {

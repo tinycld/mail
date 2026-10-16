@@ -33,36 +33,40 @@ export function useIsStepVisible() {
 
 export function useIsStepDone() {
     const [domainsCollection] = useStore('mail_domains')
-    const { data, isReady } = useLiveQuery(query =>
-        query.from({ d: domainsCollection }).select(({ d }) => ({
-            verified: d.verified,
-            spf_verified: d.spf_verified,
-            dkim_verified: d.dkim_verified,
-            return_path_verified: d.return_path_verified,
-        }))
-    )
+    const { data, isReady } = useLiveQuery({
+        queryKey: ['mail_setup_domain_readiness'],
+        query: query =>
+            query.from({ d: domainsCollection }).select(({ d }) => ({
+                verified: d.verified,
+                spf_verified: d.spf_verified,
+                dkim_verified: d.dkim_verified,
+                return_path_verified: d.return_path_verified,
+            })),
+    })
     return isReady ? hasReadyDomain(data ?? []) : undefined
 }
 
 function useDomains() {
     const [domainsCollection] = useStore('mail_domains')
-    const { data = [] } = useLiveQuery(query =>
-        query
-            .from({ d: domainsCollection })
-            .orderBy(({ d }) => d.created, 'asc')
-            .select(({ d }) => ({
-                id: d.id,
-                domain: d.domain,
-                verified: d.verified,
-                mx_verified: d.mx_verified,
-                inbound_domain_verified: d.inbound_domain_verified,
-                spf_verified: d.spf_verified,
-                dkim_verified: d.dkim_verified,
-                return_path_verified: d.return_path_verified,
-                lastCheckedAt: d.last_checked_at,
-                details: d.verification_details,
-            }))
-    )
+    const { data = [] } = useLiveQuery({
+        queryKey: ['mail_setup_domains'],
+        query: query =>
+            query
+                .from({ d: domainsCollection })
+                .orderBy(({ d }) => d.created, 'asc')
+                .select(({ d }) => ({
+                    id: d.id,
+                    domain: d.domain,
+                    verified: d.verified,
+                    mx_verified: d.mx_verified,
+                    inbound_domain_verified: d.inbound_domain_verified,
+                    spf_verified: d.spf_verified,
+                    dkim_verified: d.dkim_verified,
+                    return_path_verified: d.return_path_verified,
+                    lastCheckedAt: d.last_checked_at,
+                    details: d.verification_details,
+                })),
+    })
     return data.map(({ details, ...d }) => ({
         ...d,
         isReady: isDomainReady(d),

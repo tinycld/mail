@@ -40,8 +40,10 @@ export const EMPTY_COUNTS: FolderCounts = {
 export function useMailboxFolderCounts(): Map<string, FolderCounts> {
     const [countsCollection] = useStore('mail_folder_counts')
 
-    const { data: rows } = useMyLiveQuery((query, { userId }) =>
-        query.from({ counts: countsCollection }).where(({ counts }) => eq(counts.user, userId))
+    const { data: rows } = useMyLiveQuery(
+        (query, { userId }) =>
+            query.from({ counts: countsCollection }).where(({ counts }) => eq(counts.user, userId)),
+        { queryKey: ['mail_folder_counts'] }
     )
 
     return useMemo(() => {

@@ -71,12 +71,13 @@ export default function MailDetailScreen() {
                 .where(({ mail_thread_state }) =>
                     and(eq(mail_thread_state.thread, id), eq(mail_thread_state.user, userId))
                 ),
-        [id]
+        { queryKey: ['mail_thread_state', id] }
     )
 
     const threadState = threadStates?.[0]
 
     const { data: threads } = useLiveQuery({
+        queryKey: ['mail_thread', id],
         query: query =>
             query
                 .from({ mail_threads: threadsCollection })
@@ -98,6 +99,7 @@ export default function MailDetailScreen() {
     )
 
     const { data: messages } = useLiveQuery({
+        queryKey: ['mail_thread_messages', id],
         query: query =>
             query
                 .from({ mail_messages: messagesCollection })

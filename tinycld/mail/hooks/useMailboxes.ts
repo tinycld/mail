@@ -25,13 +25,15 @@ export function useMailboxes() {
     // One query: membership rows resolve to their mailbox in the same
     // expression, so an optimistically-created mailbox appears immediately
     // instead of waiting for a second collection's realtime round-trip.
-    const { data: rows, isLoading } = useMyLiveQuery((query, { userId }) =>
-        query
-            .from({ member: membersCollection })
-            .innerJoin({ mailbox: mailboxesCollection }, ({ member, mailbox }) =>
-                eq(member.mailbox, mailbox.id)
-            )
-            .where(({ member }) => eq(member.user, userId))
+    const { data: rows, isLoading } = useMyLiveQuery(
+        (query, { userId }) =>
+            query
+                .from({ member: membersCollection })
+                .innerJoin({ mailbox: mailboxesCollection }, ({ member, mailbox }) =>
+                    eq(member.mailbox, mailbox.id)
+                )
+                .where(({ member }) => eq(member.user, userId)),
+        { queryKey: ['mail_mailboxes'] }
     )
 
     return useMemo(

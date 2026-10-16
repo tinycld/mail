@@ -22,19 +22,21 @@ export function useMailSendReadiness(): MailSendReadiness {
 
     // Joined so the mailbox's type is available for the choice below —
     // membership rows alone can't distinguish personal from shared.
-    const { data: members } = useMyLiveQuery((query, { userId }) =>
-        query
-            .from({ mail_mailbox_members: membersCollection })
-            .join(
-                { mail_mailboxes: mailboxesCollection },
-                ({ mail_mailbox_members, mail_mailboxes }) =>
-                    eq(mail_mailbox_members.mailbox, mail_mailboxes.id)
-            )
-            .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user, userId))
-            .select(({ mail_mailbox_members, mail_mailboxes }) => ({
-                mailbox: mail_mailbox_members.mailbox,
-                type: mail_mailboxes.type,
-            }))
+    const { data: members } = useMyLiveQuery(
+        (query, { userId }) =>
+            query
+                .from({ mail_mailbox_members: membersCollection })
+                .join(
+                    { mail_mailboxes: mailboxesCollection },
+                    ({ mail_mailbox_members, mail_mailboxes }) =>
+                        eq(mail_mailbox_members.mailbox, mail_mailboxes.id)
+                )
+                .where(({ mail_mailbox_members }) => eq(mail_mailbox_members.user, userId))
+                .select(({ mail_mailbox_members, mail_mailboxes }) => ({
+                    mailbox: mail_mailbox_members.mailbox,
+                    type: mail_mailboxes.type,
+                })),
+        { queryKey: ['mail_send_memberships'] }
     )
 
     // The DEFAULT mailbox a new compose sends from: the user's personal one.
@@ -49,6 +51,7 @@ export function useMailSendReadiness(): MailSendReadiness {
         members?.find(m => m.type === 'personal')?.mailbox ?? members?.[0]?.mailbox ?? null
 
     const { data: mailboxes } = useLiveQuery({
+        queryKey: ['mail_send_mailbox', mailboxId],
         query: query =>
             query
                 .from({ mail_mailboxes: mailboxesCollection })
@@ -65,6 +68,7 @@ export function useMailSendReadiness(): MailSendReadiness {
     const domainId = mailbox?.domain ?? null
 
     const { data: domains } = useLiveQuery({
+        queryKey: ['mail_send_domain', domainId],
         query: query =>
             query
                 .from({ mail_domains: domainsCollection })

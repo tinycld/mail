@@ -26,19 +26,27 @@ function useAddressRules(mailboxId: string) {
         'mail_domains',
         'mail_identities'
     )
-    const { data: domains } = useLiveQuery(query =>
-        query.from({ domain: domainsCollection }).orderBy(({ domain }) => domain.rank, 'asc')
-    )
-    const { data: addresses } = useLiveQuery(query =>
-        query
-            .from({ address: addressesCollection })
-            .select(({ address }) => ({ localPart: address.local_part, domain: address.domain }))
-    )
-    const { data: identities } = useLiveQuery(query =>
-        query
-            .from({ identity: identitiesCollection })
-            .select(({ identity }) => ({ emailName: identity.email_name, inbox: identity.inbox }))
-    )
+    const { data: domains } = useLiveQuery({
+        queryKey: ['mail_address_rule_domains'],
+        query: query =>
+            query.from({ domain: domainsCollection }).orderBy(({ domain }) => domain.rank, 'asc'),
+    })
+    const { data: addresses } = useLiveQuery({
+        queryKey: ['mail_address_rule_addresses'],
+        query: query =>
+            query.from({ address: addressesCollection }).select(({ address }) => ({
+                localPart: address.local_part,
+                domain: address.domain,
+            })),
+    })
+    const { data: identities } = useLiveQuery({
+        queryKey: ['mail_address_rule_identities'],
+        query: query =>
+            query.from({ identity: identitiesCollection }).select(({ identity }) => ({
+                emailName: identity.email_name,
+                inbox: identity.inbox,
+            })),
+    })
 
     const schema = useMemo(
         () =>
