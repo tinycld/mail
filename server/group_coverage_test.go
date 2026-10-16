@@ -440,3 +440,44 @@ func TestGroupMembership_OffboardCreatesNothing(t *testing.T) {
 		t.Fatalf("events that passed the mail listener = %+v, want ann's one leave from sales", passed)
 	}
 }
+
+// Only the reconciler sets via_group. An admin who sends it on a hand-made
+// address through the API has it cleared, as source and is_primary are;
+// otherwise the address would later say it came from a group it did not.
+func TestGroupCoverage_APICreateClearsViaGroup(t *testing.T) {
+	var seed *ruleAPISeed
+	var sales *core.Record
+	scenario := tests.ApiScenario{
+		Name:           "POST mail_addresses with via_group",
+		Method:         http.MethodPost,
+		URL:            "/api/collections/mail_addresses/records",
+		ExpectedStatus: http.StatusOK,
+		ExpectedContent: []string{
+			`"local_part":"desk"`,
+			`"via_group":""`,
+			`"source":"manual"`,
+		},
+		Headers: map[string]string{"Content-Type": "application/json"},
+	}
+	scenario.TestAppFactory = func(_ testing.TB) *tests.TestApp {
+		app := newRuleTestApp(t)
+		seed = seedRuleAPI(t, app)
+		sales = seedGroup(t, app, "Sales")
+		scenario.Body = strings.NewReader(`{"local_part":"desk","domain":"` + seed.other.Id +
+			`","mailbox":"` + seed.mailbx.Id + `","via_group":"` + sales.Id + `"}`)
+		return app
+	}
+	scenario.BeforeTestFunc = func(_ testing.TB, _ *tests.TestApp, _ *core.ServeEvent) {
+		scenario.Headers["Authorization"] = authTokenFor(t, seed.admin)
+	}
+	scenario.AfterTestFunc = func(_ testing.TB, app *tests.TestApp, _ *http.Response) {
+		row, err := findAddressRow(app, "desk", seed.other.Id)
+		if err != nil || row == nil {
+			t.Fatalf("desk@other.example was not saved: %v", err)
+		}
+		if row.GetString("via_group") != "" {
+			t.Fatalf("via_group = %q, want it cleared on an API write", row.GetString("via_group"))
+		}
+	}
+	scenario.Test(t)
+}

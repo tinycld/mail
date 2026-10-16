@@ -279,12 +279,15 @@ func registerAddressHooks(app core.App) {
 	})
 
 	// Through the API an admin may only add or remove hand-made, non-primary
-	// addresses: rule rows follow the domain's rule, and a primary row follows
-	// its mailbox's address.
+	// addresses: rule rows follow the domain's rule, a primary row follows
+	// its mailbox's address, and only the reconciler records which group gave
+	// an address. No update hook is needed: the collection's update rule is
+	// superuser-only.
 	app.OnRecordCreateRequest("mail_addresses").BindFunc(func(e *core.RecordRequestEvent) error {
 		if e.Auth == nil || !e.Auth.IsSuperuser() {
 			e.Record.Set("source", addressSourceManual)
 			e.Record.Set("is_primary", false)
+			e.Record.Set("via_group", "")
 		}
 		return e.Next()
 	})
