@@ -103,7 +103,10 @@ function AddFormSlot({
 function AddressRow({ item, onRemove }: { item: AddressItem; onRemove: () => void }) {
     const primaryColor = useThemeColor('primary')
     return (
-        <View className="flex-row items-center gap-3 rounded-lg py-2">
+        <View
+            testID={`address-row-${item.email}`}
+            className="flex-row items-center gap-3 rounded-lg py-2"
+        >
             <View
                 className="items-center justify-center rounded-lg bg-primary/10"
                 style={{ width: 28, height: 28 }}

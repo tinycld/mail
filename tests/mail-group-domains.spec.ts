@@ -35,7 +35,7 @@ async function openTestUserEmail(page: Page) {
     await expect(drawer.getByText('Addresses', { exact: true })).toBeVisible()
     // The main address proves the address list loaded, so a missing address
     // below is an answer and not a list that has not rendered yet.
-    await expect(drawer.getByText(TEST_USER_MAILBOX, { exact: true }).first()).toBeVisible()
+    await expect(drawer.getByTestId(`address-row-${TEST_USER_MAILBOX}`)).toBeVisible()
     return drawer
 }
 
@@ -90,10 +90,10 @@ test.describe('Mail — Domains for members of groups', () => {
         await expect(card.getByText('Apply', { exact: true })).toBeHidden()
 
         const mailboxDrawer = await openTestUserEmail(page)
-        await expect(mailboxDrawer.getByText(address, { exact: true })).toBeVisible()
-        await expect(
-            mailboxDrawer.getByText(`From group ${groupName}`, { exact: true })
-        ).toBeVisible()
+        // The row, not the bare text: the Default From choices list each address too.
+        const row = mailboxDrawer.getByTestId(`address-row-${address}`)
+        await expect(row).toBeVisible()
+        await expect(row.getByText(`From group ${groupName}`, { exact: true })).toBeVisible()
         await closeDrawer(page)
 
         await openGroupsSettings(page)
@@ -113,7 +113,7 @@ test.describe('Mail — Domains for members of groups', () => {
         await closeDrawer(page)
 
         const reopenedDrawer = await openTestUserEmail(page)
-        await expect(reopenedDrawer.getByText(address, { exact: true })).toBeHidden()
+        await expect(reopenedDrawer.getByTestId(`address-row-${address}`)).toBeHidden()
         await closeDrawer(page)
     })
 })

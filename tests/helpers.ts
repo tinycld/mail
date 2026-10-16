@@ -148,6 +148,28 @@ export async function openPersonEmail(page: Page, username: string) {
     return drawer
 }
 
+// Sets a domain's "Who gets an address here?" to Everyone on the Domains
+// screen and applies it, so each person gets their email name on it.
+export async function giveEveryoneAnAddressOn(page: Page, domain: string) {
+    await page.getByTestId('nav-settings').click()
+    await page.getByText('Domains', { exact: true }).first().click()
+    await expect(page.getByText('Mail Domains', { exact: true })).toBeVisible()
+
+    // The nearest ancestor holding this domain's name and its rule control,
+    // so a click cannot land in another domain's card.
+    const card = page
+        .locator('div')
+        .filter({ has: page.getByText(domain, { exact: true }) })
+        .filter({ has: page.getByText('Who gets an address here?', { exact: true }) })
+        .last()
+    await expect(card.getByText('Only people I add', { exact: true })).toBeVisible()
+
+    await card.getByText('Everyone', { exact: true }).click()
+    await expect(card.getByText(new RegExp(`^Adds .*@${domain}`))).toBeVisible()
+    await card.getByText('Apply', { exact: true }).click()
+    await expect(card.getByText('Apply', { exact: true })).toBeHidden()
+}
+
 // PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
 // through to PB transparently — see scripts/dev.ts::isPbPath.
 export const PB_URL = 'http://127.0.0.1:7200'
