@@ -61,6 +61,16 @@ func TestMigrations_AddressesBackfill(t *testing.T) {
 	// Collides with the shared mailbox's own address: the mailbox must win.
 	save("mail_mailbox_aliases", map[string]any{"mailbox": personal.Id, "address": "support"})
 	messy := save("mail_mailboxes", map[string]any{"address": "  Mixed.Case ", "domain": org.Id, "type": "shared"})
+	// Legacy addresses were case-sensitive: Foo and foo are two mailboxes that
+	// both become foo@tinycld.com. The older one keeps the address.
+	upperFoo := save("mail_mailboxes", map[string]any{"address": "Foo", "domain": com.Id, "type": "shared"})
+	lowerFoo := save("mail_mailboxes", map[string]any{"address": "foo", "domain": com.Id, "type": "shared"})
+	for id, created := range map[string]string{upperFoo.Id: "2026-10-01 09:00:00.000Z", lowerFoo.Id: "2026-10-02 09:00:00.000Z"} {
+		if _, err := app.DB().NewQuery("UPDATE mail_mailboxes SET created = {:c} WHERE id = {:id}").
+			Bind(dbx.Params{"c": created, "id": id}).Execute(); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	rlstest.Apply(t, app, rlstest.MigrationsDir(t, "../pb-migrations"))
 
@@ -76,9 +86,15 @@ func TestMigrations_AddressesBackfill(t *testing.T) {
 	if got := oldAfter.GetString("coverage"); got != "manual" {
 		t.Fatalf("older unverified domain coverage = %q, want manual", got)
 	}
-	if oldAfter.GetInt("rank") != 1 || orgAfter.GetInt("rank") != 2 || comAfter.GetInt("rank") != 3 {
-		t.Fatalf("ranks = %d, %d, %d; want 1, 2, 3",
-			oldAfter.GetInt("rank"), orgAfter.GetInt("rank"), comAfter.GetInt("rank"))
+	// The everyone domain is first, so it stays the main domain; the others
+	// follow by age.
+	if orgAfter.GetInt("rank") != 1 || oldAfter.GetInt("rank") != 2 || comAfter.GetInt("rank") != 3 {
+		t.Fatalf("ranks org %d, old %d, com %d; want 1, 2, 3",
+			orgAfter.GetInt("rank"), oldAfter.GetInt("rank"), comAfter.GetInt("rank"))
+	}
+	main, err := mainDomain(app)
+	if err != nil || main == nil || main.Id != org.Id {
+		t.Fatalf("main domain = %v (err %v), want tinycld.org", main, err)
 	}
 
 	want := []struct {
@@ -106,5 +122,17 @@ func TestMigrations_AddressesBackfill(t *testing.T) {
 	n, err := app.CountRecords("mail_addresses", dbx.HashExp{"local_part": "support", "domain": org.Id})
 	if err != nil || n != 1 {
 		t.Fatalf("support@tinycld.org rows = %d (err %v), want 1", n, err)
+	}
+
+	foos, err := app.FindRecordsByFilter("mail_addresses", "local_part = 'foo' && domain = {:domain}", "", 0, 0,
+		dbx.Params{"domain": com.Id})
+	if err != nil || len(foos) != 1 {
+		t.Fatalf("foo@tinycld.com rows = %d (err %v), want 1", len(foos), err)
+	}
+	if foos[0].GetString("mailbox") != upperFoo.Id {
+		t.Fatalf("foo@tinycld.com delivers to %s, want the older mailbox %s", foos[0].GetString("mailbox"), upperFoo.Id)
+	}
+	if n, _ := app.CountRecords("mail_addresses", dbx.HashExp{"mailbox": lowerFoo.Id}); n != 0 {
+		t.Fatalf("the newer colliding mailbox has %d address rows, want 0", n)
 	}
 }

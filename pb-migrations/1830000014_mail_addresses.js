@@ -181,18 +181,23 @@ migrate(
         aliases.updateRule = null
         app.save(aliases)
 
-        app.db()
-            .newQuery(
-                `UPDATE mail_domains SET coverage = 'manual', \`rank\` = (
-                    SELECT COUNT(*) FROM mail_domains d2
-                    WHERE d2.created < mail_domains.created
-                       OR (d2.created = mail_domains.created AND d2.id <= mail_domains.id))`
-            )
-            .execute()
+        app.db().newQuery(`UPDATE mail_domains SET coverage = 'manual'`).execute()
         app.db()
             .newQuery(
                 `UPDATE mail_domains SET coverage = 'everyone' WHERE id = (
                     SELECT id FROM mail_domains WHERE verified = TRUE ORDER BY created, id LIMIT 1)`
+            )
+            .execute()
+        // The everyone domain is rank 1, so it stays the main domain new
+        // inboxes are created on; the others follow by age.
+        app.db()
+            .newQuery(
+                `UPDATE mail_domains SET \`rank\` = (
+                    SELECT COUNT(*) FROM mail_domains d2
+                    WHERE (d2.coverage = 'everyone') > (mail_domains.coverage = 'everyone')
+                       OR ((d2.coverage = 'everyone') = (mail_domains.coverage = 'everyone') AND (
+                            d2.created < mail_domains.created
+                            OR (d2.created = mail_domains.created AND d2.id <= mail_domains.id))))`
             )
             .execute()
 
@@ -205,7 +210,8 @@ migrate(
         // give 16, cut to 15. INSERT OR IGNORE because (address, domain) is
         // unique on mailboxes and the old hooks kept aliases off those
         // addresses, so a collision here is a pre-existing data error that
-        // must not abort the upgrade.
+        // must not abort the upgrade. The oldest row of a collision keeps the
+        // address (ORDER BY created).
         const now = `strftime('%Y-%m-%d %H:%M:%fZ', 'now')`
         const newId = `substr(lower(hex(randomblob(8))), 1, 15)`
         const warnDropped = (what, sql) => {
@@ -225,7 +231,8 @@ migrate(
             .newQuery(
                 `INSERT OR IGNORE INTO mail_addresses (id, local_part, domain, mailbox, source, is_primary, created, updated)
                  SELECT ${newId}, lower(trim(address)), domain, id, 'manual', TRUE, ${now}, ${now}
-                 FROM mail_mailboxes WHERE trim(address) != '' AND domain != ''`
+                 FROM mail_mailboxes WHERE trim(address) != '' AND domain != ''
+                 ORDER BY created, id`
             )
             .execute()
         warnDropped(
@@ -242,7 +249,8 @@ migrate(
                 `INSERT OR IGNORE INTO mail_addresses (id, local_part, domain, mailbox, source, is_primary, created, updated)
                  SELECT ${newId}, lower(trim(a.address)), mb.domain, a.mailbox, 'manual', FALSE, ${now}, ${now}
                  FROM mail_mailbox_aliases a JOIN mail_mailboxes mb ON mb.id = a.mailbox
-                 WHERE trim(a.address) != '' AND mb.domain != ''`
+                 WHERE trim(a.address) != '' AND mb.domain != ''
+                 ORDER BY a.created, a.id`
             )
             .execute()
     },
