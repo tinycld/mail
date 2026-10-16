@@ -1,4 +1,4 @@
-import { coalesce, eq, type InitialQueryBuilder } from '@tanstack/db'
+import { coalesce, eq, type InitialQueryBuilder, not } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import type { AddressRowData } from './address-items'
@@ -25,9 +25,14 @@ export function personEmailQuery(
     collections: PersonEmailCollections,
     userId: string
 ) {
+    // A retired identity's inbox is '': it must match no address, so the
+    // join reads only addresses that deliver somewhere.
+    const deliveringAddresses = query
+        .from({ address: collections.addresses })
+        .where(({ address }) => not(eq(address.mailbox, '')))
     return query
         .from({ identity: collections.identities })
-        .join({ address: collections.addresses }, ({ identity, address }) =>
+        .join({ address: deliveringAddresses }, ({ identity, address }) =>
             eq(address.mailbox, identity.inbox)
         )
         .join({ domain: collections.domains }, ({ address, domain }) =>
@@ -51,6 +56,7 @@ export function personEmailQuery(
             source: address?.source,
             isPrimary: address?.is_primary,
             rank: domain?.rank,
+            verified: domain?.verified,
             groupName: coalesce(group?.name, null),
         }))
 }
@@ -70,8 +76,11 @@ function usePersonEmailRows(userId: string) {
     })
 }
 
-function toAddressRow(row: PersonEmailRow): AddressRowData | null {
-    const { addressId, localPart, domainId, domainName, source, isPrimary, rank } = row
+/** An address of the person's inbox; `verified` says whether mail can go out from it. */
+export type PersonAddress = AddressRowData & { verified: boolean }
+
+function toAddressRow(row: PersonEmailRow): PersonAddress | null {
+    const { addressId, localPart, domainId, domainName, source, isPrimary, rank, verified } = row
     if (!addressId || !localPart || !domainId || !domainName) return null
     return {
         id: addressId,
@@ -81,6 +90,7 @@ function toAddressRow(row: PersonEmailRow): AddressRowData | null {
         source: source ?? 'manual',
         isPrimary: isPrimary ?? false,
         rank: rank ?? 0,
+        verified: verified ?? false,
         groupName: row.groupName,
     }
 }

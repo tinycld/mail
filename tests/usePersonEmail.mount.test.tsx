@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
             retired: false,
         },
         { id: 'i2', user: 'u2', email_name: 'ann', inbox: 'mb2', default_from: '', retired: false },
+        { id: 'i3', user: 'u3', email_name: 'old', inbox: '', default_from: '', retired: true },
     ],
     addresses: [
         {
@@ -33,10 +34,19 @@ const h = vi.hoisted(() => ({
             is_primary: false,
             via_group: '',
         },
+        {
+            id: 'a9',
+            local_part: 'stray',
+            domain: 'd1',
+            mailbox: '',
+            source: 'manual',
+            is_primary: false,
+            via_group: '',
+        },
     ],
     domains: [
-        { id: 'd1', domain: 'tinycld.com', rank: 1 },
-        { id: 'd2', domain: 'q.example', rank: 2 },
+        { id: 'd1', domain: 'tinycld.com', rank: 1, verified: true },
+        { id: 'd2', domain: 'q.example', rank: 2, verified: false },
     ],
 }))
 
@@ -82,5 +92,18 @@ it('returns null for a user with no identity', async () => {
     const { result } = renderHook(() => usePersonEmail('u9'))
     await waitFor(() => expect(result.current.isReady).toBe(true))
     expect(result.current.identity).toBeNull()
+    expect(result.current.addresses).toEqual([])
+})
+
+it("says whether each address's domain is verified", async () => {
+    const { result } = renderHook(() => usePersonEmail('u1'))
+    await waitFor(() => expect(result.current.addresses).toHaveLength(2))
+    const verified = Object.fromEntries(result.current.addresses.map(a => [a.id, a.verified]))
+    expect(verified).toEqual({ a1: true, a2: false })
+})
+
+it('a retired identity with no inbox joins no address with an empty inbox', async () => {
+    const { result } = renderHook(() => usePersonEmail('u3'))
+    await waitFor(() => expect(result.current.identity).toMatchObject({ id: 'i3', retired: true }))
     expect(result.current.addresses).toEqual([])
 })
