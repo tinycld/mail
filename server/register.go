@@ -296,12 +296,15 @@ func registerShared(app *pocketbase.PocketBase) {
 		return e.Next()
 	})
 
-	registerAliasHooks(app)
+	registerAddressHooks(app)
 	registerThreadMarkerHooks(app)
 	registerThreadStateSyncHooks(app)
 	registerFolderCountHooks(app)
 	registerMemberBackfillHooks(app)
 
+	audit.RegisterCollection(app, "mail_addresses", &audit.CollectionConfig{
+		ExtractLabel: audit.LabelFromField("local_part"),
+	})
 	audit.RegisterCollection(app, "mail_mailbox_aliases", &audit.CollectionConfig{
 		ExtractLabel: audit.LabelFromField("address"),
 	})

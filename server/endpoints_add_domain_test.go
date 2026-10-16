@@ -44,6 +44,8 @@ func setupAddDomainTestApp(t *testing.T) *tests.TestApp {
 	domains.Fields.Add(&core.BoolField{Name: "return_path_verified"})
 	domains.Fields.Add(&core.JSONField{Name: "provider_domain_metadata", MaxSize: 2000})
 	domains.Fields.Add(&core.JSONField{Name: "verification_details", MaxSize: 4000})
+	domains.Fields.Add(&core.SelectField{Name: "coverage", MaxSelect: 1, Values: []string{coverageEveryone, coverageManual}})
+	domains.Fields.Add(&core.NumberField{Name: "rank", OnlyInt: true})
 	if err := app.Save(domains); err != nil {
 		t.Fatalf("failed to save mail_domains: %v", err)
 	}

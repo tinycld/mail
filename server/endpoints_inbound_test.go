@@ -158,6 +158,8 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 	messages.Fields.Add(&core.TextField{Name: "in_reply_to"})
 	messages.Fields.Add(&core.TextField{Name: "alias"})
 	messages.Fields.Add(&core.TextField{Name: "sent_by"})
+	messages.Fields.Add(&core.TextField{Name: "delivered_to"})
+	messages.Fields.Add(&core.TextField{Name: "sent_from"})
 	messages.Fields.Add(&core.TextField{Name: "sender_name"})
 	messages.Fields.Add(&core.TextField{Name: "sender_email"})
 	// A real DateField, matching migration 1713000000 — not TextField. The
