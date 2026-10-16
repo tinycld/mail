@@ -3,6 +3,7 @@ import type { AddDomainResponse, OutboundCheckResult } from '@tinycld/app-genera
 import { SetupContinueButton } from '@tinycld/core/components/setup/wizard/SetupContinueButton'
 import { SetupTabs } from '@tinycld/core/components/setup/wizard/SetupTabs'
 import { StepHeading } from '@tinycld/core/components/setup/wizard/StepHeading'
+import { SlotContribution } from '@tinycld/core/components/sidebar-primitives/SidebarSlot'
 import { errorToString } from '@tinycld/core/lib/errors'
 import { log } from '@tinycld/core/lib/logger'
 import { useMutation } from '@tinycld/core/lib/mutations'
@@ -12,7 +13,7 @@ import type { SetupStepProps } from '@tinycld/core/lib/setup/types'
 import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
 import { useIsSettingManaged } from '@tinycld/core/lib/use-managed-settings'
 import { ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
-import { Suspense, useState } from 'react'
+import { useState } from 'react'
 import { Text, View } from 'react-native'
 import { AddDomainForm } from '../settings/AddDomainForm'
 import { DnsRecordsPanel, hasUnpublishedDnsRecords } from '../settings/DnsRecordsPanel'
@@ -309,12 +310,7 @@ function DomainTabBar({ state }: { state: DomainChoiceState }) {
 // The selected contribution's panel, loaded on first show like any slot.
 function ContributedPanel({ entry }: { entry: DomainChoiceState['contributedPanel'] }) {
     if (!entry) return null
-    const Component = entry.Component
-    return (
-        <Suspense fallback={null}>
-            <Component />
-        </Suspense>
-    )
+    return <SlotContribution entry={entry} />
 }
 
 function OwnDomainForm({
