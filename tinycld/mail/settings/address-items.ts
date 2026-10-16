@@ -1,6 +1,7 @@
 export interface AddressRowData {
     id: string
     localPart: string
+    domainId: string
     domainName: string
     source: string
     isPrimary: boolean

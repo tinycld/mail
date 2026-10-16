@@ -31,6 +31,7 @@ function useMailboxAddresses(mailboxId: string) {
                 .select(({ address, domain, group }) => ({
                     id: address.id,
                     localPart: address.local_part,
+                    domainId: domain.id,
                     domainName: domain.domain,
                     source: address.source,
                     isPrimary: address.is_primary,
