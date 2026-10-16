@@ -60,31 +60,37 @@ function useCoveragePreview(
     // Memberships matter only to a groups rule. With no group chosen the
     // filter matches nothing, and pbtsdb sends no request for it.
     const groupIds = target === 'groups' ? targetGroups : []
-    const { data: rows } = useLiveQuery(query => {
-        const memberships = query
-            .from({ member: groupMembersCollection })
-            .where(({ member }) => inArray(member.group, groupIds))
-        return (
-            query
-                .from({ identity: identitiesCollection })
-                .innerJoin({ user: usersCollection }, ({ identity, user }) =>
-                    eq(identity.user, user.id)
-                )
-                .join({ member: memberships }, ({ identity, member }) =>
-                    eq(identity.user, member.user)
-                )
-                // A retired identity belongs to an offboarded person: it has no
-                // inbox and a tombstone email name, so it never gets an address.
-                .where(({ user, identity }) =>
-                    and(not(eq(user.role, 'guest')), eq(identity.retired, false))
-                )
-                .select(({ identity, member }) => ({
-                    userId: identity.user,
-                    emailName: identity.email_name,
-                    inbox: identity.inbox,
-                    groupId: member?.group,
-                }))
-        )
+    // Explicit keys on this hook's queries: the form re-renders the control
+    // on each change, and without a key every render rebuilds and hashes
+    // each query's IR to find out that the query is the same.
+    const { data: rows } = useLiveQuery({
+        queryKey: ['mail_coverage_people', groupIds],
+        query: query => {
+            const memberships = query
+                .from({ member: groupMembersCollection })
+                .where(({ member }) => inArray(member.group, groupIds))
+            return (
+                query
+                    .from({ identity: identitiesCollection })
+                    .innerJoin({ user: usersCollection }, ({ identity, user }) =>
+                        eq(identity.user, user.id)
+                    )
+                    .join({ member: memberships }, ({ identity, member }) =>
+                        eq(identity.user, member.user)
+                    )
+                    // A retired identity belongs to an offboarded person: it has no
+                    // inbox and a tombstone email name, so it never gets an address.
+                    .where(({ user, identity }) =>
+                        and(not(eq(user.role, 'guest')), eq(identity.retired, false))
+                    )
+                    .select(({ identity, member }) => ({
+                        userId: identity.user,
+                        emailName: identity.email_name,
+                        inbox: identity.inbox,
+                        groupId: member?.group,
+                    }))
+            )
+        },
     })
     // One row per (person, membership in a chosen group), or one row with no
     // group for a person in none of them: fold them into the preview's inputs.
@@ -98,16 +104,18 @@ function useCoveragePreview(
         }
         return { people: [...byUser.values()], memberships: groupsOf }
     }, [rows])
-    const { data: addressesOnDomain } = useLiveQuery(query =>
-        query
-            .from({ address: addressesCollection })
-            .where(({ address }) => eq(address.domain, domainId))
-            .select(({ address }) => ({
-                localPart: address.local_part,
-                mailbox: address.mailbox,
-                source: address.source,
-            }))
-    )
+    const { data: addressesOnDomain } = useLiveQuery({
+        queryKey: ['mail_coverage_addresses', domainId],
+        query: query =>
+            query
+                .from({ address: addressesCollection })
+                .where(({ address }) => eq(address.domain, domainId))
+                .select(({ address }) => ({
+                    localPart: address.local_part,
+                    mailbox: address.mailbox,
+                    source: address.source,
+                })),
+    })
     return coverageChangePreview({
         target,
         targetGroups: groupIds,
@@ -120,12 +128,15 @@ function useCoveragePreview(
 
 function useGroupOptions() {
     const [groupsCollection] = useStore('groups')
-    const { data } = useLiveQuery(query =>
-        query
-            .from({ group: groupsCollection })
-            .orderBy(({ group }) => group.name, 'asc')
-            .select(({ group }) => ({ value: group.id, label: group.name }))
-    )
+    // Keyed for the same reason as the preview queries: it renders with the form.
+    const { data } = useLiveQuery({
+        queryKey: ['mail_coverage_group_options'],
+        query: query =>
+            query
+                .from({ group: groupsCollection })
+                .orderBy(({ group }) => group.name, 'asc')
+                .select(({ group }) => ({ value: group.id, label: group.name })),
+    })
     return data ?? []
 }
 
