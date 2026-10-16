@@ -303,7 +303,7 @@ func newMembershipTestApp(t *testing.T) *tests.TestApp {
 	groups.ResetForTesting()
 	t.Cleanup(groups.ResetForTesting)
 	groups.Register(&pocketbase.PocketBase{App: app})
-	bindGroupMembershipListener(app)
+	bindGroupMembershipListener()
 	return app
 }
 
@@ -338,6 +338,27 @@ func TestGroupMembership_JoinAndLeave(t *testing.T) {
 	}
 	if row := ruleRow(t, app, "ann", q.Id); row != nil {
 		t.Fatalf("ann@q.example after leaving sales = %v, want no row", row)
+	}
+}
+
+// The listener is registered once per process, so it must reconcile through
+// the app in the event. A listener that held the app it was registered with
+// would write to that app and leave a second app with no address.
+func TestGroupMembership_UsesTheEventsApp(t *testing.T) {
+	first := newMembershipTestApp(t)
+	second := newRuleTestApp(t)
+	groups.Register(&pocketbase.PocketBase{App: second})
+	saveRealRecord(t, second, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	ann := seedGroupUser(t, second, "ann")
+	sales := seedGroup(t, second, "Sales")
+	q := saveGroupsDomain(t, second, "q.example", sales)
+
+	saveRealRecord(t, second, "group_members", map[string]any{"group": sales.Id, "user": ann.Id})
+	if row := ruleRow(t, second, "ann", q.Id); row == nil || row.GetString("via_group") != sales.Id {
+		t.Fatalf("ann@q.example in the second app = %v, want a rule row via sales", row)
+	}
+	if n, _ := first.CountRecords("mail_addresses"); n != 0 {
+		t.Fatalf("first app has %d addresses, want none", n)
 	}
 }
 
@@ -412,10 +433,9 @@ func TestGroupMembership_OffboardCreatesNothing(t *testing.T) {
 	groups.ResetForTesting()
 	t.Cleanup(groups.ResetForTesting)
 	groups.Register(&pocketbase.PocketBase{App: app})
-	listener := membershipListener(app)
 	var passed []groups.MembershipEvent
 	groups.OnMembershipChange(func(e groups.MembershipEvent) error {
-		err := listener(e)
+		err := onGroupMembershipChange(e)
 		if err != nil {
 			t.Errorf("mail listener for %+v: %v", e, err)
 		} else {

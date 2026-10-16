@@ -84,22 +84,20 @@ var registerMembershipListenerOnce sync.Once
 // none at boot, which the boot reconcile covers. Core's registry is process
 // global and Register can run more than once in one process (tests), so the
 // listener is added only once.
-func registerGroupMembershipListener(app core.App) {
-	registerMembershipListenerOnce.Do(func() {
-		bindGroupMembershipListener(app)
-	})
+func registerGroupMembershipListener() {
+	registerMembershipListenerOnce.Do(bindGroupMembershipListener)
 }
 
 // bindGroupMembershipListener adds the listener with no once-guard, for a
 // test that has cleared core's registry with groups.ResetForTesting.
-func bindGroupMembershipListener(app core.App) {
-	groups.OnMembershipChange(membershipListener(app))
+func bindGroupMembershipListener() {
+	groups.OnMembershipChange(onGroupMembershipChange)
 }
 
-// membershipListener reconciles the rule addresses of the person who joined
-// or left. The reconcile error goes back to core, which logs it.
-func membershipListener(app core.App) func(groups.MembershipEvent) error {
-	return func(e groups.MembershipEvent) error {
-		return reconcileRuleAddresses(app, ruleScope{UserID: e.UserID})
-	}
+// onGroupMembershipChange reconciles the rule addresses of the person who
+// joined or left, through the app that saved the membership: the listener
+// is registered once per process, so an app captured at registration can be
+// another app. The reconcile error goes back to core, which logs it.
+func onGroupMembershipChange(e groups.MembershipEvent) error {
+	return reconcileRuleAddresses(e.App, ruleScope{UserID: e.UserID})
 }
