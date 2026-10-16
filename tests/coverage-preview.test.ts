@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { coverageChangePreview, coveragePreviewText } from '~/tinycld/mail/settings/coverage-preview'
+import {
+    coverageChangePreview,
+    coveragePreviewText,
+} from '~/tinycld/mail/settings/coverage-preview'
 
 const people = [
     { emailName: 'nathan', inbox: 'mb_n' },
@@ -46,8 +49,7 @@ describe('coverageChangePreview', () => {
     })
 })
 
-const addresses = (n: number) =>
-    Array.from({ length: n }, (_, i) => `p${i + 1}@tinycld.com`)
+const addresses = (n: number) => Array.from({ length: n }, (_, i) => `p${i + 1}@tinycld.com`)
 
 describe('coveragePreviewText', () => {
     it('lists every address when there are five or fewer', () => {

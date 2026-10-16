@@ -225,7 +225,8 @@ export default function MailboxesSettings() {
                                 <HelpIcon topic="mail:mailboxes" size={18} />
                             </View>
                             <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
-                                Manage shared mailboxes, members, and addresses for your organization.
+                                Manage shared mailboxes, members, and addresses for your
+                                organization.
                             </Text>
                         </View>
                         <Pressable

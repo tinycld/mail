@@ -1,6 +1,6 @@
+import type { MailMessages } from '../types'
 import { filterOwnAddresses, pickReplyFrom } from './defaultFromIdentity'
 import type { SendableIdentity } from './groupSendableIdentities'
-import type { MailMessages } from '../types'
 import type { ReplyContext } from './useComposeState'
 
 export type ReplyKind = 'reply' | 'replyAll' | 'forward'

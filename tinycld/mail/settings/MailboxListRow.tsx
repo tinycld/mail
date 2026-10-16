@@ -26,7 +26,9 @@ function subtitle(item: MailboxListItem): string {
         parts.push(`${item.memberCount} member${item.memberCount !== 1 ? 's' : ''}`)
     }
     if (item.otherAddressCount > 0) {
-        parts.push(`${item.otherAddressCount} other address${item.otherAddressCount !== 1 ? 'es' : ''}`)
+        parts.push(
+            `${item.otherAddressCount} other address${item.otherAddressCount !== 1 ? 'es' : ''}`
+        )
     }
     return parts.join(' \u00b7 ')
 }
