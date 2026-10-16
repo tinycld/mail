@@ -53,6 +53,7 @@ func ensureIdentityWith(app core.App, user *core.Record, policy inboxPolicy) (*c
 	if err != nil {
 		return nil, err
 	}
+	adopted := inbox != nil
 	var emailName string
 	switch {
 	case inbox != nil:
@@ -100,6 +101,17 @@ func ensureIdentityWith(app core.App, user *core.Record, policy inboxPolicy) (*c
 	identity.Set("user", user.Id)
 	identity.Set("inbox", inbox.Id)
 	identity.Set("email_name", emailName)
+	if adopted {
+		// A legacy inbox sent from its own address. Keep that as the default
+		// From: the domain rules may now rank another domain first.
+		primary, err := app.FindFirstRecordByFilter("mail_addresses",
+			"mailbox = {:inbox} && is_primary = true", dbx.Params{"inbox": inbox.Id})
+		if err == nil {
+			identity.Set("default_from", primary.Id)
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("primary address lookup: %w", err)
+		}
+	}
 	if err := app.Save(identity); err != nil {
 		return nil, fmt.Errorf("save identity: %w", err)
 	}
