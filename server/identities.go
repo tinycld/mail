@@ -12,7 +12,8 @@ import (
 
 // ensureIdentity gives a non-guest user one personal inbox and one identity.
 // It adopts the inbox the user already owns (every user created before this
-// release has one) and otherwise creates an inbox on the main domain. It
+// release has one, unless it was created before any domain was verified or
+// has an unusable username) and otherwise creates an inbox on the main domain. It
 // returns nil, nil for a guest, and when no domain is verified yet: the
 // domain-verified hook calls ensureIdentities, so the user is picked up then.
 func ensureIdentity(app core.App, user *core.Record) (*core.Record, error) {
@@ -33,10 +34,14 @@ func ensureIdentity(app core.App, user *core.Record) (*core.Record, error) {
 	}
 	var emailName string
 	if inbox != nil {
-		emailName = inbox.GetString("address")
-		taken, err := emailNameTaken(app, emailName, inbox.Id)
-		if err != nil {
-			return nil, err
+		// Legacy inbox addresses were never pattern-checked.
+		emailName = normalizeLocalPart(inbox.GetString("address"))
+		taken := true
+		if localPartPattern.MatchString(emailName) {
+			taken, err = emailNameTaken(app, emailName, inbox.Id)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if taken {
 			emailName = deriveEmailName(app, user.GetString("username"), inbox.GetString("domain"))
@@ -101,8 +106,12 @@ func adoptPersonalInbox(app core.App, userID string) (*core.Record, error) {
 		return nil, err
 	}
 	for _, id := range ids {
-		if _, err := app.FindFirstRecordByFilter("mail_identities", "inbox = {:inbox}", dbx.Params{"inbox": id}); err == nil {
+		_, err := app.FindFirstRecordByFilter("mail_identities", "inbox = {:inbox}", dbx.Params{"inbox": id})
+		if err == nil {
 			continue
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("identity lookup for inbox %s: %w", id, err)
 		}
 		return app.FindRecordById("mail_mailboxes", id)
 	}
@@ -148,16 +157,35 @@ func deriveEmailName(app core.App, username, inboxDomainID string) string {
 	if base == "" {
 		return ""
 	}
-	candidate := base
-	for i := 2; i <= 100; i++ {
-		taken, err := emailNameTaken(app, candidate, "")
-		if err == nil && !taken {
-			row, err := findAddressRow(app, candidate, inboxDomainID)
-			if err == nil && row == nil {
-				return candidate
-			}
+	for i := 1; i <= 99; i++ {
+		suffix := ""
+		if i > 1 {
+			suffix = fmt.Sprint(i)
 		}
-		candidate = fmt.Sprintf("%s%d", base, i)
+		trimmed := base
+		if max := 64 - len(suffix); len(trimmed) > max {
+			trimmed = trimmed[:max]
+		}
+		candidate := trimmed + suffix
+		if !localPartPattern.MatchString(candidate) {
+			continue
+		}
+		taken, err := emailNameTaken(app, candidate, "")
+		if err != nil {
+			addressLog.Error("could not check an email name", "name", candidate, "error", err)
+			return ""
+		}
+		if taken {
+			continue
+		}
+		row, err := findAddressRow(app, candidate, inboxDomainID)
+		if err != nil {
+			addressLog.Error("could not check an address", "name", candidate, "error", err)
+			return ""
+		}
+		if row == nil {
+			return candidate
+		}
 	}
 	return ""
 }
@@ -196,8 +224,7 @@ func createPersonalInbox(app core.App, user *core.Record, emailName, domainID st
 	return inbox, nil
 }
 
-// registerIdentityHooks gives every new non-guest user, and every guest
-// promoted to a member role, an identity.
+// registerIdentityHooks gives every new or updated non-guest user an identity.
 func registerIdentityHooks(app core.App) {
 	app.OnRecordAfterCreateSuccess("users").BindFunc(func(e *core.RecordEvent) error {
 		if _, err := ensureIdentity(e.App, e.Record); err != nil {
@@ -205,11 +232,11 @@ func registerIdentityHooks(app core.App) {
 		}
 		return e.Next()
 	})
+	// Idempotent, so it needs no old role: it covers a promoted guest and heals
+	// a non-guest that lacks an identity.
 	app.OnRecordAfterUpdateSuccess("users").BindFunc(func(e *core.RecordEvent) error {
-		if e.Record.Original().GetString("role") == "guest" && e.Record.GetString("role") != "guest" {
-			if _, err := ensureIdentity(e.App, e.Record); err != nil {
-				addressLog.Error("could not give a promoted guest a mail identity", "user", e.Record.Id, "error", err)
-			}
+		if _, err := ensureIdentity(e.App, e.Record); err != nil {
+			addressLog.Error("could not ensure a mail identity after a user update", "user", e.Record.Id, "error", err)
 		}
 		return e.Next()
 	})

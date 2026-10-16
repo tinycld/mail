@@ -28,7 +28,7 @@ func findPersonalMailboxesOf(app core.App, userID string) ([]string, error) {
 			AND NOT EXISTS (SELECT 1 FROM mail_mailbox_members o
 				WHERE o.mailbox = m.mailbox AND o.role = 'owner' AND o.user != {:user}
 					AND (o.created < m.created OR (o.created = m.created AND o.rowid < m.rowid)))
-		ORDER BY m.mailbox`,
+		ORDER BY mb.created, mb.rowid`,
 	).Bind(dbx.Params{"user": userID}).All(&rows)
 	if err != nil {
 		return nil, fmt.Errorf("find personal mailboxes: %w", err)
