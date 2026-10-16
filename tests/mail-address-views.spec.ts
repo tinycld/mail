@@ -3,9 +3,9 @@
 // Everything runs on the main domain (tinycld.org) and is driven through the
 // UI: an admin gives the test user a second address in Members, the user
 // turns on "Show a folder for each address" in Account → Email, and the
-// sidebar views list only the mail that used their address. The spec puts the
-// test user back as it was at the end (switch off, address removed), because
-// other specs share that user.
+// sidebar views list only the mail that used their address. Other specs share
+// the test user, so an afterEach puts it back as it was (switch off, address
+// removed), also after a failed step.
 import { expect, type Page, test } from '@playwright/test'
 import { login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 import {
@@ -63,25 +63,55 @@ async function addAddress(page: Page, localPart: string) {
     await expect(drawer).toBeHidden()
 }
 
-async function removeAddress(page: Page, email: string) {
+// The cleanup runs after a failed step too, so it reads the state first and
+// changes only what the test left behind. Other specs share the test user.
+async function restoreTestUser(page: Page, addedAddress: string) {
+    const openDrawer = page.getByRole('dialog').first()
+    if (await openDrawer.isVisible()) {
+        await openDrawer.getByRole('button', { name: 'Close' }).click()
+        await expect(openDrawer).toBeHidden()
+    }
+
+    await openAccountEmail(page)
+    // The main address row proves the panel loaded, so a missing or off
+    // switch below is an answer.
+    await expect(page.getByText(TEST_USER_MAILBOX, { exact: true }).first()).toBeVisible()
+    const viewsSwitch = page.getByRole('switch', { name: VIEWS_SWITCH })
+    if (
+        (await viewsSwitch.count()) > 0 &&
+        (await viewsSwitch.getAttribute('aria-checked')) === 'true'
+    ) {
+        await viewsSwitch.click()
+        await expect(viewsSwitch).toHaveAttribute('aria-checked', 'false')
+    }
+
     const drawer = await openPersonEmail(page, TEST_USER_USERNAME)
-    const row = drawer.getByTestId(`address-row-${email}`)
-    await row.getByRole('button', { name: `Remove address ${email}` }).click()
-    await expect(row).toBeHidden()
+    await expect(drawer.getByTestId(`address-row-${TEST_USER_MAILBOX}`)).toBeVisible()
+    const row = drawer.getByTestId(`address-row-${addedAddress}`)
+    if ((await row.count()) > 0) {
+        await row.getByRole('button', { name: `Remove address ${addedAddress}` }).click()
+        await expect(row).toBeHidden()
+    }
     await drawer.getByRole('button', { name: 'Close' }).click()
     await expect(drawer).toBeHidden()
 }
 
 test.describe('Mail — A folder for each address', () => {
+    const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+    const localPart = `v${stamp}`
+    const secondAddress = `${localPart}@${MAIN_DOMAIN}`
+    let isSignedIn = false
+
+    test.afterEach(async ({ page }) => {
+        if (isSignedIn) await restoreTestUser(page, secondAddress)
+    })
+
     test('each address view lists only the mail sent to that address', async ({
         page,
         request,
     }) => {
-        const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-        const localPart = `v${stamp}`
-        const secondAddress = `${localPart}@${MAIN_DOMAIN}`
-
         await login(page)
+        isSignedIn = true
         await openMail(page)
         await addAddress(page, localPart)
 
@@ -115,9 +145,9 @@ test.describe('Mail — A folder for each address', () => {
         await setAddressViews(page, false)
         await expect(page.getByText('Show in sidebar', { exact: true })).toBeHidden()
         await openMail(page)
-        await expect(page.getByText('Inbox', { exact: true }).first()).toBeVisible()
+        // The marker shows once the views query has loaded, so no entries
+        // below is an answer and not a sidebar still loading.
+        await page.getByTestId('address-views-ready').waitFor({ state: 'attached' })
         await expect(page.locator('[data-testid^="address-view-"]')).toHaveCount(0)
-
-        await removeAddress(page, secondAddress)
     })
 })
