@@ -39,13 +39,13 @@ function useMailboxData(currentUserId: string) {
         domainsCollection,
         mailboxesCollection,
         membersCollection,
-        aliasesCollection,
+        addressesCollection,
         usersCollection,
     ] = useStore(
         'mail_domains',
         'mail_mailboxes',
         'mail_mailbox_members',
-        'mail_mailbox_aliases',
+        'mail_addresses',
         'users'
     )
 
@@ -71,8 +71,18 @@ function useMailboxData(currentUserId: string) {
             .innerJoin({ user: usersCollection }, ({ member, user }) => eq(member.user, user.id))
     )
 
-    const { data: aliases } = useLiveQuery(query =>
-        query.from({ mail_mailbox_aliases: aliasesCollection })
+    const { data: extraAddresses } = useLiveQuery(query =>
+        query
+            .from({ address: addressesCollection })
+            .innerJoin({ domain: domainsCollection }, ({ address, domain }) =>
+                eq(address.domain, domain.id)
+            )
+            .where(({ address }) => eq(address.is_primary, false))
+            .select(({ address, domain }) => ({
+                mailbox: address.mailbox,
+                localPart: address.local_part,
+                domainName: domain.domain,
+            }))
     )
 
     // Single-org: every real member is a potential mailbox member — the
@@ -104,9 +114,9 @@ function useMailboxData(currentUserId: string) {
     }
 
     const aliasesByMailbox = new Map<string, string[]>()
-    for (const a of aliases ?? []) {
+    for (const a of extraAddresses ?? []) {
         const list = aliasesByMailbox.get(a.mailbox) ?? []
-        list.push(a.address)
+        list.push(`${a.localPart}@${a.domainName}`)
         aliasesByMailbox.set(a.mailbox, list)
     }
 
