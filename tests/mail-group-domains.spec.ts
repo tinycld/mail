@@ -10,7 +10,12 @@
 // away — is driven through the UI.
 import { expect, type Page, test } from '@playwright/test'
 import { login, navigateToPackage, TEST_USER_EMAIL } from '@tinycld/core/e2e-helpers'
-import { navigateToMailboxSettings, seedVerifiedDomain, TEST_USER_MAILBOX } from './helpers'
+import {
+    openPersonEmail,
+    seedVerifiedDomain,
+    TEST_USER_MAILBOX,
+    TEST_USER_USERNAME,
+} from './helpers'
 
 async function openGroupsSettings(page: Page) {
     await page.getByTestId('nav-settings').click()
@@ -25,10 +30,8 @@ async function closeDrawer(page: Page) {
     await expect(drawer).toBeHidden()
 }
 
-async function openTestUserMailbox(page: Page) {
-    await navigateToMailboxSettings(page)
-    await page.getByTestId(`mailbox-row-${TEST_USER_MAILBOX}`).click()
-    const drawer = page.getByRole('dialog')
+async function openTestUserEmail(page: Page) {
+    const drawer = await openPersonEmail(page, TEST_USER_USERNAME)
     await expect(drawer.getByText('Addresses', { exact: true })).toBeVisible()
     // The main address proves the address list loaded, so a missing address
     // below is an answer and not a list that has not rendered yet.
@@ -86,7 +89,7 @@ test.describe('Mail — Domains for members of groups', () => {
         await card.getByText('Apply', { exact: true }).click()
         await expect(card.getByText('Apply', { exact: true })).toBeHidden()
 
-        const mailboxDrawer = await openTestUserMailbox(page)
+        const mailboxDrawer = await openTestUserEmail(page)
         await expect(mailboxDrawer.getByText(address, { exact: true })).toBeVisible()
         await expect(
             mailboxDrawer.getByText(`From group ${groupName}`, { exact: true })
@@ -109,7 +112,7 @@ test.describe('Mail — Domains for members of groups', () => {
         await expect(memberRow).toBeHidden()
         await closeDrawer(page)
 
-        const reopenedDrawer = await openTestUserMailbox(page)
+        const reopenedDrawer = await openTestUserEmail(page)
         await expect(reopenedDrawer.getByText(address, { exact: true })).toBeHidden()
         await closeDrawer(page)
     })

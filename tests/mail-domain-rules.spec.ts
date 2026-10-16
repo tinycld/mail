@@ -9,7 +9,12 @@
 // address in the mailbox and in compose — is driven through the UI.
 import { expect, test } from '@playwright/test'
 import { login, navigateToPackage } from '@tinycld/core/e2e-helpers'
-import { navigateToMailboxSettings, seedVerifiedDomain, TEST_USER_MAILBOX } from './helpers'
+import {
+    openPersonEmail,
+    seedVerifiedDomain,
+    TEST_USER_MAILBOX,
+    TEST_USER_USERNAME,
+} from './helpers'
 
 test.describe('Mail — Domain rule', () => {
     test('setting a domain to Everyone gives the test user an address on it', async ({ page }) => {
@@ -42,9 +47,7 @@ test.describe('Mail — Domain rule', () => {
         await card.getByText('Apply', { exact: true }).click()
         await expect(card.getByText('Apply', { exact: true })).toBeHidden()
 
-        await navigateToMailboxSettings(page)
-        await page.getByTestId(`mailbox-row-${TEST_USER_MAILBOX}`).click()
-        const drawer = page.getByRole('dialog')
+        const drawer = await openPersonEmail(page, TEST_USER_USERNAME)
         await expect(drawer.getByText('Addresses', { exact: true })).toBeVisible()
         await expect(drawer.getByText(address, { exact: true })).toBeVisible()
         await expect(drawer.getByText('From the domain rule', { exact: true })).toBeVisible()

@@ -31,7 +31,7 @@ export function MailboxMemberRow({
     const dangerColor = useThemeColor('danger')
     const removeState = useServerActionState({
         isDisabled: !canRemove,
-        accessibilityHint: `Removes ${name} from the mailbox`,
+        accessibilityHint: `Removes ${name} from the inbox`,
     })
     const isOwner = role === 'owner'
     const pillBg = isOwner ? `${primaryColor}1F` : `${mutedColor}26`

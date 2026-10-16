@@ -118,7 +118,7 @@ function CreateView({
             <DrawerHeader>
                 <View>
                     <Text className="text-foreground" style={{ fontSize: 16, fontWeight: '700' }}>
-                        New shared mailbox
+                        Set up a shared inbox
                     </Text>
                     <Text
                         className="text-muted-foreground"
@@ -163,7 +163,7 @@ function EditView({
             <DrawerHeader>
                 <View>
                     <Text className="text-foreground" style={{ fontSize: 16, fontWeight: '700' }}>
-                        Edit mailbox
+                        Edit shared inbox
                     </Text>
                     <Text
                         className="text-muted-foreground"
@@ -609,7 +609,7 @@ function DangerZone({ mailboxId, onDeleted }: { mailboxId: string; onDeleted: ()
         <View className="flex-row items-center justify-between gap-3">
             <View className="flex-1">
                 <Text className="text-foreground" style={{ fontSize: 12.5, fontWeight: '600' }}>
-                    Delete this mailbox.
+                    Delete this shared inbox.
                 </Text>
                 <Text className="text-muted-foreground" style={{ fontSize: 11.5 }}>
                     Members lose access. Its addresses are freed. Messages stay on disk.

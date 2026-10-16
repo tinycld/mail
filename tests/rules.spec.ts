@@ -11,7 +11,7 @@ import { deliverInbound, emailRow, navigateToPersonalInbox } from './helpers'
 // is worse than no action, so asserting the folder change (not just a
 // database row) is what makes this test worth having.
 
-// Element-gated settings navigation, mirroring navigateToMailboxSettings in
+// Element-gated settings navigation, mirroring navigateToSharedInboxSettings in
 // ./helpers — never page.goto(), which tears down the SPA mid-navigation.
 async function navigateToRulesSettings(page: Page) {
     await page.getByTestId('nav-settings').click()

@@ -38,7 +38,7 @@ const manifest = {
         // distinct from the systemSettings 'Provider' panel below, which is
         // where the provider itself is chosen.
         { slug: 'provider', label: 'Domains', component: 'settings/provider' },
-        { slug: 'mailboxes', label: 'Mailboxes', component: 'settings/mailboxes' },
+        { slug: 'mailboxes', label: 'Shared inboxes', component: 'settings/mailboxes' },
     ],
     accountSettings: [{ slug: 'email', label: 'Email', component: 'settings/AccountEmail' }],
     // keyPrefix: these are deployment-wide credentials. Where a service provider
