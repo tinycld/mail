@@ -201,7 +201,9 @@ func registerRuleAddressHooks(app core.App) {
 		return e.Next()
 	})
 	app.OnRecordAfterUpdateSuccess("mail_identities").BindFunc(func(e *core.RecordEvent) error {
-		if e.Record.Original().GetString("email_name") != e.Record.GetString("email_name") {
+		original := e.Record.Original()
+		if original.GetString("email_name") != e.Record.GetString("email_name") ||
+			original.GetString("inbox") != e.Record.GetString("inbox") {
 			reconcile(e.App, ruleScope{UserID: e.Record.GetString("user")})
 		}
 		return e.Next()
@@ -234,6 +236,15 @@ func registerRuleAddressHooks(app core.App) {
 		becameVerified := !original.GetBool("verified") && e.Record.GetBool("verified")
 		if becameVerified || original.GetString("coverage") != e.Record.GetString("coverage") {
 			domainChanged(e, becameVerified)
+		}
+		return e.Next()
+	})
+
+	// Deleting a domain cascades to the inboxes on it, which clears the
+	// owners' identity.inbox. Give those people a new inbox at once.
+	app.OnRecordAfterDeleteSuccess("mail_domains").BindFunc(func(e *core.RecordEvent) error {
+		if err := repairEmptyInboxIdentities(e.App); err != nil {
+			addressLog.Error("could not repair identities after a domain was deleted", "domain", e.Record.Id, "error", err)
 		}
 		return e.Next()
 	})

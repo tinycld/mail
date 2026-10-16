@@ -43,6 +43,9 @@ func ensureIdentityWith(app core.App, user *core.Record, policy inboxPolicy) (*c
 		if existing.GetBool("retired") {
 			return nil, nil
 		}
+		if existing.GetString("inbox") == "" {
+			return repairIdentityInbox(app, user, existing)
+		}
 		return existing, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -116,6 +119,88 @@ func ensureIdentityWith(app core.App, user *core.Record, policy inboxPolicy) (*c
 		return nil, fmt.Errorf("save identity: %w", err)
 	}
 	return identity, nil
+}
+
+// repairIdentityInbox gives a live identity whose inbox was deleted outside
+// offboarding (a removed domain, the owner deleting it, a superuser) a new
+// one: an inbox the user owns that no identity claims, else a new one on the
+// main domain. It runs under both policies: a live identity is not a leaver.
+// With no verified domain the identity is returned unchanged; the
+// domain-verified hook retries.
+func repairIdentityInbox(app core.App, user, identity *core.Record) (*core.Record, error) {
+	inbox, err := adoptPersonalInbox(app, user.Id)
+	if err != nil {
+		return nil, err
+	}
+	if inbox == nil {
+		domain, err := mainDomain(app)
+		if err != nil || domain == nil {
+			return identity, err
+		}
+		emailName, err := repairEmailName(app, user, identity, domain.Id)
+		if err != nil {
+			return nil, err
+		}
+		if emailName == "" {
+			addressLog.Error("could not choose an email name; the user has no inbox",
+				"user", user.Id, "username", user.GetString("username"))
+			return identity, nil
+		}
+		inbox, err = createPersonalInbox(app, user, emailName, domain.Id)
+		if err != nil {
+			return nil, err
+		}
+		identity.Set("email_name", emailName)
+	}
+	identity.Set("inbox", inbox.Id)
+	if err := app.Save(identity); err != nil {
+		return nil, fmt.Errorf("save repaired identity: %w", err)
+	}
+	return identity, nil
+}
+
+// repairEmailName keeps the identity's email name when it is still free on the
+// main domain, and otherwise derives a new one.
+func repairEmailName(app core.App, user, identity *core.Record, domainID string) (string, error) {
+	name := identity.GetString("email_name")
+	if localPartPattern.MatchString(name) {
+		others, err := app.FindRecordsByFilter("mail_identities",
+			"email_name = {:name} && retired != true && id != {:id}", "", 1, 0,
+			dbx.Params{"name": name, "id": identity.Id})
+		if err != nil {
+			return "", err
+		}
+		row, err := findAddressRow(app, name, domainID)
+		if err != nil {
+			return "", err
+		}
+		if len(others) == 0 && row == nil {
+			return name, nil
+		}
+	}
+	return deriveEmailName(app, user.GetString("username"), domainID), nil
+}
+
+// repairEmptyInboxIdentities runs the repair for every live identity without
+// an inbox. Unlike ensureIdentities it never gives a user without an
+// identity one.
+func repairEmptyInboxIdentities(app core.App) error {
+	identities, err := app.FindRecordsByFilter("mail_identities",
+		"retired != true && inbox = '' && user.role != 'guest'", "created", 0, 0)
+	if err != nil {
+		return fmt.Errorf("list identities without an inbox: %w", err)
+	}
+	var errs []error
+	for _, identity := range identities {
+		user, err := app.FindRecordById("users", identity.GetString("user"))
+		if err == nil {
+			_, err = ensureIdentityWith(app, user, adoptOrCreateInbox)
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("identity %s: %w", identity.Id, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // ensureIdentities runs ensureIdentity for every non-guest user under the

@@ -180,7 +180,9 @@ func checkAddressAvailable(app core.App, localPart, domainID, mailboxID, selfID 
 	if err != nil {
 		return fmt.Errorf("identity lookup failed: %w", err)
 	}
-	if owner.GetString("inbox") != mailboxID {
+	// An identity without an inbox (it is being repaired) hands the name out
+	// nowhere yet, and its repair must be able to create the inbox on it.
+	if owner.GetString("inbox") != "" && owner.GetString("inbox") != mailboxID {
 		return validation.NewError("address_reserved",
 			fmt.Sprintf("%s is reserved on %s: it is a person's email name, and everyone gets that name there",
 				localPart, domain.GetString("domain")))
