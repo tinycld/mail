@@ -81,6 +81,7 @@ export function AddAddressForm({ mailboxId, onDone }: { mailboxId: string; onDon
                 mailbox: mailboxId,
                 source: 'manual',
                 is_primary: false,
+                via_group: '',
                 created: '',
                 updated: '',
             })

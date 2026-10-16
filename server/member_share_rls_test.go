@@ -53,6 +53,7 @@ func setupMailShareApp(t *testing.T) *mailShareEnv {
 		t.Fatalf("add users fields: %v", err)
 	}
 
+	seedGroupsCollection(t, app)
 	rlstest.Apply(t, app, rlstest.MigrationsDir(t, "../pb-migrations"))
 
 	owner := mailGuestUser(t, app, "roster-owner@test.local", "member")
