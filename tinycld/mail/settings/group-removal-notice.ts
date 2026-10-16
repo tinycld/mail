@@ -27,18 +27,72 @@ export function addressesLost(
     return [...lost].sort()
 }
 
+/** One row of a person on an inbox the removed group grants; viaGroup '' is a direct row. */
+export interface InboxAccessRow {
+    mailboxId: string
+    email: string
+    userId: string
+    viaGroup: string
+}
+
+/**
+ * Pure: the inboxes that stop being open to someone, sorted. The rows are
+ * every row of the people on the inboxes the group grants. An inbox is kept
+ * while the person has a row besides the removed group's derived row.
+ */
+export function inboxesLost(rows: InboxAccessRow[], removedGroupId: string) {
+    const kept = new Set<string>()
+    const derived = new Map<string, string>()
+    for (const row of rows) {
+        const key = `${row.mailboxId}\u0000${row.userId}`
+        if (row.viaGroup === removedGroupId) derived.set(key, row.email)
+        else kept.add(key)
+    }
+    const lost = new Set<string>()
+    for (const [key, email] of derived) {
+        if (!kept.has(key)) lost.add(email)
+    }
+    return [...lost].sort()
+}
+
+function addressesPart(personName: string | null, addresses: string[]) {
+    if (addresses.length === 1) return addresses[0]
+    if (personName) return shortList(addresses)
+    return `${addresses.length} addresses (${shortList(addresses)})`
+}
+
+function inboxesPart(personName: string | null, inboxes: string[]) {
+    if (inboxes.length === 1 || personName) return `access to ${shortList(inboxes)}`
+    return `access to ${inboxes.length} shared inboxes (${shortList(inboxes)})`
+}
+
+function addressesOnlyText(who: string, personName: string | null, addresses: string[]) {
+    const n = addresses.length
+    if (n === 1) return `${who} the address ${addresses[0]}.`
+    if (personName) return `${who} these addresses: ${shortList(addresses)}.`
+    return `${who} ${n} addresses: ${shortList(addresses)}.`
+}
+
+function inboxesOnlyText(who: string, personName: string | null, inboxes: string[]) {
+    if (inboxes.length === 1) return `${who} access to ${inboxes[0]}.`
+    if (personName) return `${who} access to these shared inboxes: ${shortList(inboxes)}.`
+    return `${who} access to ${inboxes.length} shared inboxes: ${shortList(inboxes)}.`
+}
+
 /** Pure: the notice sentence, or null when nothing is lost. personName null: the group is deleted. */
 export function removalNoticeText({
     personName,
     addresses,
+    inboxes = [],
 }: {
     personName: string | null
     addresses: string[]
+    inboxes?: string[]
 }) {
-    const n = addresses.length
-    if (n === 0) return null
     const who = personName ? `${personName} loses` : 'Members lose'
-    if (n === 1) return `${who} the address ${addresses[0]}.`
-    if (personName) return `${who} these addresses: ${shortList(addresses)}.`
-    return `${who} ${n} addresses: ${shortList(addresses)}.`
+    if (addresses.length === 0 && inboxes.length === 0) return null
+    if (inboxes.length === 0) return addressesOnlyText(who, personName, addresses)
+    if (addresses.length === 0) return inboxesOnlyText(who, personName, inboxes)
+    const lead = addressesPart(personName, addresses)
+    return `${who} ${lead} and ${inboxesPart(personName, inboxes)}.`
 }

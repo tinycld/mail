@@ -21,6 +21,8 @@ const h = vi.hoisted(() => ({
         { id: 'ann', name: 'Ann', email: 'ann@tinycld.org' },
         { id: 'bob', name: 'Bob', email: 'bob@tinycld.org' },
         { id: 'cat', name: '', email: 'cat@tinycld.org' },
+        { id: 'dan', name: 'Dan', email: 'dan@tinycld.org' },
+        { id: 'eve', name: 'Eve', email: 'eve@tinycld.org' },
     ],
     identities: [
         { id: 'i_ann', user: 'ann', inbox: 'mb_ann', email_name: 'ann', retired: false },
@@ -36,6 +38,21 @@ const h = vi.hoisted(() => ({
         { id: 'gm2', group: 'g_sales', user: 'cat' },
         // Cat is also in Ops, the other group of r.example: she keeps that address.
         { id: 'gm3', group: 'g_ops', user: 'cat' },
+    ],
+    mailboxes: [
+        { id: 'mb_support', type: 'shared', address: 'support', domain: 'd_q' },
+        { id: 'mb_ops', type: 'shared', address: 'ops', domain: 'd_q' },
+    ],
+    mailboxMembers: [
+        // Grants of Sales: support only.
+        { id: 'g1', mailbox: 'mb_support', group: 'g_sales', user: '', role: 'member' },
+        { id: 'd1', mailbox: 'mb_support', group: 'g_sales', user: 'dan', role: 'member' },
+        { id: 'd2', mailbox: 'mb_support', group: 'g_sales', user: 'eve', role: 'member' },
+        // Eve also has a direct row: she keeps support.
+        { id: 'd3', mailbox: 'mb_support', group: '', user: 'eve', role: 'member' },
+        // Ops grants the other inbox.
+        { id: 'g2', mailbox: 'mb_ops', group: 'g_ops', user: '', role: 'member' },
+        { id: 'd4', mailbox: 'mb_ops', group: 'g_ops', user: 'dan', role: 'member' },
     ],
     addresses: [
         {
@@ -92,6 +109,8 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
         mail_identities: mk('mail_identities', h.identities),
         mail_addresses: mk('mail_addresses', h.addresses),
         users: mk('users', h.users),
+        mail_mailboxes: mk('mail_mailboxes', h.mailboxes),
+        mail_mailbox_members: mk('mail_mailbox_members', h.mailboxMembers),
         groups: mk('groups', h.groups),
         group_members: mk('group_members', h.groupMembers),
     }
@@ -128,5 +147,31 @@ test('an address another of the domain groups keeps is not listed', async () => 
 test('deleting the group lists every rule address its members lose', async () => {
     const { findByText } = render(<GroupRemovalNotice groupId="g_sales" userId={null} />)
     // Not cat@r.example: Cat stays in Ops, the other group of r.example.
-    expect(await findByText('Members lose 2 addresses: ann@q.example, cat@q.example.')).toBeTruthy()
+    // Dan loses the support inbox too; Eve keeps it by her direct row.
+    expect(
+        await findByText(
+            'Members lose 2 addresses (ann@q.example, cat@q.example) and access to support@q.example.'
+        )
+    ).toBeTruthy()
+})
+
+test('removing a person names the inbox only the group gave them', async () => {
+    const { findByText } = render(<GroupRemovalNotice groupId="g_sales" userId="dan" />)
+    expect(await findByText('Dan loses access to support@q.example.')).toBeTruthy()
+})
+
+test('an inbox the person also has directly is not listed', async () => {
+    const { container, findByText } = render(
+        <>
+            <GroupRemovalNotice groupId="g_sales" userId="eve" />
+            <GroupRemovalNotice groupId="g_sales" userId="dan" />
+        </>
+    )
+    await findByText('Dan loses access to support@q.example.')
+    expect(container.childElementCount).toBe(1)
+})
+
+test('deleting the group names the inboxes its members lose', async () => {
+    const { findByText } = render(<GroupRemovalNotice groupId="g_ops" userId={null} />)
+    expect(await findByText('Members lose access to ops@q.example.')).toBeTruthy()
 })

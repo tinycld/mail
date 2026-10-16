@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { addressesLost, removalNoticeText } from '~/tinycld/mail/settings/group-removal-notice'
+import {
+    addressesLost,
+    inboxesLost,
+    removalNoticeText,
+} from '~/tinycld/mail/settings/group-removal-notice'
 
 describe('removalNoticeText', () => {
     it('names the one address a person loses', () => {
@@ -36,6 +40,82 @@ describe('removalNoticeText', () => {
     it('says nothing when nothing is lost', () => {
         expect(removalNoticeText({ personName: 'Ann', addresses: [] })).toBeNull()
         expect(removalNoticeText({ personName: null, addresses: [] })).toBeNull()
+    })
+})
+
+describe('removalNoticeText with inboxes', () => {
+    it('names an address and an inbox a person loses', () => {
+        expect(
+            removalNoticeText({
+                personName: 'Holly',
+                addresses: ['holly@q.example'],
+                inboxes: ['support@q.example'],
+            })
+        ).toBe('Holly loses holly@q.example and access to support@q.example.')
+    })
+
+    it('names only inboxes', () => {
+        expect(
+            removalNoticeText({
+                personName: 'Holly',
+                addresses: [],
+                inboxes: ['support@q.example'],
+            })
+        ).toBe('Holly loses access to support@q.example.')
+    })
+
+    it('counts the inboxes members lose when the group is deleted', () => {
+        expect(
+            removalNoticeText({
+                personName: null,
+                addresses: [],
+                inboxes: ['support@q.example', 'sales@q.example'],
+            })
+        ).toBe('Members lose access to 2 shared inboxes: support@q.example, sales@q.example.')
+    })
+
+    it('says nothing without addresses and inboxes', () => {
+        expect(removalNoticeText({ personName: 'Ann', addresses: [], inboxes: [] })).toBeNull()
+    })
+})
+
+describe('inboxesLost', () => {
+    const row = (mailboxId: string, userId: string, viaGroup: string) => ({
+        mailboxId,
+        email: `${mailboxId}@q.example`,
+        userId,
+        viaGroup,
+    })
+
+    it('loses an inbox when only the derived row of the group is left', () => {
+        expect(inboxesLost([row('support', 'ann', 'g_sales')], 'g_sales')).toEqual([
+            'support@q.example',
+        ])
+    })
+
+    it('keeps an inbox the person also has by a direct row', () => {
+        const rows = [row('support', 'ann', 'g_sales'), row('support', 'ann', '')]
+        expect(inboxesLost(rows, 'g_sales')).toEqual([])
+    })
+
+    it('keeps an inbox the person has through another group', () => {
+        const rows = [row('support', 'ann', 'g_sales'), row('support', 'ann', 'g_ops')]
+        expect(inboxesLost(rows, 'g_sales')).toEqual([])
+    })
+
+    it('ignores a person without a derived row of the group', () => {
+        expect(inboxesLost([row('support', 'bob', '')], 'g_sales')).toEqual([])
+    })
+
+    it('lists each lost inbox once, sorted, when members of a deleted group lose it', () => {
+        const rows = [
+            row('support', 'ann', 'g_sales'),
+            row('support', 'bob', 'g_sales'),
+            row('sales', 'bob', 'g_sales'),
+            row('sales', 'bob', ''),
+            row('sales', 'ann', 'g_sales'),
+        ]
+        expect(inboxesLost(rows, 'g_sales')).toEqual(['sales@q.example', 'support@q.example'])
     })
 })
 

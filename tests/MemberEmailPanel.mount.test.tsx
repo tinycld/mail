@@ -17,6 +17,7 @@ const h = vi.hoisted(() => ({
             retired: false,
         },
         { id: 'i2', user: 'u2', email_name: 'ann', inbox: 'mb2', default_from: '', retired: false },
+        { id: 'i4', user: 'u4', email_name: 'zed', inbox: 'mb4', default_from: '', retired: false },
         { id: 'i3', user: 'u3', email_name: 'old', inbox: '', default_from: '', retired: true },
     ],
     addresses: [
@@ -48,11 +49,20 @@ const h = vi.hoisted(() => ({
         { id: 'mb_sales', type: 'shared', display_name: 'Sales inbox' },
         { id: 'mb_blank', type: 'shared', display_name: '', name: 'Support', address: 'support' },
         { id: 'mb_other', type: 'shared', display_name: 'Other inbox' },
+        {
+            id: 'mb_via',
+            type: 'shared',
+            display_name: '',
+            name: '',
+            address: 'support',
+            domain: 'd2',
+        },
     ],
     users: [
         { id: 'u1', role: 'admin' },
         { id: 'u2', role: 'member' },
         { id: 'u3', role: 'member' },
+        { id: 'u4', role: 'member' },
         { id: 'u8', role: 'member' },
         { id: 'u9', role: 'guest' },
     ],
@@ -61,6 +71,9 @@ const h = vi.hoisted(() => ({
         { id: 'm2', mailbox: 'mb1', user: 'u1' },
         { id: 'm4', mailbox: 'mb_blank', user: 'u1' },
         { id: 'm3', mailbox: 'mb_other', user: 'u9' },
+        { id: 'm5', mailbox: 'mb_via', user: 'u2', group: 'g_sales' },
+        { id: 'm6', mailbox: 'mb_sales', user: 'u2', group: 'g_sales' },
+        { id: 'm7', mailbox: 'mb_sales', user: 'u2', group: '' },
     ],
 }))
 
@@ -84,7 +97,7 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
         mail_identities: mk('mail_identities', h.identities),
         mail_addresses: mk('mail_addresses', h.addresses),
         mail_domains: mk('mail_domains', h.domains),
-        groups: mk('groups', []),
+        groups: mk('groups', [{ id: 'g_sales', name: 'Sales' }]),
         users: mk('users', h.users),
         mail_mailboxes: mk('mail_mailboxes', h.mailboxes),
         mail_mailbox_members: mk('mail_mailbox_members', h.members),
@@ -133,9 +146,21 @@ test('a shared inbox with an empty display name shows its name', async () => {
 })
 
 test('no shared inbox list when there are none', async () => {
-    const { findByText, queryByText } = renderPanel('u2')
+    const { findByText, queryByText } = renderPanel('u4')
     await findByText('Send new mail from')
     expect(queryByText('Shared inboxes')).toBeNull()
+})
+
+test('an inbox from a group says which group', async () => {
+    const { findByText } = renderPanel('u2')
+    expect(await findByText('support@q.example · through Sales')).toBeTruthy()
+})
+
+test('an inbox with a direct row and a group row shows once, without the group', async () => {
+    const { findByText, queryByText, getAllByText } = renderPanel('u2')
+    await findByText('support@q.example · through Sales')
+    expect(getAllByText('Sales inbox')).toHaveLength(1)
+    expect(queryByText(/Sales inbox ·/)).toBeNull()
 })
 
 test('a person with an inbox and no address says so', async () => {
