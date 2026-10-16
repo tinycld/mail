@@ -9,6 +9,10 @@ A shared inbox is for an address that a team uses together, for example `support
 
 Each person also has a personal inbox. TinyCld makes it when the account is made. You manage a personal inbox in **Settings → Members**, not here. Click the person and use the **Email** section. See [Your email addresses](help://mail:addresses).
 
+## What an admin sees
+
+An admin or an owner of the workspace sees every shared inbox in **Settings → Mail → Shared inboxes**, with its members. An admin cannot read the mail of an inbox, unless the admin is a member of it. Only an owner of the inbox can change its members and settings.
+
 ## Make a shared inbox
 
 1. Open **Settings → Mail → Shared inboxes**.
