@@ -1,9 +1,19 @@
 package mail
 
 import (
+	"database/sql"
+	"errors"
+	"fmt"
+
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/groups"
+	"tinycld.org/core/logging"
 )
+
+var memberAccessLog = logging.ForPackage("mail")
+
+const memberCleanupBatch = 500
 
 // A group can be a member of a shared inbox. mail_mailbox_members is a core
 // groups grant table (migration 2040000013):
@@ -84,4 +94,106 @@ func refuseDerivedRow(e *core.RecordRequestEvent, row *core.Record) error {
 		return e.ForbiddenError("You have access through the group "+name+". Ask an admin to remove you from the group.", nil)
 	}
 	return e.ForbiddenError("This person has access through the group "+name+". Remove the group from the inbox, or ask an admin to remove the person from the group.", nil)
+}
+
+// userHasMailboxRow reports whether the user has a member row on the mailbox
+// other than exceptID: a direct row or a row derived from a group.
+func userHasMailboxRow(app core.App, mailboxID, userID string, exceptID string) (bool, error) {
+	n, err := app.CountRecords("mail_mailbox_members",
+		dbx.HashExp{"mailbox": mailboxID, "user": userID},
+		dbx.Not(dbx.HashExp{"id": exceptID}),
+	)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// registerMemberAccessCleanup removes a person's thread state for an inbox
+// when the person loses the last member row that gave access to it: they were
+// removed, they left the last group that has access, or that group or its
+// grant was deleted. A person with a direct row who leaves a group, or who
+// is in two groups and leaves one, keeps their state.
+//
+// The cleanup runs in a goroutine for the reason the backfill does
+// (member_backfill.go): an inbox can hold many thousands of threads, and one
+// delete per row must not hold up the member delete. The root app is captured
+// at registration because the goroutine outlives the request, and the event's
+// app can be a finished transaction. For the same reason the access check
+// runs in the goroutine with the root app, not in the hook.
+func registerMemberAccessCleanup(app core.App) {
+	app.OnRecordAfterDeleteSuccess("mail_mailbox_members").BindFunc(func(e *core.RecordEvent) error {
+		mailboxID := e.Record.GetString("mailbox")
+		userID := e.Record.GetString("user")
+		if userID == "" {
+			return e.Next()
+		}
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					memberAccessLog.Error("member access cleanup panicked",
+						"mailbox", mailboxID, "user", userID, "panic", r)
+				}
+			}()
+			if err := cleanupLostMailboxAccess(app, mailboxID, userID); err != nil {
+				memberAccessLog.Error("member access cleanup failed",
+					"mailbox", mailboxID, "user", userID, "error", err)
+			}
+		}()
+		return e.Next()
+	})
+}
+
+// cleanupLostMailboxAccess deletes the user's mail_thread_state rows for the
+// mailbox, in batches, and then the user's counts row for it. It does nothing
+// while the user still has a member row on the mailbox, and checks again
+// before each batch: a person can be added back while a cleanup runs, and
+// their new state must stay. Each row is a record delete, so realtime and the
+// folder-count hook fire.
+func cleanupLostMailboxAccess(app core.App, mailboxID, userID string) error {
+	for {
+		// The app can be torn down while a cleanup is still running (test
+		// teardown, dev DB reset); a query on a closed DB panics.
+		if !appIsLive(app) {
+			return nil
+		}
+		has, err := userHasMailboxRow(app, mailboxID, userID, "")
+		if err != nil {
+			return fmt.Errorf("member rows of user %s on mailbox %s: %w", userID, mailboxID, err)
+		}
+		if has {
+			return nil
+		}
+		states, err := app.FindRecordsByFilter(
+			"mail_thread_state",
+			"mailbox = {:mailbox} && user = {:user}",
+			"id",
+			memberCleanupBatch,
+			0,
+			map[string]any{"mailbox": mailboxID, "user": userID},
+		)
+		if err != nil {
+			return fmt.Errorf("list state rows of user %s on mailbox %s: %w", userID, mailboxID, err)
+		}
+		for _, state := range states {
+			if err := app.Delete(state); err != nil {
+				return fmt.Errorf("delete state row %s: %w", state.Id, err)
+			}
+		}
+		if len(states) < memberCleanupBatch {
+			break
+		}
+	}
+
+	counts, err := app.FindRecordById("mail_folder_counts", folderCountsID(userID, mailboxID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("counts row of user %s on mailbox %s: %w", userID, mailboxID, err)
+	}
+	if err := app.Delete(counts); err != nil {
+		return fmt.Errorf("delete counts row of user %s on mailbox %s: %w", userID, mailboxID, err)
+	}
+	return nil
 }

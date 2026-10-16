@@ -4,11 +4,13 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 	"tinycld.org/core/groups"
+	"tinycld.org/core/offboard"
 	"tinycld.org/core/rlstest"
 )
 
@@ -382,4 +384,349 @@ func TestInboxGroup_OnlyOwnerManagesGrants(t *testing.T) {
 func TestInboxGroup_RulesGuardGrantUser(t *testing.T) {
 	app := newRealSchemaApp(t)
 	rlstest.RequireAuthGuardOnGrantRules(t, app, "mail_mailbox_members")
+}
+
+// The tests below cover what a person's several rows on one inbox mean for
+// the server: a person with a direct row and one derived row per group is one
+// member, a grant row is no person at all, and losing the last row ends the
+// person's thread state for the inbox.
+
+// newInboxStateTestApp adds the thread-state hooks to newInboxGroupTestApp:
+// the state row takes its mailbox from the thread, the counts row follows the
+// state rows, and the cleanup runs when a member row goes. The backfill hook
+// is left out: its goroutine would write state rows at a time the test does
+// not control.
+func newInboxStateTestApp(t *testing.T) *tests.TestApp {
+	t.Helper()
+	app := newInboxGroupTestApp(t)
+	registerThreadStateSyncHooks(app)
+	registerFolderCountHooks(app)
+	registerMemberAccessCleanup(app)
+	return app
+}
+
+func addInboxPerson(t *testing.T, app core.App, mailbox, user *core.Record, role string) *core.Record {
+	t.Helper()
+	return saveRealRecord(t, app, "mail_mailbox_members", map[string]any{
+		"mailbox": mailbox.Id, "user": user.Id, "role": role,
+	})
+}
+
+// deliverToInbox runs one inbound message through the delivery path and
+// returns the thread it went to.
+func deliverToInbox(t *testing.T, app core.App, mailbox *core.Record, id string) *core.Record {
+	t.Helper()
+	msg := &InboundMessage{
+		From:      Recipient{Email: "sender@sender.example"},
+		To:        []Recipient{{Email: mailbox.GetString("address") + "@inbox.example"}},
+		Subject:   "Message " + id,
+		TextBody:  "body",
+		MessageID: "<" + id + "@sender.example>",
+		Date:      time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := processInboundForMailbox(app, mailbox, msg, ""); err != nil {
+		t.Fatalf("deliver %s: %v", id, err)
+	}
+	message, err := app.FindFirstRecordByFilter("mail_messages", "message_id = {:id}",
+		map[string]any{"id": msg.MessageID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	thread, err := app.FindRecordById("mail_threads", message.GetString("thread"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return thread
+}
+
+func inboxStateCount(t *testing.T, app core.App, mailbox *core.Record, userID string) int {
+	t.Helper()
+	rows, err := app.FindRecordsByFilter("mail_thread_state", "mailbox = {:m} && user = {:u}", "", 0, 0,
+		map[string]any{"m": mailbox.Id, "u": userID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(rows)
+}
+
+func hasCountsRow(app core.App, mailbox, user *core.Record) bool {
+	_, err := app.FindRecordById("mail_folder_counts", folderCountsID(user.Id, mailbox.Id))
+	return err == nil
+}
+
+// waitFor polls cond for up to two seconds. The cleanup runs in a goroutine,
+// so its result can only be seen by polling for it.
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for !cond() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !cond() {
+		t.Fatalf("after 2s: %s", what)
+	}
+}
+
+func TestInboxGroup_InboundSkipsGrantAndDuplicates(t *testing.T) {
+	app := newInboxStateTestApp(t)
+	s := seedInboxGroup(t, app)
+	addInboxPerson(t, app, s.shared, s.ann, "member")
+	saveRealRecord(t, app, "group_members", map[string]any{"group": s.sales.Id, "user": s.owner.Id})
+	saveInboxGrant(t, app, s.shared, s.sales, "member")
+	saveInboxGrant(t, app, s.shared, seedGroup(t, app, "Empty"), "member")
+
+	members, err := getMailboxMembers(app, s.shared.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roles := map[string]string{}
+	for _, m := range members {
+		user := m.GetString("user")
+		if _, seen := roles[user]; seen {
+			t.Errorf("getMailboxMembers returns user %q twice", user)
+		}
+		roles[user] = m.GetString("role")
+	}
+	want := map[string]string{s.owner.Id: "owner", s.member.Id: "member", s.ann.Id: "member", s.bob.Id: "member"}
+	if len(roles) != len(want) {
+		t.Errorf("getMailboxMembers users = %v, want %v", roles, want)
+	}
+	for user, role := range want {
+		if roles[user] != role {
+			t.Errorf("getMailboxMembers role of %s = %q, want %q (the highest of the person's rows)", user, roles[user], role)
+		}
+	}
+
+	thread := deliverToInbox(t, app, s.shared, "inbound-1")
+	for _, user := range []*core.Record{s.owner, s.member, s.ann, s.bob} {
+		if n := inboxStateCount(t, app, s.shared, user.Id); n != 1 {
+			t.Errorf("%s has %d state rows, want 1", user.GetString("username"), n)
+		}
+	}
+	if n := inboxStateCount(t, app, s.shared, ""); n != 0 {
+		t.Errorf("%d state rows with no user, want 0", n)
+	}
+	if state := findThreadState(app, thread.Id, s.ann.Id); state == nil || state.GetString("folder") != "inbox" {
+		t.Errorf("ann's state row = %v, want one in inbox", state)
+	}
+}
+
+func TestInboxGroup_MessageOwnersOnce(t *testing.T) {
+	app := newInboxStateTestApp(t)
+	s := seedInboxGroup(t, app)
+	addInboxPerson(t, app, s.shared, s.ann, "member")
+	saveInboxGrant(t, app, s.shared, s.sales, "member")
+	thread := deliverToInbox(t, app, s.shared, "owners-1")
+
+	message, err := app.FindFirstRecordByFilter("mail_messages", "thread = {:t}", map[string]any{"t": thread.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owners := messageOwnerResolver(app, message)
+	seen := map[string]bool{}
+	for _, id := range owners {
+		if id == "" || seen[id] {
+			t.Errorf("messageOwnerResolver = %v, want each person once and no empty id", owners)
+			break
+		}
+		seen[id] = true
+	}
+	if len(seen) != 4 {
+		t.Errorf("messageOwnerResolver gives %d people, want 4 (olga, mike, ann, bob)", len(seen))
+	}
+}
+
+func TestInboxGroup_BackfillIgnoresGrantRow(t *testing.T) {
+	app := newInboxStateTestApp(t)
+	s := seedInboxGroup(t, app)
+	deliverToInbox(t, app, s.shared, "backfill-1")
+
+	if err := backfillMemberThreadState(app, s.shared.Id, ""); err != nil {
+		t.Fatalf("backfill for a grant row = %v, want nil", err)
+	}
+	if n := inboxStateCount(t, app, s.shared, ""); n != 0 {
+		t.Fatalf("%d state rows with no user, want 0", n)
+	}
+}
+
+func TestInboxGroup_LeaveKeepsDirectAccess(t *testing.T) {
+	app := newInboxStateTestApp(t)
+	s := seedInboxGroup(t, app)
+	addInboxPerson(t, app, s.shared, s.ann, "member")
+	saveInboxGrant(t, app, s.shared, s.sales, "member")
+	deliverToInbox(t, app, s.shared, "keep-1")
+
+	if err := app.Delete(membershipOf(t, app, s.sales, s.ann)); err != nil {
+		t.Fatal(err)
+	}
+	has, err := userHasMailboxRow(app, s.shared.Id, s.ann.Id, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !has {
+		t.Fatal("userHasMailboxRow = false for ann, who keeps her direct row")
+	}
+	// The cleanup checks again before it deletes, so a cleanup that starts
+	// after access came back leaves the rows alone.
+	if err := cleanupLostMailboxAccess(app, s.shared.Id, s.ann.Id); err != nil {
+		t.Fatal(err)
+	}
+	if n := inboxStateCount(t, app, s.shared, s.ann.Id); n != 1 {
+		t.Errorf("ann has %d state rows after she leaves Sales, want 1", n)
+	}
+	if !hasCountsRow(app, s.shared, s.ann) {
+		t.Error("ann's counts row was deleted")
+	}
+}
+
+func TestInboxGroup_LastRowGoneRemovesState(t *testing.T) {
+	app := newInboxStateTestApp(t)
+	s := seedInboxGroup(t, app)
+	saveInboxGrant(t, app, s.shared, s.sales, "member")
+	addInboxPerson(t, app, s.personal, s.bob, "member")
+	deliverToInbox(t, app, s.shared, "gone-1")
+	deliverToInbox(t, app, s.personal, "gone-2")
+	if n := inboxStateCount(t, app, s.shared, s.bob.Id); n != 1 {
+		t.Fatalf("bob has %d state rows before he leaves, want 1", n)
+	}
+
+	if err := app.Delete(membershipOf(t, app, s.sales, s.bob)); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "bob keeps his state for the inbox he left", func() bool {
+		return inboxStateCount(t, app, s.shared, s.bob.Id) == 0 && !hasCountsRow(app, s.shared, s.bob)
+	})
+	if n := inboxStateCount(t, app, s.personal, s.bob.Id); n != 1 {
+		t.Errorf("bob has %d state rows on the inbox he still uses, want 1", n)
+	}
+	if !hasCountsRow(app, s.personal, s.bob) {
+		t.Error("bob lost the counts row of the inbox he still uses")
+	}
+	if n := inboxStateCount(t, app, s.shared, s.ann.Id); n != 1 {
+		t.Errorf("ann, still in Sales, has %d state rows, want 1", n)
+	}
+}
+
+func TestInboxGroup_GroupDeleteCascades(t *testing.T) {
+	app := newInboxStateTestApp(t)
+	s := seedInboxGroup(t, app)
+	saveInboxGrant(t, app, s.shared, s.sales, "member")
+	deliverToInbox(t, app, s.shared, "cascade-1")
+
+	if err := app.Delete(reloaded(t, app, s.sales)); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := app.FindRecordsByFilter("mail_mailbox_members", "group = {:g}", "", 0, 0,
+		map[string]any{"g": s.sales.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("%d member rows of the deleted group remain, want 0", len(rows))
+	}
+	waitFor(t, "bob keeps his state after his only group is deleted", func() bool {
+		return inboxStateCount(t, app, s.shared, s.bob.Id) == 0 && !hasCountsRow(app, s.shared, s.bob)
+	})
+	if n := inboxStateCount(t, app, s.shared, s.member.Id); n != 1 {
+		t.Errorf("mike, a direct member, has %d state rows, want 1", n)
+	}
+}
+
+func TestInboxGroup_SearchAndIMAPListOnce(t *testing.T) {
+	app := newInboxStateTestApp(t)
+	s := seedInboxGroup(t, app)
+	addInboxPerson(t, app, s.shared, s.ann, "member")
+	saveInboxGrant(t, app, s.shared, s.sales, "member")
+
+	ids, err := getUserMailboxIDs(app, s.ann.Id, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 1 || ids[0] != s.shared.Id {
+		t.Errorf("getUserMailboxIDs = %v, want [%s]", ids, s.shared.Id)
+	}
+
+	session := newIMAPSession(app)
+	if err := session.Login(s.ann.Email(), "Password123!"); err != nil {
+		t.Fatal(err)
+	}
+	if len(session.mailboxIndex) != 1 || session.mailboxIndex[0].mailboxID != s.shared.Id {
+		t.Errorf("IMAP mailbox index = %v, want the shared inbox once", session.mailboxIndex)
+	}
+	if session.multiMailbox {
+		t.Error("multiMailbox = true for a person with one inbox")
+	}
+}
+
+func TestInboxGroup_OffboardIgnoresGrantRow(t *testing.T) {
+	app := newInboxStateTestApp(t)
+	s := seedInboxGroup(t, app)
+	solo := saveRealRecord(t, app, "mail_mailboxes", map[string]any{
+		"address": "solo", "domain": s.shared.GetString("domain"), "type": "shared", "name": "Solo", "display_name": "Solo",
+	})
+	addInboxPerson(t, app, solo, s.owner, "owner")
+	saveInboxGrant(t, app, solo, seedGroup(t, app, "Empty"), "member")
+
+	owned, err := findSoleOwnedSharedMailboxes(app, s.owner.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found *soleOwnedMailbox
+	for i := range owned {
+		if owned[i].ID == solo.Id {
+			found = &owned[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("findSoleOwnedSharedMailboxes = %v, want the inbox Solo", owned)
+	}
+	if found.OtherMembers != 0 {
+		t.Errorf("Solo OtherMembers = %d, want 0: a grant with no people is no other member", found.OtherMembers)
+	}
+
+	// A self-delete with no heir refuses only for an inbox other people use.
+	// Shared still has mike, so it is the only reason to refuse here; without
+	// it the grant alone must not refuse.
+	if err := app.Delete(reloadedMember(t, app, s.shared, s.member)); err != nil {
+		t.Fatal(err)
+	}
+	if err := handOverSoleOwnedMailboxes(app, s.owner, offboard.Plan{Mode: offboard.ModeDeleteMyData}, s.owner.Id); err != nil {
+		t.Errorf("handOverSoleOwnedMailboxes = %v, want nil: nobody else uses Solo or Shared", err)
+	}
+}
+
+func TestInboxGroup_HeirWithGroupAccessGetsDirectOwnerRow(t *testing.T) {
+	app := newInboxStateTestApp(t)
+	s := seedInboxGroup(t, app)
+	saveInboxGrant(t, app, s.shared, s.sales, "member")
+
+	if err := makeMailboxOwner(app, s.shared.Id, s.bob.Id); err != nil {
+		t.Fatal(err)
+	}
+	direct, err := app.FindFirstRecordByFilter("mail_mailbox_members", `mailbox = {:m} && user = {:u} && group = ""`,
+		map[string]any{"m": s.shared.Id, "u": s.bob.Id})
+	if err != nil {
+		t.Fatalf("bob has no direct row after makeMailboxOwner: %v", err)
+	}
+	if direct.GetString("role") != "owner" {
+		t.Errorf("bob's direct role = %q, want owner", direct.GetString("role"))
+	}
+	if row := derivedRow(t, app, s.shared, s.sales, s.bob); row == nil || row.GetString("role") != "member" {
+		t.Errorf("bob's derived row = %v, want it kept at role member", row)
+	}
+
+	// A second call finds the direct owner row and changes nothing.
+	if err := makeMailboxOwner(app, s.shared.Id, s.bob.Id); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func reloadedMember(t *testing.T, app core.App, mailbox, user *core.Record) *core.Record {
+	t.Helper()
+	row, err := app.FindFirstRecordByFilter("mail_mailbox_members", `mailbox = {:m} && user = {:u} && group = ""`,
+		map[string]any{"m": mailbox.Id, "u": user.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return row
 }

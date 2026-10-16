@@ -304,6 +304,7 @@ func registerShared(app *pocketbase.PocketBase) {
 	registerThreadStateSyncHooks(app)
 	registerFolderCountHooks(app)
 	registerMemberBackfillHooks(app)
+	registerMemberAccessCleanup(app)
 
 	audit.RegisterCollection(app, "mail_addresses", &audit.CollectionConfig{
 		ExtractLabel: audit.LabelFromField("local_part"),
@@ -675,10 +676,12 @@ func requireAuth(re *core.RequestEvent) error {
 }
 
 // mailboxMembersForMessage resolves the mail_mailbox_members rows for the
-// mailbox an arriving message belongs to, via thread -> mailbox. Shared by
-// bufferMailNotification (notification recipients) and messageOwnerResolver
-// (automation rule owners) — both need the same "who does this message
-// belong to" traversal. Returns nil (not an error) on any missing link.
+// mailbox an arriving message belongs to, via thread -> mailbox: one row per
+// person (getMailboxMembers), so nobody gets a notification or a personal
+// rule run twice. Shared by bufferMailNotification (notification recipients)
+// and messageOwnerResolver (automation rule owners) — both need the same "who
+// does this message belong to" traversal. Returns nil (not an error) on any
+// missing link.
 func mailboxMembersForMessage(app core.App, msgRecord *core.Record) []*core.Record {
 	threadID := msgRecord.GetString("thread")
 	if threadID == "" {
@@ -695,14 +698,7 @@ func mailboxMembersForMessage(app core.App, msgRecord *core.Record) []*core.Reco
 		return nil
 	}
 
-	members, err := app.FindRecordsByFilter(
-		"mail_mailbox_members",
-		"mailbox = {:mailboxId}",
-		"",
-		0,
-		0,
-		map[string]any{"mailboxId": mailboxID},
-	)
+	members, err := getMailboxMembers(app, mailboxID)
 	if err != nil || len(members) == 0 {
 		return nil
 	}

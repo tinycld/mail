@@ -24,6 +24,35 @@ func verifyMailboxMembership(app core.App, mailboxID, userID string) (*core.Reco
 	return records[0], nil
 }
 
+// userMailboxIDs returns the ids of the mailboxes the user is a member of,
+// each once, in the order of the user's member rows. A person can hold a
+// direct row and one derived row per group on the same mailbox
+// (mailbox_member_groups.go), and every one of them gives the same access.
+func userMailboxIDs(app core.App, userID string) ([]string, error) {
+	rows, err := app.FindRecordsByFilter(
+		"mail_mailbox_members",
+		"user = {:user}",
+		"",
+		0,
+		0,
+		map[string]any{"user": userID},
+	)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(rows))
+	seen := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		id := row.GetString("mailbox")
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
 // verifyAdmin checks that the authenticated user holds an administrative role.
 // Single-org: role is a field on the users auth record, so this reads the
 // already-authenticated record rather than a membership junction.

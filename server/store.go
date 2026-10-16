@@ -635,16 +635,39 @@ func mailDomainHosted(app core.App, domainStr string) bool {
 	return err != nil || len(domains) > 0
 }
 
-// getMailboxMembers returns all mail_mailbox_members for a given mailbox.
+// getMailboxMembers returns one member row per person of a mailbox. A person
+// can hold several rows: a direct row and one derived row per group that is a
+// member (mailbox_member_groups.go). Each person is one member, so only the
+// row with the highest role is kept. A grant row has no user and is no person,
+// so it is left out. There is no row limit: a group can bring in any number
+// of people.
 func getMailboxMembers(app core.App, mailboxID string) ([]*core.Record, error) {
-	return app.FindRecordsByFilter(
+	rows, err := app.FindRecordsByFilter(
 		"mail_mailbox_members",
-		"mailbox = {:mailbox}",
+		"mailbox = {:mailbox} && user != ''",
 		"",
-		100,
+		0,
 		0,
 		map[string]any{"mailbox": mailboxID},
 	)
+	if err != nil {
+		return nil, err
+	}
+	byUser := make(map[string]int, len(rows))
+	members := make([]*core.Record, 0, len(rows))
+	for _, row := range rows {
+		userID := row.GetString("user")
+		i, seen := byUser[userID]
+		if !seen {
+			byUser[userID] = len(members)
+			members = append(members, row)
+			continue
+		}
+		if row.GetString("role") == "owner" && members[i].GetString("role") != "owner" {
+			members[i] = row
+		}
+	}
+	return members, nil
 }
 
 // normalizeSubject strips Re:, Fwd:, etc. prefixes for thread matching.

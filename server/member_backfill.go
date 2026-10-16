@@ -50,6 +50,11 @@ func registerMemberBackfillHooks(app core.App) {
 // A failed row is logged and skipped so one bad thread does not stop the
 // rest; the first error is returned for the caller to log.
 func backfillMemberThreadState(app core.App, mailboxID, userID string) error {
+	// A group grant row has no user: its people get their own derived rows,
+	// and each of those starts its own backfill.
+	if userID == "" {
+		return nil
+	}
 	var firstErr error
 	for offset := 0; ; offset += memberBackfillBatch {
 		// The app can be torn down while a backfill is still running (test
