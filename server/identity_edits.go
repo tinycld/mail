@@ -2,6 +2,7 @@ package mail
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -52,8 +53,79 @@ func registerIdentityEditHooks(app core.App) {
 		if err := checkEmailName(e.App, identity, name); err != nil {
 			return err
 		}
-		return e.Next()
+		// One transaction, so a move that fails also undoes the rename. The
+		// move runs before the identity's reconcile (an after-success hook),
+		// which would otherwise add the new name as a rule row and block it.
+		original := e.App
+		defer func() { e.App = original }()
+		return e.App.RunInTransaction(func(txApp core.App) error {
+			if err := moveMainAddress(txApp, identity, name); err != nil {
+				return err
+			}
+			e.App = txApp
+			return e.Next()
+		})
 	})
+}
+
+// moveMainAddress makes the email name the address of the identity's inbox.
+// The primary row moves in place (same id), so a Default From that pointed at
+// the main address follows the new name. A row of the same inbox that already
+// holds the name (an old name kept as an added address) is taken over: it is
+// deleted, and a Default From that pointed at it moves to the main address.
+func moveMainAddress(app core.App, identity *core.Record, name string) error {
+	inboxID := identity.GetString("inbox")
+	if inboxID == "" {
+		return nil
+	}
+	inbox, err := app.FindRecordById("mail_mailboxes", inboxID)
+	if err != nil {
+		return fmt.Errorf("identity inbox: %w", err)
+	}
+	if inbox.GetString("address") == name {
+		return nil
+	}
+	held, err := findAddressRow(app, name, inbox.GetString("domain"))
+	if err != nil {
+		return err
+	}
+	takenOver := ""
+	if held != nil && held.GetString("mailbox") == inboxID && !held.GetBool("is_primary") {
+		takenOver = held.Id
+		if err := app.Delete(held); err != nil {
+			return fmt.Errorf("take over %s: %w", name, err)
+		}
+	}
+	// A row of another inbox makes the inbox save refuse the address;
+	// checkEmailName has already refused that name, so this is a race.
+	inbox.Set("address", name)
+	if err := app.Save(inbox); err != nil {
+		return inboxAddressAsEmailName(err)
+	}
+	if err := savePrimaryAddress(app, inbox); err != nil {
+		return fmt.Errorf("move the main address: %w", err)
+	}
+	if takenOver != "" && identity.GetString("default_from") == takenOver {
+		primary, err := app.FindFirstRecordByFilter("mail_addresses",
+			"mailbox = {:inbox} && is_primary = true", dbx.Params{"inbox": inboxID})
+		if err != nil {
+			return fmt.Errorf("main address lookup: %w", err)
+		}
+		identity.Set("default_from", primary.Id)
+	}
+	return nil
+}
+
+// inboxAddressAsEmailName puts the inbox's refusal of its new address under
+// email_name, the field the admin edited.
+func inboxAddressAsEmailName(err error) error {
+	var fields validation.Errors
+	if errors.As(err, &fields) {
+		if refusal, ok := fields["address"]; ok {
+			return validation.Errors{"email_name": refusal}
+		}
+	}
+	return err
 }
 
 func isAdminAuth(auth *core.Record) bool {
@@ -64,8 +136,9 @@ func isAdminAuth(auth *core.Record) bool {
 	return role == "admin" || role == "owner"
 }
 
-// checkDefaultFrom accepts an empty value (the inbox's own primary address
-// is used) or an address that delivers to the identity's inbox.
+// checkDefaultFrom accepts an empty value (mail goes out from the inbox's
+// address on the highest-ranked verified domain, see defaultSendAddress) or an
+// address that delivers to the identity's inbox.
 func checkDefaultFrom(app core.App, identity *core.Record) error {
 	id := identity.GetString("default_from")
 	if id == "" {
@@ -104,11 +177,23 @@ func checkEmailName(app core.App, identity *core.Record, name string) error {
 }
 
 // checkEmailNameFree refuses a name that is already an address of another
-// inbox on a domain with a rule, naming those addresses.
+// inbox on a domain with a rule, or on the domain of the identity's main
+// address (the name becomes that address, whatever the domain's coverage). It
+// names those addresses.
 func checkEmailNameFree(app core.App, identity *core.Record, name string) error {
+	inboxID := identity.GetString("inbox")
+	domains := ruleDomainRelFilter
+	params := dbx.Params{"name": name, "inbox": inboxID}
+	if inboxID != "" {
+		inbox, err := app.FindRecordById("mail_mailboxes", inboxID)
+		if err != nil {
+			return fmt.Errorf("identity inbox: %w", err)
+		}
+		domains = "(" + ruleDomainRelFilter + " || domain = {:main})"
+		params["main"] = inbox.GetString("domain")
+	}
 	rows, err := app.FindRecordsByFilter("mail_addresses",
-		"local_part = {:name} && mailbox != {:inbox} && "+ruleDomainRelFilter, "", 0, 0,
-		dbx.Params{"name": name, "inbox": identity.GetString("inbox")})
+		"local_part = {:name} && mailbox != {:inbox} && "+domains, "", 0, 0, params)
 	if err != nil {
 		return err
 	}

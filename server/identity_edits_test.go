@@ -203,16 +203,24 @@ func TestIdentityEdit_ServerFieldsStayFixed(t *testing.T) {
 }
 
 func TestIdentityEdit_AdminRenameMovesRuleAddress(t *testing.T) {
+	var second *core.Record
 	runIdentityEdit(t, identityEditCase{
 		name: "admin rename", actor: asAdmin, status: http.StatusOK, content: `"anna"`,
+		prepare: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
+			second = saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "second.org", "verified": true, "coverage": coverageEveryone})
+			if row, err := findAddressRow(app, "ann", second.Id); err != nil || row == nil {
+				t.Fatalf("seed: ann@second.org = %v %v", row, err)
+			}
+		},
 		body: bodyOf(`{"email_name":"anna"}`),
 		after: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
-			row, _ := findAddressRow(app, "anna", s.domain.Id)
-			if row == nil || row.GetString("source") != addressSourceRule {
-				t.Fatalf("anna row = %v, want a rule row", row)
+			row, err := findAddressRow(app, "anna", second.Id)
+			if err != nil || row == nil || row.GetString("source") != addressSourceRule {
+				t.Fatalf("anna@second.org = %v %v, want a rule row", row, err)
 			}
-			if old, _ := findAddressRow(app, "ann", s.domain.Id); old != nil && old.GetString("source") == addressSourceRule {
-				t.Fatal("the old rule address still exists")
+			old, err := findAddressRow(app, "ann", second.Id)
+			if err != nil || old != nil {
+				t.Fatalf("ann@second.org = %v %v, want no row", old, err)
 			}
 		},
 	})
@@ -322,6 +330,142 @@ func TestIdentityEdit_RetiredIdentityCannotChange(t *testing.T) {
 		body: bodyOf(`{"email_name":"carol"}`),
 		after: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
 			assertIdentityField(t, app, s, "email_name", tombstone)
+		},
+	})
+}
+
+func primaryRowOf(t *testing.T, app core.App, inboxID string) *core.Record {
+	t.Helper()
+	row, err := app.FindFirstRecordByFilter("mail_addresses",
+		"mailbox = {:inbox} && is_primary = true", map[string]any{"inbox": inboxID})
+	if err != nil {
+		t.Fatalf("primary row of %s: %v", inboxID, err)
+	}
+	return row
+}
+
+func setDefaultFrom(t *testing.T, app core.App, s *identityEditSeed, addressID string) {
+	t.Helper()
+	identity := mustRecord(t, app, "mail_identities", s.annID.Id)
+	identity.Set("default_from", addressID)
+	if err := app.Save(identity); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The main address follows the email name: the inbox's primary row moves in
+// place, so a Default From that pointed at it now sends as the new name.
+func TestIdentityEdit_RenameMovesMainAddress(t *testing.T) {
+	var primaryID string
+	runIdentityEdit(t, identityEditCase{
+		name: "rename moves main address", actor: asAdmin, status: http.StatusOK, content: `"anna"`,
+		prepare: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
+			primaryID = primaryRowOf(t, app, s.annInbox.Id).Id
+			setDefaultFrom(t, app, s, primaryID)
+		},
+		body: bodyOf(`{"email_name":"anna"}`),
+		after: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
+			if got := mustRecord(t, app, "mail_mailboxes", s.annInbox.Id).GetString("address"); got != "anna" {
+				t.Fatalf("inbox address = %q, want anna", got)
+			}
+			primary := primaryRowOf(t, app, s.annInbox.Id)
+			if primary.Id != primaryID || primary.GetString("local_part") != "anna" {
+				t.Fatalf("primary = %s %q, want %s anna", primary.Id, primary.GetString("local_part"), primaryID)
+			}
+			if old, _ := findAddressRow(app, "ann", s.domain.Id); old != nil {
+				t.Fatalf("ann@example.org still exists: %s %s", old.GetString("source"), old.Id)
+			}
+			assertIdentityField(t, app, s, "default_from", primaryID)
+			from, err := defaultSendAddress(app, mustRecord(t, app, "mail_mailboxes", s.annInbox.Id))
+			if err != nil || from.Email() != "anna@example.org" {
+				t.Fatalf("default send address = %v %v, want anna@example.org", from, err)
+			}
+		},
+	})
+}
+
+// Renaming back to a name the inbox kept as an added address takes that row
+// over: the kept row goes, and the main address moves onto the name.
+func TestIdentityEdit_RenameBackTakesOverKeptAddress(t *testing.T) {
+	var primaryID string
+	runIdentityEdit(t, identityEditCase{
+		name: "rename back", actor: asAdmin, status: http.StatusOK, content: `"ann"`,
+		prepare: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
+			primaryID = primaryRowOf(t, app, s.annInbox.Id).Id
+			identity := mustRecord(t, app, "mail_identities", s.annID.Id)
+			identity.Set("email_name", "anna")
+			if err := app.Save(identity); err != nil {
+				t.Fatalf("first rename: %v", err)
+			}
+			kept := saveRealRecord(t, app, "mail_addresses", map[string]any{
+				"local_part": "ann", "domain": s.domain.Id, "mailbox": s.annInbox.Id, "source": addressSourceManual,
+			})
+			setDefaultFrom(t, app, s, kept.Id)
+		},
+		body: bodyOf(`{"email_name":"ann"}`),
+		after: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
+			primary := primaryRowOf(t, app, s.annInbox.Id)
+			if primary.Id != primaryID || primary.GetString("local_part") != "ann" {
+				t.Fatalf("primary = %s %q, want %s ann", primary.Id, primary.GetString("local_part"), primaryID)
+			}
+			rows, err := app.FindRecordsByFilter("mail_addresses", "mailbox = {:inbox}", "", 0, 0,
+				map[string]any{"inbox": s.annInbox.Id})
+			if err != nil || len(rows) != 1 {
+				t.Fatalf("inbox rows = %d %v, want only the main address", len(rows), err)
+			}
+			assertIdentityField(t, app, s, "default_from", primaryID)
+		},
+	})
+}
+
+// Another inbox's address on the main address's domain blocks the move even
+// when that domain gives no addresses by rule.
+func TestIdentityEdit_RenameRefusedByMainDomainHolder(t *testing.T) {
+	runIdentityEdit(t, identityEditCase{
+		name: "main domain holder", actor: asAdmin, status: http.StatusBadRequest, content: `anna@example.org`,
+		prepare: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
+			domain := reloaded(t, app, s.domain)
+			domain.Set("coverage", coverageManual)
+			if err := app.Save(domain); err != nil {
+				t.Fatal(err)
+			}
+			saveRealRecord(t, app, "mail_addresses", map[string]any{
+				"local_part": "anna", "domain": s.domain.Id, "mailbox": s.shared.Id, "source": addressSourceManual,
+			})
+		},
+		body: bodyOf(`{"email_name":"anna"}`),
+		after: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
+			assertIdentityField(t, app, s, "email_name", "ann")
+			if got := mustRecord(t, app, "mail_mailboxes", s.annInbox.Id).GetString("address"); got != "ann" {
+				t.Fatalf("inbox address = %q, want ann", got)
+			}
+		},
+	})
+}
+
+// Another live identity has the name but no address on a domain with a rule
+// or on the main address's domain: only the identity check refuses it.
+func TestIdentityEdit_RenameRefusedByAnotherIdentityName(t *testing.T) {
+	runIdentityEdit(t, identityEditCase{
+		name: "identity name taken", actor: asAdmin, status: http.StatusBadRequest, content: `email_name_taken`,
+		prepare: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
+			other := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "other.org", "verified": true, "coverage": coverageManual})
+			bobInbox := reloaded(t, app, mustRecord(t, app, "mail_mailboxes", identityOf(t, app, s.otherUser.Id).GetString("inbox")))
+			bobInbox.Set("domain", other.Id)
+			if err := app.Save(bobInbox); err != nil {
+				t.Fatal(err)
+			}
+			// The rule row the move left behind; deleting a rule row does not
+			// reconcile, so Bob keeps no address on example.org.
+			if row, _ := findAddressRow(app, "bob", s.domain.Id); row != nil {
+				if err := app.Delete(row); err != nil {
+					t.Fatal(err)
+				}
+			}
+		},
+		body: bodyOf(`{"email_name":"bob"}`),
+		after: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
+			assertIdentityField(t, app, s, "email_name", "ann")
 		},
 	})
 }
