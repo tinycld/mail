@@ -123,3 +123,71 @@ func seedAlias(t *testing.T, app core.App, mailboxID, address, aliasID string) {
 		t.Fatalf("failed to save alias %s: %v", address, err)
 	}
 }
+
+func TestResolveMailboxByAddress_PrimaryMatch(t *testing.T) {
+	app := setupAliasTestApp(t)
+
+	_ = seedDomainAndMailbox(t, app, "example.com", "support", "mbox_primary")
+
+	mailbox, alias, err := resolveMailboxByAddress(app, "support", "example.com")
+	if err != nil {
+		t.Fatalf("expected primary match, got error: %v", err)
+	}
+	if mailbox == nil || mailbox.Id != padID("mbox_primary") {
+		t.Fatalf("expected mailbox mbox_primary, got %+v", mailbox)
+	}
+	if alias != nil {
+		t.Fatalf("expected nil alias on primary match, got %+v", alias)
+	}
+}
+
+func TestResolveMailboxByAddress_AliasMatch(t *testing.T) {
+	app := setupAliasTestApp(t)
+
+	seedDomainAndMailbox(t, app, "example.com", "team", "mbox_alias_tgt")
+	seedAlias(t, app, "mbox_alias_tgt", "help", "alias_help")
+
+	mailbox, alias, err := resolveMailboxByAddress(app, "help", "example.com")
+	if err != nil {
+		t.Fatalf("expected alias match, got error: %v", err)
+	}
+	if mailbox == nil || mailbox.Id != padID("mbox_alias_tgt") {
+		t.Fatalf("expected mailbox mbox_alias_tgt, got %+v", mailbox)
+	}
+	if alias == nil || alias.Id != padID("alias_help") {
+		t.Fatalf("expected alias alias_help, got %+v", alias)
+	}
+}
+
+func TestResolveMailboxByAddress_AliasOnWrongDomainDoesNotMatch(t *testing.T) {
+	app := setupAliasTestApp(t)
+
+	seedDomainAndMailbox(t, app, "example.com", "team", "mbox_domainA")
+	seedAlias(t, app, "mbox_domainA", "help", "alias_help_a")
+
+	// Second domain, no aliases
+	seedDomainAndMailbox(t, app, "other.com", "team", "mbox_domainB")
+
+	_, _, err := resolveMailboxByAddress(app, "help", "other.com")
+	if err == nil {
+		t.Fatalf("expected not-found error when alias lives on a different domain")
+	}
+}
+
+func TestResolveMailboxByAddress_CaseInsensitive(t *testing.T) {
+	app := setupAliasTestApp(t)
+
+	seedDomainAndMailbox(t, app, "example.com", "team", "mbox_case")
+	seedAlias(t, app, "mbox_case", "help", "alias_case_help")
+
+	mailbox, alias, err := resolveMailboxByAddress(app, "HELP", "EXAMPLE.COM")
+	if err != nil {
+		t.Fatalf("expected case-insensitive alias match, got error: %v", err)
+	}
+	if mailbox == nil || mailbox.Id != padID("mbox_case") {
+		t.Fatalf("expected mailbox mbox_case, got %+v", mailbox)
+	}
+	if alias == nil || alias.Id != padID("alias_case_help") {
+		t.Fatalf("expected alias alias_case_help, got %+v", alias)
+	}
+}

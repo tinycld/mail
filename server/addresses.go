@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/pocketbase/dbx"
@@ -40,6 +41,17 @@ type resolvedAddress struct {
 // Email returns the full address, local@domain.
 func (r *resolvedAddress) Email() string {
 	return r.Address.GetString("local_part") + "@" + r.Domain.GetString("domain")
+}
+
+var localPartPattern = regexp.MustCompile(`^[a-z0-9._-]{1,64}$`)
+
+// checkMailboxLocalPart refuses an inbox address that its primary address row
+// could not hold, so a saved inbox always has a routable address.
+func checkMailboxLocalPart(local string) error {
+	if !localPartPattern.MatchString(local) {
+		return fmt.Errorf("%s is not a valid mailbox address: use lowercase letters, numbers, dots, hyphens and underscores", local)
+	}
+	return nil
 }
 
 func normalizeLocalPart(s string) string {
@@ -121,6 +133,9 @@ func checkAddressAvailable(app core.App, localPart, domainID, mailboxID, selfID 
 		return err
 	}
 	if existing != nil && existing.Id != selfID {
+		if mailboxID != "" && existing.GetString("mailbox") == mailboxID {
+			return fmt.Errorf("%s is already an added address of this inbox: remove that added address first", localPart)
+		}
 		return fmt.Errorf("%s is already an address on this domain", localPart)
 	}
 	domain, err := app.FindRecordById("mail_domains", domainID)
@@ -245,6 +260,9 @@ func registerAddressHooks(app core.App) {
 	app.OnRecordCreate("mail_mailboxes").BindFunc(func(e *core.RecordEvent) error {
 		local := normalizeLocalPart(e.Record.GetString("address"))
 		e.Record.Set("address", local)
+		if err := checkMailboxLocalPart(local); err != nil {
+			return err
+		}
 		if err := checkAddressAvailable(e.App, local, e.Record.GetString("domain"), "", ""); err != nil {
 			return err
 		}
@@ -263,10 +281,16 @@ func registerAddressHooks(app core.App) {
 		if original.GetString("address") == local && original.GetString("domain") == e.Record.GetString("domain") {
 			return e.Next()
 		}
+		if err := checkMailboxLocalPart(local); err != nil {
+			return err
+		}
 		primaryID := ""
-		if row, err := e.App.FindFirstRecordByFilter("mail_addresses",
-			"mailbox = {:mailbox} && is_primary = true", dbx.Params{"mailbox": e.Record.Id}); err == nil {
+		row, err := e.App.FindFirstRecordByFilter("mail_addresses",
+			"mailbox = {:mailbox} && is_primary = true", dbx.Params{"mailbox": e.Record.Id})
+		if err == nil {
 			primaryID = row.Id
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return err
 		}
 		if err := checkAddressAvailable(e.App, local, e.Record.GetString("domain"), e.Record.Id, primaryID); err != nil {
 			return err
@@ -330,17 +354,16 @@ func mirrorLegacyAlias(app core.App, alias *core.Record) error {
 }
 
 func removeLegacyAlias(app core.App, alias *core.Record) error {
-	mailbox, err := app.FindRecordById("mail_mailboxes", alias.GetString("mailbox"))
+	// Match on the inbox, not its current domain: the inbox may have moved
+	// domains since the alias was mirrored.
+	row, err := app.FindFirstRecordByFilter("mail_addresses",
+		"mailbox = {:mailbox} && local_part = {:local} && source = {:source} && is_primary = false",
+		dbx.Params{"mailbox": alias.GetString("mailbox"), "local": alias.GetString("address"), "source": addressSourceManual})
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
 	if err != nil {
-		// The mailbox delete cascaded to both rows already.
-		return nil
-	}
-	row, err := findAddressRow(app, alias.GetString("address"), mailbox.GetString("domain"))
-	if err != nil || row == nil {
 		return err
-	}
-	if row.GetString("mailbox") != mailbox.Id || row.GetBool("is_primary") || row.GetString("source") != addressSourceManual {
-		return nil
 	}
 	return app.Delete(row)
 }

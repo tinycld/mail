@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 )
@@ -296,4 +297,92 @@ func TestAddressAPI_CreateForcesManualNonPrimary(t *testing.T) {
 		}
 	}
 	scenario.Test(t)
+}
+
+func TestMailboxCreate_RefusesUnroutableAddress(t *testing.T) {
+	app := newAddressTestApp(t)
+	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org"})
+	mb := core.NewRecord(mustCollection(t, app, "mail_mailboxes"))
+	mb.Set("address", "a+b")
+	mb.Set("domain", domain.Id)
+	mb.Set("type", "shared")
+	mb.Set("display_name", "AB")
+	mb.Set("name", "AB")
+	err := app.Save(mb)
+	if err == nil || !strings.Contains(err.Error(), "not a valid mailbox address") {
+		t.Fatalf("want an invalid-address refusal, got %v", err)
+	}
+}
+
+func TestMailboxUpdate_LegacyInvalidAddressStillAllowsOtherEdits(t *testing.T) {
+	app := newAddressTestApp(t)
+	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org"})
+	mb := core.NewRecord(mustCollection(t, app, "mail_mailboxes"))
+	mb.Set("address", "sales")
+	mb.Set("domain", domain.Id)
+	mb.Set("type", "shared")
+	mb.Set("display_name", "Sales")
+	mb.Set("name", "Sales")
+	if err := app.Save(mb); err != nil {
+		t.Fatal(err)
+	}
+	// Raw SQL stands in for a row saved before the address rule existed.
+	if _, err := app.DB().NewQuery("UPDATE mail_mailboxes SET address = 'sales+eu' WHERE id = {:id}").
+		Bind(dbx.Params{"id": mb.Id}).Execute(); err != nil {
+		t.Fatal(err)
+	}
+	mb, err := app.FindRecordById("mail_mailboxes", mb.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mb.Set("display_name", "Sales EU")
+	if err := app.Save(mb); err != nil {
+		t.Fatalf("a display-name edit must not trip the address rule: %v", err)
+	}
+}
+
+func TestMailboxUpdate_RenameToOwnAddedAddressSaysRemoveFirst(t *testing.T) {
+	app := newAddressTestApp(t)
+	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org"})
+	mb := saveRealRecord(t, app, "mail_mailboxes", map[string]any{"address": "main", "domain": domain.Id, "type": "shared", "display_name": "M", "name": "M"})
+	saveRealRecord(t, app, "mail_addresses", map[string]any{"local_part": "extra", "domain": domain.Id, "mailbox": mb.Id, "source": addressSourceManual})
+	mb.Set("address", "extra")
+	err := app.Save(mb)
+	if err == nil || !strings.Contains(err.Error(), "remove that added address first") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestLegacyAlias_RefusedWhenAddressTaken(t *testing.T) {
+	app := newAddressTestApp(t)
+	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org"})
+	a := saveRealRecord(t, app, "mail_mailboxes", map[string]any{"address": "a", "domain": domain.Id, "type": "shared", "display_name": "A", "name": "A"})
+	b := saveRealRecord(t, app, "mail_mailboxes", map[string]any{"address": "b", "domain": domain.Id, "type": "shared", "display_name": "B", "name": "B"})
+	saveRealRecord(t, app, "mail_addresses", map[string]any{"local_part": "help", "domain": domain.Id, "mailbox": a.Id, "source": addressSourceManual})
+
+	col := mustCollection(t, app, "mail_mailbox_aliases")
+	alias := core.NewRecord(col)
+	alias.Set("mailbox", b.Id)
+	alias.Set("address", "help")
+	if err := app.Save(alias); err == nil {
+		t.Fatal("a legacy alias took an address that already exists")
+	}
+}
+
+func TestLegacyAlias_DeleteAfterMailboxDomainChange(t *testing.T) {
+	app := newAddressTestApp(t)
+	d1 := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "one.example"})
+	d2 := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "two.example"})
+	mb := saveRealRecord(t, app, "mail_mailboxes", map[string]any{"address": "n", "domain": d1.Id, "type": "personal", "display_name": "N", "name": "N"})
+	alias := saveRealRecord(t, app, "mail_mailbox_aliases", map[string]any{"mailbox": mb.Id, "address": "admin"})
+	mb.Set("domain", d2.Id)
+	if err := app.Save(mb); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.Delete(alias); err != nil {
+		t.Fatal(err)
+	}
+	if row, _ := findAddressRow(app, "admin", d1.Id); row != nil {
+		t.Fatal("orphan address row left behind")
+	}
 }
