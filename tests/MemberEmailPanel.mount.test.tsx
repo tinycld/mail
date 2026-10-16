@@ -46,11 +46,13 @@ const h = vi.hoisted(() => ({
     mailboxes: [
         { id: 'mb1', type: 'personal', display_name: 'Nathan' },
         { id: 'mb_sales', type: 'shared', display_name: 'Sales inbox' },
+        { id: 'mb_blank', type: 'shared', display_name: '', name: 'Support', address: 'support' },
         { id: 'mb_other', type: 'shared', display_name: 'Other inbox' },
     ],
     members: [
         { id: 'm1', mailbox: 'mb_sales', user: 'u1' },
         { id: 'm2', mailbox: 'mb1', user: 'u1' },
+        { id: 'm4', mailbox: 'mb_blank', user: 'u1' },
         { id: 'm3', mailbox: 'mb_other', user: 'u9' },
     ],
 }))
@@ -116,6 +118,11 @@ test('lists the shared inboxes of the person', async () => {
     const { findByText, queryByText } = renderPanel('u1')
     expect(await findByText('Sales inbox')).toBeTruthy()
     expect(queryByText('Other inbox')).toBeNull()
+})
+
+test('a shared inbox with an empty display name shows its name', async () => {
+    const { findByText } = renderPanel('u1')
+    expect(await findByText('Support')).toBeTruthy()
 })
 
 test('no shared inbox list when there are none', async () => {

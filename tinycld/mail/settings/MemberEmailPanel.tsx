@@ -31,10 +31,13 @@ function useSharedInboxes(userId: string) {
                 )
                 .select(({ mailbox }) => ({
                     id: mailbox.id,
-                    name: mailbox.display_name || mailbox.name || mailbox.address,
+                    displayName: mailbox.display_name,
+                    name: mailbox.name,
+                    address: mailbox.address,
                 })),
     })
-    return data ?? []
+    // Labels are picked in JS: inside select() the fields are refs, always truthy.
+    return (data ?? []).map(m => ({ id: m.id, name: m.displayName || m.name || m.address }))
 }
 
 function Heading() {
