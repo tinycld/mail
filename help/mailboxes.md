@@ -35,6 +35,23 @@ If you are the only owner of a shared inbox that other people use, you cannot de
 
 If a person's account is deleted, their personal inbox and all of its messages are deleted. The messages do not go to the person who takes the content.
 
+## Give a group access
+
+You can give all of the people in a group access to a shared inbox. You must be an owner of the inbox.
+
+1. Open **Settings → Mail → Shared inboxes** and click the inbox row.
+2. Open **Members**.
+3. Under **Groups**, click **Add group**.
+4. Find the group and click **Add**.
+
+Each person in the group can then read the mail and send from the inbox. **Members** shows each of these people with **Through group _name_**.
+
+Group access is always **Member**. A group cannot be an owner. To make a person in the group an owner, add that person directly with **Add member**, then make the person an owner.
+
+When a person leaves the group, the person loses access to the inbox. When you remove the group from the inbox, all of its people lose access. A person who is also a direct member, or a member through a different group, keeps access.
+
+To change the people in a group, open **Settings → Groups**.
+
 ## Addresses
 
 A shared inbox can have more than one address, on any of your domains. Mail sent to each address arrives in the same inbox.
