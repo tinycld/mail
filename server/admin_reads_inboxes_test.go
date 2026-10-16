@@ -119,3 +119,32 @@ func TestAdminReads_AdminCannotWriteInbox(t *testing.T) {
 		body: `{"name":"pwned"}`, status: http.StatusNotFound,
 	}.run(t, env.anonGuardEnv, env.adminToken)
 }
+
+// Ruling L: reading every inbox must not let an admin join one.
+func TestAdminReads_AdminCannotAddThemselvesAsMember(t *testing.T) {
+	env := setupAdminReadApp(t)
+	admin, err := env.app.FindAuthRecordByEmail("users", "reader-admin@test.local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	anonCall{
+		method: http.MethodPost, url: listURL("mail_mailbox_members"),
+		body:   `{"mailbox":"` + env.mailbox.Id + `","user":"` + admin.Id + `","role":"member"}`,
+		status: http.StatusBadRequest,
+	}.run(t, env.anonGuardEnv, env.adminToken)
+
+	rows, err := env.app.FindRecordsByFilter("mail_mailbox_members", "user = {:u}", "", 0, 0, map[string]any{"u": admin.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("admin gained %d member rows", len(rows))
+	}
+	for _, collection := range []string{"mail_threads", "mail_messages"} {
+		anonCall{
+			method: http.MethodGet, url: listURL(collection), status: http.StatusOK,
+			expected: []string{`"totalItems":0`},
+			absent:   []string{"member thread", "sales secrets"},
+		}.run(t, env.anonGuardEnv, env.adminToken)
+	}
+}

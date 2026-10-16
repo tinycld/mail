@@ -19,6 +19,7 @@ import { Pressable, Text, View } from 'react-native'
 import { MailboxAddressesPanel } from './MailboxAddressesPanel'
 import { MailboxForm, type MailboxFormValues } from './MailboxForm'
 import { MailboxMemberRow, type Role } from './MailboxMemberRow'
+import { viewerIsOwner } from './viewer-is-owner'
 
 interface MemberRow {
     id: string
@@ -206,6 +207,7 @@ function ViewMode({
     const [tab, setTab] = useState<'members' | 'addresses'>(
         mailbox.type === 'shared' ? 'members' : 'addresses'
     )
+    const canWrite = viewerIsOwner(members)
     const avatarInitial = (mailbox.displayName || mailbox.address).trim().charAt(0).toUpperCase()
 
     return (
@@ -239,7 +241,7 @@ function ViewMode({
                     </View>
                 </View>
                 <View className="flex-row gap-1">
-                    {mailbox.type === 'shared' && (
+                    {mailbox.type === 'shared' && canWrite && (
                         <Pressable className="p-2" onPress={onEdit}>
                             <Pencil size={16} color={mutedColor} />
                         </Pressable>
@@ -281,14 +283,19 @@ function ViewMode({
 
             <DrawerBody>
                 {mailbox.type === 'shared' && tab === 'members' && (
-                    <MembersTab mailboxId={mailbox.id} members={members} orgMembers={orgMembers} />
+                    <MembersTab
+                        mailboxId={mailbox.id}
+                        members={members}
+                        orgMembers={orgMembers}
+                        canWrite={canWrite}
+                    />
                 )}
                 {(mailbox.type === 'personal' || tab === 'addresses') && (
                     <MailboxAddressesPanel mailboxId={mailbox.id} />
                 )}
             </DrawerBody>
 
-            {mailbox.type === 'shared' && (
+            {mailbox.type === 'shared' && canWrite && (
                 <DrawerFooter>
                     <DangerZone mailboxId={mailbox.id} onDeleted={onDeleted} />
                 </DrawerFooter>
@@ -389,10 +396,12 @@ function MembersTab({
     mailboxId,
     members,
     orgMembers,
+    canWrite,
 }: {
     mailboxId: string
     members: MemberRow[]
     orgMembers: OrgMemberRow[]
+    canWrite: boolean
 }) {
     const mutedColor = useThemeColor('muted-foreground')
     const [membersCollection] = useStore('mail_mailbox_members')
@@ -434,6 +443,7 @@ function MembersTab({
                 // both anyway; the controls must not offer actions that
                 // always fail.
                 const isLastOwner = m.role === 'owner' && ownerCount <= 1
+                const canChange = canWrite && !isLastOwner
                 return (
                     <MailboxMemberRow
                         key={m.id}
@@ -442,7 +452,8 @@ function MembersTab({
                         isYou={m.isYou}
                         role={m.role}
                         canRemove={!isLastOwner}
-                        canToggleRole={!isLastOwner}
+                        canToggleRole={canChange}
+                        canEdit={canWrite}
                         onToggleRole={() =>
                             toggleRoleMutation.mutate({
                                 id: m.id,
@@ -454,7 +465,7 @@ function MembersTab({
                 )
             })}
 
-            {!adding && available.length > 0 && (
+            {canWrite && !adding && available.length > 0 && (
                 <Pressable
                     onPress={() => setAdding(true)}
                     className="flex-row gap-2 items-center rounded-lg p-3 border border-border"

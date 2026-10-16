@@ -12,6 +12,8 @@ interface Props {
     role: Role
     canRemove: boolean
     canToggleRole: boolean
+    /** False for a viewer who cannot change members: the remove control is not shown. */
+    canEdit?: boolean
     onToggleRole: () => void
     onRemove: () => void
 }
@@ -23,6 +25,7 @@ export function MailboxMemberRow({
     role,
     canRemove,
     canToggleRole,
+    canEdit = true,
     onToggleRole,
     onRemove,
 }: Props) {
@@ -73,17 +76,42 @@ export function MailboxMemberRow({
                     {isOwner ? 'Owner' : 'Member'}
                 </Text>
             </Pressable>
-            <Pressable
-                onPress={onRemove}
-                disabled={removeState.isDisabled}
-                accessibilityRole="button"
-                accessibilityLabel={`Remove ${name}`}
-                accessibilityHint={removeState.accessibilityHint}
-                className="p-1"
-                style={{ opacity: removeState.isDisabled ? 0.35 : 1 }}
-            >
-                <X size={14} color={dangerColor} />
-            </Pressable>
+            <RemoveButton
+                isVisible={canEdit}
+                name={name}
+                state={removeState}
+                color={dangerColor}
+                onRemove={onRemove}
+            />
         </View>
+    )
+}
+
+function RemoveButton({
+    isVisible,
+    name,
+    state,
+    color,
+    onRemove,
+}: {
+    isVisible: boolean
+    name: string
+    state: ReturnType<typeof useServerActionState>
+    color: string
+    onRemove: () => void
+}) {
+    if (!isVisible) return null
+    return (
+        <Pressable
+            onPress={onRemove}
+            disabled={state.isDisabled}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove ${name}`}
+            accessibilityHint={state.accessibilityHint}
+            className="p-1"
+            style={{ opacity: state.isDisabled ? 0.35 : 1 }}
+        >
+            <X size={14} color={color} />
+        </Pressable>
     )
 }
