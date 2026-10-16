@@ -524,6 +524,7 @@ function AddMemberPicker({
                 id: newRecordId(),
                 mailbox: mailboxId,
                 user,
+                group: '',
                 role: 'member',
             })
         }),

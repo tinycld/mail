@@ -101,6 +101,11 @@ func registerShared(app *pocketbase.PocketBase) {
 
 	audit.RegisterCollection(app, "mail_mailbox_members", &audit.CollectionConfig{})
 
+	// A group can be a member of a shared inbox. Declares the grant table to
+	// core before core's groups.Register binds the expander, and refuses edits
+	// of derived rows before the last-owner guard runs.
+	registerMailboxMemberGroups(app)
+
 	// A shared mailbox must never lose its last owner (self-demotion or row
 	// delete) — an ownerless mailbox is unmanageable. Server backstop for the
 	// drawer's client-side checks.
