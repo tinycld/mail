@@ -1,22 +1,12 @@
 // mail-person-email.spec.ts — an admin manages a person's email from Members.
 //
-// A second domain is seeded VERIFIED by a superuser write. Verification needs
-// a live DNS MX lookup and provider enrollment, which CI does not have, so
-// the add-and-verify path cannot run here (mail-custom-domain.spec.ts stubs
-// the add endpoint for the same reason). The second domain is needed because
-// on tinycld.org the person's address is the inbox's main address, which a
-// rename keeps; only a rule address is lost and kept by "Keep the old
-// addresses". This spec therefore does NOT cover adding or verifying a domain.
-// Everything after the seed — the invite, the domain rule, the added address,
-// the Default From and the rename — is driven through the UI.
+// Everything runs on the main domain (tinycld.org) and is driven through the
+// UI: the invite, the added address, the Default From and the rename. The
+// rename moves the person's main address to the new name, and "Keep the old
+// addresses" keeps the old main address as an added address.
 import { expect, type Locator, test } from '@playwright/test'
 import { createInvitedUser } from '@tinycld/core/e2e-helpers'
-import {
-    giveEveryoneAnAddressOn,
-    navigateToSharedInboxSettings,
-    openPersonEmail,
-    seedVerifiedDomain,
-} from './helpers'
+import { navigateToSharedInboxSettings, openPersonEmail } from './helpers'
 
 const MAIN_DOMAIN = 'tinycld.org'
 
@@ -36,24 +26,18 @@ test.describe('Mail — A person’s email in Members', () => {
         page,
     }) => {
         const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-        const ruleDomain = `person-${stamp}.example.com`
-        await seedVerifiedDomain(ruleDomain)
 
         const { user, close } = await createInvitedUser(page, 'mailp')
         await close()
-        await giveEveryoneAnAddressOn(page, ruleDomain)
 
-        const mainEmail = `${user.username}@${MAIN_DOMAIN}`
-        const oldRuleEmail = `${user.username}@${ruleDomain}`
+        const oldMainEmail = `${user.username}@${MAIN_DOMAIN}`
         const addedEmail = `p${stamp}@${MAIN_DOMAIN}`
-        const newMainDomainEmail = `r${stamp}@${MAIN_DOMAIN}`
-        const newRuleEmail = `r${stamp}@${ruleDomain}`
+        const newMainEmail = `r${stamp}@${MAIN_DOMAIN}`
 
-        const drawer = await openPersonEmail(page, user.username)
-        const mainRow = addressRow(drawer, mainEmail)
-        await expect(mainRow.getByText('Main address', { exact: true })).toBeVisible()
-        const oldRuleRow = addressRow(drawer, oldRuleEmail)
-        await expect(oldRuleRow.getByText('From the domain rule', { exact: true })).toBeVisible()
+        let drawer = await openPersonEmail(page, user.username)
+        await expect(
+            addressRow(drawer, oldMainEmail).getByText('Main address', { exact: true })
+        ).toBeVisible()
 
         await drawer.getByText('Add address', { exact: true }).click()
         await drawer.getByTestId('local_part').fill(`p${stamp}`)
@@ -71,8 +55,12 @@ test.describe('Mail — A person’s email in Members', () => {
             addedRow.getByRole('button', { name: `Remove address ${addedEmail}` })
         ).toBeVisible()
 
-        await defaultFromChoice(drawer, addedEmail).click()
-        await expect(defaultFromChoice(drawer, addedEmail)).toHaveAttribute('aria-checked', 'true')
+        // The main address as Default From: it must follow the rename.
+        await defaultFromChoice(drawer, oldMainEmail).click()
+        await expect(defaultFromChoice(drawer, oldMainEmail)).toHaveAttribute(
+            'aria-checked',
+            'true'
+        )
 
         await drawer.getByText('Edit', { exact: true }).click()
         await drawer.getByTestId('email_name').fill(`r${stamp}`)
@@ -82,19 +70,30 @@ test.describe('Mail — A person’s email in Members', () => {
         await drawer.getByText('Rename', { exact: true }).click()
         await expect(drawer.getByText('Rename', { exact: true })).toBeHidden()
 
-        for (const email of [newMainDomainEmail, newRuleEmail]) {
-            await expect(
-                addressRow(drawer, email).getByText('From the domain rule', { exact: true })
-            ).toBeVisible()
-        }
-        // The rename removed the old rule address; "Keep the old addresses"
-        // added it back as an address that an admin can remove.
-        await expect(oldRuleRow).toHaveText(oldRuleEmail)
         await expect(
-            oldRuleRow.getByRole('button', { name: `Remove address ${oldRuleEmail}` })
+            addressRow(drawer, newMainEmail).getByText('Main address', { exact: true })
         ).toBeVisible()
-        await expect(mainRow.getByText('Main address', { exact: true })).toBeVisible()
-        await expect(defaultFromChoice(drawer, addedEmail)).toHaveAttribute('aria-checked', 'true')
+        // "Keep the old addresses" added the old main address back as an
+        // address that an admin can remove.
+        const oldMainRow = addressRow(drawer, oldMainEmail)
+        await expect(oldMainRow).toHaveText(oldMainEmail)
+        await expect(
+            oldMainRow.getByRole('button', { name: `Remove address ${oldMainEmail}` })
+        ).toBeVisible()
+        await expect(addedRow).toHaveText(addedEmail)
+
+        // Reopen the drawer: the Default From shown is the saved one.
+        await drawer.getByRole('button', { name: 'Close' }).click()
+        await expect(drawer).toBeHidden()
+        drawer = await openPersonEmail(page, user.username)
+        await expect(defaultFromChoice(drawer, newMainEmail)).toHaveAttribute(
+            'aria-checked',
+            'true'
+        )
+        await expect(defaultFromChoice(drawer, oldMainEmail)).toHaveAttribute(
+            'aria-checked',
+            'false'
+        )
 
         // The drawer is modal: its backdrop covers the app rail until it closes.
         await drawer.getByRole('button', { name: 'Close' }).click()
@@ -109,6 +108,6 @@ test.describe('Mail — A person’s email in Members', () => {
                 .or(page.getByText('No shared inboxes yet', { exact: true }))
                 .first()
         ).toBeVisible()
-        await expect(page.locator(`[data-testid^="mailbox-row-${user.username}@"]`)).toHaveCount(0)
+        await expect(page.locator(`[data-testid^="mailbox-row-r${stamp}@"]`)).toHaveCount(0)
     })
 })
