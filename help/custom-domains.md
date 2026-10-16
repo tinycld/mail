@@ -66,8 +66,6 @@ Each domain has a setting **Who gets an address here?**:
 - **Members of these groups** — only members of the groups that you choose get their email name on this domain. When a person joins one of the groups, the person gets the address. When the person leaves all of the groups, the address stops receiving mail.
 - **Only people I add** — nobody gets an address automatically. To add an address for a person, open **Settings → Members**, click the person, and use the **Email** section. To add an address for a shared inbox, use **Settings → Mail → Shared inboxes**.
 
-A person's new addresses show in **Settings → Members** → the person → **Email**.
-
 To make groups, go to **Settings → Groups**. When you remove a person from a group, the confirm message shows the addresses that the person loses.
 
 If you delete the last group of a domain, nobody gets an address on that domain. The domain shows a warning until you choose a group.

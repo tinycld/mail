@@ -27,7 +27,7 @@ received mail only: drafts you're composing, messages you send, and bounce
 notifications never start a rule.
 
 You can filter on the message's subject, sender address, sender name, whether
-it has attachments, and which alias it came in on. A rule with no conditions
+it has attachments, and the address that received it. A rule with no conditions
 runs on every arriving message.
 
 ## What a rule can do
