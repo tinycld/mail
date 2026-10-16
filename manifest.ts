@@ -39,6 +39,7 @@ const manifest = {
     migrations: { directory: 'pb-migrations' },
     collections: { register: 'collections', types: 'types' },
     help: { directory: 'help' },
+    notifications: { events: 'notify-events' },
     seed: { script: 'seed' },
     // Mail is searchable through core's federated /api/search, which reads the
     // Go source registered in server/. The in-app advanced search keeps its own
