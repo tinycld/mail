@@ -341,6 +341,10 @@ func (s *smtpSession) Data(r io.Reader) error {
 		InReplyTo:   inReplyToHeader,
 		References:  referencesHeader,
 		Attachments: attachments,
+
+		// Same attribution the /send endpoint gives: delivery and bounce
+		// notifications carry no From address, only this metadata.
+		Metadata: map[string]string{senderDomainMetadataKey: strings.ToLower(domainName)},
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
