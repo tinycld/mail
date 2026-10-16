@@ -25,12 +25,18 @@ interface KeptRow {
 
 /**
  * The addresses a rename removes, each with a new id for its manual copy.
- * The server moves the main address to the new name, and rule addresses follow
- * the name; manual rows survive a rename.
+ * Rule addresses follow the name, so those with the old name go. The main
+ * address goes when its name differs from the new one: a legacy main address
+ * (john.smith for the name john) is not the old name but is still lost.
+ * Manual rows survive a rename.
  */
-export function keptAddresses(rows: KeptRow[], oldName: string) {
+export function keptAddresses(rows: KeptRow[], oldName: string, newName: string) {
     return rows
-        .filter(row => row.localPart === oldName && (row.isPrimary || row.source === 'rule'))
+        .filter(row =>
+            row.isPrimary
+                ? row.localPart !== newName
+                : row.source === 'rule' && row.localPart === oldName
+        )
         .map(row => ({
             localPart: row.localPart,
             domainId: row.domainId,

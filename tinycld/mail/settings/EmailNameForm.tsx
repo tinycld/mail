@@ -57,7 +57,9 @@ function useRename(
 
     return useMutation({
         mutationFn: async (values: EmailNameValues) => {
-            const kept = values.keep_old ? keptAddresses(addresses, identity.emailName) : []
+            const kept = values.keep_old
+                ? keptAddresses(addresses, identity.emailName, values.email_name)
+                : []
             // The rename must come first: the server frees the old address
             // only when the rename persists, and a manual copy of it is
             // refused while the old name still holds it.

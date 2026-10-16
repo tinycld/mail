@@ -31,7 +31,7 @@ const rows = [
 
 describe('keptAddresses', () => {
     it('keeps the main address and the rule rows with the old local part', () => {
-        expect(keptAddresses(rows, 'nathan')).toEqual([
+        expect(keptAddresses(rows, 'nathan', 'nate')).toEqual([
             expect.objectContaining({
                 localPart: 'nathan',
                 domainId: 'main',
@@ -52,18 +52,28 @@ describe('keptAddresses', () => {
             }),
         ])
     })
-    it('does not keep a main address with another local part', () => {
-        expect(keptAddresses([row('a0', 'legacy', 'main', 'manual', true)], 'nathan')).toEqual([])
+    it('keeps a legacy main address that differs from both names', () => {
+        const legacy = [row('a0', 'john.smith', 'main', 'manual', true)]
+        expect(keptAddresses(legacy, 'john', 'jon')).toEqual([
+            expect.objectContaining({ localPart: 'john.smith', oldId: 'a0', isPrimary: true }),
+        ])
+    })
+    it('does not keep a main address equal to the new name', () => {
+        const back = [row('a0', 'john', 'main', 'manual', true)]
+        expect(keptAddresses(back, 'jon', 'john')).toEqual([])
+    })
+    it('does not keep a rule row with another local part', () => {
+        expect(keptAddresses([row('a9', 'legacy', 'd1', 'rule')], 'nathan', 'nate')).toEqual([])
     })
     it('gives each kept address a new id and its full address', () => {
-        const kept = keptAddresses(rows, 'nathan')
+        const kept = keptAddresses(rows, 'nathan', 'nate')
         expect(new Set(kept.map(k => k.newId)).size).toBe(kept.length)
         expect(kept[1].email).toBe('nathan@d1.example')
     })
 })
 
 describe('defaultFromAfterRename', () => {
-    const kept = keptAddresses(rows, 'nathan')
+    const kept = keptAddresses(rows, 'nathan', 'nate')
     const newIdOf = (oldId: string) => kept.find(k => k.oldId === oldId)?.newId
     it('returns the new id when the default was a kept rule row', () => {
         expect(defaultFromAfterRename('a2', kept)).toBe(newIdOf('a2'))
