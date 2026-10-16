@@ -53,7 +53,7 @@ func resolveSendAddress(app core.App, mailbox *core.Record, fromAddressID, legac
 // its owner's chosen default (mail_identities.default_from), else the address
 // on the highest-ranked verified domain, else any address.
 func defaultSendAddress(app core.App, mailbox *core.Record) (*resolvedAddress, error) {
-	identity, err := app.FindFirstRecordByFilter("mail_identities", "inbox = {:inbox}", dbx.Params{"inbox": mailbox.Id})
+	identity, err := app.FindFirstRecordByFilter("mail_identities", "inbox = {:inbox} && retired != true", dbx.Params{"inbox": mailbox.Id})
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		addressLog.Error("could not read the inbox identity for its default sender", "mailbox", mailbox.Id, "error", err)
 	}

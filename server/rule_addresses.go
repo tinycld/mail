@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"sort"
@@ -17,6 +18,10 @@ type ruleScope struct {
 	UserID   string
 	DomainID string
 }
+
+// liveIdentityFilter selects the identities rules give addresses to: a
+// non-guest's, with an inbox, not retired by offboarding.
+const liveIdentityFilter = "user.role != 'guest' && retired != true && inbox != ''"
 
 type ruleKey struct {
 	local  string
@@ -99,7 +104,7 @@ func expectedRuleAddresses(app core.App, scope ruleScope) (map[ruleKey]string, e
 		return nil, fmt.Errorf("list rule domains: %w", err)
 	}
 
-	identityFilter := "user.role != 'guest'"
+	identityFilter := liveIdentityFilter
 	identityParams := dbx.Params{}
 	if scope.UserID != "" {
 		identityFilter += " && user = {:user}"
@@ -128,8 +133,14 @@ func actualRuleAddresses(app core.App, scope ruleScope) (map[ruleKey]*core.Recor
 	}
 	if scope.UserID != "" {
 		identity, err := app.FindFirstRecordByFilter("mail_identities", "user = {:user}", dbx.Params{"user": scope.UserID})
+		if errors.Is(err, sql.ErrNoRows) {
+			return map[ruleKey]*core.Record{}, nil
+		}
 		if err != nil {
-			// No identity: its rows went with its inbox.
+			return nil, fmt.Errorf("identity lookup: %w", err)
+		}
+		// A retired identity has no inbox: its rows went with the inbox.
+		if identity.GetString("inbox") == "" {
 			return map[ruleKey]*core.Record{}, nil
 		}
 		filter += " && mailbox = {:inbox}"
@@ -153,7 +164,7 @@ func checkCoverageConflicts(app core.App, domain *core.Record) error {
 	if !domainHasRule(domain) {
 		return nil
 	}
-	identities, err := app.FindRecordsByFilter("mail_identities", "user.role != 'guest'", "", 0, 0)
+	identities, err := app.FindRecordsByFilter("mail_identities", liveIdentityFilter, "", 0, 0)
 	if err != nil {
 		return fmt.Errorf("list identities: %w", err)
 	}
@@ -208,7 +219,7 @@ func registerRuleAddressHooks(app core.App) {
 	// just appeared). Losing verification changes nothing here.
 	domainChanged := func(e *core.RecordEvent, becameVerified bool) {
 		if becameVerified {
-			if err := ensureIdentities(e.App); err != nil {
+			if err := ensureIdentities(e.App, adoptOrCreateInbox); err != nil {
 				addressLog.Error("could not give users identities after a domain was verified", "domain", e.Record.Id, "error", err)
 			}
 		}

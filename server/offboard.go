@@ -75,10 +75,16 @@ func mailboxHeir(leaverID string, plan offboard.Plan, actorUserID string) string
 }
 
 // offboardMail is mail's offboard.Handler. It first settles the shared
-// mailboxes, which can refuse the whole offboard, then deletes the leaver's
-// personal mailboxes.
+// mailboxes, which can refuse the whole offboard, then retires the leaver's
+// identity and deletes their personal mailboxes. The anonymized users row
+// keeps its role, so without the retired identity the next users save or
+// domain verification would give the leaver a new inbox with their old
+// address.
 func offboardMail(txApp core.App, leaver *core.Record, plan offboard.Plan, actorUserID string) error {
 	if err := handOverSoleOwnedMailboxes(txApp, leaver, plan, actorUserID); err != nil {
+		return err
+	}
+	if err := retireIdentity(txApp, leaver.Id); err != nil {
 		return err
 	}
 	return deletePersonalMailboxesOf(txApp, leaver.Id)

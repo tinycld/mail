@@ -160,7 +160,7 @@ func checkAddressAvailable(app core.App, localPart, domainID, mailboxID, selfID 
 	if !domainHasRule(domain) {
 		return nil
 	}
-	owner, err := app.FindFirstRecordByFilter("mail_identities", "email_name = {:name}", dbx.Params{"name": localPart})
+	owner, err := app.FindFirstRecordByFilter("mail_identities", "email_name = {:name} && retired != true", dbx.Params{"name": localPart})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}

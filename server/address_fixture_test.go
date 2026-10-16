@@ -46,9 +46,10 @@ func addAddressFixture(t *testing.T, app core.App) {
 
 	identities := core.NewBaseCollection("mail_identities")
 	identities.Fields.Add(&core.TextField{Name: "user", Required: true})
-	identities.Fields.Add(&core.RelationField{Name: "inbox", Required: true, CollectionId: mailboxes.Id, CascadeDelete: true, MaxSelect: 1})
+	identities.Fields.Add(&core.RelationField{Name: "inbox", CollectionId: mailboxes.Id, MaxSelect: 1})
 	identities.Fields.Add(&core.TextField{Name: "email_name", Required: true})
 	identities.Fields.Add(&core.TextField{Name: "default_from"})
+	identities.Fields.Add(&core.BoolField{Name: "retired"})
 	if err := app.Save(identities); err != nil {
 		t.Fatal(err)
 	}

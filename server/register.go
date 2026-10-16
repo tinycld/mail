@@ -346,8 +346,10 @@ func registerShared(app *pocketbase.PocketBase) {
 		reconcileMailDomainsRegistrar(app)
 
 		// Repair identities and rule addresses that a crash or an older
-		// release left out of step.
-		if err := ensureIdentities(app); err != nil {
+		// release left out of step. Boot only adopts inboxes that exist: a
+		// user with no inbox may be a leaver offboarded before identities
+		// existed, whose anonymized row still has a non-guest role.
+		if err := ensureIdentities(app, adoptInboxOnly); err != nil {
 			addressLog.Error("boot: could not ensure mail identities", "error", err)
 		}
 		if err := reconcileRuleAddresses(app, ruleScope{}); err != nil {

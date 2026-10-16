@@ -24,7 +24,7 @@ func loginIdentifier(app core.App, identifier string) string {
 	if err != nil {
 		return identifier
 	}
-	identity, err := app.FindFirstRecordByFilter("mail_identities", "inbox = {:inbox}", dbx.Params{"inbox": target.Mailbox.Id})
+	identity, err := app.FindFirstRecordByFilter("mail_identities", "inbox = {:inbox} && retired != true", dbx.Params{"inbox": target.Mailbox.Id})
 	if err != nil {
 		return identifier
 	}

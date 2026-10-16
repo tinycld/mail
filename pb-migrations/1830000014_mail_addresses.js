@@ -120,13 +120,16 @@ migrate(
                     cascadeDelete: true,
                     maxSelect: 1,
                 },
+                // Not required and no cascade: offboarding deletes the leaver's
+                // inbox but keeps the identity, marked retired, so nothing
+                // gives the anonymized account a new inbox.
                 {
                     id: 'mail_ident_inbox',
                     name: 'inbox',
                     type: 'relation',
-                    required: true,
+                    required: false,
                     collectionId: 'pbc_mail_mailboxes_01',
-                    cascadeDelete: true,
+                    cascadeDelete: false,
                     maxSelect: 1,
                 },
                 {
@@ -147,11 +150,12 @@ migrate(
                     cascadeDelete: false,
                     maxSelect: 1,
                 },
+                { id: 'mail_ident_retired', name: 'retired', type: 'bool' },
                 ...autodate('mail_ident'),
             ],
             indexes: [
                 'CREATE UNIQUE INDEX `idx_mail_identities_user` ON `mail_identities` (`user`)',
-                'CREATE UNIQUE INDEX `idx_mail_identities_inbox` ON `mail_identities` (`inbox`)',
+                "CREATE UNIQUE INDEX `idx_mail_identities_inbox` ON `mail_identities` (`inbox`) WHERE `inbox` != ''",
                 'CREATE UNIQUE INDEX `idx_mail_identities_email_name` ON `mail_identities` (`email_name`)',
             ],
         })
