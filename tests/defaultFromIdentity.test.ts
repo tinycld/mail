@@ -14,12 +14,14 @@ const addr = (id: string, email: string) => ({
 const personal: SendableIdentity = {
     mailboxId: 'mb1',
     mailboxDisplayName: 'Nathan',
+    isPersonal: true,
     addresses: [addr('org', 'nathan@tinycld.org'), addr('com', 'nathan@tinycld.com')],
     defaultAddressId: 'org',
 }
 const support: SendableIdentity = {
     mailboxId: 'mb2',
     mailboxDisplayName: 'Support',
+    isPersonal: false,
     addresses: [addr('sup', 'support@tinycld.org'), addr('help', 'help@tinycld.org')],
     defaultAddressId: 'sup',
 }
@@ -71,13 +73,26 @@ describe('pickReplyFrom', () => {
     })
 })
 
+describe('pickReplyFrom header match', () => {
+    it("prefers the thread mailbox's address when the message went to several of mine", () => {
+        expect(
+            pickReplyFrom({
+                identities,
+                deliveredToAddressId: null,
+                headerAddresses: ['nathan@tinycld.org', 'support@tinycld.org'],
+                threadMailboxId: 'mb2',
+            })
+        ).toEqual({ mailboxId: 'mb2', addressId: 'sup' })
+    })
+})
+
 describe('filterOwnAddresses', () => {
     it('removes every address of the identity, any case', () => {
         const recipients = [
             { name: 'Me', email: 'Nathan@TinyCld.com' },
             { name: 'Bo', email: 'bo@else.example' },
         ]
-        expect(filterOwnAddresses({ identity: personal, recipients })).toEqual([
+        expect(filterOwnAddresses({ identities: [personal], recipients })).toEqual([
             { name: 'Bo', email: 'bo@else.example' },
         ])
     })

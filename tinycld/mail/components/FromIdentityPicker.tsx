@@ -77,6 +77,7 @@ function IdentityGroup({
                     key={address.id}
                     label={address.email}
                     isSelected={address.id === selectedAddressId}
+                    isUnverified={!address.domainVerified}
                     onPress={() => onChoose(identity.mailboxId, address.id)}
                 />
             ))}
@@ -87,10 +88,12 @@ function IdentityGroup({
 function AddressRow({
     label,
     isSelected,
+    isUnverified,
     onPress,
 }: {
     label: string
     isSelected: boolean
+    isUnverified: boolean
     onPress: () => void
 }) {
     const selectedClass = isSelected ? 'bg-primary/10' : ''
@@ -102,6 +105,17 @@ function AddressRow({
             <Text className="text-foreground" style={{ fontSize: 13 }}>
                 {label}
             </Text>
+            <UnverifiedNote isVisible={isUnverified} />
         </Pressable>
+    )
+}
+
+// Mail from an unverified domain fails to send; say so before it is picked.
+function UnverifiedNote({ isVisible }: { isVisible: boolean }) {
+    if (!isVisible) return null
+    return (
+        <Text className="ml-2 text-muted-foreground" style={{ fontSize: 12 }}>
+            domain not verified
+        </Text>
     )
 }

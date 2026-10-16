@@ -198,10 +198,12 @@ test('useSendableIdentities: one identity per reachable mailbox, addresses group
     const personal = result.current[0]
     expect(personal.addresses.map(a => a.email)).toEqual(['alice@acme.com'])
     expect(personal.defaultAddressId).toBe('ad_me')
+    expect(personal.isPersonal).toBe(true)
 
     const support = result.current[1]
     expect(support.mailboxDisplayName).toBe('Support')
     expect(support.defaultAddressId).toBe('ad_support')
+    expect(support.isPersonal).toBe(false)
     expect(support.addresses.map(a => a.email).sort()).toEqual([
         'help@acme.com',
         'sos@acme.com',

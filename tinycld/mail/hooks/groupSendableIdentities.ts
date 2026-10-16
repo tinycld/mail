@@ -12,6 +12,7 @@ export interface SendableAddress {
 export interface SendableIdentity {
     mailboxId: string
     mailboxDisplayName: string
+    isPersonal: boolean
     // Default first, then the server's default order.
     addresses: SendableAddress[]
     defaultAddressId: string
@@ -61,6 +62,7 @@ function toIdentity(entry: MailboxEntry): SendableIdentity {
     return {
         mailboxId: entry.mailbox.id,
         mailboxDisplayName: entry.mailbox.display_name || entry.mailbox.address,
+        isPersonal: entry.mailbox.type === 'personal',
         addresses: [defaultAddress, ...sorted.filter(a => a.id !== defaultAddress.id)],
         defaultAddressId: defaultAddress.id,
     }

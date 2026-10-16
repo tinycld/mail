@@ -46,7 +46,9 @@ interface PickReplyFromParams {
  * Pure: which address a reply or forward is sent from.
  *  1. the address the message was delivered to (mail_messages.delivered_to);
  *  2. else one of my addresses found in its To/Cc (mail stored before
- *     delivered_to existed has none);
+ *     delivered_to existed has none), the thread mailbox's addresses first:
+ *     a message to both support@ and me@ in a Support thread replies as
+ *     Support;
  *  3. else the thread's mailbox, with its default address;
  *  4. else my first mailbox.
  */
@@ -64,7 +66,11 @@ export function pickReplyFrom({
     if (delivered) return delivered
 
     const header = new Set(headerAddresses.map(extractBareAddress).filter(a => a !== null))
-    const fromHeader = findAddress(identities, email => header.has(email))
+    const threadFirst = [
+        ...identities.filter(i => i.mailboxId === threadMailboxId),
+        ...identities.filter(i => i.mailboxId !== threadMailboxId),
+    ]
+    const fromHeader = findAddress(threadFirst, email => header.has(email))
     if (fromHeader) return fromHeader
 
     const thread = identities.find(i => i.mailboxId === threadMailboxId) ?? identities[0]
@@ -72,15 +78,17 @@ export function pickReplyFrom({
 }
 
 interface FilterOwnAddressesParams {
-    identity: SendableIdentity
+    identities: SendableIdentity[]
     recipients: Recipient[]
 }
 
-/** Pure: drop every address of the sending identity from a recipient list. */
+/** Pure: drop every address of the given identities from a recipient list. */
 export function filterOwnAddresses({
-    identity,
+    identities,
     recipients,
 }: FilterOwnAddressesParams): Recipient[] {
-    const own = new Set(identity.addresses.map(a => a.email.toLowerCase()))
+    const own = new Set(
+        identities.flatMap(identity => identity.addresses.map(a => a.email.toLowerCase()))
+    )
     return recipients.filter(r => !own.has(r.email.toLowerCase()))
 }

@@ -51,10 +51,12 @@ export function buildReplyContext({
         headerAddresses,
         threadMailboxId,
     })
-    const identity = identities.find(i => i.mailboxId === from.mailboxId)
+    // Reply-all leaves out the sending mailbox and my personal inbox: a reply
+    // from Support must not copy me in. Other shared mailboxes stay — their
+    // other members may still need the reply.
+    const own = identities.filter(i => i.mailboxId === from.mailboxId || i.isPersonal)
     const raw = recipientsFor(kind, message)
-    const to =
-        kind === 'replyAll' && identity ? filterOwnAddresses({ identity, recipients: raw }) : raw
+    const to = kind === 'replyAll' ? filterOwnAddresses({ identities: own, recipients: raw }) : raw
     return {
         messageId: message.id,
         threadId,

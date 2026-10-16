@@ -1,32 +1,21 @@
 import type { ComponentProps } from 'react'
 import { Text, View } from 'react-native'
+import type { ResolvedFrom } from '../hooks/composeFrom'
 import type { SendableIdentity } from '../hooks/groupSendableIdentities'
-import { useSendableIdentities } from '../hooks/useSendableIdentities'
-import { useComposeStore } from '../stores/compose-store'
 import { FromIdentityPicker } from './FromIdentityPicker'
 
-// Resolve the shown From during render instead of syncing a default into the
-// store: an empty store mailboxId means the personal mailbox (identities[0]),
-// and a null address means that mailbox's default. Nothing is written until
-// the user picks.
-function resolveFrom(identities: SendableIdentity[], mailboxId: string, addressId: string | null) {
-    const identity = identities.find(i => i.mailboxId === mailboxId) ?? identities[0]
-    const address =
-        identity.addresses.find(a => a.id === addressId) ??
-        identity.addresses.find(a => a.id === identity.defaultAddressId) ??
-        identity.addresses[0]
-    return { identity, address }
+interface Props {
+    identities: SendableIdentity[]
+    // What the parent sends from (useComposeFrom), so the row never shows a
+    // different From from the one the payload uses.
+    from: ResolvedFrom | null
+    onSelect: (mailboxId: string, addressId: string) => void
 }
 
-export function ComposeFromRow() {
-    const identities = useSendableIdentities()
-    const mailboxId = useComposeStore(s => s.mailboxId)
-    const fromAddressId = useComposeStore(s => s.fromAddressId)
-    const setFrom = useComposeStore(s => s.setFrom)
+export function ComposeFromRow({ identities, from, onSelect }: Props) {
+    if (!from) return null
 
-    if (identities.length === 0) return null
-
-    const { identity, address } = resolveFrom(identities, mailboxId, fromAddressId)
+    const { identity, address } = from
     const hasChoices = identities.length > 1 || identity.addresses.length > 1
     const label = `${identity.mailboxDisplayName} <${address.email}>`
 
@@ -45,7 +34,7 @@ export function ComposeFromRow() {
                 isVisible={hasChoices}
                 identities={identities}
                 selectedAddressId={address.id}
-                onSelect={setFrom}
+                onSelect={onSelect}
             />
         </View>
     )
