@@ -7,7 +7,9 @@ import type {
     WebhookURLsResponse,
 } from '@tinycld/app-generated/mail-api'
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
+import { SortableDragHandle, SortableList } from '@tinycld/core/components/SortableList'
 import { errorToString } from '@tinycld/core/lib/errors'
+import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { ButtonIcon, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
@@ -15,9 +17,11 @@ import * as Clipboard from 'expo-clipboard'
 import { CheckCircle, Copy, Globe, Loader2, RefreshCw, XCircle } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { MONOSPACE_FONT } from '../lib/monospace-font'
 import { AddDomainForm } from './AddDomainForm'
 import { DnsRecordsPanel, hasUnpublishedDnsRecords } from './DnsRecordsPanel'
+import { DomainCoverageControl } from './DomainCoverageControl'
 import { isDomainReady } from './domain-ready'
 import { DeleteDomainButton, RemoveDomainConfirm, useRemoveDomain } from './RemoveDomain'
 import { assertVerifySaved } from './verify-domain'
@@ -34,13 +38,15 @@ export default function ProviderSettings() {
     const storedProvider = sysRows[0]?.value
 
     return (
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="bg-background">
-            <View className="flex-1 gap-5 p-5" style={{ maxWidth: 600 }}>
-                <ProviderHeader primaryColor={primaryColor} />
+        <GestureHandlerRootView className="flex-1">
+            <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="bg-background">
+                <View className="flex-1 gap-5 p-5" style={{ maxWidth: 600 }}>
+                    <ProviderHeader primaryColor={primaryColor} />
 
-                <DomainsSection storedProvider={storedProvider} />
-            </View>
-        </ScrollView>
+                    <DomainsSection storedProvider={storedProvider} />
+                </View>
+            </ScrollView>
+        </GestureHandlerRootView>
     )
 }
 
@@ -72,6 +78,8 @@ interface DomainRow {
     return_path_verified: boolean
     last_checked_at: string
     verification_details: VerificationDetails | null
+    coverage: 'everyone' | 'manual'
+    rank: number
 }
 
 // The provider these DNS instructions must describe.
@@ -100,8 +108,19 @@ function DomainsSection({ storedProvider }: { storedProvider: string | undefined
     const { data: domains } = useLiveQuery(query =>
         query
             .from({ mail_domains: domainsCollection })
+            .orderBy(({ mail_domains }) => mail_domains.rank, 'asc')
             .orderBy(({ mail_domains }) => mail_domains.created, 'asc')
     )
+
+    const reorder = useMutation({
+        mutationFn: mutation(function* (orderedIds: string[]) {
+            yield orderedIds.map((id, index) =>
+                domainsCollection.update(id, d => {
+                    d.rank = index + 1
+                })
+            )
+        }),
+    })
 
     const domainRows: DomainRow[] = (domains ?? []).map(d => ({
         id: d.id,
@@ -114,6 +133,8 @@ function DomainsSection({ storedProvider }: { storedProvider: string | undefined
         return_path_verified: d.return_path_verified,
         last_checked_at: d.last_checked_at,
         verification_details: d.verification_details ?? null,
+        coverage: d.coverage === 'everyone' ? 'everyone' : 'manual',
+        rank: d.rank ?? 0,
     }))
 
     return (
@@ -128,13 +149,22 @@ function DomainsSection({ storedProvider }: { storedProvider: string | undefined
 
             <NoDomainsBanner isVisible={domainRows.length === 0} />
 
-            {domainRows.map(d => (
-                <DomainRowItem
-                    key={d.id}
-                    domain={d}
-                    provider={resolveProvider(d.verification_details, storedProvider)}
-                />
-            ))}
+            <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
+                Drag to set the order. The first verified domain is the main domain: new people get
+                their inbox there, and people send from it unless they choose another address.
+            </Text>
+
+            <SortableList
+                data={domainRows}
+                keyExtractor={d => d.id}
+                onReorder={rows => reorder.mutate(rows.map(r => r.id))}
+                renderItem={({ item }) => (
+                    <DomainRowItem
+                        domain={item}
+                        provider={resolveProvider(item.verification_details, storedProvider)}
+                    />
+                )}
+            />
 
             <AddDomainForm />
         </View>
@@ -176,6 +206,7 @@ function DomainRowItem({ domain, provider }: { domain: DomainRow; provider: 'pos
         <View className="gap-3 border border-border rounded-xl p-3">
             <View className="flex-row justify-between items-center">
                 <View className="flex-row gap-2 items-center flex-1">
+                    <SortableDragHandle />
                     <VerifiedIcon size={18} color={verifiedColor} />
                     <View>
                         <Text className="text-foreground" style={{ fontWeight: '600' }}>
@@ -198,6 +229,12 @@ function DomainRowItem({ domain, provider }: { domain: DomainRow; provider: 'pos
                     />
                 </View>
             </View>
+
+            <DomainCoverageControl
+                domainId={domain.id}
+                domainName={domain.domain}
+                coverage={domain.coverage}
+            />
 
             <RemoveDomainConfirm
                 isVisible={removal.isConfirming}
