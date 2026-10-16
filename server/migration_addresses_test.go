@@ -57,9 +57,17 @@ func TestMigrations_AddressesBackfill(t *testing.T) {
 	com := seedDomain("tinycld.com", true, "2026-10-15 20:07:36.434Z")
 	personal := save("mail_mailboxes", map[string]any{"address": "nathan", "domain": org.Id, "type": "personal"})
 	shared := save("mail_mailboxes", map[string]any{"address": "support", "domain": org.Id, "type": "shared"})
-	save("mail_mailbox_aliases", map[string]any{"mailbox": personal.Id, "address": "admin"})
+	adminAlias := save("mail_mailbox_aliases", map[string]any{"mailbox": personal.Id, "address": " Admin "})
 	// Collides with the shared mailbox's own address: the mailbox must win.
-	save("mail_mailbox_aliases", map[string]any{"mailbox": personal.Id, "address": "support"})
+	supportAlias := save("mail_mailbox_aliases", map[string]any{"mailbox": personal.Id, "address": "support"})
+	// Drafts and sent mail from an alias record the alias only. After the
+	// migration they must record the copied address as sent_from, or a
+	// reopened draft sends from the default address.
+	aliasDraft := save("mail_messages", map[string]any{"subject": "from admin", "alias": adminAlias.Id})
+	// The colliding alias has no row of its own: sent_from stays unset rather
+	// than pointing at the shared mailbox's address.
+	collidedDraft := save("mail_messages", map[string]any{"subject": "from support", "alias": supportAlias.Id})
+	plainDraft := save("mail_messages", map[string]any{"subject": "no alias"})
 	messy := save("mail_mailboxes", map[string]any{"address": "  Mixed.Case ", "domain": org.Id, "type": "shared"})
 	// Legacy addresses were case-sensitive: Foo and foo are two mailboxes that
 	// both become foo@tinycld.com. The older one keeps the address.
@@ -122,6 +130,27 @@ func TestMigrations_AddressesBackfill(t *testing.T) {
 	n, err := app.CountRecords("mail_addresses", dbx.HashExp{"local_part": "support", "domain": org.Id})
 	if err != nil || n != 1 {
 		t.Fatalf("support@tinycld.org rows = %d (err %v), want 1", n, err)
+	}
+
+	adminRow, err := app.FindFirstRecordByFilter("mail_addresses",
+		"local_part = 'admin' && domain = {:domain}", dbx.Params{"domain": org.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name, id, want string
+	}{
+		{"alias draft", aliasDraft.Id, adminRow.Id},
+		{"collided alias draft", collidedDraft.Id, ""},
+		{"draft with no alias", plainDraft.Id, ""},
+	} {
+		msg, err := app.FindRecordById("mail_messages", c.id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := msg.GetString("sent_from"); got != c.want {
+			t.Fatalf("%s sent_from = %q, want %q", c.name, got, c.want)
+		}
 	}
 
 	foos, err := app.FindRecordsByFilter("mail_addresses", "local_part = 'foo' && domain = {:domain}", "", 0, 0,

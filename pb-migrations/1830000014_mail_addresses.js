@@ -257,6 +257,28 @@ migrate(
                  ORDER BY a.created, a.id`
             )
             .execute()
+
+        // A message sent or drafted from an alias records the alias, not the
+        // address. Without sent_from a reopened draft would fall back to the
+        // default sender, so the copied manual row becomes its sent_from. An
+        // alias that collided above has no row on its own mailbox and stays
+        // unset.
+        app.db()
+            .newQuery(
+                `UPDATE mail_messages SET sent_from = (
+                    SELECT x.id FROM mail_mailbox_aliases a
+                    JOIN mail_mailboxes mb ON mb.id = a.mailbox
+                    JOIN mail_addresses x ON x.local_part = lower(trim(a.address))
+                        AND x.domain = mb.domain AND x.mailbox = a.mailbox
+                    WHERE a.id = mail_messages.alias)
+                 WHERE alias != '' AND (sent_from = '' OR sent_from IS NULL) AND EXISTS (
+                    SELECT 1 FROM mail_mailbox_aliases a
+                    JOIN mail_mailboxes mb ON mb.id = a.mailbox
+                    JOIN mail_addresses x ON x.local_part = lower(trim(a.address))
+                        AND x.domain = mb.domain AND x.mailbox = a.mailbox
+                    WHERE a.id = mail_messages.alias)`
+            )
+            .execute()
     },
     app => {
         const aliases = app.findCollectionByNameOrId('mail_mailbox_aliases')
