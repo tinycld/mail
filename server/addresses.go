@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/pocketbase/dbx"
+	validation "github.com/pocketbase/ozzo-validation/v4"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/logging"
 )
@@ -49,9 +50,22 @@ var localPartPattern = regexp.MustCompile(`^[a-z0-9._-]{1,64}$`)
 // could not hold, so a saved inbox always has a routable address.
 func checkMailboxLocalPart(local string) error {
 	if !localPartPattern.MatchString(local) {
-		return fmt.Errorf("%s is not a valid mailbox address: use lowercase letters, numbers, dots, hyphens and underscores", local)
+		return validation.NewError("invalid_address",
+			fmt.Sprintf("%s is not a valid mailbox address: use lowercase letters, numbers, dots, hyphens and underscores", local))
 	}
 	return nil
+}
+
+// onField puts a refusal under the form field it belongs to. PocketBase hides
+// every hook error except validation.Errors, so without this an API client
+// sees only "Something went wrong". Other errors (database failures) pass
+// through unchanged.
+func onField(field string, err error) error {
+	var refusal validation.Error
+	if errors.As(err, &refusal) {
+		return validation.Errors{field: refusal}
+	}
+	return err
 }
 
 func normalizeLocalPart(s string) string {
@@ -134,9 +148,10 @@ func checkAddressAvailable(app core.App, localPart, domainID, mailboxID, selfID 
 	}
 	if existing != nil && existing.Id != selfID {
 		if mailboxID != "" && existing.GetString("mailbox") == mailboxID {
-			return fmt.Errorf("%s is already an added address of this inbox: remove that added address first", localPart)
+			return validation.NewError("address_taken",
+				fmt.Sprintf("%s is already an added address of this inbox: remove that added address first", localPart))
 		}
-		return fmt.Errorf("%s is already an address on this domain", localPart)
+		return validation.NewError("address_taken", fmt.Sprintf("%s is already an address on this domain", localPart))
 	}
 	domain, err := app.FindRecordById("mail_domains", domainID)
 	if err != nil {
@@ -153,8 +168,9 @@ func checkAddressAvailable(app core.App, localPart, domainID, mailboxID, selfID 
 		return fmt.Errorf("identity lookup failed: %w", err)
 	}
 	if owner.GetString("inbox") != mailboxID {
-		return fmt.Errorf("%s is reserved on %s: it is a person's email name, and everyone gets that name there",
-			localPart, domain.GetString("domain"))
+		return validation.NewError("address_reserved",
+			fmt.Sprintf("%s is reserved on %s: it is a person's email name, and everyone gets that name there",
+				localPart, domain.GetString("domain")))
 	}
 	return nil
 }
@@ -221,7 +237,7 @@ func registerAddressHooks(app core.App) {
 		local := normalizeLocalPart(e.Record.GetString("local_part"))
 		e.Record.Set("local_part", local)
 		if err := checkAddressAvailable(e.App, local, e.Record.GetString("domain"), e.Record.GetString("mailbox"), ""); err != nil {
-			return err
+			return onField("local_part", err)
 		}
 		return e.Next()
 	})
@@ -229,7 +245,7 @@ func registerAddressHooks(app core.App) {
 		local := normalizeLocalPart(e.Record.GetString("local_part"))
 		e.Record.Set("local_part", local)
 		if err := checkAddressAvailable(e.App, local, e.Record.GetString("domain"), e.Record.GetString("mailbox"), e.Record.Id); err != nil {
-			return err
+			return onField("local_part", err)
 		}
 		return e.Next()
 	})
@@ -261,10 +277,10 @@ func registerAddressHooks(app core.App) {
 		local := normalizeLocalPart(e.Record.GetString("address"))
 		e.Record.Set("address", local)
 		if err := checkMailboxLocalPart(local); err != nil {
-			return err
+			return onField("address", err)
 		}
 		if err := checkAddressAvailable(e.App, local, e.Record.GetString("domain"), "", ""); err != nil {
-			return err
+			return onField("address", err)
 		}
 		return e.Next()
 	})
@@ -282,7 +298,7 @@ func registerAddressHooks(app core.App) {
 			return e.Next()
 		}
 		if err := checkMailboxLocalPart(local); err != nil {
-			return err
+			return onField("address", err)
 		}
 		primaryID := ""
 		row, err := e.App.FindFirstRecordByFilter("mail_addresses",
@@ -293,7 +309,7 @@ func registerAddressHooks(app core.App) {
 			return err
 		}
 		if err := checkAddressAvailable(e.App, local, e.Record.GetString("domain"), e.Record.Id, primaryID); err != nil {
-			return err
+			return onField("address", err)
 		}
 		return e.Next()
 	})
@@ -318,7 +334,7 @@ func registerAddressHooks(app core.App) {
 			return fmt.Errorf("alias references unknown mailbox: %w", err)
 		}
 		if err := checkAddressAvailable(e.App, local, mailbox.GetString("domain"), mailbox.Id, ""); err != nil {
-			return err
+			return onField("address", err)
 		}
 		return e.Next()
 	})

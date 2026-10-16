@@ -183,3 +183,35 @@ func TestRegister_OnServeEnsuresIdentitiesAtBoot(t *testing.T) {
 		t.Fatal("OnServe did not ensure the user's mail identity")
 	}
 }
+
+// OnServe must also reconcile rule addresses, repairing a row that went
+// missing.
+func TestRegister_OnServeReconcilesRuleAddressesAtBoot(t *testing.T) {
+	t.Setenv("IMAP_ENABLED", "false")
+	t.Setenv("SMTP_ENABLED", "false")
+
+	app := newRealSchemaApp(t)
+	registerAddressHooks(app)
+	registerIdentityHooks(app)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "boot.example", "verified": true})
+	extra := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "extra.example", "verified": true, "coverage": coverageEveryone})
+	saveRealRecord(t, app, "users", map[string]any{"email": "c@ext.example", "username": "cy", "name": "Cy", "role": "member"})
+	if _, err := app.DB().NewQuery("DELETE FROM mail_addresses WHERE source = 'rule'").Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if row, _ := findAddressRow(app, "cy", extra.Id); row != nil {
+		t.Fatal("precondition: the rule row still exists")
+	}
+	Register(&pocketbase.PocketBase{App: app})
+
+	router, err := apis.NewRouter(app)
+	if err != nil {
+		t.Fatalf("new router: %v", err)
+	}
+	if err := app.OnServe().Trigger(&core.ServeEvent{App: app, Router: router}, func(*core.ServeEvent) error { return nil }); err != nil {
+		t.Fatalf("OnServe trigger: %v", err)
+	}
+	if row, _ := findAddressRow(app, "cy", extra.Id); row == nil {
+		t.Fatal("OnServe did not restore the missing rule address")
+	}
+}

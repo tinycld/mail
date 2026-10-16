@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/pocketbase/dbx"
+	validation "github.com/pocketbase/ozzo-validation/v4"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -24,7 +25,9 @@ type ruleKey struct {
 
 // reconcileRuleAddresses converges the source = 'rule' rows in scope to what
 // the domain rules say: each non-guest identity gets <email_name>@<domain> on
-// each verified domain whose coverage is everyone. A row that already exists
+// each domain whose coverage is everyone. Rule rows depend on coverage only,
+// not on verification: a transient failed verify must not delete addresses
+// that messages and identities link to. A row that already exists
 // for the same address and inbox (the inbox's primary row, or an address an
 // admin added) satisfies the rule, and nothing is written. A row held by a
 // different inbox is a conflict: it is logged and left alone (the coverage
@@ -85,7 +88,7 @@ func reconcileRuleAddresses(app core.App, scope ruleScope) error {
 }
 
 func expectedRuleAddresses(app core.App, scope ruleScope) (map[ruleKey]string, error) {
-	domainFilter := "coverage = {:everyone} && verified = true"
+	domainFilter := "coverage = {:everyone}"
 	params := dbx.Params{"everyone": coverageEveryone}
 	if scope.DomainID != "" {
 		domainFilter += " && id = {:domain}"
@@ -168,8 +171,9 @@ func checkCoverageConflicts(app core.App, domain *core.Record) error {
 		return nil
 	}
 	sort.Strings(conflicts)
-	return fmt.Errorf("these addresses already belong to another inbox, and the rule would give them to people: %s. Change those addresses first",
-		strings.Join(conflicts, ", "))
+	return validation.Errors{"coverage": validation.NewError("coverage_conflict",
+		fmt.Sprintf("these addresses already belong to another inbox, and the rule would give them to people: %s. Change those addresses first",
+			strings.Join(conflicts, ", ")))}
 }
 
 // registerRuleAddressHooks keeps rule rows current. Every trigger is an
@@ -186,9 +190,7 @@ func registerRuleAddressHooks(app core.App) {
 		return e.Next()
 	})
 	app.OnRecordAfterUpdateSuccess("mail_identities").BindFunc(func(e *core.RecordEvent) error {
-		original := e.Record.Original()
-		if original.GetString("email_name") != e.Record.GetString("email_name") ||
-			original.GetString("inbox") != e.Record.GetString("inbox") {
+		if e.Record.Original().GetString("email_name") != e.Record.GetString("email_name") {
 			reconcile(e.App, ruleScope{UserID: e.Record.GetString("user")})
 		}
 		return e.Next()
@@ -202,6 +204,8 @@ func registerRuleAddressHooks(app core.App) {
 		}
 		return e.Next()
 	})
+	// Only becoming verified creates identities (the main domain may have
+	// just appeared). Losing verification changes nothing here.
 	domainChanged := func(e *core.RecordEvent, becameVerified bool) {
 		if becameVerified {
 			if err := ensureIdentities(e.App); err != nil {
@@ -211,16 +215,13 @@ func registerRuleAddressHooks(app core.App) {
 		reconcile(e.App, ruleScope{DomainID: e.Record.Id})
 	}
 	app.OnRecordAfterCreateSuccess("mail_domains").BindFunc(func(e *core.RecordEvent) error {
-		if e.Record.GetBool("verified") {
-			domainChanged(e, true)
-		}
+		domainChanged(e, e.Record.GetBool("verified"))
 		return e.Next()
 	})
 	app.OnRecordAfterUpdateSuccess("mail_domains").BindFunc(func(e *core.RecordEvent) error {
 		original := e.Record.Original()
 		becameVerified := !original.GetBool("verified") && e.Record.GetBool("verified")
-		if becameVerified || original.GetBool("verified") != e.Record.GetBool("verified") ||
-			original.GetString("coverage") != e.Record.GetString("coverage") {
+		if becameVerified || original.GetString("coverage") != e.Record.GetString("coverage") {
 			domainChanged(e, becameVerified)
 		}
 		return e.Next()
