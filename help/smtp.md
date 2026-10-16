@@ -90,6 +90,7 @@ Outbound messages are capped at **25 MB total** (including attachments). Larger 
 ## Why messages might be rejected
 
 - **Connects, then immediately disconnects ("service unavailable")** — the server name in your client is wrong. It must be `{{server-host}}` exactly (your TinyCld web address); a `mail.` name, your mail domain, or an IP address all reach the server but don't identify your workspace, so it hangs up.
+- **"Relaying denied. To send mail, log in on port 465."** — your mail app is sending through port 25, which only receives mail. Set the outgoing server port to **465**, turn on **SSL/TLS**, and turn on password authentication. In Apple Mail, clear **Automatically manage connection settings** first.
 - **Auth failed** — wrong username/email or password. Same as IMAP — use the identity you sign in to TinyCld with. With two-step verification on, the password must be an [app password](help://core:security-app-passwords).
 - **Auth fails with `Your mail access is read-only; sending is not permitted`** — your account has read-only access to Mail on this server. You can still read over [IMAP](help://mail:imap); sending needs an administrator to grant full access.
 - **From address not owned** — see above; the From header has to match a mailbox or alias you have access to.

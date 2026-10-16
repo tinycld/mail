@@ -943,33 +943,69 @@ func (s *imapSession) buildStatusData(name, mailboxID string, options *imap.Stat
 		return data, nil
 	}
 
-	if options.NumMessages {
+	// go-imap dereferences the pointer of every item the client requested, so
+	// each requested item must be set or the whole call must fail. A nil
+	// pointer here panics the connection.
+	if options.NumMessages || options.Size {
 		messages, err := s.messagesForFolder(name, mailboxID)
-		if err == nil {
+		if err != nil {
+			return nil, err
+		}
+		if options.NumMessages {
 			n := uint32(len(messages))
 			data.NumMessages = &n
+		}
+		if options.Size {
+			var size int64
+			for _, msg := range messages {
+				size += int64(msg.GetInt("total_size"))
+			}
+			data.Size = &size
 		}
 	}
 
 	if options.UIDValidity {
-		v, _ := getMailboxUIDValidity(s.app, mailboxID)
+		v, err := getMailboxUIDValidity(s.app, mailboxID)
+		if err != nil {
+			return nil, err
+		}
 		data.UIDValidity = v
 	}
 
 	if options.UIDNext {
-		n, _ := getMailboxUIDNext(s.app, mailboxID)
-		uid := imap.UID(n)
-		data.UIDNext = uid
+		n, err := getMailboxUIDNext(s.app, mailboxID)
+		if err != nil {
+			return nil, err
+		}
+		data.UIDNext = imap.UID(n)
 	}
 
 	if options.NumUnseen {
 		filter, params := folderToFilter(s.app, name, s.user.Id, mailboxID)
 		filter += " && is_read = false"
 		states, err := s.app.FindRecordsByFilter("mail_thread_state", filter, "", 0, 0, params)
-		if err == nil {
-			n := uint32(len(states))
-			data.NumUnseen = &n
+		if err != nil {
+			return nil, err
 		}
+		n := uint32(len(states))
+		data.NumUnseen = &n
+	}
+
+	// \Deleted marks live only in the selecting session (s.deleted) and are
+	// expunged on close, so another folder never holds any. RECENT is
+	// obsolete in IMAP4rev2 and this server never sets it. There is no QUOTA
+	// support, so no storage is held by deleted messages.
+	if options.NumDeleted {
+		var zero uint32
+		data.NumDeleted = &zero
+	}
+	if options.NumRecent {
+		var zero uint32
+		data.NumRecent = &zero
+	}
+	if options.DeletedStorage {
+		var zero int64
+		data.DeletedStorage = &zero
 	}
 
 	return data, nil
