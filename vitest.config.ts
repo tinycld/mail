@@ -4,13 +4,7 @@ import { mergeConfig } from 'vitest/config'
 
 export default mergeConfig(appConfig, {
     resolve: {
-        alias: [
-            { find: /^~\/(.+)$/, replacement: path.resolve(import.meta.dirname, '$1') },
-            {
-                find: /^react-native-drax$/,
-                replacement: path.resolve(import.meta.dirname, 'tests/react-native-drax-stub.tsx'),
-            },
-        ],
+        alias: [{ find: /^~\/(.+)$/, replacement: path.resolve(import.meta.dirname, '$1') }],
     },
     test: {
         root: import.meta.dirname,

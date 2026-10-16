@@ -83,8 +83,15 @@ test('Apply writes the coverage to the domain row', async () => {
 })
 
 test('Cancel removes the confirm box', async () => {
-    const { findByText, queryByText } = renderControl()
+    const { container, findByText, queryByText } = renderControl()
     await press(await findByText('Everyone'))
     await press(await findByText('Cancel'))
     await waitFor(() => expect(queryByText('Apply')).toBeNull())
+    expect(queryByText('Adds 1: nathan@tinycld.com')).toBeNull()
+    // The test renderer stringifies accessibilityState; the selected dot is
+    // the observable difference.
+    const manual = container.querySelector('[testid="coverage-manual"]')
+    const everyone = container.querySelector('[testid="coverage-everyone"]')
+    expect(manual?.innerHTML).toContain('border-primary')
+    expect(everyone?.innerHTML).not.toContain('border-primary')
 })

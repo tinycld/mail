@@ -9,7 +9,6 @@ import type {
 import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { SortableDragHandle, SortableList } from '@tinycld/core/components/SortableList'
 import { errorToString } from '@tinycld/core/lib/errors'
-import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { ButtonIcon, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
@@ -24,6 +23,7 @@ import { DnsRecordsPanel, hasUnpublishedDnsRecords } from './DnsRecordsPanel'
 import { DomainCoverageControl } from './DomainCoverageControl'
 import { isDomainReady } from './domain-ready'
 import { DeleteDomainButton, RemoveDomainConfirm, useRemoveDomain } from './RemoveDomain'
+import { useReorderDomains } from './useReorderDomains'
 import { assertVerifySaved } from './verify-domain'
 
 export default function ProviderSettings() {
@@ -112,15 +112,7 @@ function DomainsSection({ storedProvider }: { storedProvider: string | undefined
             .orderBy(({ mail_domains }) => mail_domains.created, 'asc')
     )
 
-    const reorder = useMutation({
-        mutationFn: mutation(function* (orderedIds: string[]) {
-            yield orderedIds.map((id, index) =>
-                domainsCollection.update(id, d => {
-                    d.rank = index + 1
-                })
-            )
-        }),
-    })
+    const reorder = useReorderDomains()
 
     const domainRows: DomainRow[] = (domains ?? []).map(d => ({
         id: d.id,
