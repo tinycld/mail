@@ -2,6 +2,7 @@ package mail
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -221,6 +222,15 @@ func (s *smtpInboundSession) Mail(from string, _ *smtp.MailOptions) error {
 	return nil
 }
 
+// errRecipientLookupFailed defers a recipient whose lookup failed on our
+// side. A 550 would bounce mail a retry delivers; a 451 makes the sending
+// MTA queue it.
+var errRecipientLookupFailed = &smtp.SMTPError{
+	Code:         451,
+	EnhancedCode: smtp.EnhancedCode{4, 3, 0},
+	Message:      "Temporary failure looking up the recipient; try again later",
+}
+
 // errMXRelayDenied refuses a recipient on a domain this server does not host.
 // The MX is only for inbound mail; a mail app that reaches it by mistake
 // (Apple Mail tries port 25 first) shows this text, so it says how to send.
@@ -248,12 +258,16 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 		return errMXRelayDenied
 	}
 	target, err := resolveAddress(s.app, localPart, domain)
-	if err != nil {
+	if errors.Is(err, errAddressNotFound) {
 		return &smtp.SMTPError{
 			Code:         550,
 			EnhancedCode: smtp.EnhancedCode{5, 1, 1},
 			Message:      "No such mailbox",
 		}
+	}
+	if err != nil {
+		addressLog.Error("inbound SMTP: recipient lookup failed", "rcpt", to, "error", err)
+		return errRecipientLookupFailed
 	}
 	s.mailboxes = append(s.mailboxes, recipientBinding{address: to, mailbox: target.Mailbox, addressID: target.Address.Id})
 	return nil

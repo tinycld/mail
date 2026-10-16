@@ -78,9 +78,21 @@ func domainHasRule(domain *core.Record) bool {
 	return domain.GetString("coverage") == coverageEveryone
 }
 
+// notFoundOr reports a missing row as errAddressNotFound and passes any other
+// error through. Only a missing row means "no such address": a database
+// failure must reach the caller as one, so mail is retried, not bounced or
+// dropped.
+func notFoundOr(err error, what string) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("%w: %s", errAddressNotFound, what)
+	}
+	return fmt.Errorf("%s: %w", what, err)
+}
+
 // resolveAddress is the one lookup for "which inbox receives mail for
 // local@domain" and "which inbox may send as it". It reads mail_addresses
-// only; plus-tag stripping is the caller's job.
+// only; plus-tag stripping is the caller's job. It returns errAddressNotFound
+// only when a row is missing; other errors are database failures.
 func resolveAddress(app core.App, localPart, domainName string) (*resolvedAddress, error) {
 	local := normalizeLocalPart(localPart)
 	name := strings.ToLower(strings.TrimSpace(domainName))
@@ -89,7 +101,7 @@ func resolveAddress(app core.App, localPart, domainName string) (*resolvedAddres
 	}
 	domain, err := app.FindFirstRecordByFilter("mail_domains", "domain = {:domain}", dbx.Params{"domain": name})
 	if err != nil {
-		return nil, fmt.Errorf("%w: no domain %s", errAddressNotFound, name)
+		return nil, notFoundOr(err, "domain "+name)
 	}
 	address, err := findAddressRow(app, local, domain.Id)
 	if err != nil {
@@ -100,24 +112,25 @@ func resolveAddress(app core.App, localPart, domainName string) (*resolvedAddres
 	}
 	mailbox, err := app.FindRecordById("mail_mailboxes", address.GetString("mailbox"))
 	if err != nil {
-		return nil, fmt.Errorf("%s@%s points at a missing mailbox: %w", local, name, err)
+		return nil, notFoundOr(err, "mailbox of "+local+"@"+name)
 	}
 	return &resolvedAddress{Address: address, Mailbox: mailbox, Domain: domain}, nil
 }
 
 // loadResolvedAddress loads an address row by id with its inbox and domain.
+// Like resolveAddress, errAddressNotFound means a missing row only.
 func loadResolvedAddress(app core.App, addressID string) (*resolvedAddress, error) {
 	address, err := app.FindRecordById("mail_addresses", addressID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: id %s", errAddressNotFound, addressID)
+		return nil, notFoundOr(err, "address "+addressID)
 	}
 	domain, err := app.FindRecordById("mail_domains", address.GetString("domain"))
 	if err != nil {
-		return nil, fmt.Errorf("address %s points at a missing domain: %w", addressID, err)
+		return nil, notFoundOr(err, "domain of address "+addressID)
 	}
 	mailbox, err := app.FindRecordById("mail_mailboxes", address.GetString("mailbox"))
 	if err != nil {
-		return nil, fmt.Errorf("address %s points at a missing mailbox: %w", addressID, err)
+		return nil, notFoundOr(err, "mailbox of address "+addressID)
 	}
 	return &resolvedAddress{Address: address, Mailbox: mailbox, Domain: domain}, nil
 }

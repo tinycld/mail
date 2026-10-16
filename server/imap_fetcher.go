@@ -3,6 +3,7 @@ package mail
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -248,7 +249,7 @@ func realIMAPDial(ctx context.Context, addr string, useTLS bool) (*imapclient.Cl
 // identically.
 func dispatchInbound(app core.App, msg *InboundMessage) error {
 	var dispatched int
-	var firstErr error
+	var firstErr, lookupErr error
 
 	for _, email := range routingRecipients(msg) {
 		localPart, domain := splitAddress(email)
@@ -258,7 +259,13 @@ func dispatchInbound(app core.App, msg *InboundMessage) error {
 		localPart = stripPlusTag(localPart)
 
 		target, err := resolveAddress(app, localPart, domain)
+		if errors.Is(err, errAddressNotFound) {
+			continue
+		}
+		// A failed lookup leaves the message unseen even when another
+		// recipient was stored: the retry dedups by Message-ID per inbox.
 		if err != nil {
+			lookupErr = errors.Join(lookupErr, fmt.Errorf("look up %s: %w", email, err))
 			continue
 		}
 		if err := processInboundForMailbox(app, target.Mailbox, msg, target.Address.Id); err != nil {
@@ -270,6 +277,9 @@ func dispatchInbound(app core.App, msg *InboundMessage) error {
 		dispatched++
 	}
 
+	if lookupErr != nil {
+		return lookupErr
+	}
 	if dispatched == 0 && firstErr != nil {
 		return firstErr
 	}

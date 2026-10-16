@@ -627,9 +627,9 @@ func findMailDomains(app core.App, domainStr string) ([]*core.Record, error) {
 }
 
 // mailDomainHosted reports whether the domain is a row in mail_domains. A
-// failed lookup counts as hosted so a database error becomes the usual
-// mailbox refusal rather than a claim that this server does not host the
-// domain.
+// failed lookup counts as hosted, so the recipient lookup that follows meets
+// the same database error and defers the message (451) rather than claiming
+// this server does not host the domain.
 func mailDomainHosted(app core.App, domainStr string) bool {
 	domains, err := findMailDomains(app, domainStr)
 	return err != nil || len(domains) > 0

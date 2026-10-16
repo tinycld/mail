@@ -2,6 +2,7 @@ package mail
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -171,6 +172,13 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 	}
 
 	target, err := resolveAddress(s.app, local, domainStr)
+	if err != nil && !errors.Is(err, errAddressNotFound) {
+		return s.refuseServerSide("mail", &smtp.SMTPError{
+			Code:         451,
+			EnhancedCode: smtp.EnhancedCode{4, 3, 0},
+			Message:      "Temporary failure looking up the sender address; try again later",
+		}, err, "from", from)
+	}
 	if err != nil {
 		return s.refuse("mail", &smtp.SMTPError{
 			Code:         550,

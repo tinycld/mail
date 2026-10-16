@@ -34,14 +34,14 @@ func resolveSendAddress(app core.App, mailbox *core.Record, fromAddressID, legac
 	case legacyAliasID != "":
 		alias, err := app.FindRecordById("mail_mailbox_aliases", legacyAliasID)
 		if err != nil {
-			return nil, fmt.Errorf("%w: alias %s", errAddressNotFound, legacyAliasID)
+			return nil, notFoundOr(err, "alias "+legacyAliasID)
 		}
 		if err := verifyAliasBelongsToMailbox(alias, mailbox.Id); err != nil {
 			return nil, errAddressNotInMailbox
 		}
 		row, err := findLegacyAliasRow(app, alias)
 		if err != nil {
-			return nil, fmt.Errorf("%w: alias %s has no address row", errAddressNotFound, legacyAliasID)
+			return nil, notFoundOr(err, "address row of alias "+legacyAliasID)
 		}
 		return loadResolvedAddress(app, row.Id)
 	default:

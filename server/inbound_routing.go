@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -44,10 +45,18 @@ func routeInbound(app core.App, msg *InboundMessage) routingResult {
 		localPart = stripPlusTag(localPart)
 
 		target, err := resolveAddress(app, localPart, domain)
-		if err != nil {
-			fullAddr := localPart + "@" + domain
+		fullAddr := localPart + "@" + domain
+		if errors.Is(err, errAddressNotFound) {
 			result.unknownAddrs = append(result.unknownAddrs, fullAddr)
 			app.Logger().Info("inbound: unknown recipient", "address", fullAddr, "messageID", msg.MessageID)
+			continue
+		}
+		// A failed lookup is a storage failure: the webhook answers 500 and
+		// the provider retries, rather than the message being dropped.
+		if err != nil {
+			result.storageFailures = append(result.storageFailures, err)
+			app.Logger().Error("inbound: recipient lookup failed",
+				"address", fullAddr, "messageID", msg.MessageID, "error", err)
 			continue
 		}
 
