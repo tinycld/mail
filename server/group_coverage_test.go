@@ -84,8 +84,9 @@ func TestGroupCoverage_TwoGroupsViaGroupFollowsOrder(t *testing.T) {
 	support := seedGroup(t, app, "Support", ann)
 	q := saveGroupsDomain(t, app, "q.example", sales, support)
 
-	if row := ruleRow(t, app, "ann", q.Id); row == nil || row.GetString("via_group") != sales.Id {
-		t.Fatalf("ann@q.example = %v, want via_group sales", row)
+	before := ruleRow(t, app, "ann", q.Id)
+	if before == nil || before.GetString("via_group") != sales.Id {
+		t.Fatalf("ann@q.example = %v, want via_group sales", before)
 	}
 
 	membership, err := app.FindFirstRecordByFilter("group_members", "group = {:g} && user = {:u}",
@@ -99,8 +100,48 @@ func TestGroupCoverage_TwoGroupsViaGroupFollowsOrder(t *testing.T) {
 	if err := reconcileRuleAddresses(app, ruleScope{UserID: ann.Id}); err != nil {
 		t.Fatal(err)
 	}
-	if row := ruleRow(t, app, "ann", q.Id); row == nil || row.GetString("via_group") != support.Id {
-		t.Fatalf("ann@q.example after leaving sales = %v, want via_group support", row)
+	after := ruleRow(t, app, "ann", q.Id)
+	if after == nil || after.GetString("via_group") != support.Id {
+		t.Fatalf("ann@q.example after leaving sales = %v, want via_group support", after)
+	}
+	if after.Id != before.Id {
+		t.Fatalf("the rule row was made again (id %s, was %s); the move must keep the row", after.Id, before.Id)
+	}
+}
+
+// Switching a groups domain to everyone keeps the members' rows and drops
+// their group; switching it on to manual removes every rule row.
+func TestGroupCoverage_SwitchToEveryoneThenManual(t *testing.T) {
+	app := newRuleTestApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	ann := seedGroupUser(t, app, "ann")
+	seedGroupUser(t, app, "bob")
+	q := saveGroupsDomain(t, app, "q.example", seedGroup(t, app, "Sales", ann))
+	before := ruleRow(t, app, "ann", q.Id)
+	if before == nil {
+		t.Fatal("precondition: ann has an address on q.example")
+	}
+
+	q = reloaded(t, app, q)
+	q.Set("coverage", coverageEveryone)
+	if err := app.Save(q); err != nil {
+		t.Fatal(err)
+	}
+	row := ruleRow(t, app, "ann", q.Id)
+	if row == nil || row.Id != before.Id || row.GetString("via_group") != "" {
+		t.Fatalf("ann@q.example on an everyone domain = %v, want row %s kept with no via_group", row, before.Id)
+	}
+	if row := ruleRow(t, app, "bob", q.Id); row == nil || row.GetString("via_group") != "" {
+		t.Fatalf("bob@q.example on an everyone domain = %v, want a rule row with no via_group", row)
+	}
+
+	q = reloaded(t, app, q)
+	q.Set("coverage", coverageManual)
+	if err := app.Save(q); err != nil {
+		t.Fatal(err)
+	}
+	if got := ruleRows(t, app, q.Id); len(got) != 0 {
+		t.Fatalf("rule rows on a manual domain: %v", got)
 	}
 }
 
