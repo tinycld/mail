@@ -16,7 +16,7 @@ import (
 // This is a hook, not a create rule that requires created_by in the body,
 // because released clients do not send the field; a rule would break
 // shared-mailbox creation for them. The ...Request hooks do not fire for a
-// server-side app.Save, so handleUserCreated is unaffected.
+// server-side app.Save, so createPersonalInbox is unaffected.
 //
 // Superusers pass, matching registerSentByGuard: an operator with console
 // access can already rewrite the row directly.

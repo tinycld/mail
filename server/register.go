@@ -163,13 +163,8 @@ func registerShared(app *pocketbase.PocketBase) {
 		return e.Next()
 	}
 
-	// Auto-create a personal mailbox when a user is created. Single-org: the
-	// process IS the org, so membership is the users record itself (the former
-	// user_org junction is gone).
-	app.OnRecordAfterCreateSuccess("users").BindFunc(func(e *core.RecordEvent) error {
-		handleUserCreated(app, e.Record)
-		return e.Next()
-	})
+	// Every non-guest user gets one personal inbox and one email name.
+	registerIdentityHooks(app)
 
 	// Clean up orphaned personal mailboxes when a user is deleted.
 	app.OnRecordAfterDeleteSuccess("users").BindFunc(func(e *core.RecordEvent) error {
