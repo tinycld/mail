@@ -229,3 +229,29 @@ test('switching to another rule keeps the stored groups', async () => {
         coverage_groups: ['g_ops'],
     })
 })
+
+function renderSavedGroupsRule(coverageGroups: string[]) {
+    return render(
+        withQueryClient(
+            <DomainCoverageControl
+                domainId="d_q"
+                domainName="q.example"
+                coverage="groups"
+                coverageGroups={coverageGroups}
+            />
+        )
+    )
+}
+
+// Deleting a domain's last group leaves a groups rule with no group: the
+// card must say that nobody gets an address here.
+test('a saved groups rule with no group shows a warning', async () => {
+    const { findByText } = renderSavedGroupsRule([])
+    expect(await findByText(/Nobody gets an address on q\.example/)).toBeTruthy()
+})
+
+test('a saved groups rule with a group shows no warning', async () => {
+    const { findByText, queryByText } = renderSavedGroupsRule(['g_sales'])
+    await findByText('Members of these groups')
+    expect(queryByText(/Nobody gets an address/)).toBeNull()
+})

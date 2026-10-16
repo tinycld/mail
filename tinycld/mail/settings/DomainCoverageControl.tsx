@@ -196,8 +196,12 @@ export function DomainCoverageControl({
         })
     )
 
+    // Deleting a domain's last group leaves the saved rule with no group.
+    const hasNoGroup = coverage === 'groups' && coverageGroups.length === 0
+
     return (
         <View className="gap-2">
+            <NoGroupWarning isVisible={hasNoGroup} domainName={domainName} />
             <RadioInput
                 control={control}
                 name="coverage"
@@ -214,6 +218,15 @@ export function DomainCoverageControl({
                 onCancel={() => reset({ coverage, coverage_groups: coverageGroups })}
             />
         </View>
+    )
+}
+
+function NoGroupWarning({ isVisible, domainName }: { isVisible: boolean; domainName: string }) {
+    if (!isVisible) return null
+    return (
+        <Text className="text-danger" style={{ fontSize: 13 }}>
+            {`Nobody gets an address on ${domainName}. Choose at least one group.`}
+        </Text>
     )
 }
 
