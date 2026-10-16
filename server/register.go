@@ -166,6 +166,7 @@ func registerShared(app *pocketbase.PocketBase) {
 	// Every non-guest user gets one personal inbox and one email name.
 	registerIdentityHooks(app)
 	registerRuleAddressHooks(app)
+	registerGroupMembershipListener()
 
 	// Clean up orphaned personal mailboxes when a user is deleted.
 	app.OnRecordAfterDeleteSuccess("users").BindFunc(func(e *core.RecordEvent) error {

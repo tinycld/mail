@@ -66,9 +66,10 @@ export default function MailSystemProvider() {
     // a `like` term in `%` when the term has none of its own, so this term's
     // trailing `%` is left as-is and compiles to `key LIKE "mail.%"` — a
     // prefix match, not a contains-match.
-    const { data: rows = [] } = useLiveQuery(query =>
-        query.from({ s: systemSettings }).where(({ s }) => like(s.key, 'mail.%'))
-    )
+    const { data: rows = [] } = useLiveQuery({
+        queryKey: ['mail_system_settings'],
+        query: query => query.from({ s: systemSettings }).where(({ s }) => like(s.key, 'mail.%')),
+    })
     const byKey = new Map<string, Row>(
         rows.map(r => [r.key, { id: r.id, value: r.value, is_secret: r.is_secret }])
     )

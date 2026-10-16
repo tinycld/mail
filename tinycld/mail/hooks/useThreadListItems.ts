@@ -66,32 +66,34 @@ export function useThreadListItems(filter: UseThreadListItemsFilter) {
     }, [isUnified, filter.mailboxId, personal, shared])
 
     const { folder, cursor } = filter
-    const { data: rows, isLoading: rowsLoading } = useMyLiveQuery((query, { userId }) =>
-        visibleMailboxIds.length === 0
-            ? null
-            : query
-                  .from({ s: threadStateCollection.fetchRelations('thread') })
-                  .where(({ s }) =>
-                      and(
-                          eq(s.user, userId),
-                          inArray(s.mailbox, visibleMailboxIds),
-                          ...folderTerms(s, folder),
-                          ...cursorTerms(s, cursor)
+    const { data: rows, isLoading: rowsLoading } = useMyLiveQuery(
+        (query, { userId }) =>
+            visibleMailboxIds.length === 0
+                ? null
+                : query
+                      .from({ s: threadStateCollection.fetchRelations('thread') })
+                      .where(({ s }) =>
+                          and(
+                              eq(s.user, userId),
+                              inArray(s.mailbox, visibleMailboxIds),
+                              ...folderTerms(s, folder),
+                              ...cursorTerms(s, cursor)
+                          )
                       )
-                  )
-                  .orderBy(({ s }) => s.latest_date, 'desc')
-                  .orderBy(({ s }) => s.id, 'desc')
-                  .limit(PAGE_SIZE)
-                  .select(({ s }) => ({
-                      ...s,
-                      thread_id: s.thread,
-                      thread: materialize(
-                          query
-                              .from({ t: threadsCollection })
-                              .where(({ t }) => eq(t.id, s.thread))
-                              .findOne()
-                      ),
-                  }))
+                      .orderBy(({ s }) => s.latest_date, 'desc')
+                      .orderBy(({ s }) => s.id, 'desc')
+                      .limit(PAGE_SIZE)
+                      .select(({ s }) => ({
+                          ...s,
+                          thread_id: s.thread,
+                          thread: materialize(
+                              query
+                                  .from({ t: threadsCollection })
+                                  .where(({ t }) => eq(t.id, s.thread))
+                                  .findOne()
+                          ),
+                      })),
+        { queryKey: ['mail_thread_list', visibleMailboxIds, folder, cursor] }
     )
 
     const { data: allAssignments, isLoading: assignmentsLoading } = useMyLiveQuery(
@@ -103,7 +105,8 @@ export function useThreadListItems(filter: UseThreadListItemsFilter) {
                         eq(label_assignments.collection, 'mail_thread_state'),
                         eq(label_assignments.user, userId)
                     )
-                )
+                ),
+        { queryKey: ['mail_thread_label_assignments'] }
     )
 
     const assignmentsByRecord = useMemo(() => {

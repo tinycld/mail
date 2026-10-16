@@ -28,6 +28,7 @@ export function registerCollections(
     const mail_domains = newCollection('mail_domains', {
         ...onDemand,
         omitOnInsert: ['created', 'updated', 'webhook_secret', 'provider_domain_metadata'] as const,
+        relations: { coverage_groups: coreStores.groups },
         collectionOptions: indexing,
     })
 
@@ -73,7 +74,7 @@ export function registerCollections(
     const mail_addresses = newCollection('mail_addresses', {
         ...onDemand,
         omitOnInsert: ['created', 'updated'] as const,
-        relations: { domain: mail_domains, mailbox: mail_mailboxes },
+        relations: { domain: mail_domains, mailbox: mail_mailboxes, via_group: coreStores.groups },
         collectionOptions: indexing,
     })
 

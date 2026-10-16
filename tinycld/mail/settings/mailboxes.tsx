@@ -51,52 +51,68 @@ function useMailboxData(currentUserId: string) {
 
     // Standalone: gates the whole screen and feeds the create-form's domain
     // options, both of which must work with zero mailboxes.
-    const { data: domains } = useLiveQuery(query => query.from({ mail_domains: domainsCollection }))
+    const { data: domains } = useLiveQuery({
+        queryKey: ['mail_settings_domains'],
+        query: query => query.from({ mail_domains: domainsCollection }),
+    })
 
     // Each mailbox resolves its domain in the same expression; one whose
     // domain is gone drops out via the inner join.
-    const { data: mailboxRows } = useLiveQuery(query =>
-        query
-            .from({ mailbox: mailboxesCollection })
-            .innerJoin({ domain: domainsCollection }, ({ mailbox, domain }) =>
-                eq(mailbox.domain, domain.id)
-            )
-    )
+    const { data: mailboxRows } = useLiveQuery({
+        queryKey: ['mail_settings_mailboxes'],
+        query: query =>
+            query
+                .from({ mailbox: mailboxesCollection })
+                .innerJoin({ domain: domainsCollection }, ({ mailbox, domain }) =>
+                    eq(mailbox.domain, domain.id)
+                ),
+    })
 
     // Membership rows carry their user in the same expression; a row whose
     // user is gone drops out via the inner join.
-    const { data: memberRows } = useLiveQuery(query =>
-        query
-            .from({ member: membersCollection })
-            .innerJoin({ user: usersCollection }, ({ member, user }) => eq(member.user, user.id))
-    )
+    const { data: memberRows } = useLiveQuery({
+        queryKey: ['mail_settings_mailbox_members'],
+        query: query =>
+            query
+                .from({ member: membersCollection })
+                .innerJoin({ user: usersCollection }, ({ member, user }) =>
+                    eq(member.user, user.id)
+                ),
+    })
 
-    const { data: extraAddresses } = useLiveQuery(query =>
-        query
-            .from({ address: addressesCollection })
-            .innerJoin({ domain: domainsCollection }, ({ address, domain }) =>
-                eq(address.domain, domain.id)
-            )
-            .where(({ address }) => eq(address.is_primary, false))
-            .select(({ address, domain }) => ({
-                mailbox: address.mailbox,
-                localPart: address.local_part,
-                domainName: domain.domain,
-            }))
-    )
+    const { data: extraAddresses } = useLiveQuery({
+        queryKey: ['mail_settings_extra_addresses'],
+        query: query =>
+            query
+                .from({ address: addressesCollection })
+                .innerJoin({ domain: domainsCollection }, ({ address, domain }) =>
+                    eq(address.domain, domain.id)
+                )
+                .where(({ address }) => eq(address.is_primary, false))
+                .select(({ address, domain }) => ({
+                    mailbox: address.mailbox,
+                    localPart: address.local_part,
+                    domainName: domain.domain,
+                })),
+    })
 
     // Single-org: every real member is a potential mailbox member — the
     // add-member picker needs users with no membership row, so this cannot
     // derive from the membership join. Guests and disabled accounts are
     // excluded: guests never get mail infra (see the 1830000002/3 rules) and a
     // suspended account must not be granted new access.
-    const { data: orgUsers } = useLiveQuery(query =>
-        query
-            .from({ users: usersCollection })
-            .where(({ users }) =>
-                and(inArray(users.role, ['owner', 'admin', 'member']), eq(users.disabled, false))
-            )
-    )
+    const { data: orgUsers } = useLiveQuery({
+        queryKey: ['mail_settings_org_users'],
+        query: query =>
+            query
+                .from({ users: usersCollection })
+                .where(({ users }) =>
+                    and(
+                        inArray(users.role, ['owner', 'admin', 'member']),
+                        eq(users.disabled, false)
+                    )
+                ),
+    })
 
     const membersByMailbox = new Map<string, MemberRow[]>()
     for (const { member, user } of memberRows ?? []) {

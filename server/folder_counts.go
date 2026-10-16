@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -76,10 +77,27 @@ func registerFolderCountHooks(app core.App) {
 	app.OnRecordAfterDeleteSuccess("mail_thread_state").BindFunc(recompute)
 }
 
+// errFolderCountsRowTaken means another change of the same mailbox created
+// the counts row between this recompute's lookup and its create.
+var errFolderCountsRowTaken = errors.New("the folder counts row was created by another change")
+
 // recomputeFolderCounts aggregates the user's state rows in one mailbox and
 // writes the counts row, creating it on first use. Saves only when a number
 // changed.
+//
+// The lookup and the create are not one step, so two changes of a mailbox
+// that has no row yet (a burst of new threads) can both try to create it.
+// The one that loses runs once more: the row then exists, and the second run
+// reads the aggregate again and updates the row.
 func recomputeFolderCounts(app core.App, userID, mailboxID string) error {
+	err := writeFolderCounts(app, userID, mailboxID)
+	if errors.Is(err, errFolderCountsRowTaken) {
+		return writeFolderCounts(app, userID, mailboxID)
+	}
+	return err
+}
+
+func writeFolderCounts(app core.App, userID, mailboxID string) error {
 	if userID == "" || mailboxID == "" {
 		return nil
 	}
@@ -119,5 +137,12 @@ func recomputeFolderCounts(app core.App, userID, mailboxID string) error {
 	if !changed {
 		return nil
 	}
-	return app.Save(record)
+	isNew := record.IsNew()
+	err = app.Save(record)
+	if err != nil && isNew {
+		if _, findErr := app.FindRecordById("mail_folder_counts", id); findErr == nil {
+			return errFolderCountsRowTaken
+		}
+	}
+	return err
 }

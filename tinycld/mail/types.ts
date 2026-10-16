@@ -11,6 +11,7 @@ import type {
     MailMessages as GenMailMessages,
     MailThreadState as GenMailThreadState,
     MailThreads as GenMailThreads,
+    Groups,
     Users,
 } from '@tinycld/core/types/pbSchema'
 
@@ -77,7 +78,9 @@ export type MailFolderCounts = GenMailFolderCounts
 export type MailSchema = {
     mail_domains: {
         type: MailDomains
-        relations: Record<string, never>
+        relations: {
+            coverage_groups: Groups
+        }
     }
     mail_mailboxes: {
         type: MailMailboxes
@@ -103,6 +106,7 @@ export type MailSchema = {
         relations: {
             domain: MailDomains
             mailbox: MailMailboxes
+            via_group: Groups
         }
     }
     mail_identities: {

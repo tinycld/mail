@@ -39,14 +39,15 @@ A mailbox can have more than one address, on any of your domains. Mail sent to a
 
 To add an address, open the mailbox in **Settings → Mail → Mailboxes**, open **Addresses**, and click **Add address**. Type the part before the `@` and choose the domain.
 
-The list marks two kinds of address that you cannot remove there:
+The list marks three kinds of address that you cannot remove there:
 
 - **Main address** — the mailbox's own address. To change it, edit the mailbox.
 - **From the domain rule** — given to each person by a domain set to **Everyone**. To remove these, change the domain's setting in [Custom domains](help://mail:custom-domains).
+- **From group _name_** — given by a group on a domain set to **Members of these groups**. To remove it, remove the person from the group in **Settings → Groups**, or change the domain's setting.
 
 You can remove only addresses that were added by hand.
 
-On a domain set to **Everyone**, a person's email name is reserved for that person, so a shared mailbox cannot use it there.
+On a domain set to **Everyone** or **Members of these groups**, a person's email name is reserved for that person, so a shared mailbox cannot use it there.
 
 When you compose, the **From** picker lets you choose which address to send as. Replies use whichever address the incoming message was sent *to*, so threading stays clean.
 

@@ -34,7 +34,10 @@ describe('mail collections', () => {
         }))
         const spyNewCollection = spy as unknown as ReturnType<typeof createCollection<MailSchema>>
 
-        const fakeCoreStores = { users: { __name: 'users' } } as unknown as CoreStores
+        const fakeCoreStores = {
+            users: { __name: 'users' },
+            groups: { __name: 'groups' },
+        } as unknown as CoreStores
 
         const collections = registerCollections(spyNewCollection, fakeCoreStores)
 
@@ -49,6 +52,18 @@ describe('mail collections', () => {
         expect(messageOptions?.relations).toEqual({
             delivered_to: collections.mail_addresses,
             sent_from: collections.mail_addresses,
+        })
+
+        // A group domain's chosen groups and a rule address's group expand
+        // into core's groups store.
+        const optionsOf = (n: string) => spy.mock.calls.find(([name]) => name === n)?.[1]
+        expect(optionsOf('mail_domains')?.relations).toEqual({
+            coverage_groups: fakeCoreStores.groups,
+        })
+        expect(optionsOf('mail_addresses')?.relations).toEqual({
+            domain: collections.mail_domains,
+            mailbox: collections.mail_mailboxes,
+            via_group: fakeCoreStores.groups,
         })
 
         for (const [name, options] of spy.mock.calls) {

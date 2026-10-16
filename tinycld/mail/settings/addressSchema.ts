@@ -5,7 +5,7 @@ interface AddressRules {
     taken: ReadonlySet<string>
     // Email names of people other than this mailbox's owner.
     reservedNames: ReadonlySet<string>
-    // Domains whose rule gives everyone an address, where email names are reserved.
+    // Domains with a rule (everyone or groups), where email names are reserved.
     ruleDomainIds: ReadonlySet<string>
 }
 
@@ -40,7 +40,7 @@ export function addressSchemaFor({ taken, reservedNames, ruleDomainIds }: Addres
                     code: 'custom',
                     path: ['local_part'],
                     message:
-                        "This is a person's email name, and everyone gets that name on this domain",
+                        "This is a person's email name, and this domain's rule keeps that name for them",
                 })
             }
         })

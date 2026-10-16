@@ -138,9 +138,27 @@ export async function navigateToMailboxSettings(page: Page) {
 
 // PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
 // through to PB transparently — see scripts/dev.ts::isPbPath.
-const PB_URL = 'http://127.0.0.1:7200'
-const SUPERUSER_EMAIL = process.env.POCKETBASE_EMAIL || 'admin@tinycld.org'
-const SUPERUSER_PASSWORD = process.env.POCKETBASE_PASSWORD || 'AdminPass1234!'
+export const PB_URL = 'http://127.0.0.1:7200'
+export const SUPERUSER_EMAIL = process.env.POCKETBASE_EMAIL || 'admin@tinycld.org'
+export const SUPERUSER_PASSWORD = process.env.POCKETBASE_PASSWORD || 'AdminPass1234!'
+
+// Seeds a mail domain that is already verified, by a superuser write. A spec
+// that calls this takes the e2e seeding exception, so its header comment must
+// say why the real path cannot run in CI and what the spec does not cover;
+// e2eFixtureRule.test.ts enforces that.
+export async function seedVerifiedDomain(domain: string) {
+    const pb = new PocketBase(PB_URL)
+    await pb.collection('_superusers').authWithPassword(SUPERUSER_EMAIL, SUPERUSER_PASSWORD)
+    await pb.collection('mail_domains').create({
+        domain,
+        verified: true,
+        mx_verified: true,
+        inbound_domain_verified: true,
+        spf_verified: true,
+        dkim_verified: true,
+        return_path_verified: true,
+    })
+}
 
 let cachedInboundUrl: string | null = null
 

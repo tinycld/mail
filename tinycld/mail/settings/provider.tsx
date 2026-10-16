@@ -32,9 +32,11 @@ export default function ProviderSettings() {
 
     // system_settings holds every deployment secret; scope to the one key this
     // screen needs instead of syncing the whole table.
-    const { data: sysRows = [] } = useLiveQuery(query =>
-        query.from({ s: systemSettings }).where(({ s }) => eq(s.key, 'mail.provider'))
-    )
+    const { data: sysRows = [] } = useLiveQuery({
+        queryKey: ['mail_provider_setting'],
+        query: query =>
+            query.from({ s: systemSettings }).where(({ s }) => eq(s.key, 'mail.provider')),
+    })
     const storedProvider = sysRows[0]?.value
 
     return (
@@ -67,20 +69,35 @@ function ProviderHeader({ primaryColor }: { primaryColor: string }) {
     )
 }
 
-interface DomainRow {
-    id: string
-    domain: string
-    verified: boolean
-    mx_verified: boolean
-    inbound_domain_verified: boolean
-    spf_verified: boolean
-    dkim_verified: boolean
-    return_path_verified: boolean
-    last_checked_at: string
-    verification_details: VerificationDetails | null
-    coverage: 'everyone' | 'manual'
-    rank: number
+function useDomainRows() {
+    const [domainsCollection] = useStore('mail_domains')
+    const { data } = useLiveQuery({
+        queryKey: ['mail_settings_domain_rows'],
+        query: query =>
+            query
+                .from({ d: domainsCollection })
+                .orderBy(({ d }) => d.rank, 'asc')
+                .orderBy(({ d }) => d.created, 'asc')
+                .select(({ d }) => ({
+                    id: d.id,
+                    domain: d.domain,
+                    verified: d.verified,
+                    mx_verified: d.mx_verified,
+                    inbound_domain_verified: d.inbound_domain_verified,
+                    spf_verified: d.spf_verified,
+                    dkim_verified: d.dkim_verified,
+                    return_path_verified: d.return_path_verified,
+                    last_checked_at: d.last_checked_at,
+                    verification_details: d.verification_details,
+                    coverage: d.coverage,
+                    coverageGroups: d.coverage_groups,
+                    rank: d.rank,
+                })),
+    })
+    return data ?? []
 }
+
+type DomainRow = ReturnType<typeof useDomainRows>[number]
 
 // The provider these DNS instructions must describe.
 //
@@ -103,31 +120,8 @@ export function resolveProvider(
 }
 
 function DomainsSection({ storedProvider }: { storedProvider: string | undefined }) {
-    const [domainsCollection] = useStore('mail_domains')
-
-    const { data: domains } = useLiveQuery(query =>
-        query
-            .from({ mail_domains: domainsCollection })
-            .orderBy(({ mail_domains }) => mail_domains.rank, 'asc')
-            .orderBy(({ mail_domains }) => mail_domains.created, 'asc')
-    )
-
+    const domainRows = useDomainRows()
     const reorder = useReorderDomains()
-
-    const domainRows: DomainRow[] = (domains ?? []).map(d => ({
-        id: d.id,
-        domain: d.domain,
-        verified: d.verified,
-        mx_verified: d.mx_verified,
-        inbound_domain_verified: d.inbound_domain_verified,
-        spf_verified: d.spf_verified,
-        dkim_verified: d.dkim_verified,
-        return_path_verified: d.return_path_verified,
-        last_checked_at: d.last_checked_at,
-        verification_details: d.verification_details ?? null,
-        coverage: d.coverage === 'everyone' ? 'everyone' : 'manual',
-        rank: d.rank ?? 0,
-    }))
 
     return (
         <View className="gap-3">
@@ -233,7 +227,9 @@ function DomainRowItem({ domain, provider }: { domain: DomainRow; provider: 'pos
             <DomainCoverageControl
                 domainId={domain.id}
                 domainName={domain.domain}
-                coverage={domain.coverage}
+                // Not required on the row: empty is no rule, as on the server.
+                coverage={domain.coverage || 'manual'}
+                coverageGroups={domain.coverageGroups ?? []}
             />
 
             <RemoveDomainConfirm

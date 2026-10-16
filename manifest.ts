@@ -7,6 +7,11 @@ const manifest = {
     nav: { label: 'Mail', icon: 'mail', order: 5, shortcut: 'm' },
     sidebar: { component: 'sidebar' },
     slots: ['sidebar.after-labels', 'setup-domain-options'],
+    // Inside core's confirm to remove a person from a group, or to delete a
+    // group: names the addresses the person or the members lose.
+    sidebarContributions: [
+        { target: 'core', slot: 'group-member-removal', component: 'settings/GroupRemovalNotice' },
+    ],
     setupSteps: [
         {
             id: 'email-domain',
@@ -86,7 +91,10 @@ const manifest = {
         module: 'tinycld.org/packages/mail/cli',
     },
     repository: { url: 'https://github.com/tinycld/mail' },
-    peerVersions: { '@tinycld/core': '>=0.7.1 <0.8.0' },
+    // 0.7.2 is the first core with the group-member-removal slot,
+    // MultiSelectInput, useMyLiveQuery's queryKey and the app on group
+    // membership events, which this version uses.
+    peerVersions: { '@tinycld/core': '>=0.7.2 <0.8.0' },
 }
 
 export default manifest

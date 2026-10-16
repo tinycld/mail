@@ -147,3 +147,35 @@ func TestFolderCounts_MailboxDeleteDoesNotRecreateRow(t *testing.T) {
 		t.Error("recompute created a counts row for a mailbox with no state rows")
 	}
 }
+
+// Two state changes of one mailbox can both find no counts row and both
+// create it. The one that loses must still leave the row correct, not fail.
+func TestFolderCounts_LosingTheCreateRaceUpdatesTheRow(t *testing.T) {
+	env := setupScopeEnv(t)
+	if err := env.app.Delete(countsRow(t, env, env.mbA.Id)); err != nil {
+		t.Fatal(err)
+	}
+	rival := false
+	env.app.OnRecordCreate("mail_folder_counts").BindFunc(func(e *core.RecordEvent) error {
+		if !rival {
+			// Another change of the same mailbox creates the row first.
+			rival = true
+			other := core.NewRecord(e.Record.Collection())
+			other.Id = e.Record.Id
+			other.Set("user", e.Record.GetString("user"))
+			other.Set("mailbox", e.Record.GetString("mailbox"))
+			if err := e.App.Save(other); err != nil {
+				t.Fatalf("rival create: %v", err)
+			}
+		}
+		return e.Next()
+	})
+
+	if err := recomputeFolderCounts(env.app, env.user.Id, env.mbA.Id); err != nil {
+		t.Fatalf("recompute after losing the create: %v", err)
+	}
+	row := countsRow(t, env, env.mbA.Id)
+	if row.GetInt("inbox") != 1 || row.GetInt("total") != 1 {
+		t.Fatalf("after the race: inbox=%d total=%d, want 1 1", row.GetInt("inbox"), row.GetInt("total"))
+	}
+}

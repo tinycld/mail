@@ -1,4 +1,4 @@
-import { eq } from '@tanstack/db'
+import { coalesce, eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
@@ -11,23 +11,34 @@ import { AddAddressForm } from './AddAddressForm'
 import { type AddressItem, toAddressItems } from './address-items'
 
 function useMailboxAddresses(mailboxId: string) {
-    const [addressesCollection, domainsCollection] = useStore('mail_addresses', 'mail_domains')
-    const { data } = useLiveQuery(query =>
-        query
-            .from({ address: addressesCollection })
-            .innerJoin({ domain: domainsCollection }, ({ address, domain }) =>
-                eq(address.domain, domain.id)
-            )
-            .where(({ address }) => eq(address.mailbox, mailboxId))
-            .select(({ address, domain }) => ({
-                id: address.id,
-                localPart: address.local_part,
-                domainName: domain.domain,
-                source: address.source,
-                isPrimary: address.is_primary,
-                rank: domain.rank,
-            }))
+    const [addressesCollection, domainsCollection, groupsCollection] = useStore(
+        'mail_addresses',
+        'mail_domains',
+        'groups'
     )
+    const { data } = useLiveQuery({
+        queryKey: ['mail_mailbox_addresses', mailboxId],
+        query: query =>
+            query
+                .from({ address: addressesCollection })
+                .innerJoin({ domain: domainsCollection }, ({ address, domain }) =>
+                    eq(address.domain, domain.id)
+                )
+                .join({ group: groupsCollection }, ({ address, group }) =>
+                    eq(address.via_group, group.id)
+                )
+                .where(({ address }) => eq(address.mailbox, mailboxId))
+                .select(({ address, domain, group }) => ({
+                    id: address.id,
+                    localPart: address.local_part,
+                    domainName: domain.domain,
+                    source: address.source,
+                    isPrimary: address.is_primary,
+                    rank: domain.rank,
+                    // A left join: an address no group gave has no group row.
+                    groupName: coalesce(group?.name, null),
+                })),
+    })
     const remove = useMutation({
         mutationFn: mutation(function* (addressId: string) {
             yield addressesCollection.delete(addressId)

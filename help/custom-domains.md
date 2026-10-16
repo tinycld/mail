@@ -62,12 +62,19 @@ Mail also re-verifies any not-yet-fully-verified domain automatically once per h
 
 Each domain has a setting **Who gets an address here?**:
 
-- **Everyone** — each person gets their email name on this domain. For example, if Nathan's email name is `nathan`, Nathan gets `nathan@` on this domain. People who join later get it too.
+- **Everyone** — each person gets their email name on this domain. For example, if Nathan's email name is `nathan`, Nathan gets `nathan@` on this domain. People who join later also get it.
+- **Members of these groups** — only members of the groups that you choose get their email name on this domain. When a person joins one of the groups, the person gets the address. When the person leaves all of the groups, the address stops receiving mail.
 - **Only people I add** — nobody gets an address automatically. Add addresses to a mailbox in **Settings → Mail → Mailboxes**.
+
+To make groups, go to **Settings → Groups**. When you remove a person from a group, the confirm message shows the addresses that the person loses.
+
+If you delete the last group of a domain, nobody gets an address on that domain. The domain shows a warning until you choose a group.
+
+On a domain set to **Everyone** or **Members of these groups**, a person's email name is reserved for that person, so a shared mailbox cannot use it there.
 
 The first domain you add is set to **Everyone**. Each domain you add after that starts as **Only people I add**, so adding a domain never gives out addresses until you choose to.
 
-Before a change is applied, TinyCld shows which addresses it adds or which addresses stop receiving mail. To apply it, click **Apply**.
+Before TinyCld applies a change, it shows which addresses the change adds and which addresses stop receiving mail. To apply the change, click **Apply**.
 
 The setting, not the verification, decides which addresses exist. If a domain loses verification, its addresses stay. The domain cannot send mail until it is verified again. The **From** list marks such addresses **domain not verified**.
 

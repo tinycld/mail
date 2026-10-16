@@ -28,6 +28,7 @@ func TestMailMessagesHasDeliveryTrackingFields(t *testing.T) {
 		t.Fatalf("add users fields: %v", err)
 	}
 
+	seedGroupsCollection(t, app)
 	rlstest.Apply(t, app, rlstest.MigrationsDir(t, "../pb-migrations"))
 
 	collection, err := app.FindCollectionByNameOrId("mail_messages")

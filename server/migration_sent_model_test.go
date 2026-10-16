@@ -88,6 +88,7 @@ func TestMigrations_SentModelBackfill(t *testing.T) {
 	receivedState := save("mail_thread_state", map[string]any{"thread": received.Id, "user": user.Id, "folder": "inbox"})
 	startedState := save("mail_thread_state", map[string]any{"thread": started.Id, "user": user.Id, "folder": "sent"})
 
+	seedGroupsCollection(t, app)
 	rlstest.Apply(t, app, rlstest.MigrationsDir(t, "../pb-migrations"))
 
 	reload := func(collection, id string) *core.Record {
@@ -181,6 +182,7 @@ func TestMigrations_SharedMailboxSentBackfill(t *testing.T) {
 	senderQuiet := save("mail_thread_state", map[string]any{"thread": quietThread.Id, "user": sender.Id, "folder": "inbox"})
 	memberQuiet := save("mail_thread_state", map[string]any{"thread": quietThread.Id, "user": member.Id, "folder": "inbox"})
 
+	seedGroupsCollection(t, app)
 	rlstest.Apply(t, app, rlstest.MigrationsDir(t, "../pb-migrations"))
 
 	isSent := func(id string) bool {

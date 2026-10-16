@@ -80,6 +80,7 @@ func TestMigrations_AddressesBackfill(t *testing.T) {
 		}
 	}
 
+	seedGroupsCollection(t, app)
 	rlstest.Apply(t, app, rlstest.MigrationsDir(t, "../pb-migrations"))
 
 	orgAfter, _ := app.FindRecordById("mail_domains", org.Id)

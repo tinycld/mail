@@ -9,28 +9,7 @@
 // address in the mailbox and in compose — is driven through the UI.
 import { expect, test } from '@playwright/test'
 import { login, navigateToPackage } from '@tinycld/core/e2e-helpers'
-import PocketBase from 'pocketbase'
-import { navigateToMailboxSettings, TEST_USER_MAILBOX } from './helpers'
-
-// PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
-// through to PB transparently — see scripts/dev.ts::isPbPath.
-const PB_URL = 'http://127.0.0.1:7200'
-const SUPERUSER_EMAIL = process.env.POCKETBASE_EMAIL || 'admin@tinycld.org'
-const SUPERUSER_PASSWORD = process.env.POCKETBASE_PASSWORD || 'AdminPass1234!'
-
-async function seedVerifiedDomain(domain: string) {
-    const pb = new PocketBase(PB_URL)
-    await pb.collection('_superusers').authWithPassword(SUPERUSER_EMAIL, SUPERUSER_PASSWORD)
-    await pb.collection('mail_domains').create({
-        domain,
-        verified: true,
-        mx_verified: true,
-        inbound_domain_verified: true,
-        spf_verified: true,
-        dkim_verified: true,
-        return_path_verified: true,
-    })
-}
+import { navigateToMailboxSettings, seedVerifiedDomain, TEST_USER_MAILBOX } from './helpers'
 
 test.describe('Mail — Domain rule', () => {
     test('setting a domain to Everyone gives the test user an address on it', async ({ page }) => {
