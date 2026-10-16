@@ -15,11 +15,21 @@ import (
 
 var addressLog = logging.ForPackage("mail")
 
-// Domain coverage: who gets an automatic address on a domain. Phase 2 adds
-// "groups".
+// Domain coverage: who gets an automatic address on a domain: every person,
+// the members of the domain's coverage_groups, or only the people an admin
+// adds.
 const (
 	coverageEveryone = "everyone"
+	coverageGroups   = "groups"
 	coverageManual   = "manual"
+)
+
+// ruleDomainFilter and ruleDomainRelFilter are the only SQL spellings of "a
+// domain with a rule", on mail_domains and through a domain relation. Keep
+// them in step with domainHasRule.
+const (
+	ruleDomainFilter    = "(coverage = '" + coverageEveryone + "' || coverage = '" + coverageGroups + "')"
+	ruleDomainRelFilter = "(domain.coverage = '" + coverageEveryone + "' || domain.coverage = '" + coverageGroups + "')"
 )
 
 // An address row is either added by hand (manual) or written by the
@@ -73,9 +83,12 @@ func normalizeLocalPart(s string) string {
 }
 
 // domainHasRule reports whether a domain gives addresses automatically, so a
-// person's email name is reserved on it.
+// person's email name is reserved on it. On a groups domain the name is
+// reserved for every person, member or not: joining a group must never find
+// the name already taken.
 func domainHasRule(domain *core.Record) bool {
-	return domain.GetString("coverage") == coverageEveryone
+	c := domain.GetString("coverage")
+	return c == coverageEveryone || c == coverageGroups
 }
 
 // notFoundOr reports a missing row as errAddressNotFound and passes any other
@@ -184,7 +197,7 @@ func checkAddressAvailable(app core.App, localPart, domainID, mailboxID, selfID 
 	// nowhere yet, and its repair must be able to create the inbox on it.
 	if owner.GetString("inbox") != "" && owner.GetString("inbox") != mailboxID {
 		return validation.NewError("address_reserved",
-			fmt.Sprintf("%s is reserved on %s: it is a person's email name, and everyone gets that name there",
+			fmt.Sprintf("%s is reserved on %s: it is a person's email name, and the domain's rule keeps that name for them",
 				localPart, domain.GetString("domain")))
 	}
 	return nil

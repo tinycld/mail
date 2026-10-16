@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -28,9 +29,17 @@ type ruleKey struct {
 	domain string
 }
 
+// expectedRule is what a rule row should hold: the inbox it delivers to and,
+// on a groups domain, the group that gave it ("" on an everyone domain).
+type expectedRule struct {
+	inbox    string
+	viaGroup string
+}
+
 // reconcileRuleAddresses converges the source = 'rule' rows in scope to what
 // the domain rules say: each non-guest identity gets <email_name>@<domain> on
-// each domain whose coverage is everyone. Rule rows depend on coverage only,
+// each domain whose coverage is everyone, and on each groups domain where the
+// person is in one of the domain's groups. Rule rows depend on coverage only,
 // not on verification: a transient failed verify must not delete addresses
 // that messages and identities link to. A row that already exists
 // for the same address and inbox (the inbox's primary row, or an address an
@@ -52,11 +61,12 @@ func reconcileRuleAddresses(app core.App, scope ruleScope) error {
 	}
 
 	var errs []error
-	for key, inbox := range expected {
+	for key, want := range expected {
 		if row, ok := actual[key]; ok {
 			delete(actual, key)
-			if row.GetString("mailbox") != inbox {
-				row.Set("mailbox", inbox)
+			if row.GetString("mailbox") != want.inbox || row.GetString("via_group") != want.viaGroup {
+				row.Set("mailbox", want.inbox)
+				row.Set("via_group", want.viaGroup)
 				if err := app.Save(row); err != nil {
 					errs = append(errs, err)
 				}
@@ -69,16 +79,17 @@ func reconcileRuleAddresses(app core.App, scope ruleScope) error {
 			continue
 		}
 		if existing != nil {
-			if existing.GetString("mailbox") != inbox {
+			if existing.GetString("mailbox") != want.inbox {
 				addressLog.Warn("a rule address is held by another inbox",
-					"local_part", key.local, "domain", key.domain, "inbox", inbox, "held_by", existing.GetString("mailbox"))
+					"local_part", key.local, "domain", key.domain, "inbox", want.inbox, "held_by", existing.GetString("mailbox"))
 			}
 			continue
 		}
 		row := core.NewRecord(col)
 		row.Set("local_part", key.local)
 		row.Set("domain", key.domain)
-		row.Set("mailbox", inbox)
+		row.Set("mailbox", want.inbox)
+		row.Set("via_group", want.viaGroup)
 		row.Set("source", addressSourceRule)
 		if err := app.Save(row); err != nil {
 			errs = append(errs, fmt.Errorf("add %s on %s: %w", key.local, key.domain, err))
@@ -92,9 +103,9 @@ func reconcileRuleAddresses(app core.App, scope ruleScope) error {
 	return errors.Join(errs...)
 }
 
-func expectedRuleAddresses(app core.App, scope ruleScope) (map[ruleKey]string, error) {
-	domainFilter := "coverage = {:everyone}"
-	params := dbx.Params{"everyone": coverageEveryone}
+func expectedRuleAddresses(app core.App, scope ruleScope) (map[ruleKey]expectedRule, error) {
+	domainFilter := ruleDomainFilter
+	params := dbx.Params{}
 	if scope.DomainID != "" {
 		domainFilter += " && id = {:domain}"
 		params["domain"] = scope.DomainID
@@ -115,10 +126,27 @@ func expectedRuleAddresses(app core.App, scope ruleScope) (map[ruleKey]string, e
 		return nil, fmt.Errorf("list identities: %w", err)
 	}
 
-	expected := map[ruleKey]string{}
+	expected := map[ruleKey]expectedRule{}
 	for _, domain := range domains {
+		// nil members means everyone; a groups domain with no groups left
+		// (its last group was deleted) gives nobody an address.
+		var members map[string][]string
+		if domain.GetString("coverage") == coverageGroups {
+			members, err = groupMembers(app, domain.GetStringSlice("coverage_groups"))
+			if err != nil {
+				return nil, fmt.Errorf("members of the groups of domain %s: %w", domain.Id, err)
+			}
+		}
 		for _, identity := range identities {
-			expected[ruleKey{local: identity.GetString("email_name"), domain: domain.Id}] = identity.GetString("inbox")
+			rule := expectedRule{inbox: identity.GetString("inbox")}
+			if members != nil {
+				groups := members[identity.GetString("user")]
+				if len(groups) == 0 {
+					continue
+				}
+				rule.viaGroup = groups[0]
+			}
+			expected[ruleKey{local: identity.GetString("email_name"), domain: domain.Id}] = rule
 		}
 	}
 	return expected, nil
@@ -158,8 +186,9 @@ func actualRuleAddresses(app core.App, scope ruleScope) (map[ruleKey]*core.Recor
 }
 
 // checkCoverageConflicts refuses to turn on a rule for a domain where a
-// person's email name is already an address of a different inbox. Each
-// conflicting address is named so the admin can rename it first.
+// person's email name is already an address of a different inbox. Every
+// person counts, also on a groups domain: the name is reserved for all of
+// them. Each conflicting address is named so the admin can rename it first.
 func checkCoverageConflicts(app core.App, domain *core.Record) error {
 	if !domainHasRule(domain) {
 		return nil
@@ -209,6 +238,10 @@ func registerRuleAddressHooks(app core.App) {
 		return e.Next()
 	})
 
+	// Only a coverage change can make a conflict. A change of coverage_groups
+	// cannot (the name is reserved for every person either way), and it must
+	// not be refused: PocketBase saves the domain this way when a group is
+	// deleted.
 	app.OnRecordUpdate("mail_domains").BindFunc(func(e *core.RecordEvent) error {
 		if e.Record.Original().GetString("coverage") != e.Record.GetString("coverage") {
 			if err := checkCoverageConflicts(e.App, e.Record); err != nil {
@@ -234,8 +267,24 @@ func registerRuleAddressHooks(app core.App) {
 	app.OnRecordAfterUpdateSuccess("mail_domains").BindFunc(func(e *core.RecordEvent) error {
 		original := e.Record.Original()
 		becameVerified := !original.GetBool("verified") && e.Record.GetBool("verified")
-		if becameVerified || original.GetString("coverage") != e.Record.GetString("coverage") {
+		if becameVerified || original.GetString("coverage") != e.Record.GetString("coverage") ||
+			!slices.Equal(original.GetStringSlice("coverage_groups"), e.Record.GetStringSlice("coverage_groups")) {
 			domainChanged(e, becameVerified)
+		}
+		return e.Next()
+	})
+
+	// The group-list rules are request hooks, not model hooks; see
+	// checkCoverageGroups.
+	app.OnRecordCreateRequest("mail_domains").BindFunc(func(e *core.RecordRequestEvent) error {
+		if err := checkCoverageGroups(e.Record); err != nil {
+			return err
+		}
+		return e.Next()
+	})
+	app.OnRecordUpdateRequest("mail_domains").BindFunc(func(e *core.RecordRequestEvent) error {
+		if err := checkCoverageGroups(e.Record); err != nil {
+			return err
 		}
 		return e.Next()
 	})

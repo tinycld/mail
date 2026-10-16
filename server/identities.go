@@ -263,8 +263,8 @@ func emailNameTaken(app core.App, name, inboxID string) (bool, error) {
 		return false, err
 	}
 	rows, err := app.FindRecordsByFilter("mail_addresses",
-		"local_part = {:name} && domain.coverage = {:everyone} && mailbox != {:inbox}", "", 1, 0,
-		dbx.Params{"name": name, "everyone": coverageEveryone, "inbox": inboxID})
+		"local_part = {:name} && "+ruleDomainRelFilter+" && mailbox != {:inbox}", "", 1, 0,
+		dbx.Params{"name": name, "inbox": inboxID})
 	if err != nil {
 		return false, err
 	}

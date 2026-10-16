@@ -1,0 +1,249 @@
+package mail
+
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+	"testing"
+
+	validation "github.com/pocketbase/ozzo-validation/v4"
+	"github.com/pocketbase/pocketbase/core"
+)
+
+// seedGroup makes a group with the given members.
+func seedGroup(t *testing.T, app core.App, name string, members ...*core.Record) *core.Record {
+	t.Helper()
+	group := saveRealRecord(t, app, "groups", map[string]any{"name": name})
+	for _, member := range members {
+		saveRealRecord(t, app, "group_members", map[string]any{"group": group.Id, "user": member.Id})
+	}
+	return group
+}
+
+func seedGroupUser(t *testing.T, app core.App, username string) *core.Record {
+	t.Helper()
+	return saveRealRecord(t, app, "users", map[string]any{
+		"email": username + "@ext.example", "username": username, "name": username, "role": "member",
+	})
+}
+
+// ruleRow returns the rule row for local on the domain, or nil.
+func ruleRow(t *testing.T, app core.App, local, domainID string) *core.Record {
+	t.Helper()
+	row, err := findAddressRow(app, local, domainID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row == nil || row.GetString("source") != addressSourceRule {
+		return nil
+	}
+	return row
+}
+
+func saveGroupsDomain(t *testing.T, app core.App, name string, groups ...*core.Record) *core.Record {
+	t.Helper()
+	ids := make([]string, len(groups))
+	for i, g := range groups {
+		ids[i] = g.Id
+	}
+	return saveRealRecord(t, app, "mail_domains", map[string]any{
+		"domain": name, "verified": true, "coverage": coverageGroups, "coverage_groups": ids,
+	})
+}
+
+func TestGroupCoverage_OnlyMembersGetAddresses(t *testing.T) {
+	app := newRuleTestApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	ann := seedGroupUser(t, app, "ann")
+	seedGroupUser(t, app, "bob")
+	sales := seedGroup(t, app, "Sales", ann)
+	q := saveGroupsDomain(t, app, "q.example", sales)
+
+	row := ruleRow(t, app, "ann", q.Id)
+	if row == nil || row.GetString("mailbox") != identityOf(t, app, ann.Id).GetString("inbox") {
+		t.Fatalf("ann@q.example = %v, want a rule row to ann's inbox", row)
+	}
+	if row.GetString("via_group") != sales.Id {
+		t.Fatalf("via_group = %q, want sales", row.GetString("via_group"))
+	}
+	if got := ruleRows(t, app, q.Id); len(got) != 1 {
+		t.Fatalf("rule rows on q.example = %v, want ann only", got)
+	}
+}
+
+func TestGroupCoverage_TwoGroupsViaGroupFollowsOrder(t *testing.T) {
+	app := newRuleTestApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	ann := seedGroupUser(t, app, "ann")
+	sales := seedGroup(t, app, "Sales", ann)
+	support := seedGroup(t, app, "Support", ann)
+	q := saveGroupsDomain(t, app, "q.example", sales, support)
+
+	if row := ruleRow(t, app, "ann", q.Id); row == nil || row.GetString("via_group") != sales.Id {
+		t.Fatalf("ann@q.example = %v, want via_group sales", row)
+	}
+
+	membership, err := app.FindFirstRecordByFilter("group_members", "group = {:g} && user = {:u}",
+		map[string]any{"g": sales.Id, "u": ann.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.Delete(membership); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconcileRuleAddresses(app, ruleScope{UserID: ann.Id}); err != nil {
+		t.Fatal(err)
+	}
+	if row := ruleRow(t, app, "ann", q.Id); row == nil || row.GetString("via_group") != support.Id {
+		t.Fatalf("ann@q.example after leaving sales = %v, want via_group support", row)
+	}
+}
+
+func TestGroupCoverage_ReservedForEveryone(t *testing.T) {
+	app := newRuleTestApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	ann := seedGroupUser(t, app, "ann")
+	seedGroupUser(t, app, "bob")
+	q := saveGroupsDomain(t, app, "q.example", seedGroup(t, app, "Sales", ann))
+	desk := saveRealRecord(t, app, "mail_mailboxes", map[string]any{"address": "desk", "domain": q.Id, "type": "shared", "display_name": "Desk", "name": "Desk"})
+
+	row := core.NewRecord(mustCollection(t, app, "mail_addresses"))
+	row.Set("local_part", "bob")
+	row.Set("domain", q.Id)
+	row.Set("mailbox", desk.Id)
+	row.Set("source", addressSourceManual)
+	err := app.Save(row)
+	var refusal validation.Errors
+	if !errors.As(err, &refusal) || refusal["local_part"] == nil {
+		t.Fatalf("bob@q.example for a shared inbox: want a local_part refusal, got %v", err)
+	}
+}
+
+func TestGroupCoverage_RequiresAGroup(t *testing.T) {
+	runRuleAPIScenario(t, http.MethodPatch, []string{`"coverage_groups":{"code":"coverage_groups_required"`},
+		func(s *ruleAPISeed) string { return "/api/collections/mail_domains/records/" + s.main.Id },
+		func(*ruleAPISeed) string { return `{"coverage":"groups","coverage_groups":[]}` })
+}
+
+func TestGroupCoverage_TooManyGroups(t *testing.T) {
+	ids := make([]string, maxCoverageGroups+1)
+	for i := range ids {
+		ids[i] = fmt.Sprintf(`"g%014d"`, i)
+	}
+	runRuleAPIScenario(t, http.MethodPatch, []string{`"coverage_groups":{"code":"coverage_groups_too_many"`},
+		func(s *ruleAPISeed) string { return "/api/collections/mail_domains/records/" + s.main.Id },
+		func(*ruleAPISeed) string {
+			return `{"coverage":"groups","coverage_groups":[` + strings.Join(ids, ",") + `]}`
+		})
+}
+
+func TestGroupCoverage_ChangingGroupsReconciles(t *testing.T) {
+	app := newRuleTestApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	ann := seedGroupUser(t, app, "ann")
+	carol := seedGroupUser(t, app, "carol")
+	sales := seedGroup(t, app, "Sales", ann)
+	support := seedGroup(t, app, "Support", carol)
+	q := saveGroupsDomain(t, app, "q.example", sales)
+
+	q = reloaded(t, app, q)
+	q.Set("coverage_groups", []string{support.Id})
+	if err := app.Save(q); err != nil {
+		t.Fatal(err)
+	}
+	if row := ruleRow(t, app, "ann", q.Id); row != nil {
+		t.Fatal("ann kept her address after sales was taken off the domain")
+	}
+	if row := ruleRow(t, app, "carol", q.Id); row == nil || row.GetString("via_group") != support.Id {
+		t.Fatalf("carol@q.example = %v, want a rule row via support", row)
+	}
+}
+
+// The name is reserved for every person, so a switch to groups is refused
+// when any person's name is taken, member or not (spec 5.4).
+func TestGroupCoverage_ConflictCheckCoversAllPeople(t *testing.T) {
+	app := newRuleTestApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	ann := seedGroupUser(t, app, "ann")
+	seedGroupUser(t, app, "bob")
+	sales := seedGroup(t, app, "Sales", ann)
+	other := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "other.example", "verified": true})
+	saveRealRecord(t, app, "mail_mailboxes", map[string]any{"address": "bob", "domain": other.Id, "type": "shared", "display_name": "Bob's desk", "name": "Bob's desk"})
+
+	other = reloaded(t, app, other)
+	other.Set("coverage", coverageGroups)
+	other.Set("coverage_groups", []string{sales.Id})
+	err := app.Save(other)
+	if err == nil || !strings.Contains(err.Error(), "bob@other.example") {
+		t.Fatalf("want a refusal naming bob@other.example, got %v", err)
+	}
+}
+
+// Deleting a domain's last group makes PocketBase clear coverage_groups with
+// a plain save. That save must go through, and nobody keeps an address.
+func TestGroupCoverage_DeletingTheLastGroup(t *testing.T) {
+	app := newRuleTestApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	ann := seedGroupUser(t, app, "ann")
+	sales := seedGroup(t, app, "Sales", ann)
+	q := saveGroupsDomain(t, app, "q.example", sales)
+	if ruleRow(t, app, "ann", q.Id) == nil {
+		t.Fatal("precondition: ann has no address on q.example")
+	}
+
+	if err := app.Delete(reloaded(t, app, sales)); err != nil {
+		t.Fatalf("deleting the domain's last group: %v", err)
+	}
+	q = reloaded(t, app, q)
+	if q.GetString("coverage") != coverageGroups || len(q.GetStringSlice("coverage_groups")) != 0 {
+		t.Fatalf("domain after group delete: coverage %q, groups %v", q.GetString("coverage"), q.GetStringSlice("coverage_groups"))
+	}
+	if got := ruleRows(t, app, q.Id); len(got) != 0 {
+		t.Fatalf("rule rows left after the last group was deleted: %v", got)
+	}
+	if err := reconcileRuleAddresses(app, ruleScope{}); err != nil {
+		t.Fatalf("a full reconcile with an empty group list: %v", err)
+	}
+}
+
+func TestGroupMembers_OrderFollowsGroupIDs(t *testing.T) {
+	app := newRuleTestApp(t)
+	ann := seedGroupUser(t, app, "ann")
+	bob := seedGroupUser(t, app, "bob")
+	sales := seedGroup(t, app, "Sales", ann)
+	support := seedGroup(t, app, "Support", ann, bob)
+	seedGroup(t, app, "Other", bob)
+
+	got, err := groupMembers(app, []string{support.Id, sales.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{support.Id, sales.Id}; strings.Join(got[ann.Id], ",") != strings.Join(want, ",") {
+		t.Fatalf("ann's groups = %v, want %v", got[ann.Id], want)
+	}
+	if strings.Join(got[bob.Id], ",") != support.Id || len(got) != 2 {
+		t.Fatalf("members = %v, want ann and bob (support only)", got)
+	}
+	if empty, err := groupMembers(app, nil); err != nil || len(empty) != 0 {
+		t.Fatalf("no groups: %v, %v", empty, err)
+	}
+}
+
+// An address of a shared inbox on a groups domain blocks that email name for
+// a new person, as it does on an everyone domain.
+func TestGroupCoverage_EmailNameTakenOnGroupsDomain(t *testing.T) {
+	app := newRuleTestApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	ann := seedGroupUser(t, app, "ann")
+	q := saveGroupsDomain(t, app, "q.example", seedGroup(t, app, "Sales", ann))
+	saveRealRecord(t, app, "mail_mailboxes", map[string]any{"address": "desk", "domain": q.Id, "type": "shared", "display_name": "Desk", "name": "Desk"})
+
+	taken, err := emailNameTaken(app, "desk", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !taken {
+		t.Fatal("desk@q.example is a shared inbox on a groups domain, but the name desk was free")
+	}
+}
