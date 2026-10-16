@@ -186,8 +186,9 @@ type smtpInboundSession struct {
 }
 
 type recipientBinding struct {
-	address string
-	mailbox *core.Record
+	address   string
+	mailbox   *core.Record
+	addressID string
 }
 
 // AuthMechanisms returns no mechanisms — AUTH is disabled on the inbound
@@ -232,7 +233,7 @@ var errMXRelayDenied = &smtp.SMTPError{
 // Rcpt resolves each recipient to a local mailbox. Unknown recipients get
 // 550 5.1.1 so the sending MTA generates a clean bounce instead of
 // silently accepting and discarding. Plus-tags are stripped (support+tag@
-// → support@) to mirror the webhook path's resolveMailboxByAddress.
+// → support@) to mirror the webhook path's resolveAddress.
 func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 	localPart, domain := splitAddress(to)
 	if localPart == "" || domain == "" {
@@ -246,7 +247,7 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 	if !mailDomainHosted(s.app, domain) {
 		return errMXRelayDenied
 	}
-	mailbox, _, err := resolveMailboxByAddress(s.app, localPart, domain)
+	target, err := resolveAddress(s.app, localPart, domain)
 	if err != nil {
 		return &smtp.SMTPError{
 			Code:         550,
@@ -254,7 +255,7 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 			Message:      "No such mailbox",
 		}
 	}
-	s.mailboxes = append(s.mailboxes, recipientBinding{address: to, mailbox: mailbox})
+	s.mailboxes = append(s.mailboxes, recipientBinding{address: to, mailbox: target.Mailbox, addressID: target.Address.Id})
 	return nil
 }
 
@@ -300,7 +301,7 @@ func (s *smtpInboundSession) Data(r io.Reader) error {
 
 	storedAny := false
 	for _, binding := range s.mailboxes {
-		if err := processInboundForMailbox(s.app, binding.mailbox, msg); err != nil {
+		if err := processInboundForMailbox(s.app, binding.mailbox, msg, binding.addressID); err != nil {
 			s.app.Logger().Error("inbound SMTP: storage failed",
 				"mailboxID", binding.mailbox.Id, "address", binding.address, "error", err)
 			continue

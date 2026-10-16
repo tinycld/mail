@@ -55,6 +55,7 @@ type postmarkInboundPayload struct {
 	To                string               `json:"To"`
 	ToFull            []postmarkRecipient  `json:"ToFull"`
 	CcFull            []postmarkRecipient  `json:"CcFull"`
+	OriginalRecipient string               `json:"OriginalRecipient"`
 	Subject           string               `json:"Subject"`
 	Date              string               `json:"Date"`
 	TextBody          string               `json:"TextBody"`
@@ -110,13 +111,14 @@ func (p *PostmarkProvider) ParseInbound(body []byte) (*InboundMessage, error) {
 			Name:  payload.FromFull.Name,
 			Email: payload.FromFull.Email,
 		},
-		To:            convertRecipients(payload.ToFull),
-		Cc:            convertRecipients(payload.CcFull),
-		Subject:       payload.Subject,
-		HTMLBody:      payload.HTMLBody,
-		TextBody:      textBody,
-		StrippedReply: payload.StrippedTextReply,
-		Date:          normalizePostmarkDate(payload.Date),
+		To:                convertRecipients(payload.ToFull),
+		Cc:                convertRecipients(payload.CcFull),
+		OriginalRecipient: payload.OriginalRecipient,
+		Subject:           payload.Subject,
+		HTMLBody:          payload.HTMLBody,
+		TextBody:          textBody,
+		StrippedReply:     payload.StrippedTextReply,
+		Date:              normalizePostmarkDate(payload.Date),
 	}
 
 	for _, h := range payload.Headers {

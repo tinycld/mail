@@ -241,7 +241,7 @@ func realIMAPDial(ctx context.Context, addr string, useTLS bool) (*imapclient.Cl
 
 // dispatchInbound routes a parsed message to each recipient's mailbox. The
 // system IMAP account receives mail for every served domain, so routing is
-// purely by recipient address: resolveMailboxByAddress finds the mailbox via its
+// purely by recipient address: resolveAddress finds the mailbox via its
 // own domain (and thus the owning org), which keeps org isolation intact without
 // a separate org filter. Reuses processInboundForMailbox (same path the webhook +
 // inbound SMTP listener use), so threading, FTS, notifications and dedup behave
@@ -250,22 +250,18 @@ func dispatchInbound(app core.App, msg *InboundMessage) error {
 	var dispatched int
 	var firstErr error
 
-	all := make([]Recipient, 0, len(msg.To)+len(msg.Cc))
-	all = append(all, msg.To...)
-	all = append(all, msg.Cc...)
-
-	for _, rcpt := range all {
-		localPart, domain := splitAddress(rcpt.Email)
+	for _, email := range routingRecipients(msg) {
+		localPart, domain := splitAddress(email)
 		if localPart == "" || domain == "" {
 			continue
 		}
 		localPart = stripPlusTag(localPart)
 
-		mailbox, _, err := resolveMailboxByAddress(app, localPart, domain)
+		target, err := resolveAddress(app, localPart, domain)
 		if err != nil {
 			continue
 		}
-		if err := processInboundForMailbox(app, mailbox, msg); err != nil {
+		if err := processInboundForMailbox(app, target.Mailbox, msg, target.Address.Id); err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}

@@ -189,6 +189,12 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 	if msg.Alias != "" {
 		record.Set("alias", msg.Alias)
 	}
+	if msg.DeliveredTo != "" {
+		record.Set("delivered_to", msg.DeliveredTo)
+	}
+	if msg.SentFrom != "" {
+		record.Set("sent_from", msg.SentFrom)
+	}
 	if msg.SentBy != "" {
 		record.Set("sent_by", msg.SentBy)
 	}
@@ -318,6 +324,10 @@ type storedMessage struct {
 	ProviderMessageID string
 	InReplyTo         string
 	Alias             string
+	// DeliveredTo is the mail_addresses row an inbound copy arrived through;
+	// SentFrom is the row an outgoing message was sent as. Empty when unknown.
+	DeliveredTo string
+	SentFrom    string
 	// SentBy is the user who sent this message. Empty for inbound mail and
 	// for anything stored before the sent_by migration — a reader must treat
 	// "" as unknown, never as a claim about who sent it. The shared mailbox

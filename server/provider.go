@@ -95,19 +95,22 @@ type BounceEvent struct {
 }
 
 type InboundMessage struct {
-	From          Recipient           `json:"from"`
-	To            []Recipient         `json:"to"`
-	Cc            []Recipient         `json:"cc,omitempty"`
-	Subject       string              `json:"subject"`
-	HTMLBody      string              `json:"html_body"`
-	TextBody      string              `json:"text_body"`
-	StrippedReply string              `json:"stripped_reply"`
-	Date          string              `json:"date"`
-	MessageID     string              `json:"message_id"`
-	InReplyTo     string              `json:"in_reply_to"`
-	References    string              `json:"references"`
-	Headers       []Header            `json:"headers,omitempty"`
-	Attachments   []InboundAttachment `json:"attachments,omitempty"`
+	From Recipient   `json:"from"`
+	To   []Recipient `json:"to"`
+	// OriginalRecipient is the envelope recipient the provider delivered this
+	// copy for. A BCC'd address appears only here.
+	OriginalRecipient string              `json:"original_recipient,omitempty"`
+	Cc                []Recipient         `json:"cc,omitempty"`
+	Subject           string              `json:"subject"`
+	HTMLBody          string              `json:"html_body"`
+	TextBody          string              `json:"text_body"`
+	StrippedReply     string              `json:"stripped_reply"`
+	Date              string              `json:"date"`
+	MessageID         string              `json:"message_id"`
+	InReplyTo         string              `json:"in_reply_to"`
+	References        string              `json:"references"`
+	Headers           []Header            `json:"headers,omitempty"`
+	Attachments       []InboundAttachment `json:"attachments,omitempty"`
 }
 
 type InboundAttachment struct {
