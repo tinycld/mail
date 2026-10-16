@@ -8,7 +8,11 @@ import (
 	"testing"
 
 	validation "github.com/pocketbase/ozzo-validation/v4"
+	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tests"
+	"tinycld.org/core/groups"
+	"tinycld.org/core/offboard"
 )
 
 // seedGroup makes a group with the given members.
@@ -245,5 +249,153 @@ func TestGroupCoverage_EmailNameTakenOnGroupsDomain(t *testing.T) {
 	}
 	if !taken {
 		t.Fatal("desk@q.example is a shared inbox on a groups domain, but the name desk was free")
+	}
+}
+
+// newMembershipTestApp is the rule test app with core's group hooks and the
+// mail membership listener bound, so group joins and leaves reach the
+// reconciler as they do in production. The listener registry is process
+// global, so it is cleared before and after.
+func newMembershipTestApp(t *testing.T) *tests.TestApp {
+	t.Helper()
+	app := newRuleTestApp(t)
+	groups.ResetForTesting()
+	t.Cleanup(groups.ResetForTesting)
+	groups.Register(&pocketbase.PocketBase{App: app})
+	bindGroupMembershipListener(app)
+	return app
+}
+
+func membershipOf(t *testing.T, app core.App, group, user *core.Record) *core.Record {
+	t.Helper()
+	m, err := app.FindFirstRecordByFilter("group_members", "group = {:g} && user = {:u}",
+		map[string]any{"g": group.Id, "u": user.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+func TestGroupMembership_JoinAndLeave(t *testing.T) {
+	app := newMembershipTestApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	ann := seedGroupUser(t, app, "ann")
+	sales := seedGroup(t, app, "Sales")
+	q := saveGroupsDomain(t, app, "q.example", sales)
+	if ruleRow(t, app, "ann", q.Id) != nil {
+		t.Fatal("precondition: ann has an address on q.example before she joins sales")
+	}
+
+	saveRealRecord(t, app, "group_members", map[string]any{"group": sales.Id, "user": ann.Id})
+	row := ruleRow(t, app, "ann", q.Id)
+	if row == nil || row.GetString("via_group") != sales.Id {
+		t.Fatalf("ann@q.example after joining sales = %v, want a rule row via sales", row)
+	}
+
+	if err := app.Delete(membershipOf(t, app, sales, ann)); err != nil {
+		t.Fatal(err)
+	}
+	if row := ruleRow(t, app, "ann", q.Id); row != nil {
+		t.Fatalf("ann@q.example after leaving sales = %v, want no row", row)
+	}
+}
+
+func TestGroupMembership_GroupDeleted(t *testing.T) {
+	app := newMembershipTestApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	ann := seedGroupUser(t, app, "ann")
+	carol := seedGroupUser(t, app, "carol")
+	sales := seedGroup(t, app, "Sales", ann)
+	support := seedGroup(t, app, "Support", carol)
+	q := saveGroupsDomain(t, app, "q.example", sales, support)
+	if ruleRow(t, app, "ann", q.Id) == nil || ruleRow(t, app, "carol", q.Id) == nil {
+		t.Fatal("precondition: ann and carol have addresses on q.example")
+	}
+
+	if err := app.Delete(reloaded(t, app, sales)); err != nil {
+		t.Fatalf("deleting sales: %v", err)
+	}
+	if row := ruleRow(t, app, "ann", q.Id); row != nil {
+		t.Fatalf("ann@q.example after sales was deleted = %v, want no row", row)
+	}
+	if row := ruleRow(t, app, "carol", q.Id); row == nil || row.GetString("via_group") != support.Id {
+		t.Fatalf("carol@q.example after sales was deleted = %v, want a rule row via support", row)
+	}
+	q = reloaded(t, app, q)
+	if got := q.GetStringSlice("coverage_groups"); len(got) != 1 || got[0] != support.Id {
+		t.Fatalf("coverage_groups after sales was deleted = %v, want [support]", got)
+	}
+	if err := app.Save(q); err != nil {
+		t.Fatalf("saving the domain after sales was deleted: %v", err)
+	}
+}
+
+func TestGroupMembership_LastGroupDeleted(t *testing.T) {
+	app := newMembershipTestApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	ann := seedGroupUser(t, app, "ann")
+	sales := seedGroup(t, app, "Sales", ann)
+	q := reloaded(t, app, saveGroupsDomain(t, app, "q.example", sales))
+	if ruleRow(t, app, "ann", q.Id) == nil {
+		t.Fatal("precondition: ann has an address on q.example")
+	}
+
+	if err := app.Delete(reloaded(t, app, sales)); err != nil {
+		t.Fatalf("deleting the domain's last group: %v", err)
+	}
+	if got := ruleRows(t, app, q.Id); len(got) != 0 {
+		t.Fatalf("rule rows on q.example after its last group was deleted: %v", got)
+	}
+	after := reloaded(t, app, q)
+	if got := after.GetStringSlice("coverage_groups"); len(got) != 0 {
+		t.Fatalf("coverage_groups after the last group was deleted = %v, want []", got)
+	}
+	for _, field := range q.Collection().Fields {
+		name := field.GetName()
+		if name == "coverage_groups" || name == "updated" {
+			continue
+		}
+		if fmt.Sprint(q.Get(name)) != fmt.Sprint(after.Get(name)) {
+			t.Fatalf("domain field %s changed from %v to %v", name, q.Get(name), after.Get(name))
+		}
+	}
+}
+
+// Offboarding removes the leaver from every group inside its transaction, so
+// the leave events arrive after the identity is retired and the inbox is
+// gone. The listener must make nothing and return no error. A recorder bound
+// after it sees an event only when the mail listener returned nil, because
+// the first error stops the chain.
+func TestGroupMembership_OffboardCreatesNothing(t *testing.T) {
+	app := newRegisteredMailApp(t)
+	groups.ResetForTesting()
+	t.Cleanup(groups.ResetForTesting)
+	groups.Register(&pocketbase.PocketBase{App: app})
+	bindGroupMembershipListener(app)
+	var passed []groups.MembershipEvent
+	groups.OnMembershipChange(func(e groups.MembershipEvent) error {
+		passed = append(passed, e)
+		return nil
+	})
+
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
+	admin := saveRealRecord(t, app, "users", map[string]any{"email": "ada@ext.example", "username": "ada", "name": "Ada", "role": "admin"})
+	ann := seedGroupUser(t, app, "ann")
+	sales := seedGroup(t, app, "Sales", ann)
+	q := saveGroupsDomain(t, app, "q.example", sales)
+	if ruleRow(t, app, "ann", q.Id) == nil {
+		t.Fatal("precondition: ann has an address on q.example")
+	}
+	passed = nil
+
+	if _, err := offboard.OffboardUser(app, ann.Id, offboard.Plan{Mode: offboard.ModeDeleteMyData}, admin.Id); err != nil {
+		t.Fatalf("OffboardUser: %v", err)
+	}
+	requireNoMailFor(t, app, ann, "ann", "after offboard")
+	if identity := identityOf(t, app, ann.Id); identity == nil || !identity.GetBool("retired") {
+		t.Fatalf("identity after offboard = %v, want retired", identity)
+	}
+	if len(passed) != 1 || passed[0].Joined || passed[0].UserID != ann.Id || passed[0].GroupID != sales.Id {
+		t.Fatalf("events that passed the mail listener = %+v, want ann's one leave from sales", passed)
 	}
 }

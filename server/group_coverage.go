@@ -2,10 +2,12 @@ package mail
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/pocketbase/dbx"
 	validation "github.com/pocketbase/ozzo-validation/v4"
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/groups"
 )
 
 // maxCoverageGroups bounds how many groups one domain may name. It is a sanity
@@ -72,4 +74,27 @@ func checkCoverageGroups(domain *core.Record) error {
 			fmt.Sprintf("Choose at most %d groups", maxCoverageGroups))}
 	}
 	return nil
+}
+
+var registerMembershipListenerOnce sync.Once
+
+// registerGroupMembershipListener keeps rule addresses on group domains in
+// step with group membership. Core delivers each join and leave after it
+// commits — also the leaves a group delete or an offboard causes — and sends
+// none at boot, which the boot reconcile covers. Core's registry is process
+// global and Register can run more than once in one process (tests), so the
+// listener is added only once.
+func registerGroupMembershipListener(app core.App) {
+	registerMembershipListenerOnce.Do(func() {
+		bindGroupMembershipListener(app)
+	})
+}
+
+// bindGroupMembershipListener adds the listener with no once-guard, for a
+// test that has cleared core's registry with groups.ResetForTesting. The
+// reconcile error goes back to core, which logs it.
+func bindGroupMembershipListener(app core.App) {
+	groups.OnMembershipChange(func(e groups.MembershipEvent) error {
+		return reconcileRuleAddresses(app, ruleScope{UserID: e.UserID})
+	})
 }
