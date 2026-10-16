@@ -116,29 +116,44 @@ function AddressRow({
     )
 }
 
+// The column heading over the row switches, so each switch has a visible name.
+function ShowInSidebarHeading({ isVisible }: { isVisible: boolean }) {
+    if (!isVisible) return null
+    return (
+        <View className="flex-row justify-end">
+            <Text className="text-muted-foreground text-xs">Show in sidebar</Text>
+        </View>
+    )
+}
+
 function AddressList({
     identity,
     addresses,
+    showsSwitches,
     onShownChange,
 }: {
     identity: Identity
     addresses: PersonEmail['addresses']
+    showsSwitches: boolean
     onShownChange: SetShown
 }) {
     const rows = toAddressItems(addresses).map(item => (
         <AddressRow
             key={item.id}
             item={item}
-            showsSwitch={identity.addressViews}
+            showsSwitch={showsSwitches}
             isShown={!identity.hiddenAddressViews.includes(item.id)}
             onShownChange={onShownChange}
         />
     ))
-    return <View className="gap-2">{rows}</View>
+    return (
+        <View className="gap-2">
+            <ShowInSidebarHeading isVisible={showsSwitches} />
+            {rows}
+        </View>
+    )
 }
 
-// A folder of the only address would be the whole inbox, so the switch is
-// offered only to a person with two or more addresses.
 function AddressViewsSwitch({
     isVisible,
     value,
@@ -191,12 +206,22 @@ function IdentityDetails({
     addresses: PersonEmail['addresses']
 }) {
     const { setEnabled, setShown } = useAddressViewSwitches(identity.id)
+    // A folder of the only address would be the whole inbox, so the switch is
+    // offered for two or more addresses; once on, it stays offered so it can
+    // be turned off after addresses go away.
+    const showsMainSwitch = addresses.length >= 2 || identity.addressViews
+    const showsRowSwitches = showsMainSwitch && identity.addressViews
     return (
         <View className="gap-4">
-            <AddressList identity={identity} addresses={addresses} onShownChange={setShown} />
+            <AddressList
+                identity={identity}
+                addresses={addresses}
+                showsSwitches={showsRowSwitches}
+                onShownChange={setShown}
+            />
             <Note isVisible={addresses.length === 0} text="No address yet." />
             <AddressViewsSwitch
-                isVisible={addresses.length >= 2}
+                isVisible={showsMainSwitch}
                 value={identity.addressViews}
                 onChange={setEnabled}
             />

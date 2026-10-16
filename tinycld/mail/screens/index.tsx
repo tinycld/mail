@@ -29,7 +29,7 @@ import { EmailListToolbar } from '../components/EmailListToolbar'
 import { EmailRow } from '../components/EmailRow'
 import type { ThreadListItem } from '../components/thread-list-item'
 import { prettifyFolderKey } from '../hooks/mailListHelpers'
-import { type AddressView, useAddressViews } from '../hooks/useAddressViews'
+import { useAddressViewFolder } from '../hooks/useAddressViews'
 import { useCompose } from '../hooks/useComposeState'
 import { useMailBulkActions } from '../hooks/useMailBulkActions'
 import { useMailboxes } from '../hooks/useMailboxes'
@@ -88,15 +88,6 @@ function folderIcon(folder: string | null) {
     if (!folder) return Tag
     if (addressViewId(folder)) return AtSign
     return FOLDER_ICONS[folder] ?? Tag
-}
-
-// An address view is titled by its address. A view that is no longer in the
-// list (the switch went off, or the address was hidden) still filters by its
-// id, so it keeps a plain title.
-function folderTitleFor(folderKey: string, views: AddressView[]) {
-    const addressId = addressViewId(folderKey)
-    if (!addressId) return prettifyFolderKey(folderKey)
-    return views.find(view => view.id === addressId)?.email ?? 'Address'
 }
 
 function LabelChip({
@@ -239,7 +230,10 @@ export default function MailListScreen() {
     const unifiedAvailable = (personal ? 1 : 0) + shared.length >= 2
     const isDefaultView = folder === null && mailbox === null && labels.length === 0
     const isUnifiedView = folder === 'all-inboxes' || (isDefaultView && unifiedAvailable)
-    const mailboxId = isUnifiedView ? UNIFIED_INBOX : (mailbox ?? personal?.id ?? '')
+    const addressFolder = useAddressViewFolder(folder)
+    // No mailbox disables the list query: a hidden address view lists nothing.
+    const listMailboxId = isUnifiedView ? UNIFIED_INBOX : (mailbox ?? personal?.id ?? '')
+    const mailboxId = addressFolder.isHidden ? '' : listMailboxId
 
     const {
         items,
@@ -374,7 +368,6 @@ export default function MailListScreen() {
     )
 
     const searchItems = useSearchThreadItems(search.results)
-    const addressViews = useAddressViews()
 
     const activeLabels = useMemo(
         () =>
@@ -388,7 +381,7 @@ export default function MailListScreen() {
     const folderTitle =
         activeLabels.length > 0
             ? activeLabels.map(l => l.name).join(', ')
-            : folderTitleFor(folderKey, addressViews)
+            : (addressFolder.title ?? prettifyFolderKey(folderKey))
 
     const tabLeaf = search.isActive ? 'Search' : folderTitle
     const isMobile = breakpoint === 'mobile'

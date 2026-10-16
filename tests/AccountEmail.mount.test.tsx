@@ -53,6 +53,16 @@ const h = vi.hoisted(() => ({
             address_views: true,
             hidden_address_views: [] as string[],
         },
+        {
+            id: 'i5',
+            user: 'u5',
+            email_name: 'dana',
+            inbox: 'mb5',
+            default_from: '',
+            retired: false,
+            address_views: true,
+            hidden_address_views: [] as string[],
+        },
     ],
     addresses: [
         {
@@ -91,6 +101,15 @@ const h = vi.hoisted(() => ({
             is_primary: false,
             via_group: '',
         },
+        {
+            id: 'a6',
+            local_part: 'dana',
+            domain: 'd1',
+            mailbox: 'mb5',
+            source: 'rule',
+            is_primary: true,
+            via_group: '',
+        },
     ],
     domains: [
         { id: 'd1', domain: 'tinycld.com', rank: 1 },
@@ -107,6 +126,7 @@ const h = vi.hoisted(() => ({
         { id: 'u2', role: 'member' },
         { id: 'u3', role: 'member' },
         { id: 'u4', role: 'member' },
+        { id: 'u5', role: 'member' },
         { id: 'u8', role: 'member' },
         { id: 'u9', role: 'guest' },
     ],
@@ -211,9 +231,10 @@ async function press(el: HTMLElement | null) {
 }
 
 test('the address view switch writes address_views and shows a switch for each address', async () => {
-    const { container, findAllByText } = renderPage('u1')
+    const { container, findAllByText, queryByText } = renderPage('u1')
     await findAllByText('nathan@tinycld.com')
     expect(switchFor(container, 'Show nathan@tinycld.com in sidebar')).toBeNull()
+    expect(queryByText('Show in sidebar')).toBeNull()
 
     await press(switchFor(container, 'Show a folder for each address'))
     await waitFor(() => expect(h.updated).toHaveLength(1))
@@ -223,6 +244,8 @@ test('the address view switch writes address_views and shows a switch for each a
         expect(switchFor(container, 'Show nathan@tinycld.com in sidebar')).toBeTruthy()
     )
     expect(switchFor(container, 'Show nathan@q.example in sidebar')).toBeTruthy()
+    // The row switches share one visible column heading.
+    expect(queryByText('Show in sidebar')).toBeTruthy()
 })
 
 test('turning off an address hides its folder', async () => {
@@ -231,4 +254,19 @@ test('turning off an address hides its folder', async () => {
     await press(switchFor(container, 'Show carl@q.example in sidebar'))
     await waitFor(() => expect(h.updated).toHaveLength(1))
     expect(h.updated[0]).toMatchObject({ id: 'i4', hidden_address_views: ['a5'] })
+})
+
+test('with views on and one address left, the main switch is offered and turns views off', async () => {
+    const { container, findAllByText, queryByText } = renderPage('u5')
+    await findAllByText('dana@tinycld.com')
+    const main = switchFor(container, 'Show a folder for each address')
+    expect(main).toBeTruthy()
+    expect(switchFor(container, 'Show dana@tinycld.com in sidebar')).toBeTruthy()
+    await press(main)
+    await waitFor(() => expect(h.updated).toHaveLength(1))
+    expect(h.updated[0]).toMatchObject({ id: 'i5', address_views: false })
+    // Off with one address: nothing more to turn on or off here.
+    await waitFor(() => expect(switchFor(container, 'Show a folder for each address')).toBeNull())
+    expect(switchFor(container, 'Show dana@tinycld.com in sidebar')).toBeNull()
+    expect(queryByText('Show in sidebar')).toBeNull()
 })

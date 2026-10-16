@@ -3,6 +3,7 @@ import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { materialize } from 'pbtsdb'
 import { useMemo } from 'react'
+import { addressViewId } from '../lib/thread-list-query'
 import { useMailboxFolderCounts } from './useMailboxFolderCounts'
 
 interface RankedAddress {
@@ -58,7 +59,7 @@ export function useAddressViews() {
     // The identity drives the query; its inbox's addresses and each address's
     // domain are read from their own collections. A retired identity has no
     // inbox, and an address with no mailbox delivers nowhere.
-    const { data: rows } = useMyLiveQuery(
+    const { data: rows, isReady } = useMyLiveQuery(
         (query, { userId }) =>
             query
                 .from({ identity: identitiesCollection })
@@ -93,7 +94,7 @@ export function useAddressViews() {
         { queryKey: ['mail_address_views'] }
     )
 
-    return useMemo(() => {
+    const views = useMemo(() => {
         const identity = rows?.[0]
         if (!identity) return []
         // An address whose domain is gone, or not loaded yet, has no email.
@@ -108,6 +109,23 @@ export function useAddressViews() {
         const byAddress = counts.get(identity.inbox)?.inboxByAddress ?? {}
         return views.map(view => ({ ...view, unread: byAddress[view.id]?.unread ?? 0 }))
     }, [rows, counts])
+    return { views, isReady }
 }
 
-export type AddressView = ReturnType<typeof useAddressViews>[number]
+export type AddressView = ReturnType<typeof useAddressViews>['views'][number]
+
+/**
+ * What the list screen shows for a folder key. An address view that is not
+ * shown now (the switch went off, or the address was hidden) lists nothing,
+ * as its IMAP folder does; a link to it can outlive the view. Until the views
+ * load, a view is not called hidden, so a shown view does not flash empty.
+ */
+export function useAddressViewFolder(folder: string | null) {
+    const { views, isReady } = useAddressViews()
+    const addressId = addressViewId(folder)
+    if (!addressId) return { isHidden: false, title: null }
+    const view = views.find(v => v.id === addressId)
+    if (view) return { isHidden: false, title: view.email }
+    if (!isReady) return { isHidden: false, title: 'Address' }
+    return { isHidden: true, title: 'Address not shown' }
+}

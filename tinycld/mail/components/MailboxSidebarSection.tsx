@@ -27,7 +27,7 @@ interface AddressViewItemsProps {
 }
 
 function AddressViewList({ mailboxId, isActive, onNavigate }: AddressViewItemsProps) {
-    const views = useAddressViews()
+    const { views } = useAddressViews()
     const items = views.map(view => {
         const folder = addressViewFolder(view.id)
         return (
