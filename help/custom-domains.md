@@ -58,6 +58,23 @@ After publishing the DNS records, click **Verify** in the domain row. Mail re-ru
 
 Mail also re-verifies any not-yet-fully-verified domain automatically once per hour in the background. So if your DNS records are correct but propagating slowly, the domain will eventually flip to green on its own.
 
+## Who gets an address on a domain
+
+Each domain has a setting **Who gets an address here?**:
+
+- **Everyone** — each person gets their email name on this domain. For example, if Nathan's email name is `nathan`, Nathan gets `nathan@` this domain. People who join later get it too.
+- **Only people I add** — nobody gets an address automatically. Add addresses to a mailbox in **Settings → Mail → Mailboxes**.
+
+The first domain you add is set to **Everyone**. Each domain you add after that starts as **Only people I add**, so adding a domain never gives out addresses until you choose to.
+
+Before a change is applied, TinyCld shows which addresses it adds or which addresses stop receiving mail. To apply it, click **Apply**.
+
+The setting, not the verification, decides which addresses exist. If a domain fails verification for a short time, its addresses stay. You cannot send from an unverified domain until it is verified. The **From** list marks such addresses **domain not verified**.
+
+## The order of domains
+
+Drag the domains to set their order. The first verified domain in the order is the **main domain**: a new person's inbox is created there, and people send from it unless they choose another address.
+
 ## What "fully verified" enables
 
 - **Send** — outbound from any address on this domain works.
@@ -72,7 +89,7 @@ When a message arrives at `someone@yourdomain.com`, what happens next depends on
 
 1. Postmark receives the message (because of your MX records).
 2. Postmark POSTs the parsed JSON to your TinyCld instance at `/api/mail/inbound/{webhook_secret}`.
-3. TinyCld looks up the recipient against `mail_mailboxes.address` and `mail_mailbox_aliases.address`, scoped to this domain.
+3. TinyCld looks up the recipient against the addresses of each mailbox (`mail_addresses`), scoped to this domain.
 4. If a match is found, the message is delivered to that mailbox's Inbox and replicated to every member.
 5. If no match is found, TinyCld returns a 403 and Postmark generates a bounce back to the sender.
 
@@ -81,14 +98,14 @@ The webhook secret is a per-domain random 32-character hex string, auto-generate
 **Self-hosted SMTP (built-in listener)**:
 
 1. TinyCld's port 25 listener accepts the connection from the sending MTA.
-2. RCPT TO is resolved against the same mailbox + alias tables. Unknown recipients are rejected with `550 5.1.1 No such mailbox` so the sending MTA bounces.
+2. RCPT TO is resolved against the same address table. Unknown recipients are rejected with `550 5.1.1 No such mailbox` so the sending MTA bounces.
 3. The DATA payload is parsed and dispatched to every matching mailbox via the same code path Postmark webhooks use.
 
 **Self-hosted SMTP (IMAP fetcher)**:
 
 1. The fetcher logs in to your configured IMAP server every poll interval.
 2. Unseen messages are pulled and parsed.
-3. Each recipient on the message is resolved against the mailbox + alias tables, **scoped to the domains added here** (so a fetcher polling an IMAP account that receives mail for many domains only routes mail for domains this server owns).
+3. Each recipient on the message is resolved against the address table, **scoped to the domains added here** (so a fetcher polling an IMAP account that receives mail for many domains only routes mail for domains this server owns).
 4. Successfully ingested messages are marked `\Seen` so the next poll skips them.
 
 ## Removing a domain
@@ -106,5 +123,5 @@ You cannot undo this. Make sure that no one uses the addresses before you remove
 ## See also
 
 - [Provider setup](help://mail:provider-setup)
-- [Mailboxes and aliases](help://mail:mailboxes)
+- [Mailboxes and addresses](help://mail:mailboxes)
 - [Delivery tracking](help://mail:delivery-tracking)

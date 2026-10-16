@@ -103,4 +103,4 @@ When you have multiple mailboxes, IMAP namespaces them — typically as separate
 ## See also
 
 - [SMTP](help://mail:smtp)
-- [Mailboxes and aliases](help://mail:mailboxes)
+- [Mailboxes and addresses](help://mail:mailboxes)

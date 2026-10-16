@@ -17,7 +17,7 @@ The compose window opens in the bottom-right corner. You can move it, minimize i
 
 ## Filling the form
 
-- **From** — which address to send as. The picker lists your personal mailbox, every shared mailbox you're a member of, and every alias of each. The default picks something sensible based on context (replying to `support@` defaults to `support@`).
+- **From** — the address you send as. Click **Change** to choose any address of your own mailbox or of a shared mailbox you belong to. A reply or forward starts from the address the original message was sent to; for older mail, from one of your addresses in its To or Cc. An open draft keeps its mailbox: you can change its From only to another address of the same mailbox.
 - **To** — primary recipients. Type and tab/comma to add multiple. Recipients auto-suggest from [Contacts](help://contacts:getting-started) if you have it installed.
 - **Cc / Bcc** — secondary recipients. Hidden by default; click **Cc Bcc** in the header to reveal. Bcc recipients are saved with the draft and kept on your Sent copy, so you can see later who was blind-copied (the recipients themselves never see the Bcc list).
 - **Subject** — required.
@@ -71,4 +71,4 @@ In the compose window:
 
 - [Reading threads](help://mail:reading-threads)
 - [Delivery tracking](help://mail:delivery-tracking)
-- [Mailboxes and aliases](help://mail:mailboxes)
+- [Mailboxes and addresses](help://mail:mailboxes)

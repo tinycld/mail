@@ -102,5 +102,5 @@ Outbound messages are capped at **25 MB total** (including attachments). Larger 
 ## See also
 
 - [IMAP](help://mail:imap) — the receive side
-- [Mailboxes and aliases](help://mail:mailboxes)
+- [Mailboxes and addresses](help://mail:mailboxes)
 - [Custom domains](help://mail:custom-domains)

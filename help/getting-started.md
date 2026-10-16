@@ -35,7 +35,7 @@ Mail groups related messages into **threads** (conversations). Replying to a thr
 
 ## Where to go next
 
-- [Mailboxes and aliases](help://mail:mailboxes)
+- [Mailboxes and addresses](help://mail:mailboxes)
 - [Composing and sending](help://mail:composing)
 - [Reading threads](help://mail:reading-threads)
 - [Folders](help://mail:folders)
