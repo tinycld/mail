@@ -13,7 +13,7 @@ import {
     zodResolver,
 } from '@tinycld/core/ui/form'
 import { Text, View } from 'react-native'
-import { type Coverage, coverageChangePreview } from './coverage-preview'
+import { type Coverage, coverageChangePreview, coveragePreviewText } from './coverage-preview'
 
 const coverageSchema = z.object({ coverage: z.enum(['everyone', 'manual']) })
 
@@ -66,14 +66,6 @@ function useCoveragePreview(domainId: string, domainName: string, target: Covera
     })
 }
 
-function previewText(preview: { adds: string[]; removes: string[] }) {
-    if (preview.adds.length > 0) return `Adds ${preview.adds.length}: ${preview.adds.join(', ')}`
-    if (preview.removes.length > 0) {
-        return `These addresses stop receiving mail: ${preview.removes.join(', ')}`
-    }
-    return 'No addresses change.'
-}
-
 export function DomainCoverageControl({
     domainId,
     domainName,
@@ -94,7 +86,9 @@ export function DomainCoverageControl({
     } = useForm({
         mode: 'onChange',
         resolver: zodResolver(coverageSchema),
-        defaultValues: { coverage },
+        // `values`, not defaultValues: when the domain row changes (this
+        // Apply, or another admin), the form follows the saved rule.
+        values: { coverage },
     })
     const target = useWatch({ control, name: 'coverage' }) as Coverage
     const preview = useCoveragePreview(domainId, domainName, target)
@@ -122,7 +116,7 @@ export function DomainCoverageControl({
             <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
             <ConfirmCoverage
                 isVisible={isChanged}
-                text={previewText(preview)}
+                text={coveragePreviewText(preview)}
                 isPending={save.isPending}
                 onConfirm={onConfirm}
                 onCancel={() => reset({ coverage })}

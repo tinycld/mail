@@ -12,11 +12,15 @@ const h = vi.hoisted(() => ({
         { id: 'u1', role: 'member' },
         { id: 'u2', role: 'guest' },
         { id: 'u3', role: 'member' },
+        { id: 'u4', role: 'member' },
     ],
     identities: [
         { id: 'i1', user: 'u1', email_name: 'nathan', inbox: 'mb1', retired: false },
         { id: 'i2', user: 'u2', email_name: 'gus', inbox: 'mb2', retired: false },
         { id: 'i3', user: 'u3', email_name: 'retired-i3', inbox: '', retired: true },
+        // Not retired, but the inbox is gone (deleted outside offboarding):
+        // the server gives it no address until the identity is repaired.
+        { id: 'i4', user: 'u4', email_name: 'orphan', inbox: '', retired: false },
     ],
     addresses: [] as { id: string }[],
     updated: [] as Record<string, unknown>[],
@@ -54,12 +58,14 @@ const withQueryClient = (ui: ReactNode) => (
     <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>
 )
 
-function renderControl() {
-    return render(
-        withQueryClient(
-            <DomainCoverageControl domainId="d_com" domainName="tinycld.com" coverage="manual" />
-        )
+function control(coverage: 'everyone' | 'manual') {
+    return withQueryClient(
+        <DomainCoverageControl domainId="d_com" domainName="tinycld.com" coverage={coverage} />
     )
+}
+
+function renderControl() {
+    return render(control('manual'))
 }
 
 async function press(el: HTMLElement) {
@@ -68,7 +74,7 @@ async function press(el: HTMLElement) {
     })
 }
 
-test('choosing Everyone previews only active non-guest people', async () => {
+test('choosing Everyone previews only active non-guest people with an inbox', async () => {
     const { findByText } = renderControl()
     await press(await findByText('Everyone'))
     expect(await findByText('Adds 1: nathan@tinycld.com')).toBeTruthy()
@@ -94,4 +100,18 @@ test('Cancel removes the confirm box', async () => {
     const everyone = container.querySelector('[testid="coverage-everyone"]')
     expect(manual?.innerHTML).toContain('border-primary')
     expect(everyone?.innerHTML).not.toContain('border-primary')
+})
+
+// Another admin, or the Apply of this one, changes the domain row: the form
+// must show the saved rule, not offer to change it back.
+test('a new coverage from the domain row resets the form', async () => {
+    const { container, rerender, queryByText } = renderControl()
+    await act(async () => {
+        rerender(control('everyone'))
+    })
+    await waitFor(() => {
+        const everyone = container.querySelector('[testid="coverage-everyone"]')
+        expect(everyone?.innerHTML).toContain('border-primary')
+    })
+    expect(queryByText('Apply')).toBeNull()
 })
