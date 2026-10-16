@@ -205,7 +205,7 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
 import { useMailboxes } from '~/tinycld/mail/hooks/useMailboxes'
 import { useSendableIdentities } from '~/tinycld/mail/hooks/useSendableIdentities'
 
-test('useMailboxes joins memberships to mailboxes for the signed-in user only', async () => {
+test('useMailboxes reads the mailbox of each membership of the signed-in user only', async () => {
     const { result } = renderHook(() => useMailboxes())
 
     await waitFor(() => expect(result.current.personal).not.toBeNull())

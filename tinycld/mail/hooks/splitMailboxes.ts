@@ -6,9 +6,10 @@ export interface MailboxesResult {
 }
 
 /**
- * Pure: given the mailboxes the current user is a member of (membership is
- * resolved by the caller's joined query), return the personal mailbox and the
- * shared ones, one entry per mailbox. Shared mailboxes are sorted by `created` ascending.
+ * Pure: given the mailboxes the current user is a member of (the caller reads
+ * them from the user's own membership rows), return the personal mailbox and
+ * the shared ones, one entry per mailbox. Shared mailboxes are sorted by
+ * `created` ascending.
  */
 export function splitMailboxes(mine: MailMailboxes[]): MailboxesResult {
     // A person can hold a direct row and group-derived rows for one mailbox.

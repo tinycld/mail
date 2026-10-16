@@ -3,7 +3,7 @@ import { splitMailboxes } from '~/tinycld/mail/hooks/splitMailboxes'
 import { getMailboxLabel } from '~/tinycld/mail/hooks/useMailboxes'
 import type { MailMailboxes } from '~/tinycld/mail/types'
 
-// Membership filtering happens in useMailboxes' joined query, not here —
+// Membership filtering happens in useMailboxes' query, not here —
 // tests/useMailboxHooks.mount.test.tsx covers it against real collections.
 
 function makeMailbox(overrides: Partial<MailMailboxes>): MailMailboxes {
