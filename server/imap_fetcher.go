@@ -3,6 +3,7 @@ package mail
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -241,31 +242,33 @@ func realIMAPDial(ctx context.Context, addr string, useTLS bool) (*imapclient.Cl
 
 // dispatchInbound routes a parsed message to each recipient's mailbox. The
 // system IMAP account receives mail for every served domain, so routing is
-// purely by recipient address: resolveMailboxByAddress finds the mailbox via its
+// purely by recipient address: resolveAddress finds the mailbox via its
 // own domain (and thus the owning org), which keeps org isolation intact without
 // a separate org filter. Reuses processInboundForMailbox (same path the webhook +
 // inbound SMTP listener use), so threading, FTS, notifications and dedup behave
 // identically.
 func dispatchInbound(app core.App, msg *InboundMessage) error {
 	var dispatched int
-	var firstErr error
+	var firstErr, lookupErr error
 
-	all := make([]Recipient, 0, len(msg.To)+len(msg.Cc))
-	all = append(all, msg.To...)
-	all = append(all, msg.Cc...)
-
-	for _, rcpt := range all {
-		localPart, domain := splitAddress(rcpt.Email)
+	for _, email := range routingRecipients(msg) {
+		localPart, domain := splitAddress(email)
 		if localPart == "" || domain == "" {
 			continue
 		}
 		localPart = stripPlusTag(localPart)
 
-		mailbox, _, err := resolveMailboxByAddress(app, localPart, domain)
-		if err != nil {
+		target, err := resolveAddress(app, localPart, domain)
+		if errors.Is(err, errAddressNotFound) {
 			continue
 		}
-		if err := processInboundForMailbox(app, mailbox, msg); err != nil {
+		// A failed lookup leaves the message unseen even when another
+		// recipient was stored: the retry dedups by Message-ID per inbox.
+		if err != nil {
+			lookupErr = errors.Join(lookupErr, fmt.Errorf("look up %s: %w", email, err))
+			continue
+		}
+		if err := processInboundForMailbox(app, target.Mailbox, msg, target.Address.Id); err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -274,6 +277,9 @@ func dispatchInbound(app core.App, msg *InboundMessage) error {
 		dispatched++
 	}
 
+	if lookupErr != nil {
+		return lookupErr
+	}
 	if dispatched == 0 && firstErr != nil {
 		return firstErr
 	}

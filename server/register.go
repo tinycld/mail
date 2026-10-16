@@ -163,13 +163,9 @@ func registerShared(app *pocketbase.PocketBase) {
 		return e.Next()
 	}
 
-	// Auto-create a personal mailbox when a user is created. Single-org: the
-	// process IS the org, so membership is the users record itself (the former
-	// user_org junction is gone).
-	app.OnRecordAfterCreateSuccess("users").BindFunc(func(e *core.RecordEvent) error {
-		handleUserCreated(app, e.Record)
-		return e.Next()
-	})
+	// Every non-guest user gets one personal inbox and one email name.
+	registerIdentityHooks(app)
+	registerRuleAddressHooks(app)
 
 	// Clean up orphaned personal mailboxes when a user is deleted.
 	app.OnRecordAfterDeleteSuccess("users").BindFunc(func(e *core.RecordEvent) error {
@@ -296,12 +292,15 @@ func registerShared(app *pocketbase.PocketBase) {
 		return e.Next()
 	})
 
-	registerAliasHooks(app)
+	registerAddressHooks(app)
 	registerThreadMarkerHooks(app)
 	registerThreadStateSyncHooks(app)
 	registerFolderCountHooks(app)
 	registerMemberBackfillHooks(app)
 
+	audit.RegisterCollection(app, "mail_addresses", &audit.CollectionConfig{
+		ExtractLabel: audit.LabelFromField("local_part"),
+	})
 	audit.RegisterCollection(app, "mail_mailbox_aliases", &audit.CollectionConfig{
 		ExtractLabel: audit.LabelFromField("address"),
 	})
@@ -345,6 +344,17 @@ func registerShared(app *pocketbase.PocketBase) {
 		// which only runs once and cannot react to a later provider switch.
 		// A no-op when a delegating registrar already claimed the seam.
 		reconcileMailDomainsRegistrar(app)
+
+		// Repair identities and rule addresses that a crash or an older
+		// release left out of step. Boot only adopts inboxes that exist: a
+		// user with no inbox may be a leaver offboarded before identities
+		// existed, whose anonymized row still has a non-guest role.
+		if err := ensureIdentities(app, adoptInboxOnly); err != nil {
+			addressLog.Error("boot: could not ensure mail identities", "error", err)
+		}
+		if err := reconcileRuleAddresses(app, ruleScope{}); err != nil {
+			addressLog.Error("boot: rule address reconcile failed", "error", err)
+		}
 
 		// Draft endpoint (requires auth, saves without sending)
 		e.Router.POST("/api/mail/draft", func(re *core.RequestEvent) error {

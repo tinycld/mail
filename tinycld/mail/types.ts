@@ -1,7 +1,9 @@
 import type { Recipient, VerificationDetails } from '@tinycld/app-generated/mail-api'
 import type {
+    MailAddresses as GenMailAddresses,
     MailDomains as GenMailDomains,
     MailFolderCounts as GenMailFolderCounts,
+    MailIdentities as GenMailIdentities,
     MailImapMailboxState as GenMailImapMailboxState,
     MailMailboxAliases as GenMailMailboxAliases,
     MailMailboxes as GenMailMailboxes,
@@ -45,6 +47,8 @@ export interface MailDomains
 export type MailMailboxes = GenMailMailboxes
 export type MailMailboxMembers = GenMailMailboxMembers
 export type MailMailboxAliases = GenMailMailboxAliases
+export type MailAddresses = GenMailAddresses
+export type MailIdentities = GenMailIdentities
 export type MailThreadState = GenMailThreadState
 export type MailImapMailboxState = GenMailImapMailboxState
 
@@ -94,6 +98,21 @@ export type MailSchema = {
             mailbox: MailMailboxes
         }
     }
+    mail_addresses: {
+        type: MailAddresses
+        relations: {
+            domain: MailDomains
+            mailbox: MailMailboxes
+        }
+    }
+    mail_identities: {
+        type: MailIdentities
+        relations: {
+            user: Users
+            inbox: MailMailboxes
+            default_from: MailAddresses
+        }
+    }
     mail_threads: {
         type: MailThreads
         relations: {
@@ -105,6 +124,8 @@ export type MailSchema = {
         relations: {
             thread: MailThreads
             alias: MailMailboxAliases
+            delivered_to: MailAddresses
+            sent_from: MailAddresses
         }
     }
     mail_thread_state: {

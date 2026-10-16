@@ -10,15 +10,17 @@ import { useSafeAreaInsets } from '@tinycld/core/lib/use-safe-area'
 import { FormErrorSummary, useForm, zodResolver } from '@tinycld/core/ui/form'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, View } from 'react-native'
+import { closeWithDraft } from '../hooks/closeWithDraft'
+import { composeSendBlocker, draftSaveRequest } from '../hooks/composeFrom'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
+import { useComposeFrom } from '../hooks/useComposeFrom'
 import { useCompose } from '../hooks/useComposeState'
 import { useDraftMessage } from '../hooks/useDraftMessage'
 import { setContentWhenReady, useMailEditor } from '../hooks/useMailEditor'
 import { useMailSendReadiness } from '../hooks/useMailSendReadiness'
 import { useSaveDraft } from '../hooks/useSaveDraft'
 import { useSendEmail } from '../hooks/useSendEmail'
-import { useComposeStore } from '../stores/compose-store'
 import { AttachmentRibbon } from './AttachmentRibbon'
 import { ComposeFields } from './ComposeFields'
 import { ComposeFromRow } from './ComposeFromRow'
@@ -33,19 +35,38 @@ const webShadow =
         ? ({ boxShadow: '0 8px 32px rgba(0,0,0,0.24)' } as Record<string, unknown>)
         : {}
 
+function notifyDraftSaveFailed(message: string) {
+    notify.emit({
+        event: 'mutation.error',
+        title: "Your draft wasn't saved",
+        body: `${message.replace(/\.$/, '')}. The message is still open.`,
+        durationMs: 8000,
+        data: { operation: 'mail.draft.save', error: message },
+    })
+}
+
 interface ComposeWindowProps {
     isVisible: boolean
 }
 
 export function ComposeWindow({ isVisible }: ComposeWindowProps) {
-    const { mode, replyContext, draftContext, minimize, maximize, open, close, setFromIdentity } =
+    const { mode, replyContext, draftContext, minimize, maximize, open, close, setFrom } =
         useCompose()
     const resolvedDraft = useDraftMessage(draftContext)
     const breakpoint = useBreakpoint()
     const insets = useSafeAreaInsets()
     const readiness = useMailSendReadiness()
-    const mailboxId = readiness.mailboxId
-    const aliasId = useComposeStore(s => s.aliasId)
+    // An open draft keeps its own mailbox (only its addresses are offered),
+    // so a shared-mailbox draft is never saved into the personal one.
+    // Otherwise the picked mailbox wins and the personal mailbox is the
+    // default.
+    const draftMailboxId = draftContext?.mailboxId ?? null
+    const { choices, from, missingFromMessage } = useComposeFrom(
+        draftMailboxId ?? readiness.mailboxId ?? '',
+        draftMailboxId
+    )
+    const sendBlocker = composeSendBlocker(from, readiness)
+    const fromMailboxId = from?.identity.mailboxId ?? null
     const draftIdRef = useRef<string | null>(null)
     const toastedBlockerRef = useRef<string | null>(null)
     const [headerTitle, setHeaderTitle] = useState('')
@@ -55,32 +76,34 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             toastedBlockerRef.current = null
             return
         }
-        if (!readiness.blocker || !readiness.message) return
-        if (toastedBlockerRef.current === readiness.blocker) {
+        if (!sendBlocker.blocker || !sendBlocker.message) return
+        // Keyed on the message, so choosing an address on another unverified
+        // domain warns again while a re-render of the same one does not.
+        if (toastedBlockerRef.current === sendBlocker.message) {
             // Log suppression so we can see how often the dedupe fires in prod.
             // If this fires a lot it means readiness keeps re-flapping into the
             // same blocker; that's worth investigating regardless of the dedupe
             // doing its job.
             captureMessageToSentry('compose-window', 'info', 'duplicate-blocker-suppressed', {
-                blocker: readiness.blocker,
-                mailboxId: readiness.mailboxId,
+                blocker: sendBlocker.blocker,
+                mailboxId: fromMailboxId,
                 isVisible,
             })
             return
         }
-        toastedBlockerRef.current = readiness.blocker
+        toastedBlockerRef.current = sendBlocker.message
         const event =
-            readiness.blocker === 'domain-unverified'
+            sendBlocker.blocker === 'domain-unverified'
                 ? 'mail.send_blocked_warn'
                 : 'mail.send_blocked_error'
         notify.emit({
             event,
             title: "Can't send mail",
-            body: readiness.message,
+            body: sendBlocker.message,
             durationMs: 8000,
-            data: { reason: readiness.message },
+            data: { reason: sendBlocker.message },
         })
-    }, [isVisible, readiness.blocker, readiness.message, readiness.mailboxId])
+    }, [isVisible, sendBlocker.blocker, sendBlocker.message, fromMailboxId])
 
     const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
         placeholder: 'Compose email',
@@ -125,7 +148,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             }
             const { message, htmlBody } = resolvedDraft
             draftIdRef.current = message.id
-            setFromIdentity(draftContext.mailboxId, message.alias || null)
+            setFrom(draftContext.mailboxId, message.sent_from || null)
             const formatRecipients = (recipients: { name: string; email: string }[]) =>
                 recipients.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ')
             reset({
@@ -156,7 +179,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             editorRef.current.clear()
         }
         return () => cleanup?.()
-    }, [isVisible, replyContext, draftContext, resolvedDraft, reset, setFromIdentity])
+    }, [isVisible, replyContext, draftContext, resolvedDraft, reset, setFrom])
 
     const [messagesCollection] = useStore('mail_messages')
 
@@ -179,11 +202,14 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         },
     })
 
-    const { saveDraft } = useSaveDraft()
+    const { saveDraftAsync, isPending: isSavingDraft } = useSaveDraft({
+        onError: notifyDraftSaveFailed,
+        onOffline: notifyDraftSaveFailed,
+    })
 
     const { isDragging, dropRef } = useFileDrop({
         onFiles: addFilesSafely,
-        isEnabled: !!mailboxId,
+        isEnabled: !!from,
     })
 
     const { pickFiles } = usePickFiles()
@@ -195,37 +221,41 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         if (picked.length > 0) addFilesSafely(picked.map(p => p.file))
     }, [pickFiles, addFilesSafely])
 
-    const handleClose = async () => {
-        const text = await editor.getText()
-        if (!text?.trim() || !mailboxId) {
-            close()
-            return
-        }
-
-        const data = getValues()
-        const htmlBody = await editor.getHTML()
-        const to = data.to ? parseRecipients(data.to) : undefined
-        const cc = data.cc ? parseRecipients(data.cc) : undefined
-        const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
-
-        saveDraft({
-            mailbox_id: mailboxId,
-            alias_id: aliasId ?? undefined,
-            message_id: draftIdRef.current ?? undefined,
-            to,
-            cc,
-            bcc,
-            subject: data.subject,
-            html_body: htmlBody,
-            text_body: text,
-            attachments: attachments.map(a => a.file),
-        })
-
+    const finishClose = () => {
         draftIdRef.current = null
         editor.clear()
         clearAttachments()
         reset({ to: '', cc: '', bcc: '', subject: '' })
         close()
+    }
+
+    const handleClose = async () => {
+        // A save is still in flight; a second one would create a second draft.
+        if (isSavingDraft) return
+        const text = await editor.getText()
+        if (!text?.trim()) {
+            close()
+            return
+        }
+        if (!from) {
+            notifyDraftSaveFailed(missingFromMessage ?? 'No address to save it from')
+            return
+        }
+
+        const data = getValues()
+        const htmlBody = await editor.getHTML()
+        const request = draftSaveRequest(from, draftIdRef.current, {
+            to: data.to ? parseRecipients(data.to) : undefined,
+            cc: data.cc ? parseRecipients(data.cc) : undefined,
+            bcc: data.bcc ? parseRecipients(data.bcc) : undefined,
+            subject: data.subject,
+            html_body: htmlBody,
+            text_body: text,
+        })
+        await closeWithDraft({
+            save: () => saveDraftAsync({ ...request, attachments: attachments.map(a => a.file) }),
+            finish: finishClose,
+        })
     }
 
     if (!isVisible) return null
@@ -260,10 +290,10 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     }
     const windowStyle = isNotDesktop ? fullscreenStyle : modeStyles[mode]
 
-    // Send is disabled without a mailbox, but ⌘Enter reaches this handler
+    // Send is disabled without a resolved From, but ⌘Enter reaches this handler
     // directly, so it must still refuse.
     const onSend = handleSubmit(async data => {
-        if (!mailboxId) return
+        if (!from) return
 
         const htmlBody = await editor.getHTML()
         const textBody = await editor.getText()
@@ -272,8 +302,8 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
 
         send({
-            mailbox_id: mailboxId,
-            alias_id: aliasId ?? undefined,
+            mailbox_id: from.identity.mailboxId,
+            from_address_id: from.address.id,
             to: parseRecipients(data.to),
             cc,
             bcc,
@@ -304,7 +334,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                 onClose={handleClose}
             />
             <View ref={dropRef} className={isMinimized ? 'hidden' : 'flex-1'}>
-                <ComposeFromRow />
+                <ComposeFromRow identities={choices} from={from} onSelect={setFrom} />
                 <ComposeFields
                     control={control}
                     errors={errors}
@@ -330,7 +360,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                     onSend={onSend}
                     onAttach={handleAttach}
                     isPending={isPending}
-                    isSendDisabled={!mailboxId}
+                    isSendDisabled={!from}
                 />
                 <DropOverlay isVisible={isDragging} />
             </View>

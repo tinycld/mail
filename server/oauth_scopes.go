@@ -43,6 +43,8 @@ func oauthPackage() oauth.Package {
 			"mail_folder_counts":   ro,
 			"mail_mailbox_members": ro,
 			"mail_mailbox_aliases": ro,
+			"mail_addresses":       ro,
+			"mail_identities":      ro,
 			"mail_domains":         ro,
 
 			// Labels are CORE collections shared with contacts, which claims

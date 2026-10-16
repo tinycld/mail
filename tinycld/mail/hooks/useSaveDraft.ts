@@ -20,9 +20,12 @@ type SaveDraftParams = SaveDraftRequest & { attachments?: UploadFile[] }
 interface UseSaveDraftOptions {
     onSuccess?: () => void
     onError?: (message: string) => void
+    // A save skipped because writes are unavailable. The caller keeps the
+    // content; this says why nothing was saved.
+    onOffline?: (reason: string) => void
 }
 
-export function useSaveDraft({ onSuccess, onError }: UseSaveDraftOptions = {}) {
+export function useSaveDraft({ onSuccess, onError, onOffline }: UseSaveDraftOptions = {}) {
     const mutation = useMutation({
         mutationFn: async (params: SaveDraftParams): Promise<SendEmailResponse> => {
             const { attachments, ...jsonFields } = params
@@ -60,6 +63,7 @@ export function useSaveDraft({ onSuccess, onError }: UseSaveDraftOptions = {}) {
             const writes = writesAvailability(useConnectivityStore.getState())
             if (!writes.available) {
                 log.info('mail.draft.save.offline', errorToString(error))
+                onOffline?.(writes.reason)
                 return
             }
             // Same contract as the useSendEmail sibling: a lost draft is real
@@ -71,6 +75,7 @@ export function useSaveDraft({ onSuccess, onError }: UseSaveDraftOptions = {}) {
 
     return {
         saveDraft: mutation.mutate,
+        saveDraftAsync: mutation.mutateAsync,
         isPending: mutation.isPending,
         error: mutation.error,
     }

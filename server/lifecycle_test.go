@@ -23,55 +23,55 @@ func seedMailbox(t *testing.T, app core.App, address, domainID string) {
 	}
 }
 
-func TestDeriveMailboxAddress_UsesUsernameVerbatim(t *testing.T) {
+func TestDeriveEmailName_UsesUsernameVerbatim(t *testing.T) {
 	app := setupAliasTestApp(t)
 	domainID := seedDomainAndMailbox(t, app, "example.com", "taken", "mbox_derive_01")
 
-	if got := deriveMailboxAddress(app, "alice", domainID); got != "alice" {
-		t.Fatalf("deriveMailboxAddress(alice) = %q, want alice", got)
+	if got := deriveEmailName(app, "alice", domainID); got != "alice" {
+		t.Fatalf("deriveEmailName(alice) = %q, want alice", got)
 	}
 	// Legacy rows may predate username validation; case and spacing normalize.
-	if got := deriveMailboxAddress(app, " Alice ", domainID); got != "alice" {
-		t.Fatalf("deriveMailboxAddress(' Alice ') = %q, want alice", got)
+	if got := deriveEmailName(app, " Alice ", domainID); got != "alice" {
+		t.Fatalf("deriveEmailName(' Alice ') = %q, want alice", got)
 	}
 }
 
-func TestDeriveMailboxAddress_SuffixesOnCollision(t *testing.T) {
+func TestDeriveEmailName_SuffixesOnCollision(t *testing.T) {
 	app := setupAliasTestApp(t)
 	domainID := seedDomainAndMailbox(t, app, "example.com", "bob", "mbox_derive_02")
 
-	if got := deriveMailboxAddress(app, "bob", domainID); got != "bob2" {
+	if got := deriveEmailName(app, "bob", domainID); got != "bob2" {
 		t.Fatalf("first collision = %q, want bob2", got)
 	}
 	seedMailbox(t, app, "bob2", domainID)
-	if got := deriveMailboxAddress(app, "bob", domainID); got != "bob3" {
+	if got := deriveEmailName(app, "bob", domainID); got != "bob3" {
 		t.Fatalf("second collision = %q, want bob3", got)
 	}
 }
 
 // A username that sanitizes to nothing (all-unicode legacy row) yields no
-// address. handleUserCreated turns that into "create no mailbox" with an
+// address. ensureIdentity turns that into "create no identity" with an
 // Error log — a deliberate trade: account creation must not fail over mailbox
 // provisioning, but the outcome must be loud enough to notice.
-func TestDeriveMailboxAddress_UnsanitizableUsernameYieldsNoAddress(t *testing.T) {
+func TestDeriveEmailName_UnsanitizableUsernameYieldsNoAddress(t *testing.T) {
 	app := setupAliasTestApp(t)
 	domainID := seedDomainAndMailbox(t, app, "example.com", "taken", "mbox_derive_03")
 
-	if got := deriveMailboxAddress(app, "日本語", domainID); got != "" {
-		t.Fatalf("deriveMailboxAddress(unicode) = %q, want empty", got)
+	if got := deriveEmailName(app, "日本語", domainID); got != "" {
+		t.Fatalf("deriveEmailName(unicode) = %q, want empty", got)
 	}
 }
 
 // The suffix loop caps at 99. The 100th "bob" gets no address at all — same
 // loud-but-non-fatal contract as above.
-func TestDeriveMailboxAddress_SuffixExhaustionYieldsNoAddress(t *testing.T) {
+func TestDeriveEmailName_SuffixExhaustionYieldsNoAddress(t *testing.T) {
 	app := setupAliasTestApp(t)
 	domainID := seedDomainAndMailbox(t, app, "example.com", "bob", "mbox_derive_04")
 	for i := 2; i <= 99; i++ {
 		seedMailbox(t, app, fmt.Sprintf("bob%d", i), domainID)
 	}
 
-	if got := deriveMailboxAddress(app, "bob", domainID); got != "" {
+	if got := deriveEmailName(app, "bob", domainID); got != "" {
 		t.Fatalf("exhausted derivation = %q, want empty", got)
 	}
 }

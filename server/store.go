@@ -189,6 +189,12 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 	if msg.Alias != "" {
 		record.Set("alias", msg.Alias)
 	}
+	if msg.DeliveredTo != "" {
+		record.Set("delivered_to", msg.DeliveredTo)
+	}
+	if msg.SentFrom != "" {
+		record.Set("sent_from", msg.SentFrom)
+	}
 	if msg.SentBy != "" {
 		record.Set("sent_by", msg.SentBy)
 	}
@@ -318,6 +324,10 @@ type storedMessage struct {
 	ProviderMessageID string
 	InReplyTo         string
 	Alias             string
+	// DeliveredTo is the mail_addresses row an inbound copy arrived through;
+	// SentFrom is the row an outgoing message was sent as. Empty when unknown.
+	DeliveredTo string
+	SentFrom    string
 	// SentBy is the user who sent this message. Empty for inbound mail and
 	// for anything stored before the sent_by migration — a reader must treat
 	// "" as unknown, never as a claim about who sent it. The shared mailbox
@@ -603,11 +613,6 @@ func setThreadStarred(app core.App, threadID, userID string, isStarred bool) err
 	return app.Save(record)
 }
 
-// resolveMailboxByAddress finds a mailbox matching a local part and domain.
-// It first checks primary addresses on mail_mailboxes, then falls back to
-// mail_mailbox_aliases. When a match is via an alias, the alias record is
-// returned as the second value; for a primary-address match, alias is nil.
-// Addresses are compared case-insensitively.
 // findMailDomains looks a domain up with the normalization every address
 // lookup shares, so "Acme.COM " and "acme.com" are one domain.
 func findMailDomains(app core.App, domainStr string) ([]*core.Record, error) {
@@ -622,45 +627,12 @@ func findMailDomains(app core.App, domainStr string) ([]*core.Record, error) {
 }
 
 // mailDomainHosted reports whether the domain is a row in mail_domains. A
-// failed lookup counts as hosted so a database error becomes the usual
-// mailbox refusal rather than a claim that this server does not host the
-// domain.
+// failed lookup counts as hosted, so the recipient lookup that follows meets
+// the same database error and defers the message (451) rather than claiming
+// this server does not host the domain.
 func mailDomainHosted(app core.App, domainStr string) bool {
 	domains, err := findMailDomains(app, domainStr)
 	return err != nil || len(domains) > 0
-}
-
-func resolveMailboxByAddress(app core.App, localPart, domainStr string) (*core.Record, *core.Record, error) {
-	normalizedLocal := strings.ToLower(strings.TrimSpace(localPart))
-
-	// First find the domain record
-	domains, err := findMailDomains(app, domainStr)
-	if err != nil || len(domains) == 0 {
-		return nil, nil, fmt.Errorf("domain %s not found", domainStr)
-	}
-
-	domainID := domains[0].Id
-
-	// Then find a mailbox with a matching primary address on this domain
-	mailboxes, err := app.FindRecordsByFilter(
-		"mail_mailboxes",
-		"address = {:address} && domain = {:domain}",
-		"",
-		1,
-		0,
-		map[string]any{"address": normalizedLocal, "domain": domainID},
-	)
-	if err == nil && len(mailboxes) > 0 {
-		return mailboxes[0], nil, nil
-	}
-
-	// Fall back to alias lookup
-	mailbox, alias, err := findMailboxViaAlias(app, domainID, normalizedLocal)
-	if err == nil {
-		return mailbox, alias, nil
-	}
-
-	return nil, nil, fmt.Errorf("mailbox %s@%s not found", localPart, domainStr)
 }
 
 // getMailboxMembers returns all mail_mailbox_members for a given mailbox.

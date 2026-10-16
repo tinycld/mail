@@ -67,38 +67,7 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 		)
 	}
 
-	allRecipients := make([]Recipient, 0, len(msg.To)+len(msg.Cc))
-	allRecipients = append(allRecipients, msg.To...)
-	allRecipients = append(allRecipients, msg.Cc...)
-
-	result := routingResult{}
-
-	for _, rcpt := range allRecipients {
-		localPart, domain := splitAddress(rcpt.Email)
-		if localPart == "" || domain == "" {
-			app.Logger().Warn("inbound: malformed recipient address", "email", rcpt.Email)
-			continue
-		}
-
-		localPart = stripPlusTag(localPart)
-
-		mailbox, _, err := resolveMailboxByAddress(app, localPart, domain)
-		if err != nil {
-			fullAddr := localPart + "@" + domain
-			result.unknownAddrs = append(result.unknownAddrs, fullAddr)
-			app.Logger().Info("inbound: unknown recipient",
-				"address", fullAddr, "messageID", msg.MessageID)
-			continue
-		}
-
-		if err := processInboundForMailbox(app, mailbox, msg); err != nil {
-			result.storageFailures = append(result.storageFailures, err)
-			app.Logger().Error("inbound: storage failed",
-				"mailboxID", mailbox.Id, "messageID", msg.MessageID, "error", err)
-			continue
-		}
-		result.storedCount++
-	}
+	result := routeInbound(app, msg)
 
 	// Any storage failure fails the whole batch so Postmark retries.
 	if len(result.storageFailures) > 0 {
@@ -162,7 +131,7 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 	return re.JSON(http.StatusOK, api.WebhookAckResponse{Status: "ok"})
 }
 
-func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMessage) error {
+func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMessage, deliveredTo string) error {
 	mailboxID := mailbox.Id
 
 	// Idempotency: skip if message with this message_id already exists in a thread for this mailbox
@@ -177,6 +146,7 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 	}
 
 	stored := &storedMessage{
+		DeliveredTo:   deliveredTo,
 		MessageID:     msg.MessageID,
 		InReplyTo:     msg.InReplyTo,
 		SenderName:    msg.From.Name,

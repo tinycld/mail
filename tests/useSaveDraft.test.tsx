@@ -70,6 +70,24 @@ describe('useSaveDraft', () => {
         expect(onError).not.toHaveBeenCalled()
     })
 
+    it('tells the caller when a save is skipped offline, so compose can keep the content', async () => {
+        useConnectivityStore.setState({ isOnline: false })
+        h.send.mockRejectedValue(new TypeError('Failed to fetch'))
+        const onError = vi.fn()
+        const onOffline = vi.fn()
+
+        const { result } = renderHook(() => useSaveDraft({ onError, onOffline }), {
+            wrapper: wrapper(),
+        })
+        await expect(
+            result.current.saveDraftAsync({ mailbox_id: 'mb1', subject: 'draft' })
+        ).rejects.toThrow('Failed to fetch')
+
+        await waitFor(() => expect(onOffline).toHaveBeenCalledTimes(1))
+        expect(onOffline).toHaveBeenCalledWith(expect.any(String))
+        expect(onError).not.toHaveBeenCalled()
+    })
+
     it('still reports a real failure to Sentry and the caller while writes are available', async () => {
         h.send.mockRejectedValue(new Error('rule denied the write'))
         const onError = vi.fn()

@@ -25,8 +25,10 @@ function subtitle(item: MailboxListItem): string {
     if (item.type === 'shared') {
         parts.push(`${item.memberCount} member${item.memberCount !== 1 ? 's' : ''}`)
     }
-    if (item.aliasCount > 0) {
-        parts.push(`${item.aliasCount} alias${item.aliasCount !== 1 ? 'es' : ''}`)
+    if (item.otherAddressCount > 0) {
+        parts.push(
+            `${item.otherAddressCount} other address${item.otherAddressCount !== 1 ? 'es' : ''}`
+        )
     }
     return parts.join(' \u00b7 ')
 }
@@ -41,6 +43,7 @@ export function MailboxListRow({ item, isActive = false, onPress }: Props) {
     return (
         <Pressable
             onPress={onPress}
+            testID={`mailbox-row-${item.address}@${item.domainName}`}
             className="flex-row items-center gap-3 rounded-lg p-3"
             style={{
                 backgroundColor: isActive ? `${primaryColor}0F` : 'transparent',

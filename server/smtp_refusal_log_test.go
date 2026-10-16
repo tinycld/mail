@@ -120,9 +120,13 @@ func TestSMTPRefusal_ClientCausedLogsInfo(t *testing.T) {
 }
 
 func TestSMTPRefusal_SendGateLogsWarn(t *testing.T) {
-	app := newRealSchemaApp(t)
+	app := newAddressTestApp(t)
 	mailbox := seedRealMailbox(t, app)
 	domain, err := app.FindRecordById("mail_domains", mailbox.GetString("domain"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	address, err := findAddressRow(app, mailbox.GetString("address"), domain.Id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +136,7 @@ func TestSMTPRefusal_SendGateLogsWarn(t *testing.T) {
 	// The domain has no verified DNS records, so the send gate refuses.
 	s := &smtpSession{
 		app: app, user: user, from: "owner@example.org",
-		mailbox: mailbox, domain: domain, recipients: []string{"to@example.net"},
+		mailbox: mailbox, address: address, domain: domain, recipients: []string{"to@example.net"},
 	}
 	raw := "From: owner@example.org\r\nTo: to@example.net\r\nSubject: hi\r\nMessage-ID: <gate@example.org>\r\n\r\nbody\r\n"
 	if err := s.Data(strings.NewReader(raw)); err == nil {
@@ -159,7 +163,7 @@ func TestSMTPRefusal_ServerSideHelperLogsWarn(t *testing.T) {
 }
 
 func TestSMTPRefusal_SecondMailResetsTransaction(t *testing.T) {
-	app := newRealSchemaApp(t)
+	app := newAddressTestApp(t)
 	mailbox := seedRealMailbox(t, app)
 	user := newRefusalUser(t, app)
 	saveRealRecord(t, app, "mail_mailbox_members", map[string]any{

@@ -68,6 +68,23 @@ export function registerCollections(
         collectionOptions: indexing,
     })
 
+    // Every address, on any domain, that delivers to a mailbox. Rows with
+    // source = 'rule' are written by the server from the domain's rule.
+    const mail_addresses = newCollection('mail_addresses', {
+        ...onDemand,
+        omitOnInsert: ['created', 'updated'] as const,
+        relations: { domain: mail_domains, mailbox: mail_mailboxes },
+        collectionOptions: indexing,
+    })
+
+    // One row per person: their personal inbox and email name. Server-owned.
+    const mail_identities = newCollection('mail_identities', {
+        ...onDemand,
+        omitOnInsert: ['created', 'updated'] as const,
+        relations: { user: coreStores.users, inbox: mail_mailboxes, default_from: mail_addresses },
+        collectionOptions: indexing,
+    })
+
     const mail_messages = newCollection('mail_messages', {
         ...onDemand,
         omitOnInsert: ['created', 'updated'] as const,
@@ -75,7 +92,9 @@ export function registerCollections(
         // pull a copy of its parent mail_threads row plus the alias row.
         // Both are already loaded elsewhere (mail_threads via
         // useThreadListItems' page query, mail_mailbox_aliases by its own
-        // on-demand query).
+        // on-demand query). The address relations only say where an
+        // expanded address files; nothing fetches them by default.
+        relations: { delivered_to: mail_addresses, sent_from: mail_addresses },
         // On-demand for the same reason as mail_threads: a power user can have
         // hundreds of thousands of message rows. Each useLiveQuery now runs
         // server-side filtered, e.g. messages for a single open thread.
@@ -125,5 +144,7 @@ export function registerCollections(
         mail_thread_state,
         mail_imap_mailbox_state,
         mail_folder_counts,
+        mail_addresses,
+        mail_identities,
     }
 }

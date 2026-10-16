@@ -2,6 +2,7 @@ package mail
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -186,8 +187,9 @@ type smtpInboundSession struct {
 }
 
 type recipientBinding struct {
-	address string
-	mailbox *core.Record
+	address   string
+	mailbox   *core.Record
+	addressID string
 }
 
 // AuthMechanisms returns no mechanisms — AUTH is disabled on the inbound
@@ -220,6 +222,15 @@ func (s *smtpInboundSession) Mail(from string, _ *smtp.MailOptions) error {
 	return nil
 }
 
+// errRecipientLookupFailed defers a recipient whose lookup failed on our
+// side. A 550 would bounce mail a retry delivers; a 451 makes the sending
+// MTA queue it.
+var errRecipientLookupFailed = &smtp.SMTPError{
+	Code:         451,
+	EnhancedCode: smtp.EnhancedCode{4, 3, 0},
+	Message:      "Temporary failure looking up the recipient; try again later",
+}
+
 // errMXRelayDenied refuses a recipient on a domain this server does not host.
 // The MX is only for inbound mail; a mail app that reaches it by mistake
 // (Apple Mail tries port 25 first) shows this text, so it says how to send.
@@ -232,7 +243,7 @@ var errMXRelayDenied = &smtp.SMTPError{
 // Rcpt resolves each recipient to a local mailbox. Unknown recipients get
 // 550 5.1.1 so the sending MTA generates a clean bounce instead of
 // silently accepting and discarding. Plus-tags are stripped (support+tag@
-// → support@) to mirror the webhook path's resolveMailboxByAddress.
+// → support@) to mirror the webhook path's resolveAddress.
 func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 	localPart, domain := splitAddress(to)
 	if localPart == "" || domain == "" {
@@ -246,15 +257,19 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 	if !mailDomainHosted(s.app, domain) {
 		return errMXRelayDenied
 	}
-	mailbox, _, err := resolveMailboxByAddress(s.app, localPart, domain)
-	if err != nil {
+	target, err := resolveAddress(s.app, localPart, domain)
+	if errors.Is(err, errAddressNotFound) {
 		return &smtp.SMTPError{
 			Code:         550,
 			EnhancedCode: smtp.EnhancedCode{5, 1, 1},
 			Message:      "No such mailbox",
 		}
 	}
-	s.mailboxes = append(s.mailboxes, recipientBinding{address: to, mailbox: mailbox})
+	if err != nil {
+		addressLog.Error("inbound SMTP: recipient lookup failed", "rcpt", to, "error", err)
+		return errRecipientLookupFailed
+	}
+	s.mailboxes = append(s.mailboxes, recipientBinding{address: to, mailbox: target.Mailbox, addressID: target.Address.Id})
 	return nil
 }
 
@@ -300,7 +315,7 @@ func (s *smtpInboundSession) Data(r io.Reader) error {
 
 	storedAny := false
 	for _, binding := range s.mailboxes {
-		if err := processInboundForMailbox(s.app, binding.mailbox, msg); err != nil {
+		if err := processInboundForMailbox(s.app, binding.mailbox, msg, binding.addressID); err != nil {
 			s.app.Logger().Error("inbound SMTP: storage failed",
 				"mailboxID", binding.mailbox.Id, "address", binding.address, "error", err)
 			continue

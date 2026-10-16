@@ -224,6 +224,12 @@ func TestMailDomainsGuardAllowsServerWrites(t *testing.T) {
 
 	// The create path handleAddDomain uses.
 	rec := seedGuardDomain(t, app, "acme.com")
+	// verifyDomainRecord loads the row; a just-saved record has no Original(),
+	// which would read as a coverage change.
+	rec, err := app.FindRecordById("mail_domains", rec.Id)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
 
 	// The update path verifyDomainRecord/checkOutbound uses: both a
 	// server-owned metadata write and a derived flag, in one save.

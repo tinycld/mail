@@ -8,10 +8,10 @@ export interface MailboxListItem {
     displayName: string
     type: string
     memberCount: number
-    aliasCount: number
+    otherAddressCount: number
     memberNames: string[]
     memberEmails: string[]
-    aliasAddresses: string[]
+    otherAddresses: string[]
 }
 
 export interface FilterInput {
@@ -37,7 +37,7 @@ function matchesQuery(item: MailboxListItem, q: string): boolean {
     for (const e of item.memberEmails) {
         if (e.toLowerCase().includes(needle)) return true
     }
-    for (const a of item.aliasAddresses) {
+    for (const a of item.otherAddresses) {
         if (a.toLowerCase().includes(needle)) return true
     }
     return false

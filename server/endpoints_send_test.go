@@ -1,87 +1,61 @@
 package mail
 
 import (
-	"strings"
+	"context"
 	"testing"
+
+	"tinycld.org/core/syscfg"
+	"tinycld.org/packages/mail/api"
 )
 
-func TestBuildFromAddress_UsesAliasWhenPresent(t *testing.T) {
-	app := setupAliasTestApp(t)
+// Sending as an address on a second domain signs and stores as that domain.
+func TestSendMessage_FromAddressOnSecondDomain(t *testing.T) {
+	env := setupSendAddressEnv(t)
+	syscfg.SetResolver(func(key string) string {
+		if key == "mail.postmark_server_token" {
+			return "test-token"
+		}
+		return ""
+	})
+	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
 
-	seedDomainAndMailbox(t, app, "acme.com", "support", "mb_send_test003")
-	seedAlias(t, app, "mb_send_test003", "help", "al_send_test003")
-
-	mb, err := app.FindRecordById("mail_mailboxes", padID("mb_send_test003"))
+	env.com.Set("spf_verified", true)
+	env.com.Set("dkim_verified", true)
+	env.com.Set("return_path_verified", true)
+	if err := env.app.Save(env.com); err != nil {
+		t.Fatal(err)
+	}
+	user := saveRealRecord(t, env.app, "users", map[string]any{
+		"email": "n@ext.example", "username": "nathan", "name": "Nathan", "role": "owner", "is_demo": true,
+	})
+	saveRealRecord(t, env.app, "mail_mailbox_members", map[string]any{"mailbox": env.inbox.Id, "user": user.Id, "role": "owner"})
+	com, err := findAddressRow(env.app, "nathan", env.com.Id)
 	if err != nil {
-		t.Fatalf("failed to load mailbox: %v", err)
+		t.Fatal(err)
 	}
-	domain, err := app.FindRecordById("mail_domains", mb.GetString("domain"))
+
+	result, err := sendMessage(env.app, sendParams{
+		Ctx:           context.Background(),
+		UserID:        user.Id,
+		MailboxID:     env.inbox.Id,
+		FromAddressID: com.Id,
+		To:            []api.Recipient{{Email: "friend@example.net"}},
+		Subject:       "hello",
+		TextBody:      "hi",
+	})
 	if err != nil {
-		t.Fatalf("failed to load domain: %v", err)
+		t.Fatal(err)
 	}
-	alias, err := app.FindRecordById("mail_mailbox_aliases", padID("al_send_test003"))
+
+	stored, err := env.app.FindRecordById("mail_messages", result.MessageRecordID)
 	if err != nil {
-		t.Fatalf("failed to load alias: %v", err)
+		t.Fatal(err)
 	}
-
-	got := buildFromAddress(mb, domain, alias)
-	if !strings.Contains(got, "help@acme.com") {
-		t.Fatalf("expected alias address in From, got %q", got)
+	if got := stored.GetString("sender_email"); got != "nathan@tinycld.com" {
+		t.Fatalf("sender_email = %q, want nathan@tinycld.com", got)
 	}
-}
-
-func TestBuildFromAddress_UsesPrimaryWhenAliasNil(t *testing.T) {
-	app := setupAliasTestApp(t)
-
-	seedDomainAndMailbox(t, app, "acme.com", "support", "mb_send_test004")
-
-	mb, err := app.FindRecordById("mail_mailboxes", padID("mb_send_test004"))
-	if err != nil {
-		t.Fatalf("failed to load mailbox: %v", err)
-	}
-	domain, err := app.FindRecordById("mail_domains", mb.GetString("domain"))
-	if err != nil {
-		t.Fatalf("failed to load domain: %v", err)
-	}
-
-	got := buildFromAddress(mb, domain, nil)
-	if !strings.Contains(got, "support@acme.com") {
-		t.Fatalf("expected primary address in From, got %q", got)
-	}
-}
-
-// TestSendMetadata_SenderDomainIsBareDomainNotFromHeader proves the
-// sender_domain metadata value sendMessage sets is the domain record's own
-// field, not something parsed out of buildFromAddress's output. A prior
-// version ran a naive domainOf(fromAddr) parse on the formatted From header
-// ("Name <addr@domain>" or "<addr@domain>"), which returns "domain>" — this
-// pins the fix by constructing the same From header sendMessage builds and
-// showing it plays no part in the metadata value.
-func TestSendMetadata_SenderDomainIsBareDomainNotFromHeader(t *testing.T) {
-	app := setupAliasTestApp(t)
-	seedDomainAndMailbox(t, app, "acme.com", "support", "mb_send_test007")
-
-	mb, err := app.FindRecordById("mail_mailboxes", padID("mb_send_test007"))
-	if err != nil {
-		t.Fatalf("failed to load mailbox: %v", err)
-	}
-	domainRecord, err := app.FindRecordById("mail_domains", mb.GetString("domain"))
-	if err != nil {
-		t.Fatalf("failed to load domain: %v", err)
-	}
-
-	fromAddr := buildFromAddress(mb, domainRecord, nil)
-	if !strings.Contains(fromAddr, "<") {
-		t.Fatalf("expected buildFromAddress to produce an angle-bracket From header, got %q", fromAddr)
-	}
-
-	// This mirrors exactly what sendMessage puts in sendReq.Metadata.
-	got := strings.ToLower(domainRecord.GetString("domain"))
-	if got != "acme.com" {
-		t.Errorf("sender_domain metadata = %q, want acme.com", got)
-	}
-	if strings.Contains(got, "<") || strings.Contains(got, ">") {
-		t.Errorf("sender_domain metadata = %q, must not carry From-header punctuation", got)
+	if got := stored.GetString("sent_from"); got != com.Id {
+		t.Fatalf("sent_from = %q, want %q", got, com.Id)
 	}
 }
 

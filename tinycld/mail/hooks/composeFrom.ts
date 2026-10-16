@@ -1,0 +1,159 @@
+import type { SaveDraftRequest } from '@tinycld/app-generated/mail-api'
+import type { SendableAddress, SendableIdentity } from './groupSendableIdentities'
+import type { MailSendBlocker, MailSendReadiness } from './useMailSendReadiness'
+
+export interface ResolvedFrom {
+    identity: SendableIdentity
+    address: SendableAddress
+}
+
+/**
+ * Pure: the mailbox and address a compose sends from. The From row shows
+ * exactly this and the send / draft payload uses exactly this, so the two
+ * cannot disagree.
+ *
+ * The wanted mailbox is the picked one, else `fallbackMailboxId`, else the
+ * first identity (the personal mailbox sorts first). When the wanted mailbox
+ * is not among the identities — still loading, or it has no sendable
+ * address — this returns null: the From row shows nothing and Send stays
+ * disabled. It never substitutes another mailbox, which would show one From
+ * and send from another.
+ *
+ * A picked address that is not in the mailbox (deleted since, or stale)
+ * resolves to that mailbox's default address.
+ */
+export function resolveComposeFrom(
+    identities: SendableIdentity[],
+    storeMailboxId: string,
+    storeAddressId: string | null,
+    fallbackMailboxId: string
+): ResolvedFrom | null {
+    const wantedId = storeMailboxId || fallbackMailboxId
+    const identity = wantedId ? identities.find(i => i.mailboxId === wantedId) : identities[0]
+    if (!identity) return null
+    const address =
+        identity.addresses.find(a => a.id === storeAddressId) ??
+        identity.addresses.find(a => a.id === identity.defaultAddressId) ??
+        identity.addresses[0]
+    if (!address) return null
+    return { identity, address }
+}
+
+export interface ComposeSendBlocker {
+    blocker: MailSendBlocker | null
+    message: string | null
+}
+
+function domainOf(email: string) {
+    return email.slice(email.lastIndexOf('@') + 1)
+}
+
+/**
+ * Pure: what blocks or warns about a send from the chosen From. The domain
+ * check uses the chosen address, not the personal mailbox's domain. With no
+ * resolved address, only the readiness blockers that mean "nothing to send
+ * from" apply (no mailbox, no domain); its personal-domain warning would be
+ * about a mailbox the user may not be sending from.
+ */
+export function composeSendBlocker(
+    from: ResolvedFrom | null,
+    readiness: MailSendReadiness
+): ComposeSendBlocker {
+    if (from) {
+        if (from.address.domainVerified) return { blocker: null, message: null }
+        return {
+            blocker: 'domain-unverified',
+            message: `The domain "${domainOf(from.address.email)}" is not verified. Outgoing mail will fail until an admin completes verification in Settings → Mail.`,
+        }
+    }
+    if (readiness.blocker === 'no-mailbox' || readiness.blocker === 'no-domain') {
+        return { blocker: readiness.blocker, message: readiness.message }
+    }
+    return { blocker: null, message: null }
+}
+
+interface ComposeStateParams {
+    identities: SendableIdentity[]
+    storeMailboxId: string
+    storeAddressId: string | null
+    fallbackMailboxId: string
+    // The open draft's mailbox. A draft keeps its mailbox: the server will
+    // not move one, so only that mailbox's addresses are offered.
+    lockedMailboxId: string | null
+}
+
+/** Pure: the From choices a compose offers, and the From it sends. */
+export function resolveComposeState({
+    identities,
+    storeMailboxId,
+    storeAddressId,
+    fallbackMailboxId,
+    lockedMailboxId,
+}: ComposeStateParams) {
+    const choices = lockedMailboxId
+        ? identities.filter(i => i.mailboxId === lockedMailboxId)
+        : identities
+    const from = resolveComposeFrom(
+        choices,
+        lockedMailboxId || storeMailboxId,
+        storeAddressId,
+        fallbackMailboxId
+    )
+    return { choices, from, missingFromMessage: missingFromMessage(identities, choices, from) }
+}
+
+// Why a draft cannot be saved when no From resolves. Identities load in one
+// query, so with some loaded and none for the locked mailbox, that mailbox
+// lost its last sendable address (or the user left it); waiting will not help.
+function missingFromMessage(
+    identities: SendableIdentity[],
+    choices: SendableIdentity[],
+    from: ResolvedFrom | null
+) {
+    if (from) return null
+    if (identities.length > 0 && choices.length === 0) {
+        return "You can no longer send from this draft's mailbox"
+    }
+    return 'No address to save it from has loaded yet'
+}
+
+/**
+ * Pure: what the From row shows. With no resolved From but mailboxes that
+ * can send (the personal mailbox has no sendable address, say), the row
+ * still offers the picker so the user can choose a working one.
+ */
+export function composeFromRowView(choices: SendableIdentity[], from: ResolvedFrom | null) {
+    if (!from) {
+        return {
+            isVisible: choices.length > 0,
+            label: 'Choose an address to send from',
+            hasChoices: choices.length > 0,
+            selectedAddressId: '',
+        }
+    }
+    return {
+        isVisible: true,
+        label: `${from.identity.mailboxDisplayName} <${from.address.email}>`,
+        hasChoices: choices.length > 1 || from.identity.addresses.length > 1,
+        selectedAddressId: from.address.id,
+    }
+}
+
+type DraftFields = Omit<
+    SaveDraftRequest,
+    'mailbox_id' | 'from_address_id' | 'message_id' | 'alias_id'
+>
+
+/** Pure: the draft save request for the resolved From. */
+export function draftSaveRequest(
+    from: ResolvedFrom,
+    draftId: string | null,
+    fields: DraftFields
+): SaveDraftRequest {
+    return {
+        ...fields,
+        mailbox_id: from.identity.mailboxId,
+        from_address_id: from.address.id,
+        message_id: draftId ?? undefined,
+    }
+}

@@ -19,7 +19,7 @@ import { EmailDetailToolbar } from '../components/EmailDetailToolbar'
 import { MessageHeader, ThreadSubjectHeader } from '../components/EmailHeader'
 import { InlineReply } from '../components/InlineReply'
 import { NotFoundState } from '../components/NotFoundState'
-import { filterOwnAddresses, pickDefaultFrom } from '../hooks/defaultFromIdentity'
+import { buildReplyContext, type ReplyKind } from '../hooks/replyContext'
 import { useLabels, useThreadLabels } from '../hooks/useLabels'
 import { useMailboxes } from '../hooks/useMailboxes'
 import { useOpenReply } from '../hooks/useOpenReply'
@@ -91,13 +91,11 @@ export default function MailDetailScreen() {
     for (const mb of shared) userMailboxIds.add(mb.id)
     const hasAccess = !thread || userMailboxIds.has(thread.mailbox)
     // Lower-cased addresses that should render as "me" in the per-message
-    // header's "to ..." line: every primary + every alias of every identity
-    // the user can send as.
-    const ownAddresses = new Set<string>()
-    for (const id of identities) {
-        ownAddresses.add(id.primaryAddress.toLowerCase())
-        for (const a of id.aliases) ownAddresses.add(a.address.toLowerCase())
-    }
+    // header's "to ..." line: every address of every identity the user can
+    // send as.
+    const ownAddresses = new Set(
+        identities.flatMap(identity => identity.addresses.map(a => a.email.toLowerCase()))
+    )
 
     const { data: messages } = useLiveQuery({
         query: query =>
@@ -242,18 +240,27 @@ export default function MailDetailScreen() {
 
     const handleForwardAll = () => {
         if (!lastMessage) return
-        openReply({
-            messageId: lastMessage.id,
-            threadId: id,
-            subject: `Fwd: ${subject}`,
-            to: [],
-            mailboxId,
-            sentToAddresses: [
-                ...(lastMessage.recipients_to ?? []).map(r => r.email),
-                ...(lastMessage.recipients_cc ?? []).map(r => r.email),
-            ],
-        })
+        openReply(
+            buildReplyContext({
+                kind: 'forward',
+                message: { ...lastMessage, subject },
+                threadId: id,
+                threadMailboxId: mailboxId,
+                identities,
+            })
+        )
     }
+
+    const startReply = (kind: ReplyKind, msg: MailMessages) =>
+        openReply(
+            buildReplyContext({
+                kind,
+                message: msg,
+                threadId: id,
+                threadMailboxId: mailboxId,
+                identities,
+            })
+        )
 
     return (
         <View className="flex-1 bg-background" testID="mail-thread-detail">
@@ -306,62 +313,9 @@ export default function MailDetailScreen() {
                                 isExpanded={expanded}
                                 onToggleExpand={() => toggleExpanded(msg.id)}
                                 onToggleStar={() => toggleStar.mutate()}
-                                onReply={() =>
-                                    openReply({
-                                        messageId: msg.id,
-                                        threadId: id,
-                                        subject: msg.subject,
-                                        to: [{ name: msg.sender_name, email: msg.sender_email }],
-                                        mailboxId,
-                                        sentToAddresses: [
-                                            ...(msg.recipients_to ?? []).map(r => r.email),
-                                            ...(msg.recipients_cc ?? []).map(r => r.email),
-                                        ],
-                                    })
-                                }
-                                onReplyAll={() => {
-                                    const replyAddresses = [
-                                        ...(msg.recipients_to ?? []).map(r => r.email),
-                                        ...(msg.recipients_cc ?? []).map(r => r.email),
-                                    ]
-                                    const defaultFrom = pickDefaultFrom({
-                                        mode: 'reply',
-                                        identities,
-                                        replyToAddresses: replyAddresses,
-                                    })
-                                    const identity = identities.find(
-                                        i => i.mailboxId === defaultFrom.mailboxId
-                                    )
-                                    const rawTo = [
-                                        { name: msg.sender_name, email: msg.sender_email },
-                                        ...(msg.recipients_to ?? []),
-                                        ...(msg.recipients_cc ?? []),
-                                    ]
-                                    const filteredTo = identity
-                                        ? filterOwnAddresses({ identity, recipients: rawTo })
-                                        : rawTo
-                                    openReply({
-                                        messageId: msg.id,
-                                        threadId: id,
-                                        subject: msg.subject,
-                                        to: filteredTo,
-                                        mailboxId,
-                                        sentToAddresses: replyAddresses,
-                                    })
-                                }}
-                                onForward={() =>
-                                    openReply({
-                                        messageId: msg.id,
-                                        threadId: id,
-                                        subject: `Fwd: ${msg.subject}`,
-                                        to: [],
-                                        mailboxId,
-                                        sentToAddresses: [
-                                            ...(msg.recipients_to ?? []).map(r => r.email),
-                                            ...(msg.recipients_cc ?? []).map(r => r.email),
-                                        ],
-                                    })
-                                }
+                                onReply={() => startReply('reply', msg)}
+                                onReplyAll={() => startReply('replyAll', msg)}
+                                onForward={() => startReply('forward', msg)}
                             />
                             {expanded ? (
                                 <EmailBody
@@ -403,6 +357,7 @@ export default function MailDetailScreen() {
                         recipientsTo={lastMessage.recipients_to ?? []}
                         recipientsCc={lastMessage.recipients_cc ?? []}
                         mailboxId={mailboxId}
+                        deliveredTo={lastMessage.delivered_to ?? ''}
                     />
                 ) : null}
             </View>

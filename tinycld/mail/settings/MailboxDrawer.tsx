@@ -16,7 +16,7 @@ import { Pencil, Trash2, UserPlus, X } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb/core'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { MailboxAliasesPanel } from './MailboxAliasesPanel'
+import { MailboxAddressesPanel } from './MailboxAddressesPanel'
 import { MailboxForm, type MailboxFormValues } from './MailboxForm'
 import { MailboxMemberRow, type Role } from './MailboxMemberRow'
 
@@ -127,7 +127,7 @@ function CreateView({
                         Choose an address and display name to get started.
                     </Text>
                 </View>
-                <DrawerCloseButton onPress={onDone}>
+                <DrawerCloseButton onPress={onDone} accessibilityLabel="Close">
                     <X size={18} color={mutedColor} />
                 </DrawerCloseButton>
             </DrawerHeader>
@@ -172,7 +172,7 @@ function EditView({
                         {mailbox.address}@{mailbox.domainName}
                     </Text>
                 </View>
-                <DrawerCloseButton onPress={onCancel}>
+                <DrawerCloseButton onPress={onCancel} accessibilityLabel="Close">
                     <X size={18} color={mutedColor} />
                 </DrawerCloseButton>
             </DrawerHeader>
@@ -203,8 +203,8 @@ function ViewMode({
     onDeleted: () => void
 }) {
     const mutedColor = useThemeColor('muted-foreground')
-    const [tab, setTab] = useState<'members' | 'aliases'>(
-        mailbox.type === 'shared' ? 'members' : 'aliases'
+    const [tab, setTab] = useState<'members' | 'addresses'>(
+        mailbox.type === 'shared' ? 'members' : 'addresses'
     )
     const avatarInitial = (mailbox.displayName || mailbox.address).trim().charAt(0).toUpperCase()
 
@@ -244,7 +244,7 @@ function ViewMode({
                             <Pencil size={16} color={mutedColor} />
                         </Pressable>
                     )}
-                    <DrawerCloseButton onPress={onDeleted}>
+                    <DrawerCloseButton onPress={onDeleted} accessibilityLabel="Close">
                         <X size={18} color={mutedColor} />
                     </DrawerCloseButton>
                 </View>
@@ -272,9 +272,9 @@ function ViewMode({
                         onPress={() => setTab('members')}
                     />
                     <TabButton
-                        label="Aliases"
-                        active={tab === 'aliases'}
-                        onPress={() => setTab('aliases')}
+                        label="Addresses"
+                        active={tab === 'addresses'}
+                        onPress={() => setTab('addresses')}
                     />
                 </View>
             )}
@@ -283,12 +283,8 @@ function ViewMode({
                 {mailbox.type === 'shared' && tab === 'members' && (
                     <MembersTab mailboxId={mailbox.id} members={members} orgMembers={orgMembers} />
                 )}
-                {(mailbox.type === 'personal' || tab === 'aliases') && (
-                    <MailboxAliasesPanel
-                        mailboxId={mailbox.id}
-                        mailboxDomainId={mailbox.domain}
-                        domainName={mailbox.domainName}
-                    />
+                {(mailbox.type === 'personal' || tab === 'addresses') && (
+                    <MailboxAddressesPanel mailboxId={mailbox.id} />
                 )}
             </DrawerBody>
 
@@ -616,7 +612,7 @@ function DangerZone({ mailboxId, onDeleted }: { mailboxId: string; onDeleted: ()
                     Delete this mailbox.
                 </Text>
                 <Text className="text-muted-foreground" style={{ fontSize: 11.5 }}>
-                    Members lose access. Aliases are freed. Messages stay on disk.
+                    Members lose access. Its addresses are freed. Messages stay on disk.
                 </Text>
             </View>
             {!confirming ? (

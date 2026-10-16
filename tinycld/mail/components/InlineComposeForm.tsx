@@ -6,13 +6,13 @@ import { useCallback, useEffect } from 'react'
 import { View } from 'react-native'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
+import { useComposeFrom } from '../hooks/useComposeFrom'
 import type { useCompose } from '../hooks/useComposeState'
-import { useDefaultMailbox } from '../hooks/useDefaultMailbox'
 import { useMailEditor } from '../hooks/useMailEditor'
 import { useSendEmail } from '../hooks/useSendEmail'
-import { useComposeStore } from '../stores/compose-store'
 import { AttachmentRibbon } from './AttachmentRibbon'
 import { ComposeFields } from './ComposeFields'
+import { ComposeFromRow } from './ComposeFromRow'
 import { ComposeToolbar } from './ComposeToolbar'
 import { DropOverlay } from './DropOverlay'
 
@@ -24,8 +24,9 @@ interface InlineComposeFormProps {
 export default function InlineComposeForm({ replyContext, onClose }: InlineComposeFormProps) {
     const borderColor = useThemeColor('border')
     const backgroundColor = useThemeColor('background')
-    const mailboxId = useDefaultMailbox()
-    const aliasId = useComposeStore(s => s.aliasId)
+    // A reply goes from the mailbox the reply context chose (the mailbox of
+    // the address the message arrived on), else the thread's mailbox.
+    const { choices, from, setFrom } = useComposeFrom(replyContext.mailboxId)
     const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
         placeholder: 'Compose reply',
     })
@@ -67,10 +68,10 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
         },
     })
 
-    // Send is disabled without a mailbox (matching ComposeWindow); the guard
-    // only narrows the type.
+    // Send is disabled without a resolved From (matching ComposeWindow); the
+    // guard only narrows the type.
     const onSend = handleSubmit(async data => {
-        if (!mailboxId) return
+        if (!from) return
 
         const htmlBody = await editor.getHTML()
         const textBody = await editor.getText()
@@ -79,8 +80,8 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
         const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
 
         send({
-            mailbox_id: mailboxId,
-            alias_id: aliasId ?? undefined,
+            mailbox_id: from.identity.mailboxId,
+            from_address_id: from.address.id,
             to: parseRecipients(data.to),
             cc,
             bcc,
@@ -94,7 +95,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
 
     const { isDragging, dropRef } = useFileDrop({
         onFiles: addFilesSafely,
-        isEnabled: !!mailboxId,
+        isEnabled: !!from,
     })
 
     const { pickFiles } = usePickFiles()
@@ -116,6 +117,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
             }}
         >
             <View ref={dropRef} className="flex-1">
+                <ComposeFromRow identities={choices} from={from} onSelect={setFrom} />
                 <ComposeFields control={control} errors={errors} autoFocusTo={toIsEmpty} />
                 <View className="p-3" style={{ minHeight: 120, maxHeight: 280 }}>
                     <EditorComponent />
@@ -133,7 +135,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
                     onSend={onSend}
                     onAttach={handleAttach}
                     isPending={isPending}
-                    isSendDisabled={!mailboxId}
+                    isSendDisabled={!from}
                 />
                 <DropOverlay isVisible={isDragging} />
             </View>

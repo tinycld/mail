@@ -9,10 +9,10 @@ function item(overrides: Partial<MailboxListItem> = {}): MailboxListItem {
         displayName: 'Support Team',
         type: 'shared',
         memberCount: 1,
-        aliasCount: 0,
+        otherAddressCount: 0,
         memberNames: ['Nathan Stitt'],
         memberEmails: ['nathan@tinycld.org'],
-        aliasAddresses: [],
+        otherAddresses: [],
         ...overrides,
     }
 }
@@ -83,8 +83,8 @@ describe('filterAndGroupMailboxes', () => {
         expect(got.shared.map(m => m.id)).toEqual(['a'])
     })
 
-    it('matches query against alias address', () => {
-        const a = item({ id: 'a', aliasAddresses: ['help'] })
+    it('matches query against another address of the mailbox', () => {
+        const a = item({ id: 'a', otherAddresses: ['help'] })
         const b = item({ id: 'b' })
         const got = filterAndGroupMailboxes([a, b], { query: 'help', type: 'all' })
         expect(got.shared.map(m => m.id)).toEqual(['a'])

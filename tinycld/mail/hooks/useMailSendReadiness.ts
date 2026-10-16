@@ -37,12 +37,14 @@ export function useMailSendReadiness(): MailSendReadiness {
             }))
     )
 
-    // Compose writes to the user's PERSONAL mailbox. Taking members[0] picked
-    // whichever membership happened to sort first, so a user who also belongs
-    // to a shared mailbox could have their draft saved into the shared one —
-    // where their own Drafts view (scoped to the personal mailbox) never shows
-    // it. Fall back to the first membership only when there is no personal
-    // mailbox at all, which keeps the existing "no-mailbox" blocker honest.
+    // The DEFAULT mailbox a new compose sends from: the user's personal one.
+    // The From picker can choose another mailbox, and compose then sends and
+    // saves drafts there (see composeFrom.ts, which also checks the chosen
+    // address's domain). Taking members[0] here would make whichever
+    // membership sorted first the silent default, so a shared mailbox could
+    // win without the user picking it. Fall back to the first membership only
+    // when there is no personal mailbox at all, which keeps the existing
+    // "no-mailbox" blocker honest.
     const mailboxId =
         members?.find(m => m.type === 'personal')?.mailbox ?? members?.[0]?.mailbox ?? null
 

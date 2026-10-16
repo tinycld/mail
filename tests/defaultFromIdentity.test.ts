@@ -1,155 +1,99 @@
 import { describe, expect, it } from 'vitest'
-import { filterOwnAddresses, pickDefaultFrom } from '~/tinycld/mail/hooks/defaultFromIdentity'
+import { filterOwnAddresses, pickReplyFrom } from '~/tinycld/mail/hooks/defaultFromIdentity'
 import type { SendableIdentity } from '~/tinycld/mail/hooks/groupSendableIdentities'
+
+const addr = (id: string, email: string) => ({
+    id,
+    email,
+    isPrimary: false,
+    domainRank: 1,
+    domainVerified: true,
+    created: '',
+})
 
 const personal: SendableIdentity = {
     mailboxId: 'mb1',
-    mailboxDisplayName: 'Alice',
-    primaryAddress: 'alice@acme.com',
-    aliases: [{ id: 'a1', address: 'alice.smith@acme.com' }],
+    mailboxDisplayName: 'Nathan',
+    isPersonal: true,
+    addresses: [addr('org', 'nathan@tinycld.org'), addr('com', 'nathan@tinycld.com')],
+    defaultAddressId: 'org',
 }
 const support: SendableIdentity = {
     mailboxId: 'mb2',
     mailboxDisplayName: 'Support',
-    primaryAddress: 'support@acme.com',
-    aliases: [{ id: 'a2', address: 'help@acme.com' }],
+    isPersonal: false,
+    addresses: [addr('sup', 'support@tinycld.org'), addr('help', 'help@tinycld.org')],
+    defaultAddressId: 'sup',
 }
+const identities = [personal, support]
 
-describe('pickDefaultFrom', () => {
-    it('returns first identity primary for new message', () => {
+describe('pickReplyFrom', () => {
+    it('uses the address the message was delivered to', () => {
         expect(
-            pickDefaultFrom({ mode: 'new', identities: [personal, support], replyToAddresses: [] })
-        ).toEqual({
-            mailboxId: 'mb1',
-            aliasId: null,
-        })
-    })
-
-    it('falls back to first identity when no reply matches', () => {
-        expect(
-            pickDefaultFrom({
-                mode: 'reply',
-                identities: [personal, support],
-                replyToAddresses: ['ext@other.com'],
+            pickReplyFrom({
+                identities,
+                deliveredToAddressId: 'com',
+                headerAddresses: [],
+                threadMailboxId: 'mb1',
             })
-        ).toEqual({ mailboxId: 'mb1', aliasId: null })
+        ).toEqual({ mailboxId: 'mb1', addressId: 'com' })
     })
 
-    it('prefers mailbox primary when reply matches primary', () => {
+    it('falls back to a header match for mail stored before delivered_to existed', () => {
         expect(
-            pickDefaultFrom({
-                mode: 'reply',
-                identities: [personal, support],
-                replyToAddresses: ['support@acme.com'],
+            pickReplyFrom({
+                identities,
+                deliveredToAddressId: null,
+                headerAddresses: ['"Help" <HELP@tinycld.org>'],
+                threadMailboxId: 'mb1',
             })
-        ).toEqual({ mailboxId: 'mb2', aliasId: null })
+        ).toEqual({ mailboxId: 'mb2', addressId: 'help' })
     })
 
-    it('matches alias when reply matches alias', () => {
+    it("falls back to the thread mailbox's default", () => {
         expect(
-            pickDefaultFrom({
-                mode: 'reply',
-                identities: [personal, support],
-                replyToAddresses: ['help@acme.com'],
+            pickReplyFrom({
+                identities,
+                deliveredToAddressId: 'gone',
+                headerAddresses: ['someone@else.example'],
+                threadMailboxId: 'mb2',
             })
-        ).toEqual({ mailboxId: 'mb2', aliasId: 'a2' })
+        ).toEqual({ mailboxId: 'mb2', addressId: null })
     })
 
-    it('prefers primary over alias when both appear', () => {
+    it('returns an empty selection with no identities', () => {
         expect(
-            pickDefaultFrom({
-                mode: 'reply',
-                identities: [personal, support],
-                replyToAddresses: ['help@acme.com', 'alice@acme.com'],
+            pickReplyFrom({
+                identities: [],
+                deliveredToAddressId: null,
+                headerAddresses: [],
+                threadMailboxId: 'x',
             })
-        ).toEqual({ mailboxId: 'mb1', aliasId: null })
+        ).toEqual({ mailboxId: '', addressId: null })
     })
+})
 
-    it('is case-insensitive', () => {
+describe('pickReplyFrom header match', () => {
+    it("prefers the thread mailbox's address when the message went to several of mine", () => {
         expect(
-            pickDefaultFrom({
-                mode: 'reply',
-                identities: [personal, support],
-                replyToAddresses: ['Support@ACME.com'],
+            pickReplyFrom({
+                identities,
+                deliveredToAddressId: null,
+                headerAddresses: ['nathan@tinycld.org', 'support@tinycld.org'],
+                threadMailboxId: 'mb2',
             })
-        ).toEqual({ mailboxId: 'mb2', aliasId: null })
-    })
-
-    it('returns empty mailboxId when no identities', () => {
-        expect(
-            pickDefaultFrom({ mode: 'reply', identities: [], replyToAddresses: ['x@y.com'] })
-        ).toEqual({
-            mailboxId: '',
-            aliasId: null,
-        })
-    })
-
-    it('treats forward mode like reply for defaulting', () => {
-        expect(
-            pickDefaultFrom({
-                mode: 'forward',
-                identities: [personal, support],
-                replyToAddresses: ['help@acme.com'],
-            })
-        ).toEqual({ mailboxId: 'mb2', aliasId: 'a2' })
+        ).toEqual({ mailboxId: 'mb2', addressId: 'sup' })
     })
 })
 
 describe('filterOwnAddresses', () => {
-    it('strips primary + aliases from recipient list', () => {
-        const got = filterOwnAddresses({
-            identity: support,
-            recipients: [
-                { name: 'External', email: 'ext@foo.com' },
-                { name: 'Support', email: 'support@acme.com' },
-                { name: 'Help', email: 'help@acme.com' },
-            ],
-        })
-        expect(got).toEqual([{ name: 'External', email: 'ext@foo.com' }])
-    })
-
-    it('is case-insensitive on emails', () => {
-        const got = filterOwnAddresses({
-            identity: support,
-            recipients: [{ name: 'Support', email: 'SUPPORT@acme.com' }],
-        })
-        expect(got).toEqual([])
-    })
-
-    it('returns the list unchanged when identity has no matches', () => {
-        const got = filterOwnAddresses({
-            identity: support,
-            recipients: [{ name: 'External', email: 'ext@foo.com' }],
-        })
-        expect(got).toEqual([{ name: 'External', email: 'ext@foo.com' }])
-    })
-})
-
-describe('pickDefaultFrom address extraction', () => {
-    it('extracts bare address from display-name-prefixed input', () => {
-        const got = pickDefaultFrom({
-            mode: 'reply',
-            identities: [personal, support],
-            replyToAddresses: ['"Support Team" <support@acme.com>'],
-        })
-        expect(got).toEqual({ mailboxId: 'mb2', aliasId: null })
-    })
-
-    it('ignores empty strings in replyToAddresses', () => {
-        const got = pickDefaultFrom({
-            mode: 'reply',
-            identities: [personal, support],
-            replyToAddresses: ['', '   ', 'support@acme.com'],
-        })
-        expect(got).toEqual({ mailboxId: 'mb2', aliasId: null })
-    })
-
-    it('falls back when all replyToAddresses are unparseable', () => {
-        const got = pickDefaultFrom({
-            mode: 'reply',
-            identities: [personal, support],
-            replyToAddresses: ['', '   '],
-        })
-        expect(got).toEqual({ mailboxId: 'mb1', aliasId: null })
+    it('removes every address of the identity, any case', () => {
+        const recipients = [
+            { name: 'Me', email: 'Nathan@TinyCld.com' },
+            { name: 'Bo', email: 'bo@else.example' },
+        ]
+        expect(filterOwnAddresses({ identities: [personal], recipients })).toEqual([
+            { name: 'Bo', email: 'bo@else.example' },
+        ])
     })
 })

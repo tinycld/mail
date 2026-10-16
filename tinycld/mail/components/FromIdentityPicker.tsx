@@ -1,30 +1,32 @@
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useState } from 'react'
-import { Modal, Pressable, Text, View } from 'react-native'
+import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native'
 import type { SendableIdentity } from '../hooks/groupSendableIdentities'
 
 interface Props {
     identities: SendableIdentity[]
-    selectedMailboxId: string
-    selectedAliasId: string | null
-    onSelect: (mailboxId: string, aliasId: string | null) => void
+    selectedAddressId: string
+    onSelect: (mailboxId: string, addressId: string) => void
 }
 
-export function FromIdentityPicker({
-    identities,
-    selectedMailboxId,
-    selectedAliasId,
-    onSelect,
-}: Props) {
-    const [open, setOpen] = useState(false)
+export function FromIdentityPicker({ identities, selectedAddressId, onSelect }: Props) {
+    const [isOpen, setIsOpen] = useState(false)
     const primaryColor = useThemeColor('primary')
-    const fgColor = useThemeColor('foreground')
-    const mutedColor = useThemeColor('muted-foreground')
     const surfaceBg = useThemeColor('surface-secondary')
+    const backdropColor = useThemeColor('overlay-backdrop')
+    // Many mailboxes or addresses must scroll inside the panel, not run off
+    // the screen.
+    const { height } = useWindowDimensions()
+    const listMaxHeight = Math.min(480, height * 0.7)
+
+    const choose = (mailboxId: string, addressId: string) => {
+        onSelect(mailboxId, addressId)
+        setIsOpen(false)
+    }
 
     return (
         <>
-            <Pressable onPress={() => setOpen(true)}>
+            <Pressable onPress={() => setIsOpen(true)}>
                 <Text
                     style={{ fontSize: 13, color: primaryColor, textDecorationLine: 'underline' }}
                 >
@@ -32,56 +34,29 @@ export function FromIdentityPicker({
                 </Text>
             </Pressable>
 
-            <Modal transparent visible={open} onRequestClose={() => setOpen(false)}>
+            <Modal transparent visible={isOpen} onRequestClose={() => setIsOpen(false)}>
                 <Pressable
                     className="flex-1 items-center justify-center"
-                    style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-                    onPress={() => setOpen(false)}
+                    style={{ backgroundColor: backdropColor }}
+                    onPress={() => setIsOpen(false)}
                 >
                     <View
-                        className="rounded-xl p-3 gap-3"
+                        className="rounded-xl p-3"
                         style={{ backgroundColor: surfaceBg, minWidth: 320 }}
                     >
-                        {identities.map(identity => (
-                            <View key={identity.mailboxId} className="gap-1">
-                                <Text
-                                    style={{
-                                        fontSize: 12,
-                                        fontWeight: '600',
-                                        color: mutedColor,
-                                        textTransform: 'uppercase',
-                                    }}
-                                >
-                                    {identity.mailboxDisplayName}
-                                </Text>
-                                <IdentityRow
-                                    label={`${identity.mailboxDisplayName} <${identity.primaryAddress}>`}
-                                    isSelected={
-                                        selectedMailboxId === identity.mailboxId && !selectedAliasId
-                                    }
-                                    onPress={() => {
-                                        onSelect(identity.mailboxId, null)
-                                        setOpen(false)
-                                    }}
-                                    color={fgColor}
+                        <ScrollView
+                            style={{ maxHeight: listMaxHeight }}
+                            contentContainerClassName="gap-3"
+                        >
+                            {identities.map(identity => (
+                                <IdentityGroup
+                                    key={identity.mailboxId}
+                                    identity={identity}
+                                    selectedAddressId={selectedAddressId}
+                                    onChoose={choose}
                                 />
-                                {identity.aliases.map(alias => (
-                                    <IdentityRow
-                                        key={alias.id}
-                                        label={alias.address}
-                                        isSelected={
-                                            selectedMailboxId === identity.mailboxId &&
-                                            selectedAliasId === alias.id
-                                        }
-                                        onPress={() => {
-                                            onSelect(identity.mailboxId, alias.id)
-                                            setOpen(false)
-                                        }}
-                                        color={fgColor}
-                                    />
-                                ))}
-                            </View>
-                        ))}
+                            ))}
+                        </ScrollView>
                     </View>
                 </Pressable>
             </Modal>
@@ -89,24 +64,67 @@ export function FromIdentityPicker({
     )
 }
 
-function IdentityRow({
+function IdentityGroup({
+    identity,
+    selectedAddressId,
+    onChoose,
+}: {
+    identity: SendableIdentity
+    selectedAddressId: string
+    onChoose: (mailboxId: string, addressId: string) => void
+}) {
+    return (
+        <View className="gap-1">
+            <Text
+                className="text-muted-foreground uppercase"
+                style={{ fontSize: 12, fontWeight: '600' }}
+            >
+                {identity.mailboxDisplayName}
+            </Text>
+            {identity.addresses.map(address => (
+                <AddressRow
+                    key={address.id}
+                    label={address.email}
+                    isSelected={address.id === selectedAddressId}
+                    isUnverified={!address.domainVerified}
+                    onPress={() => onChoose(identity.mailboxId, address.id)}
+                />
+            ))}
+        </View>
+    )
+}
+
+function AddressRow({
     label,
     isSelected,
+    isUnverified,
     onPress,
-    color,
 }: {
     label: string
     isSelected: boolean
+    isUnverified: boolean
     onPress: () => void
-    color: string
 }) {
+    const selectedClass = isSelected ? 'bg-primary/10' : ''
     return (
         <Pressable
             onPress={onPress}
-            className="flex-row items-center px-2 py-1.5 rounded-md"
-            style={{ backgroundColor: isSelected ? 'rgba(0, 0, 0, 0.08)' : 'transparent' }}
+            className={`flex-row items-center px-2 py-1.5 rounded-md ${selectedClass}`}
         >
-            <Text style={{ fontSize: 13, color }}>{label}</Text>
+            <Text className="text-foreground" style={{ fontSize: 13 }}>
+                {label}
+            </Text>
+            <UnverifiedNote isVisible={isUnverified} />
         </Pressable>
+    )
+}
+
+// Mail from an unverified domain fails to send; say so before it is picked.
+function UnverifiedNote({ isVisible }: { isVisible: boolean }) {
+    if (!isVisible) return null
+    return (
+        <Text className="ml-2 text-muted-foreground" style={{ fontSize: 12 }}>
+            domain not verified
+        </Text>
     )
 }

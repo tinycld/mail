@@ -141,6 +141,8 @@ func setupMailGuestApp(t *testing.T) *mailGuestEnv {
 		t.Fatal(err)
 	}
 
+	addAddressFixture(t, app)
+
 	member := mailGuestUser(t, app, "member@test.local", "member")
 	guest := mailGuestUser(t, app, "guest@test.local", "guest")
 
