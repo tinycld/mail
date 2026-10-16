@@ -1,12 +1,12 @@
 import { and, eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
-import { openHelp } from '@tinycld/core/lib/help/open-help'
 import type { MemberDrawerPanelProps } from '@tinycld/core/lib/members/member-panel'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { DefaultFromPicker } from './DefaultFromPicker'
 import { EmailNameForm } from './EmailNameForm'
+import { MailAppLink } from './MailAppLink'
 import { MailboxAddressesPanel } from './MailboxAddressesPanel'
 import { usePersonEmail } from './usePersonEmail'
 
@@ -106,14 +106,6 @@ function SharedInboxList({ userId }: { userId: string }) {
                 </Text>
             ))}
         </View>
-    )
-}
-
-function MailAppLink() {
-    return (
-        <Pressable onPress={() => openHelp('mail:imap')}>
-            <Text className="text-primary text-xs font-semibold">Set up a mail app</Text>
-        </Pressable>
     )
 }
 

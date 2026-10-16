@@ -55,7 +55,7 @@ export function personEmailQuery(
         }))
 }
 
-type PersonEmailRow = NonNullable<ReturnType<typeof usePersonEmailRows>['data']>[number]
+export type PersonEmailRow = NonNullable<ReturnType<typeof usePersonEmailRows>['data']>[number]
 
 function usePersonEmailRows(userId: string) {
     const [identities, addresses, domains, groups] = useStore(
@@ -85,10 +85,8 @@ function toAddressRow(row: PersonEmailRow): AddressRowData | null {
     }
 }
 
-/** A person's identity and every address of its inbox, from one live query. */
-export function usePersonEmail(userId: string) {
-    const { data, isReady } = usePersonEmailRows(userId)
-    const rows = data ?? []
+/** Folds the joined rows into the identity and its addresses (the identity survives zero addresses). */
+export function toPersonEmail(rows: PersonEmailRow[]) {
     const first = rows[0]
     const identity = first
         ? {
@@ -99,9 +97,11 @@ export function usePersonEmail(userId: string) {
               retired: first.retired,
           }
         : null
-    return {
-        identity,
-        addresses: rows.map(toAddressRow).filter(a => a !== null),
-        isReady,
-    }
+    return { identity, addresses: rows.map(toAddressRow).filter(a => a !== null) }
+}
+
+/** A person's identity and every address of its inbox, from one live query. */
+export function usePersonEmail(userId: string) {
+    const { data, isReady } = usePersonEmailRows(userId)
+    return { ...toPersonEmail(data ?? []), isReady }
 }

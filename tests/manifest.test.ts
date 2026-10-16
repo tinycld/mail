@@ -35,6 +35,12 @@ describe('mail manifest', () => {
         expect(manifest.settings?.length).toBeGreaterThan(0)
     })
 
+    it('declares the Account email page', () => {
+        expect(manifest.accountSettings).toEqual([
+            { slug: 'email', label: 'Email', component: 'settings/AccountEmail' },
+        ])
+    })
+
     it('declares the setup wizard steps and the domain options slot', () => {
         expect(manifest.setupSteps).toEqual([
             {
