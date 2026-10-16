@@ -11,6 +11,7 @@ describe('toAddressItems', () => {
                 source: 'rule',
                 isPrimary: false,
                 rank: 2,
+                groupName: null,
             },
             {
                 id: 'm',
@@ -19,6 +20,7 @@ describe('toAddressItems', () => {
                 source: 'manual',
                 isPrimary: false,
                 rank: 1,
+                groupName: null,
             },
             {
                 id: 'p',
@@ -27,6 +29,7 @@ describe('toAddressItems', () => {
                 source: 'manual',
                 isPrimary: true,
                 rank: 1,
+                groupName: null,
             },
         ])
         expect(items).toEqual([
@@ -39,5 +42,29 @@ describe('toAddressItems', () => {
                 canRemove: false,
             },
         ])
+    })
+
+    it('names the group that gave a rule address', () => {
+        const items = toAddressItems([
+            {
+                id: 'g',
+                localPart: 'ann',
+                domainName: 'q.example',
+                source: 'rule',
+                isPrimary: false,
+                rank: 1,
+                groupName: 'Sales',
+            },
+            {
+                id: 'd',
+                localPart: 'ann',
+                domainName: 'r.example',
+                source: 'rule',
+                isPrimary: false,
+                rank: 2,
+                groupName: null,
+            },
+        ])
+        expect(items.map(i => i.badge)).toEqual(['From group Sales', 'From the domain rule'])
     })
 })

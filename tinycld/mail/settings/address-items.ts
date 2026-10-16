@@ -5,6 +5,8 @@ export interface AddressRowData {
     source: string
     isPrimary: boolean
     rank: number
+    /** The group that gave a rule address, when the domain gives addresses by group. */
+    groupName: string | null
 }
 
 export interface AddressItem {
@@ -16,6 +18,7 @@ export interface AddressItem {
 
 function badgeFor(row: AddressRowData) {
     if (row.isPrimary) return 'Main address'
+    if (row.source === 'rule' && row.groupName) return `From group ${row.groupName}`
     if (row.source === 'rule') return 'From the domain rule'
     return null
 }
