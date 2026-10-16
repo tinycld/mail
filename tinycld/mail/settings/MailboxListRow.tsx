@@ -41,6 +41,7 @@ export function MailboxListRow({ item, isActive = false, onPress }: Props) {
     return (
         <Pressable
             onPress={onPress}
+            testID={`mailbox-row-${item.address}@${item.domainName}`}
             className="flex-row items-center gap-3 rounded-lg p-3"
             style={{
                 backgroundColor: isActive ? `${primaryColor}0F` : 'transparent',

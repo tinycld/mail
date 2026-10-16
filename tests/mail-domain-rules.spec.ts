@@ -64,10 +64,14 @@ test.describe('Mail — Domain rule', () => {
         await expect(card.getByText('Apply', { exact: true })).toBeHidden()
 
         await navigateToMailboxSettings(page)
-        await page.getByText(TEST_USER_MAILBOX, { exact: true }).first().click()
-        await expect(page.getByText('Addresses', { exact: true }).first()).toBeVisible()
-        await expect(page.getByText(address, { exact: true })).toBeVisible()
-        await expect(page.getByText('From the domain rule', { exact: true }).first()).toBeVisible()
+        await page.getByTestId(`mailbox-row-${TEST_USER_MAILBOX}`).click()
+        const drawer = page.getByRole('dialog')
+        await expect(drawer.getByText('Addresses', { exact: true })).toBeVisible()
+        await expect(drawer.getByText(address, { exact: true })).toBeVisible()
+        await expect(drawer.getByText('From the domain rule', { exact: true })).toBeVisible()
+        // The drawer is modal: its backdrop covers the app rail until it closes.
+        await drawer.getByRole('button', { name: 'Close' }).click()
+        await expect(drawer).toBeHidden()
 
         await navigateToPackage(page, 'mail', {
             waitFor: page.getByTestId('package-sidebar-mounted'),

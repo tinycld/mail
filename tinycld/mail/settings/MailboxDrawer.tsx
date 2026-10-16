@@ -127,7 +127,7 @@ function CreateView({
                         Choose an address and display name to get started.
                     </Text>
                 </View>
-                <DrawerCloseButton onPress={onDone}>
+                <DrawerCloseButton onPress={onDone} accessibilityLabel="Close">
                     <X size={18} color={mutedColor} />
                 </DrawerCloseButton>
             </DrawerHeader>
@@ -172,7 +172,7 @@ function EditView({
                         {mailbox.address}@{mailbox.domainName}
                     </Text>
                 </View>
-                <DrawerCloseButton onPress={onCancel}>
+                <DrawerCloseButton onPress={onCancel} accessibilityLabel="Close">
                     <X size={18} color={mutedColor} />
                 </DrawerCloseButton>
             </DrawerHeader>
@@ -244,7 +244,7 @@ function ViewMode({
                             <Pencil size={16} color={mutedColor} />
                         </Pressable>
                     )}
-                    <DrawerCloseButton onPress={onDeleted}>
+                    <DrawerCloseButton onPress={onDeleted} accessibilityLabel="Close">
                         <X size={18} color={mutedColor} />
                     </DrawerCloseButton>
                 </View>
