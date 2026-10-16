@@ -308,3 +308,20 @@ func TestIdentityEdit_RepairedNameIsAccepted(t *testing.T) {
 		t.Fatalf("identity after repair = inbox %q name %q", got.GetString("inbox"), got.GetString("email_name"))
 	}
 }
+
+func TestIdentityEdit_RetiredIdentityCannotChange(t *testing.T) {
+	var tombstone string
+	runIdentityEdit(t, identityEditCase{
+		name: "retired rename", actor: asAdmin, status: http.StatusForbidden, content: `This person has left`,
+		prepare: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
+			if err := retireIdentity(app, s.ann.Id); err != nil {
+				t.Fatal(err)
+			}
+			tombstone = "retired-" + s.annID.Id
+		},
+		body: bodyOf(`{"email_name":"carol"}`),
+		after: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
+			assertIdentityField(t, app, s, "email_name", tombstone)
+		},
+	})
+}

@@ -18,6 +18,10 @@ const maxEmailNameLength = 64
 func registerIdentityEditHooks(app core.App) {
 	app.OnRecordUpdateRequest("mail_identities").BindFunc(func(e *core.RecordRequestEvent) error {
 		original := e.Record.Original()
+		// A tombstone's name is the server's; the model hook skips retired rows.
+		if original.GetBool("retired") {
+			return e.ForbiddenError("This person has left. Their email settings cannot change.", nil)
+		}
 		// Restore rather than refuse: a client that saves an edited row can
 		// send the whole record back.
 		for _, field := range []string{"user", "inbox"} {
