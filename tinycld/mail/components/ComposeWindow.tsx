@@ -38,14 +38,16 @@ interface ComposeWindowProps {
 }
 
 export function ComposeWindow({ isVisible }: ComposeWindowProps) {
-    const { mode, replyContext, draftContext, minimize, maximize, open, close, setFromIdentity } =
+    const { mode, replyContext, draftContext, minimize, maximize, open, close, setFrom } =
         useCompose()
     const resolvedDraft = useDraftMessage(draftContext)
     const breakpoint = useBreakpoint()
     const insets = useSafeAreaInsets()
     const readiness = useMailSendReadiness()
-    const mailboxId = readiness.mailboxId
-    const aliasId = useComposeStore(s => s.aliasId)
+    const storeMailboxId = useComposeStore(s => s.mailboxId)
+    const fromAddressId = useComposeStore(s => s.fromAddressId)
+    // The picked mailbox wins; the personal mailbox is the default.
+    const mailboxId = storeMailboxId || readiness.mailboxId
     const draftIdRef = useRef<string | null>(null)
     const toastedBlockerRef = useRef<string | null>(null)
     const [headerTitle, setHeaderTitle] = useState('')
@@ -125,7 +127,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             }
             const { message, htmlBody } = resolvedDraft
             draftIdRef.current = message.id
-            setFromIdentity(draftContext.mailboxId, message.alias || null)
+            setFrom(draftContext.mailboxId, message.sent_from || null)
             const formatRecipients = (recipients: { name: string; email: string }[]) =>
                 recipients.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ')
             reset({
@@ -156,7 +158,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             editorRef.current.clear()
         }
         return () => cleanup?.()
-    }, [isVisible, replyContext, draftContext, resolvedDraft, reset, setFromIdentity])
+    }, [isVisible, replyContext, draftContext, resolvedDraft, reset, setFrom])
 
     const [messagesCollection] = useStore('mail_messages')
 
@@ -210,7 +212,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
         saveDraft({
             mailbox_id: mailboxId,
-            alias_id: aliasId ?? undefined,
+            from_address_id: fromAddressId ?? undefined,
             message_id: draftIdRef.current ?? undefined,
             to,
             cc,
@@ -273,7 +275,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
         send({
             mailbox_id: mailboxId,
-            alias_id: aliasId ?? undefined,
+            from_address_id: fromAddressId ?? undefined,
             to: parseRecipients(data.to),
             cc,
             bcc,

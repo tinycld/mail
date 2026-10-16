@@ -1,50 +1,60 @@
-import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import type { ComponentProps } from 'react'
 import { Text, View } from 'react-native'
+import type { SendableIdentity } from '../hooks/groupSendableIdentities'
 import { useSendableIdentities } from '../hooks/useSendableIdentities'
 import { useComposeStore } from '../stores/compose-store'
 import { FromIdentityPicker } from './FromIdentityPicker'
 
+// Resolve the shown From during render instead of syncing a default into the
+// store: an empty store mailboxId means the personal mailbox (identities[0]),
+// and a null address means that mailbox's default. Nothing is written until
+// the user picks.
+function resolveFrom(identities: SendableIdentity[], mailboxId: string, addressId: string | null) {
+    const identity = identities.find(i => i.mailboxId === mailboxId) ?? identities[0]
+    const address =
+        identity.addresses.find(a => a.id === addressId) ??
+        identity.addresses.find(a => a.id === identity.defaultAddressId) ??
+        identity.addresses[0]
+    return { identity, address }
+}
+
 export function ComposeFromRow() {
     const identities = useSendableIdentities()
     const mailboxId = useComposeStore(s => s.mailboxId)
-    const aliasId = useComposeStore(s => s.aliasId)
-    const setFromIdentity = useComposeStore(s => s.setFromIdentity)
-
-    const mutedColor = useThemeColor('muted-foreground')
-    const fgColor = useThemeColor('foreground')
-    const borderColor = useThemeColor('border')
+    const fromAddressId = useComposeStore(s => s.fromAddressId)
+    const setFrom = useComposeStore(s => s.setFrom)
 
     if (identities.length === 0) return null
 
-    // Resolve the displayed identity during render rather than syncing a
-    // default into the store via an effect: an unset store mailboxId (a fresh
-    // compose) falls back to the first identity here, and the send paths read
-    // their own mailbox (useMailSendReadiness / useDefaultMailbox), so no store
-    // write is needed until the user explicitly picks a different From.
-    const resolved = identities.find(i => i.mailboxId === mailboxId) ?? identities[0]
-    const currentAddress = aliasId
-        ? (resolved.aliases.find(a => a.id === aliasId)?.address ?? resolved.primaryAddress)
-        : resolved.primaryAddress
-
-    const hasChoices = identities.length > 1 || identities.some(i => i.aliases.length > 0)
+    const { identity, address } = resolveFrom(identities, mailboxId, fromAddressId)
+    const hasChoices = identities.length > 1 || identity.addresses.length > 1
+    const label = `${identity.mailboxDisplayName} <${address.email}>`
 
     return (
         <View
-            className="flex-row items-center px-3 py-1"
-            style={{ minHeight: 36, borderBottomWidth: 1, borderBottomColor: borderColor }}
+            className="flex-row items-center px-3 py-1 border-b border-border"
+            style={{ minHeight: 36 }}
         >
-            <Text style={{ fontSize: 13, width: 56, color: mutedColor }}>From</Text>
-            <Text className="flex-1" style={{ fontSize: 13, color: fgColor }}>
-                {resolved.mailboxDisplayName} &lt;{currentAddress}&gt;
+            <Text className="text-muted-foreground" style={{ fontSize: 13, width: 56 }}>
+                From
             </Text>
-            {hasChoices && (
-                <FromIdentityPicker
-                    identities={identities}
-                    selectedMailboxId={resolved.mailboxId}
-                    selectedAliasId={aliasId}
-                    onSelect={setFromIdentity}
-                />
-            )}
+            <Text className="flex-1 text-foreground" style={{ fontSize: 13 }}>
+                {label}
+            </Text>
+            <PickerSlot
+                isVisible={hasChoices}
+                identities={identities}
+                selectedAddressId={address.id}
+                onSelect={setFrom}
+            />
         </View>
     )
+}
+
+function PickerSlot({
+    isVisible,
+    ...props
+}: { isVisible: boolean } & ComponentProps<typeof FromIdentityPicker>) {
+    if (!isVisible) return null
+    return <FromIdentityPicker {...props} />
 }

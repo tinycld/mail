@@ -3,7 +3,7 @@ import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { Forward, Reply, ReplyAll } from 'lucide-react-native'
 import { lazy, Suspense } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { filterOwnAddresses, pickDefaultFrom } from '../hooks/defaultFromIdentity'
+import { buildReplyContext, type ReplyKind } from '../hooks/replyContext'
 import { useCompose } from '../hooks/useComposeState'
 import { useOpenReply } from '../hooks/useOpenReply'
 import { useSendableIdentities } from '../hooks/useSendableIdentities'
@@ -22,6 +22,7 @@ interface InlineReplyProps {
     recipientsTo: { name: string; email: string }[]
     recipientsCc: { name: string; email: string }[]
     mailboxId: string
+    deliveredTo: string
 }
 
 export function InlineReply({
@@ -33,6 +34,7 @@ export function InlineReply({
     recipientsTo,
     recipientsCc,
     mailboxId,
+    deliveredTo,
 }: InlineReplyProps) {
     const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
@@ -44,48 +46,22 @@ export function InlineReply({
 
     const isInlineActive = mode === 'inline' && replyContext?.threadId === threadId
 
-    const sentToAddresses = [...recipientsTo.map(r => r.email), ...recipientsCc.map(r => r.email)]
-
-    const handleReply = () => {
-        openReply({
-            messageId,
-            threadId,
-            subject,
-            to: [{ name: senderName, email: senderEmail }],
-            mailboxId,
-            sentToAddresses,
-        })
+    const message = {
+        id: messageId,
+        subject,
+        sender_name: senderName,
+        sender_email: senderEmail,
+        recipients_to: recipientsTo,
+        recipients_cc: recipientsCc,
+        delivered_to: deliveredTo,
     }
-
-    const handleReplyAll = () => {
-        const defaultFrom = pickDefaultFrom({
-            mode: 'reply',
-            identities,
-            replyToAddresses: sentToAddresses,
-        })
-        const identity = identities.find(i => i.mailboxId === defaultFrom.mailboxId)
-        const rawTo = [{ name: senderName, email: senderEmail }, ...recipientsTo, ...recipientsCc]
-        const filteredTo = identity ? filterOwnAddresses({ identity, recipients: rawTo }) : rawTo
-        openReply({
-            messageId,
-            threadId,
-            subject,
-            to: filteredTo,
-            mailboxId,
-            sentToAddresses,
-        })
-    }
-
-    const handleForward = () => {
-        openReply({
-            messageId,
-            threadId,
-            subject: `Fwd: ${subject}`,
-            to: [],
-            mailboxId,
-            sentToAddresses,
-        })
-    }
+    const start = (kind: ReplyKind) =>
+        openReply(
+            buildReplyContext({ kind, message, threadId, threadMailboxId: mailboxId, identities })
+        )
+    const handleReply = () => start('reply')
+    const handleReplyAll = () => start('replyAll')
+    const handleForward = () => start('forward')
 
     if (isInlineActive) {
         const formKey = `${replyContext.messageId}-${replyContext.to.length}`

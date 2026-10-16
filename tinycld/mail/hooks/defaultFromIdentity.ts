@@ -1,8 +1,14 @@
 import type { SendableIdentity } from './groupSendableIdentities'
 
-export interface FromIdentity {
+export interface FromSelection {
     mailboxId: string
-    aliasId: string | null
+    // null sends as that mailbox's default address.
+    addressId: string | null
+}
+
+interface Recipient {
+    name: string
+    email: string
 }
 
 /**
@@ -18,68 +24,63 @@ export function extractBareAddress(raw: string): string | null {
     return trimmed.toLowerCase()
 }
 
-interface PickDefaultFromParams {
-    mode: 'new' | 'reply' | 'forward'
+function findAddress(
+    identities: SendableIdentity[],
+    match: (email: string, id: string) => boolean
+) {
+    for (const identity of identities) {
+        const address = identity.addresses.find(a => match(a.email.toLowerCase(), a.id))
+        if (address) return { mailboxId: identity.mailboxId, addressId: address.id }
+    }
+    return null
+}
+
+interface PickReplyFromParams {
     identities: SendableIdentity[]
-    replyToAddresses: string[]
+    deliveredToAddressId: string | null
+    headerAddresses: string[]
+    threadMailboxId: string
 }
 
 /**
- * Pure: choose which identity the compose form should default to.
- *  - mode=new: personal (identities[0]) primary
- *  - mode=reply or mode=forward: scan replyToAddresses for a match against any
- *    identity's primary address first (any mailbox wins), then its aliases.
- *  - if no match, fall back to identities[0] primary.
- *  - returns { mailboxId: '', aliasId: null } when identities is empty.
+ * Pure: which address a reply or forward is sent from.
+ *  1. the address the message was delivered to (mail_messages.delivered_to);
+ *  2. else one of my addresses found in its To/Cc (mail stored before
+ *     delivered_to existed has none);
+ *  3. else the thread's mailbox, with its default address;
+ *  4. else my first mailbox.
  */
-export function pickDefaultFrom({
-    mode,
+export function pickReplyFrom({
     identities,
-    replyToAddresses,
-}: PickDefaultFromParams): FromIdentity {
-    if (identities.length === 0) return { mailboxId: '', aliasId: null }
-    const fallback: FromIdentity = { mailboxId: identities[0].mailboxId, aliasId: null }
+    deliveredToAddressId,
+    headerAddresses,
+    threadMailboxId,
+}: PickReplyFromParams): FromSelection {
+    if (identities.length === 0) return { mailboxId: '', addressId: null }
 
-    if (mode === 'new' || replyToAddresses.length === 0) return fallback
+    const delivered = deliveredToAddressId
+        ? findAddress(identities, (_, id) => id === deliveredToAddressId)
+        : null
+    if (delivered) return delivered
 
-    const normalized = new Set<string>()
-    for (const raw of replyToAddresses) {
-        const bare = extractBareAddress(raw)
-        if (bare) normalized.add(bare)
-    }
-    if (normalized.size === 0) return fallback
+    const header = new Set(headerAddresses.map(extractBareAddress).filter(a => a !== null))
+    const fromHeader = findAddress(identities, email => header.has(email))
+    if (fromHeader) return fromHeader
 
-    for (const id of identities) {
-        if (normalized.has(id.primaryAddress.toLowerCase())) {
-            return { mailboxId: id.mailboxId, aliasId: null }
-        }
-    }
-    for (const id of identities) {
-        for (const a of id.aliases) {
-            if (normalized.has(a.address.toLowerCase())) {
-                return { mailboxId: id.mailboxId, aliasId: a.id }
-            }
-        }
-    }
-    return fallback
+    const thread = identities.find(i => i.mailboxId === threadMailboxId) ?? identities[0]
+    return { mailboxId: thread.mailboxId, addressId: null }
 }
 
 interface FilterOwnAddressesParams {
     identity: SendableIdentity
-    recipients: { name: string; email: string }[]
+    recipients: Recipient[]
 }
 
-/**
- * Pure: strip out the selected identity's primary + all aliases from a
- * recipient list, so reply-all from support@ doesn't include support@.
- */
+/** Pure: drop every address of the sending identity from a recipient list. */
 export function filterOwnAddresses({
     identity,
     recipients,
-}: FilterOwnAddressesParams): { name: string; email: string }[] {
-    const own = new Set<string>([
-        identity.primaryAddress.toLowerCase(),
-        ...identity.aliases.map(a => a.address.toLowerCase()),
-    ])
+}: FilterOwnAddressesParams): Recipient[] {
+    const own = new Set(identity.addresses.map(a => a.email.toLowerCase()))
     return recipients.filter(r => !own.has(r.email.toLowerCase()))
 }

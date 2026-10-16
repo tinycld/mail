@@ -5,15 +5,18 @@ interface ComposeStoreState {
     mode: ComposeMode
     replyContext: ReplyContext | null
     draftContext: DraftContext | null
+    // The mailbox the message is sent from, and the address in it. An empty
+    // mailboxId means the user's personal mailbox; a null fromAddressId means
+    // that mailbox's default address.
     mailboxId: string
-    aliasId: string | null
+    fromAddressId: string | null
     open: () => void
     minimize: () => void
     maximize: () => void
     close: () => void
     openReply: (context: ReplyContext) => void
     openDraft: (context: DraftContext) => void
-    setFromIdentity: (mailboxId: string, aliasId: string | null) => void
+    setFrom: (mailboxId: string, addressId: string | null) => void
 }
 
 export const useComposeStore = create<ComposeStoreState>(set => ({
@@ -21,7 +24,7 @@ export const useComposeStore = create<ComposeStoreState>(set => ({
     replyContext: null,
     draftContext: null,
     mailboxId: '',
-    aliasId: null,
+    fromAddressId: null,
     open: () => set({ mode: 'open' }),
     minimize: () => set({ mode: 'minimized' }),
     maximize: () => set({ mode: 'maximized' }),
@@ -31,14 +34,14 @@ export const useComposeStore = create<ComposeStoreState>(set => ({
             replyContext: null,
             draftContext: null,
             mailboxId: '',
-            aliasId: null,
+            fromAddressId: null,
         }),
     openReply: context =>
         set({
             replyContext: context,
             mode: 'inline',
-            mailboxId: context.mailboxId,
-            aliasId: null,
+            mailboxId: context.from.mailboxId || context.mailboxId,
+            fromAddressId: context.from.addressId,
         }),
     openDraft: context =>
         set({
@@ -46,7 +49,7 @@ export const useComposeStore = create<ComposeStoreState>(set => ({
             replyContext: null,
             mode: 'open',
             mailboxId: context.mailboxId,
-            aliasId: null,
+            fromAddressId: null,
         }),
-    setFromIdentity: (mailboxId, aliasId) => set({ mailboxId, aliasId }),
+    setFrom: (mailboxId, addressId) => set({ mailboxId, fromAddressId: addressId }),
 }))

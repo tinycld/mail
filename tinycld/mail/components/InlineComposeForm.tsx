@@ -7,12 +7,12 @@ import { View } from 'react-native'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useAttachments } from '../hooks/useAttachments'
 import type { useCompose } from '../hooks/useComposeState'
-import { useDefaultMailbox } from '../hooks/useDefaultMailbox'
 import { useMailEditor } from '../hooks/useMailEditor'
 import { useSendEmail } from '../hooks/useSendEmail'
 import { useComposeStore } from '../stores/compose-store'
 import { AttachmentRibbon } from './AttachmentRibbon'
 import { ComposeFields } from './ComposeFields'
+import { ComposeFromRow } from './ComposeFromRow'
 import { ComposeToolbar } from './ComposeToolbar'
 import { DropOverlay } from './DropOverlay'
 
@@ -24,8 +24,10 @@ interface InlineComposeFormProps {
 export default function InlineComposeForm({ replyContext, onClose }: InlineComposeFormProps) {
     const borderColor = useThemeColor('border')
     const backgroundColor = useThemeColor('background')
-    const mailboxId = useDefaultMailbox()
-    const aliasId = useComposeStore(s => s.aliasId)
+    // A reply goes from the mailbox the reply context chose (its thread's
+    // mailbox, or the mailbox of the address the message arrived on).
+    const mailboxId = useComposeStore(s => s.mailboxId) || replyContext.mailboxId
+    const fromAddressId = useComposeStore(s => s.fromAddressId)
     const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
         placeholder: 'Compose reply',
     })
@@ -80,7 +82,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
 
         send({
             mailbox_id: mailboxId,
-            alias_id: aliasId ?? undefined,
+            from_address_id: fromAddressId ?? undefined,
             to: parseRecipients(data.to),
             cc,
             bcc,
@@ -116,6 +118,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
             }}
         >
             <View ref={dropRef} className="flex-1">
+                <ComposeFromRow />
                 <ComposeFields control={control} errors={errors} autoFocusTo={toIsEmpty} />
                 <View className="p-3" style={{ minHeight: 120, maxHeight: 280 }}>
                     <EditorComponent />

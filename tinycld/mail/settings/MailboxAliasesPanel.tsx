@@ -30,8 +30,8 @@ export function MailboxAliasesPanel({ mailboxId, mailboxDomainId, domainName }: 
     })
 
     const remove = useMutation({
-        mutationFn: mutation(function* (aliasId: string) {
-            yield aliasesCollection.delete(aliasId)
+        mutationFn: mutation(function* (id: string) {
+            yield aliasesCollection.delete(id)
         }),
     })
 

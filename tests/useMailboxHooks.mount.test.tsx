@@ -6,15 +6,15 @@ import { afterEach, expect, test, vi } from 'vitest'
 // afterEach cleanup never registers.
 afterEach(cleanup)
 
-// useMailboxes and useSendableIdentities resolve membership, mailbox, domain
-// and aliases in ONE joined live query each (no client-side Map stitching).
+// useMailboxes and useSendableIdentities resolve membership, mailbox, address
+// and domain in ONE joined live query each (no client-side Map stitching).
 // These tests mount the real hooks against real TanStack DB collections so
 // the join conditions and the user predicate actually execute — a fixture
 // that never runs the query would certify a filter matching zero rows
 // (the §3.2 bug class).
 
 const h = vi.hoisted(() => ({
-    domains: [{ id: 'd1', domain: 'acme.com' }],
+    domains: [{ id: 'd1', domain: 'acme.com', rank: 1, verified: true }],
     mailboxes: [
         {
             id: 'mb_me',
@@ -50,8 +50,9 @@ const h = vi.hoisted(() => ({
             created: '2024-01-15T00:00:00Z',
             updated: '',
         },
-        // A mailbox whose domain row is gone: the domain inner join must drop
-        // it from sendable identities even though alice is a member.
+        // A mailbox whose only address points at a domain row that is gone:
+        // the domain inner join must drop it from sendable identities even
+        // though alice is a member.
         {
             id: 'mb_orphan',
             address: 'ghost',
@@ -69,12 +70,80 @@ const h = vi.hoisted(() => ({
         { id: 'm3', mailbox: 'mb_bob', user: 'u2', role: 'owner', created: '', updated: '' },
         { id: 'm4', mailbox: 'mb_orphan', user: 'u1', role: 'member', created: '', updated: '' },
     ],
-    aliases: [
-        { id: 'a1', mailbox: 'mb_support', address: 'help', created: '', updated: '' },
-        { id: 'a2', mailbox: 'mb_support', address: 'sos', created: '', updated: '' },
-        // Bob's alias: must never surface through alice's identities.
-        { id: 'a3', mailbox: 'mb_bob', address: 'bobby', created: '', updated: '' },
+    addresses: [
+        {
+            id: 'ad_me',
+            mailbox: 'mb_me',
+            domain: 'd1',
+            local_part: 'alice',
+            source: 'manual',
+            is_primary: true,
+            created: '',
+            updated: '',
+        },
+        {
+            id: 'ad_support',
+            mailbox: 'mb_support',
+            domain: 'd1',
+            local_part: 'support',
+            source: 'manual',
+            is_primary: true,
+            created: '',
+            updated: '',
+        },
+        {
+            id: 'ad_help',
+            mailbox: 'mb_support',
+            domain: 'd1',
+            local_part: 'help',
+            source: 'manual',
+            is_primary: false,
+            created: '',
+            updated: '',
+        },
+        {
+            id: 'ad_sos',
+            mailbox: 'mb_support',
+            domain: 'd1',
+            local_part: 'sos',
+            source: 'manual',
+            is_primary: false,
+            created: '',
+            updated: '',
+        },
+        {
+            id: 'ad_bob',
+            mailbox: 'mb_bob',
+            domain: 'd1',
+            local_part: 'ops',
+            source: 'manual',
+            is_primary: true,
+            created: '',
+            updated: '',
+        },
+        // Bob's second address: must never surface through alice's identities.
+        {
+            id: 'ad_bobby',
+            mailbox: 'mb_bob',
+            domain: 'd1',
+            local_part: 'bobby',
+            source: 'manual',
+            is_primary: false,
+            created: '',
+            updated: '',
+        },
+        {
+            id: 'ad_orphan',
+            mailbox: 'mb_orphan',
+            domain: 'd_missing',
+            local_part: 'ghost',
+            source: 'manual',
+            is_primary: true,
+            created: '',
+            updated: '',
+        },
     ],
+    identities: [],
 }))
 
 vi.mock('@tinycld/core/lib/auth', () => ({
@@ -96,7 +165,8 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
         mail_domains: mk('mail_domains', h.domains),
         mail_mailboxes: mk('mail_mailboxes', h.mailboxes),
         mail_mailbox_members: mk('mail_mailbox_members', h.members),
-        mail_mailbox_aliases: mk('mail_mailbox_aliases', h.aliases),
+        mail_addresses: mk('mail_addresses', h.addresses),
+        mail_identities: mk('mail_identities', h.identities),
     }
     return {
         useStore: (...names: string[]) => names.map(n => stores[n]),
@@ -117,7 +187,7 @@ test('useMailboxes joins memberships to mailboxes for the signed-in user only', 
     expect(result.current.shared.map(m => m.id)).toEqual(['mb_support', 'mb_orphan'])
 })
 
-test('useSendableIdentities: one identity per reachable mailbox, aliases grouped, personal first', async () => {
+test('useSendableIdentities: one identity per reachable mailbox, addresses grouped, personal first', async () => {
     const { result } = renderHook(() => useSendableIdentities())
 
     await waitFor(() => expect(result.current.length).toBeGreaterThan(0))
@@ -126,11 +196,18 @@ test('useSendableIdentities: one identity per reachable mailbox, aliases grouped
     expect(result.current.map(i => i.mailboxId)).toEqual(['mb_me', 'mb_support'])
 
     const personal = result.current[0]
-    expect(personal.primaryAddress).toBe('alice@acme.com')
-    expect(personal.aliases).toEqual([])
+    expect(personal.addresses.map(a => a.email)).toEqual(['alice@acme.com'])
+    expect(personal.defaultAddressId).toBe('ad_me')
 
     const support = result.current[1]
-    expect(support.primaryAddress).toBe('support@acme.com')
     expect(support.mailboxDisplayName).toBe('Support')
-    expect(support.aliases.map(a => a.address).sort()).toEqual(['help@acme.com', 'sos@acme.com'])
+    expect(support.defaultAddressId).toBe('ad_support')
+    expect(support.addresses.map(a => a.email).sort()).toEqual([
+        'help@acme.com',
+        'sos@acme.com',
+        'support@acme.com',
+    ])
+
+    const allEmails = result.current.flatMap(i => i.addresses.map(a => a.email))
+    expect(allEmails.some(e => e.startsWith('bobby@') || e.startsWith('ops@'))).toBe(false)
 })
