@@ -134,6 +134,63 @@ func TestRuleAddresses_ManualRowOfSameInboxSurvivesRuleRemoval(t *testing.T) {
 	}
 }
 
+// A manual row that satisfied a rule address is removed: the rule row must
+// replace it at once, so the person keeps the address.
+func TestRuleAddresses_DeletedManualRowIsReplacedByRuleRow(t *testing.T) {
+	app := newRuleTestApp(t)
+	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true})
+	user := saveRealRecord(t, app, "users", map[string]any{"email": "nathan@argosity.com", "username": "nathan", "name": "Nathan", "role": "owner"})
+	com := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.com", "verified": true})
+	inbox := identityOf(t, app, user.Id).GetString("inbox")
+	manual := saveRealRecord(t, app, "mail_addresses", map[string]any{
+		"local_part": "nathan", "domain": com.Id, "mailbox": inbox, "source": addressSourceManual,
+	})
+	com = reloaded(t, app, com)
+	com.Set("coverage", coverageEveryone)
+	if err := app.Save(com); err != nil {
+		t.Fatal(err)
+	}
+	if got := ruleRows(t, app, com.Id); len(got) != 0 {
+		t.Fatalf("precondition: the manual row should satisfy the rule, got rule rows %v", got)
+	}
+
+	if err := app.Delete(reloaded(t, app, manual)); err != nil {
+		t.Fatal(err)
+	}
+	row, _ := findAddressRow(app, "nathan", com.Id)
+	if row == nil || row.GetString("source") != addressSourceRule || row.GetString("mailbox") != inbox {
+		t.Fatalf("nathan@tinycld.com after the manual row was deleted = %v, want a rule row to the inbox", row)
+	}
+}
+
+// Renaming an inbox moves its primary row; the old address, still the
+// person's email name on an everyone domain, must come back as a rule row.
+func TestRuleAddresses_MovedPrimaryRowIsReplacedByRuleRow(t *testing.T) {
+	app := newRuleTestApp(t)
+	org := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true})
+	user := saveRealRecord(t, app, "users", map[string]any{"email": "nathan@argosity.com", "username": "nathan", "name": "Nathan", "role": "owner"})
+	identity := identityOf(t, app, user.Id)
+	if got := ruleRows(t, app, org.Id); len(got) != 0 {
+		t.Fatalf("precondition: the primary row should satisfy the rule, got rule rows %v", got)
+	}
+
+	inbox, err := app.FindRecordById("mail_mailboxes", identity.GetString("inbox"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	inbox.Set("address", "nate")
+	if err := app.Save(inbox); err != nil {
+		t.Fatal(err)
+	}
+	if row, _ := findAddressRow(app, "nate", org.Id); row == nil || !row.GetBool("is_primary") {
+		t.Fatal("the primary row did not move to nate@tinycld.org")
+	}
+	row, _ := findAddressRow(app, "nathan", org.Id)
+	if row == nil || row.GetString("source") != addressSourceRule || row.GetString("mailbox") != inbox.Id {
+		t.Fatalf("nathan@tinycld.org after the rename = %v, want a rule row to the inbox", row)
+	}
+}
+
 func TestRuleAddresses_AddressHeldByAnotherInboxIsLeftAlone(t *testing.T) {
 	app := newRuleTestApp(t)
 	logs := captureLogs(t)

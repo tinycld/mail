@@ -333,6 +333,8 @@ func registerAddressHooks(app core.App) {
 			if err := savePrimaryAddress(e.App, e.Record); err != nil {
 				addressLog.Error("could not move a mailbox's address row", "mailbox", e.Record.Id, "error", err)
 			}
+			// The old address may now be a rule address of the inbox's owner.
+			reconcileInboxOwner(e.App, e.Record.Id)
 		}
 		return e.Next()
 	})

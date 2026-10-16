@@ -244,4 +244,37 @@ func registerRuleAddressHooks(app core.App) {
 		}
 		return e.Next()
 	})
+
+	// A removed manual or primary row may have been what satisfied a rule
+	// address; the rule row must replace it at once, not at the next boot.
+	// A rule row's own delete is skipped: the reconciler or a domain change
+	// made it, and reconciling again would only re-enter the reconciler.
+	app.OnRecordAfterDeleteSuccess("mail_addresses").BindFunc(func(e *core.RecordEvent) error {
+		if e.Record.GetString("source") != addressSourceRule {
+			reconcileInboxOwner(e.App, e.Record.GetString("mailbox"))
+		}
+		return e.Next()
+	})
+}
+
+// reconcileInboxOwner reconciles the rule addresses of the person whose
+// identity owns the inbox. An inbox no live identity owns (a shared inbox, or
+// one being deleted) has no rule addresses, and nothing is done.
+func reconcileInboxOwner(app core.App, inboxID string) {
+	if inboxID == "" {
+		return
+	}
+	identity, err := app.FindFirstRecordByFilter("mail_identities", "inbox = {:inbox} && retired != true",
+		dbx.Params{"inbox": inboxID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return
+	}
+	if err != nil {
+		addressLog.Error("could not find the owner of an inbox to reconcile its rule addresses", "inbox", inboxID, "error", err)
+		return
+	}
+	userID := identity.GetString("user")
+	if err := reconcileRuleAddresses(app, ruleScope{UserID: userID}); err != nil {
+		addressLog.Error("rule address reconcile failed", "user", userID, "error", err)
+	}
 }
