@@ -93,7 +93,7 @@ Outbound messages are capped at **25 MB total** (including attachments). Larger 
 - **"Relaying denied. To send mail, log in on port 465."** — your mail app is sending through port 25, which only receives mail. Set the outgoing server port to **465**, turn on **SSL/TLS**, and turn on password authentication. In Apple Mail, clear **Automatically manage connection settings** first.
 - **Auth failed** — same as IMAP. Check your user name and password.
 - **Auth fails with `Your mail access is read-only; sending is not permitted`** — your account has read-only access to Mail on this server. You can still read over [IMAP](help://mail:imap); sending needs an administrator to grant full access.
-- **From address not owned** — see above; the From header has to match a mailbox or alias you have access to.
+- **From address not owned** — see above; the From header has to be one of the addresses of a mailbox you belong to.
 - **Domain not verified** — the sending domain has to be fully verified (MX, SPF, DKIM, Return-Path). See [Custom domains](help://mail:custom-domains).
 - **Provider not configured** — the deployment has no mail provider yet. Configuring one is an administrator task; where a service provider runs this deployment, it is theirs to fix.
 - **Message size too large** — 25 MB max.
