@@ -74,6 +74,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         items: attachmentItems,
         files: attachmentFiles,
         removedSaved,
+        keptSaved,
         addFilesSafely,
         removeItem,
         clearAll: clearAttachments,
@@ -321,7 +322,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         const cc = data.cc ? parseRecipients(data.cc) : undefined
         const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
 
-        const request = composeSendRequest(from, draftIdRef.current, removedSaved, {
+        const request = composeSendRequest(from, draftIdRef.current, keptSaved, {
             to: parseRecipients(data.to),
             cc,
             bcc,

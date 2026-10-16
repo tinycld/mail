@@ -71,6 +71,24 @@ describe('useComposeAttachments', () => {
         expect(result.current.items.map(i => i.name)).toEqual(['hippo.jpg'])
     })
 
+    it('reports the saved files it shows, for the send', () => {
+        const { result } = renderHook(() =>
+            useComposeAttachments(draft(['hippo_ab12cd34ef.jpg', 'notes_0123456789.txt']))
+        )
+        act(() => result.current.removeItem(result.current.items[1]))
+        expect(result.current.keptSaved).toEqual(['hippo_ab12cd34ef.jpg'])
+    })
+
+    it('counts the saved files toward the 20-file limit', () => {
+        const saved = Array.from({ length: 18 }, (_, i) => `saved${i}_ab12cd34ef.txt`)
+        const { result } = renderHook(() => useComposeAttachments(draft(saved)))
+        act(() => result.current.addFilesSafely([localFile('a.txt'), localFile('b.txt')]))
+        expect(result.current.items).toHaveLength(20)
+        act(() => result.current.addFilesSafely([localFile('c.txt')]))
+        expect(result.current.items).toHaveLength(20)
+        expect(result.current.files.map(f => f.name)).toEqual(['a.txt', 'b.txt'])
+    })
+
     it('has no saved files without a draft', () => {
         const { result } = renderHook(() => useComposeAttachments(null))
         expect(result.current.items).toEqual([])

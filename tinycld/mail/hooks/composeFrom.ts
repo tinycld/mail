@@ -166,18 +166,20 @@ export function draftSaveRequest(
 
 type SendFields = Omit<
     SendEmailRequest,
-    'mailbox_id' | 'from_address_id' | 'alias_id' | 'draft_id' | 'remove_attachments'
+    'mailbox_id' | 'from_address_id' | 'alias_id' | 'draft_id' | 'draft_attachments'
 >
 
 /**
  * Pure: the send request for the resolved From. A resumed draft is named so
- * the server sends its saved files (less the removed ones) and deletes it;
- * without the id those files were lost with the draft.
+ * the server sends the saved files compose showed and deletes the draft;
+ * without the id those files were lost with the draft. Naming exactly the
+ * shown files lets the server tell a draft deleted meanwhile with no files
+ * (send it as a new message) from one whose files are gone (refuse).
  */
 export function composeSendRequest(
     from: ResolvedFrom,
     draftId: string | null,
-    removedAttachments: string[],
+    keptSavedAttachments: string[],
     fields: SendFields
 ): SendEmailRequest {
     return {
@@ -185,7 +187,7 @@ export function composeSendRequest(
         mailbox_id: from.identity.mailboxId,
         from_address_id: from.address.id,
         draft_id: draftId ?? undefined,
-        remove_attachments: draftId ? nonEmpty(removedAttachments) : undefined,
+        draft_attachments: draftId ? nonEmpty(keptSavedAttachments) : undefined,
     }
 }
 

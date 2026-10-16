@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, expect, test, vi } from 'vitest'
 
@@ -138,5 +138,35 @@ test('returns null again when the thread id switches to one with no draft in the
 
     rerender({ threadId: 'thread_missing' })
 
+    expect(result.current).toBeNull()
+})
+
+// Another member deletes the open draft. The live row leaves the store, but
+// compose must keep what the person wrote and the saved files it showed, so
+// the send can say the files are gone instead of the form going blank.
+// Last in the file: it deletes the shared fixture row.
+test('keeps the last draft while its thread stays open after the row is deleted', async () => {
+    const { useStore } = await import('@tinycld/core/lib/pocketbase')
+    const [messages] = useStore('mail_messages')
+    const { result, rerender } = renderHook(
+        ({ threadId }: { threadId: string | null }) =>
+            useDraftMessage(threadId ? { threadId, mailboxId: 'mb1' } : null),
+        {
+            wrapper: ({ children }) => withQueryClient(children),
+            initialProps: { threadId: 'thread1' as string | null },
+        }
+    )
+    await waitFor(() => expect(result.current?.message.id).toBe('msg_draft1'))
+
+    await act(async () => {
+        await messages.delete('msg_draft1').isPersisted.promise
+    })
+    rerender({ threadId: 'thread1' })
+    expect(result.current?.message.id).toBe('msg_draft1')
+    expect(result.current?.htmlBody).toBe('<p>hello</p>')
+
+    // Closing compose forgets it, so opening the thread again shows nothing.
+    rerender({ threadId: null })
+    rerender({ threadId: 'thread1' })
     expect(result.current).toBeNull()
 })

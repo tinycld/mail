@@ -3,7 +3,10 @@ package mail
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -148,12 +151,13 @@ func TestHandleSend_DraftAttachmentsAreSentAndTheDraftIsDeleted(t *testing.T) {
 	})
 
 	re, rec := sendEvent(t, env.app, env.user, api.SendEmailRequest{
-		MailboxID:     env.inbox.Id,
-		FromAddressID: env.from.Id,
-		To:            []api.Recipient{{Email: "friend@example.net"}},
-		Subject:       "hello",
-		TextBody:      "hi",
-		DraftID:       draft.Id,
+		MailboxID:        env.inbox.Id,
+		FromAddressID:    env.from.Id,
+		To:               []api.Recipient{{Email: "friend@example.net"}},
+		Subject:          "hello",
+		TextBody:         "hi",
+		DraftID:          draft.Id,
+		DraftAttachments: draft.GetStringSlice("attachments"),
 	})
 	if err := handleSend(env.app, re); err != nil {
 		t.Fatal(err)
@@ -179,28 +183,23 @@ func TestHandleSend_DraftAttachmentsAreSentAndTheDraftIsDeleted(t *testing.T) {
 	}
 }
 
-func TestSendMessage_DraftAttachmentTheSenderRemovedIsLeftOut(t *testing.T) {
+func TestSendMessage_OnlyTheSavedFilesTheSenderKeptAreSent(t *testing.T) {
 	env := setupDraftSendEnv(t)
 	draft := seedDraft(t, env.app, env.inbox.Id, "draft", map[string]string{
 		"keep.txt": "keep", "drop.txt": "drop",
 	})
-	var dropName string
-	for _, name := range draft.GetStringSlice("attachments") {
-		if originalAttachmentName(name) == "drop.txt" {
-			dropName = name
-		}
-	}
+	keepName := storedNameOf(t, draft, "keep.txt")
 
 	result, err := sendMessage(env.app, sendParams{
-		Ctx:                    context.Background(),
-		UserID:                 env.user.Id,
-		MailboxID:              env.inbox.Id,
-		FromAddressID:          env.from.Id,
-		To:                     []api.Recipient{{Email: "friend@example.net"}},
-		Subject:                "hello",
-		TextBody:               "hi",
-		DraftID:                draft.Id,
-		RemoveDraftAttachments: []string{dropName},
+		Ctx:              context.Background(),
+		UserID:           env.user.Id,
+		MailboxID:        env.inbox.Id,
+		FromAddressID:    env.from.Id,
+		To:               []api.Recipient{{Email: "friend@example.net"}},
+		Subject:          "hello",
+		TextBody:         "hi",
+		DraftID:          draft.Id,
+		DraftAttachments: []string{keepName},
 		Attachments: []Attachment{{
 			Name: "new.txt", ContentType: "text/plain", Content: "bmV3", // "new"
 		}},
@@ -241,25 +240,25 @@ func TestSendMessage_RefusesADraftItCannotResume(t *testing.T) {
 		name      string
 		mailboxID string
 		fromID    string
-		draftID   string
+		draft     *core.Record
 	}{
-		{"a draft in another mailbox", env.inbox.Id, env.from.Id, otherDraft.Id},
-		{"another person's draft, sent from their mailbox", otherInbox.Id, otherFrom.Id, otherDraft.Id},
-		{"a message that is not a draft", env.inbox.Id, env.from.Id, notADraft.Id},
-		{"a draft that does not exist", env.inbox.Id, env.from.Id, "nosuchdraft0000"},
+		{"a draft in another mailbox", env.inbox.Id, env.from.Id, otherDraft},
+		{"another person's draft, sent from their mailbox", otherInbox.Id, otherFrom.Id, otherDraft},
+		{"a message that is not a draft", env.inbox.Id, env.from.Id, notADraft},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			before := sentMessageCount(t, env.app)
 			_, err := sendMessage(env.app, sendParams{
-				Ctx:           context.Background(),
-				UserID:        env.user.Id,
-				MailboxID:     tc.mailboxID,
-				FromAddressID: tc.fromID,
-				To:            []api.Recipient{{Email: "friend@example.net"}},
-				Subject:       "hello",
-				TextBody:      "hi",
-				DraftID:       tc.draftID,
+				Ctx:              context.Background(),
+				UserID:           env.user.Id,
+				MailboxID:        tc.mailboxID,
+				FromAddressID:    tc.fromID,
+				To:               []api.Recipient{{Email: "friend@example.net"}},
+				Subject:          "hello",
+				TextBody:         "hi",
+				DraftID:          tc.draft.Id,
+				DraftAttachments: tc.draft.GetStringSlice("attachments"),
 			})
 			if err == nil {
 				t.Fatal("the send was accepted")
@@ -290,14 +289,15 @@ func TestSendMessage_AnUnreadableDraftFileFailsTheSendAndKeepsTheDraft(t *testin
 
 	before := sentMessageCount(t, env.app)
 	_, err = sendMessage(env.app, sendParams{
-		Ctx:           context.Background(),
-		UserID:        env.user.Id,
-		MailboxID:     env.inbox.Id,
-		FromAddressID: env.from.Id,
-		To:            []api.Recipient{{Email: "friend@example.net"}},
-		Subject:       "hello",
-		TextBody:      "hi",
-		DraftID:       draft.Id,
+		Ctx:              context.Background(),
+		UserID:           env.user.Id,
+		MailboxID:        env.inbox.Id,
+		FromAddressID:    env.from.Id,
+		To:               []api.Recipient{{Email: "friend@example.net"}},
+		Subject:          "hello",
+		TextBody:         "hi",
+		DraftID:          draft.Id,
+		DraftAttachments: []string{stored},
 	})
 	if err == nil {
 		t.Fatal("the send succeeded without the draft's file")
@@ -347,12 +347,7 @@ func TestHandleDraft_RemoveAttachmentsDropsThemFromTheDraft(t *testing.T) {
 	draft := seedDraft(t, env.app, env.inbox.Id, "draft", map[string]string{
 		"keep.txt": "keep", "drop.txt": "drop",
 	})
-	var dropName string
-	for _, name := range draft.GetStringSlice("attachments") {
-		if originalAttachmentName(name) == "drop.txt" {
-			dropName = name
-		}
-	}
+	dropName := storedNameOf(t, draft, "drop.txt")
 
 	re, _ := draftEvent(t, env.app, env.user, map[string]any{
 		"mailbox_id": env.inbox.Id, "from_address_id": env.from.Id, "message_id": draft.Id,
@@ -381,5 +376,199 @@ func TestOriginalAttachmentName(t *testing.T) {
 		if got := originalAttachmentName(in); got != want {
 			t.Errorf("originalAttachmentName(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// storedNameOf is the stored filename of the draft's file attached as name.
+func storedNameOf(t *testing.T, draft *core.Record, name string) string {
+	t.Helper()
+	for _, stored := range draft.GetStringSlice("attachments") {
+		if originalAttachmentName(stored) == name {
+			return stored
+		}
+	}
+	t.Fatalf("the draft has no %s", name)
+	return ""
+}
+
+// sendDraft sends a resumed draft from env's inbox with the given kept saved
+// files and new uploads.
+func sendDraft(env *draftSendEnv, draftID string, kept []string, uploads []Attachment) (*sendResultRecord, error) {
+	return sendMessage(env.app, sendParams{
+		Ctx:              context.Background(),
+		UserID:           env.user.Id,
+		MailboxID:        env.inbox.Id,
+		FromAddressID:    env.from.Id,
+		To:               []api.Recipient{{Email: "friend@example.net"}},
+		Subject:          "hello",
+		TextBody:         "hi",
+		DraftID:          draftID,
+		DraftAttachments: kept,
+		Attachments:      uploads,
+	})
+}
+
+// expectRefusedAndKept checks that a refused send stored no message and left
+// the draft in place.
+func expectRefusedAndKept(t *testing.T, env *draftSendEnv, draft *core.Record, before int, err error, wantInError string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("the send was accepted")
+	}
+	if !strings.Contains(err.Error(), wantInError) {
+		t.Fatalf("error %q does not say %q", err, wantInError)
+	}
+	var sendErr *sendError
+	if !errors.As(err, &sendErr) || sendErr.kind != sendErrBadRequest {
+		t.Fatalf("error %v is not a bad request", err)
+	}
+	if after := sentMessageCount(t, env.app); after != before {
+		t.Fatalf("a refused send stored a message (%d → %d)", before, after)
+	}
+	if _, err := env.app.FindRecordById("mail_messages", draft.Id); err != nil {
+		t.Fatalf("the draft was deleted after a refused send: %v", err)
+	}
+}
+
+func TestSendMessage_RefusesMoreFilesThanTheSentCopyHolds(t *testing.T) {
+	env := setupDraftSendEnv(t)
+	files := map[string]string{}
+	for i := range 15 {
+		files[fmt.Sprintf("saved%02d.txt", i)] = "saved"
+	}
+	draft := seedDraft(t, env.app, env.inbox.Id, "draft", files)
+	var uploads []Attachment
+	for i := range 6 {
+		uploads = append(uploads, Attachment{Name: fmt.Sprintf("new%d.txt", i), ContentType: "text/plain", Content: "bmV3"})
+	}
+
+	before := sentMessageCount(t, env.app)
+	_, err := sendDraft(env, draft.Id, draft.GetStringSlice("attachments"), uploads)
+	expectRefusedAndKept(t, env, draft, before, err, "at most 20 attachments")
+}
+
+func TestSendMessage_RefusesAttachmentsOverTheSizeLimit(t *testing.T) {
+	env := setupDraftSendEnv(t)
+	draft := seedDraft(t, env.app, env.inbox.Id, "draft", map[string]string{
+		"big.bin": strings.Repeat("a", 6*1024*1024),
+	})
+	upload := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("b"), 5*1024*1024))
+
+	before := sentMessageCount(t, env.app)
+	_, err := sendDraft(env, draft.Id, draft.GetStringSlice("attachments"),
+		[]Attachment{{Name: "more.bin", ContentType: "application/octet-stream", Content: upload}})
+	expectRefusedAndKept(t, env, draft, before, err, "more than 10 MB")
+}
+
+func TestSendMessage_AKeptFileNoLongerOnTheDraftIsRefusedByName(t *testing.T) {
+	env := setupDraftSendEnv(t)
+	draft := seedDraft(t, env.app, env.inbox.Id, "draft", map[string]string{"notes.txt": "n"})
+
+	before := sentMessageCount(t, env.app)
+	_, err := sendDraft(env, draft.Id, []string{"gone_ab12cd34ef.pdf"}, nil)
+	expectRefusedAndKept(t, env, draft, before, err, `"gone.pdf"`)
+}
+
+// Another member deleted the draft while it was open. With no saved files
+// shown, the person can still send what they wrote.
+func TestSendMessage_AGoneDraftWithNoSavedFilesSendsAsANewMessage(t *testing.T) {
+	env := setupDraftSendEnv(t)
+	draft := seedDraft(t, env.app, env.inbox.Id, "draft", nil)
+	if err := env.app.Delete(draft); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := sendDraft(env, draft.Id, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.app.FindRecordById("mail_messages", result.MessageRecordID); err != nil {
+		t.Fatalf("no sent copy stored: %v", err)
+	}
+}
+
+// With saved files shown, a gone draft took them along; sending without
+// them would drop them silently.
+func TestSendMessage_AGoneDraftWithSavedFilesShownIsRefused(t *testing.T) {
+	env := setupDraftSendEnv(t)
+	draft := seedDraft(t, env.app, env.inbox.Id, "draft", map[string]string{"notes.txt": "n"})
+	kept := draft.GetStringSlice("attachments")
+	if err := env.app.Delete(draft); err != nil {
+		t.Fatal(err)
+	}
+
+	before := sentMessageCount(t, env.app)
+	_, err := sendDraft(env, draft.Id, kept, nil)
+	if err == nil || !strings.Contains(err.Error(), draftGoneMessage) {
+		t.Fatalf("error = %v, want %q", err, draftGoneMessage)
+	}
+	if after := sentMessageCount(t, env.app); after != before {
+		t.Fatalf("a refused send stored a message (%d → %d)", before, after)
+	}
+}
+
+// A member whose access to a shared inbox comes from a group (a derived
+// member row) has send rights, so resuming a draft there must work and keep
+// its files.
+func TestSendMessage_AGroupDerivedMemberSendsADraftWithItsFiles(t *testing.T) {
+	app := newInboxGroupTestApp(t)
+	registerAddressHooks(app)
+	syscfg.SetResolver(func(key string) string {
+		if key == "mail.postmark_server_token" {
+			return "test-token"
+		}
+		return ""
+	})
+	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
+
+	s := seedInboxGroup(t, app)
+	domain, err := app.FindRecordById("mail_domains", s.shared.GetString("domain"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	domain.Set("spf_verified", true)
+	domain.Set("dkim_verified", true)
+	domain.Set("return_path_verified", true)
+	if err := app.Save(domain); err != nil {
+		t.Fatal(err)
+	}
+	s.ann.Set("is_demo", true)
+	if err := app.Save(s.ann); err != nil {
+		t.Fatal(err)
+	}
+	saveInboxGrant(t, app, s.shared, s.sales, "member")
+	row := derivedRow(t, app, s.shared, s.sales, s.ann)
+	if row == nil {
+		t.Fatal("ann has no derived row on the shared inbox")
+	}
+	from, err := findAddressRow(app, "sales", domain.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft := seedDraft(t, app, s.shared.Id, "draft", map[string]string{"quote.pdf": "%PDF-1.4 quote"})
+
+	result, err := sendMessage(app, sendParams{
+		Ctx:              context.Background(),
+		UserID:           s.ann.Id,
+		MailboxID:        s.shared.Id,
+		FromAddressID:    from.Id,
+		To:               []api.Recipient{{Email: "client@example.net"}},
+		Subject:          "quote",
+		TextBody:         "attached",
+		DraftID:          draft.Id,
+		DraftAttachments: draft.GetStringSlice("attachments"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent, err := app.FindRecordById("mail_messages", result.MessageRecordID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := storedFiles(t, app, sent); len(got) != 1 || got["quote.pdf"] != "%PDF-1.4 quote" {
+		t.Fatalf("sent attachments = %v, want quote.pdf", got)
+	}
+	if _, err := app.FindRecordById("mail_messages", draft.Id); err == nil {
+		t.Fatal("the draft still exists after a successful send")
 	}
 }

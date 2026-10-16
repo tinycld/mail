@@ -123,7 +123,7 @@ test.describe('Mail — Compose attachments', () => {
         await page.getByText('Send', { exact: true }).click()
         const body = (await sendRequest).postDataJSON()
         expect(body.draft_id).toBeTruthy()
-        expect(body.remove_attachments).toBeUndefined()
+        expect(body.draft_attachments).toEqual([expect.stringMatching(/^hippo_\w{10}\.jpg$/)])
 
         // e2e has no mail provider, so the server refuses the send (see the
         // note at the end of this file). A refused send must keep the draft

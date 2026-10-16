@@ -277,7 +277,7 @@ describe('composeSendRequest', () => {
         text_body: '',
     }
 
-    it('names the resumed draft and the saved files the sender removed', () => {
+    it('names the resumed draft and the saved files compose kept', () => {
         const { from } = resolveComposeState({
             identities,
             storeMailboxId: '',
@@ -286,11 +286,19 @@ describe('composeSendRequest', () => {
             lockedMailboxId: 'mb_support',
         })
         if (!from) throw new Error('expected a From')
-        const request = composeSendRequest(from, 'd1', ['drop_ab12cd34ef.txt'], fields)
+        const request = composeSendRequest(from, 'd1', ['keep_ab12cd34ef.txt'], fields)
         expect(request.mailbox_id).toBe('mb_support')
         expect(request.from_address_id).toBe('sup')
         expect(request.draft_id).toBe('d1')
-        expect(request.remove_attachments).toEqual(['drop_ab12cd34ef.txt'])
+        expect(request.draft_attachments).toEqual(['keep_ab12cd34ef.txt'])
+    })
+
+    it('names no saved files when compose showed none, so a deleted draft still sends', () => {
+        const from = resolveComposeFrom(identities, '', null, '')
+        if (!from) throw new Error('expected a From')
+        const request = composeSendRequest(from, 'd1', [], fields)
+        expect(request.draft_id).toBe('d1')
+        expect(request.draft_attachments).toBeUndefined()
     })
 
     it('names no draft for a new message', () => {
@@ -298,6 +306,6 @@ describe('composeSendRequest', () => {
         if (!from) throw new Error('expected a From')
         const request = composeSendRequest(from, null, [], fields)
         expect(request.draft_id).toBeUndefined()
-        expect(request.remove_attachments).toBeUndefined()
+        expect(request.draft_attachments).toBeUndefined()
     })
 })

@@ -111,9 +111,10 @@ type sendParams struct {
 	Bcc                []api.Recipient
 	InReplyToMessageID string
 	Attachments        []Attachment
-	// DraftID is the draft this send resumes; see api.SendEmailRequest.
-	DraftID                string
-	RemoveDraftAttachments []string
+	// DraftID is the draft this send resumes, and DraftAttachments the saved
+	// files of it to send; see api.SendEmailRequest.
+	DraftID          string
+	DraftAttachments []string
 }
 
 // sendResultRecord is what a completed send produces: the stored message and
@@ -194,15 +195,15 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 	attachments := p.Attachments
 	var draft *core.Record
 	if p.DraftID != "" {
-		draft, err = loadSendDraft(app, p.DraftID, p.MailboxID)
-		if err != nil {
-			return nil, err
-		}
-		saved, err := draftAttachments(app, draft, p.RemoveDraftAttachments)
+		var saved []Attachment
+		draft, saved, err = resolveSendDraft(app, p.DraftID, p.MailboxID, p.DraftAttachments)
 		if err != nil {
 			return nil, err
 		}
 		attachments = append(saved, p.Attachments...)
+	}
+	if err := checkAttachmentLimits(app, attachments); err != nil {
+		return nil, err
 	}
 
 	domainRecord := from.Domain
@@ -357,21 +358,21 @@ func handleSend(app core.App, re *core.RequestEvent) error {
 	}
 
 	result, err := sendMessage(app, sendParams{
-		Ctx:                    re.Request.Context(),
-		UserID:                 userID,
-		MailboxID:              req.MailboxID,
-		AliasID:                req.AliasID,
-		FromAddressID:          req.FromAddressID,
-		Subject:                req.Subject,
-		HTMLBody:               req.HTMLBody,
-		TextBody:               req.TextBody,
-		To:                     req.To,
-		Cc:                     req.Cc,
-		Bcc:                    req.Bcc,
-		InReplyToMessageID:     req.InReplyToMessageID,
-		Attachments:            fileAttachments,
-		DraftID:                req.DraftID,
-		RemoveDraftAttachments: req.RemoveAttachments,
+		Ctx:                re.Request.Context(),
+		UserID:             userID,
+		MailboxID:          req.MailboxID,
+		AliasID:            req.AliasID,
+		FromAddressID:      req.FromAddressID,
+		Subject:            req.Subject,
+		HTMLBody:           req.HTMLBody,
+		TextBody:           req.TextBody,
+		To:                 req.To,
+		Cc:                 req.Cc,
+		Bcc:                req.Bcc,
+		InReplyToMessageID: req.InReplyToMessageID,
+		Attachments:        fileAttachments,
+		DraftID:            req.DraftID,
+		DraftAttachments:   req.DraftAttachments,
 	})
 	if err != nil {
 		var sendErr *sendError

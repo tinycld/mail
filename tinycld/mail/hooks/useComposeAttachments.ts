@@ -54,8 +54,8 @@ function useSavedAttachments(draft: SavedDraft | null) {
 
 /** The compose window's attachments: the open draft's saved files plus new ones. */
 export function useComposeAttachments(draft: SavedDraft | null) {
-    const local = useAttachments()
     const saved = useSavedAttachments(draft)
+    const local = useAttachments(saved.kept.length)
     const { removeFile, clearAll: clearLocal } = local
     const { remove: removeSaved, reset: resetSaved } = saved
 
@@ -72,6 +72,7 @@ export function useComposeAttachments(draft: SavedDraft | null) {
         items: composeRibbonItems(saved.kept, local.attachments),
         files: local.attachments.map(a => a.file),
         removedSaved: saved.removed,
+        keptSaved: saved.kept,
         addFilesSafely: local.addFilesSafely,
         removeItem,
         clearAll,
