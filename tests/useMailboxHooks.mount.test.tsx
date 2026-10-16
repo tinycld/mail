@@ -69,6 +69,9 @@ const h = vi.hoisted(() => ({
         { id: 'm2', mailbox: 'mb_support', user: 'u1', role: 'member', created: '', updated: '' },
         { id: 'm3', mailbox: 'mb_bob', user: 'u2', role: 'owner', created: '', updated: '' },
         { id: 'm4', mailbox: 'mb_orphan', user: 'u1', role: 'member', created: '', updated: '' },
+        // A membership whose mailbox row is gone: useMailboxes left-joins the
+        // mailbox, so it must drop this row itself.
+        { id: 'm5', mailbox: 'mb_gone', user: 'u1', role: 'member', created: '', updated: '' },
     ],
     addresses: [
         {
@@ -183,7 +186,8 @@ test('useMailboxes joins memberships to mailboxes for the signed-in user only', 
 
     expect(result.current.personal?.id).toBe('mb_me')
     // mb_bob is excluded by the membership predicate; mb_orphan is still a
-    // membership (domains are not this hook's concern).
+    // membership (domains are not this hook's concern); mb_gone has no
+    // mailbox row.
     expect(result.current.shared.map(m => m.id)).toEqual(['mb_support', 'mb_orphan'])
 })
 
