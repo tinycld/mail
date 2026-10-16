@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"sort"
@@ -38,11 +39,8 @@ func resolveSendAddress(app core.App, mailbox *core.Record, fromAddressID, legac
 		if err := verifyAliasBelongsToMailbox(alias, mailbox.Id); err != nil {
 			return nil, errAddressNotInMailbox
 		}
-		row, err := findAddressRow(app, alias.GetString("address"), mailbox.GetString("domain"))
+		row, err := findLegacyAliasRow(app, alias)
 		if err != nil {
-			return nil, err
-		}
-		if row == nil || row.GetString("mailbox") != mailbox.Id {
 			return nil, fmt.Errorf("%w: alias %s has no address row", errAddressNotFound, legacyAliasID)
 		}
 		return loadResolvedAddress(app, row.Id)
@@ -55,7 +53,11 @@ func resolveSendAddress(app core.App, mailbox *core.Record, fromAddressID, legac
 // its owner's chosen default (mail_identities.default_from), else the address
 // on the highest-ranked verified domain, else any address.
 func defaultSendAddress(app core.App, mailbox *core.Record) (*resolvedAddress, error) {
-	if identity, err := app.FindFirstRecordByFilter("mail_identities", "inbox = {:inbox}", dbx.Params{"inbox": mailbox.Id}); err == nil {
+	identity, err := app.FindFirstRecordByFilter("mail_identities", "inbox = {:inbox}", dbx.Params{"inbox": mailbox.Id})
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		addressLog.Error("could not read the inbox identity for its default sender", "mailbox", mailbox.Id, "error", err)
+	}
+	if err == nil {
 		if id := identity.GetString("default_from"); id != "" {
 			if from, err := loadResolvedAddress(app, id); err == nil && from.Mailbox.Id == mailbox.Id {
 				return from, nil

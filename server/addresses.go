@@ -369,12 +369,17 @@ func mirrorLegacyAlias(app core.App, alias *core.Record) error {
 	return app.Save(row)
 }
 
-func removeLegacyAlias(app core.App, alias *core.Record) error {
-	// Match on the inbox, not its current domain: the inbox may have moved
-	// domains since the alias was mirrored.
-	row, err := app.FindFirstRecordByFilter("mail_addresses",
+// findLegacyAliasRow finds the manual, non-primary address row an alias was
+// mirrored to. It matches on the inbox, not its current domain: the inbox may
+// have moved domains since the alias was mirrored.
+func findLegacyAliasRow(app core.App, alias *core.Record) (*core.Record, error) {
+	return app.FindFirstRecordByFilter("mail_addresses",
 		"mailbox = {:mailbox} && local_part = {:local} && source = {:source} && is_primary = false",
-		dbx.Params{"mailbox": alias.GetString("mailbox"), "local": alias.GetString("address"), "source": addressSourceManual})
+		dbx.Params{"mailbox": alias.GetString("mailbox"), "local": normalizeLocalPart(alias.GetString("address")), "source": addressSourceManual})
+}
+
+func removeLegacyAlias(app core.App, alias *core.Record) error {
+	row, err := findLegacyAliasRow(app, alias)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}

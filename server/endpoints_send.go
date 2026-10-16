@@ -128,8 +128,10 @@ func sendErrorForAddress(err error) *sendError {
 		return &sendError{kind: sendErrForbidden, msg: "The sender address does not belong to this mailbox", err: err}
 	case errors.Is(err, errNoSendAddress):
 		return &sendError{kind: sendErrBadRequest, msg: "This mailbox has no address to send from", err: err}
-	default:
+	case errors.Is(err, errAddressNotFound):
 		return &sendError{kind: sendErrNotFound, msg: "Sender address not found", err: err}
+	default:
+		return &sendError{kind: sendErrInternal, msg: "Could not resolve the sender address", err: err}
 	}
 }
 

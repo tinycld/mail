@@ -57,17 +57,19 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 		return re.ForbiddenError("Not a member of this mailbox", err)
 	}
 
-	from, err := resolveSendAddress(app, mailbox, req.FromAddressID, req.AliasID)
-	if err != nil {
-		e := sendErrorForAddress(err)
-		switch e.kind {
-		case sendErrForbidden:
-			return re.ForbiddenError(e.msg, err)
-		case sendErrBadRequest:
-			return re.BadRequestError(e.msg, err)
-		default:
-			return re.NotFoundError(e.msg, err)
+	// An old client's draft update names no address; keep the one a newer
+	// client chose rather than re-resolving the default over it.
+	fromAddressID := req.FromAddressID
+	if req.MessageID != "" && fromAddressID == "" && req.AliasID == "" {
+		if existing, err := app.FindRecordById("mail_messages", req.MessageID); err == nil {
+			if kept, err := loadResolvedAddress(app, existing.GetString("sent_from")); err == nil && kept.Mailbox.Id == mailbox.Id {
+				fromAddressID = kept.Address.Id
+			}
 		}
+	}
+	from, err := resolveSendAddress(app, mailbox, fromAddressID, req.AliasID)
+	if err != nil {
+		return sendErrorForAddress(err).asAPIError(re)
 	}
 
 	displayName := mailbox.GetString("display_name")

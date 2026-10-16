@@ -264,7 +264,7 @@ func mailboxAddresses(app core.App, mailboxID string) ([]string, error) {
 	for _, row := range rows {
 		domain, err := app.FindRecordById("mail_domains", row.GetString("domain"))
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("domain lookup for address %s: %w", row.Id, err)
 		}
 		addresses = append(addresses, row.GetString("local_part")+"@"+domain.GetString("domain"))
 	}

@@ -381,6 +381,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 	existingMsg, existingThread, _ := findMessageInMailbox(s.app, mailboxID, result.MessageID)
 	if existingMsg != nil && isOutgoingMessage(existingMsg) {
 		existingMsg.Set("sent_by", s.user.Id)
+		existingMsg.Set("sent_from", s.address.Id)
 		if result.ProviderMessageID != "" {
 			existingMsg.Set("provider_message_id", result.ProviderMessageID)
 		}
