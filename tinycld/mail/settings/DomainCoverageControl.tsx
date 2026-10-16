@@ -21,7 +21,7 @@ import { type Coverage, coverageChangePreview, coveragePreviewText } from './cov
 const coverageSchema = z
     .object({
         coverage: z.enum(['everyone', 'groups', 'manual']),
-        coverage_groups: z.array(z.string()),
+        coverage_groups: z.array(z.string()).max(100, 'Choose at most 100 groups'),
     })
     .superRefine((v, ctx) => {
         if (v.coverage === 'groups' && v.coverage_groups.length === 0) {
@@ -48,21 +48,6 @@ const OPTIONS = [
     },
     { value: 'manual', label: 'Only people I add', description: 'Add each address by hand.' },
 ]
-
-// One row per (person, membership in a chosen group), or one row with no
-// group for a person in none of them: fold them into the preview's inputs.
-function foldPeople(
-    rows: { userId: string; emailName: string; inbox: string; groupId?: string }[]
-) {
-    const people = new Map<string, { userId: string; emailName: string; inbox: string }>()
-    const memberships = new Map<string, string[]>()
-    for (const { groupId, ...person } of rows) {
-        people.set(person.userId, person)
-        if (!groupId) continue
-        memberships.set(person.userId, [...(memberships.get(person.userId) ?? []), groupId])
-    }
-    return { people: [...people.values()], memberships }
-}
 
 function useCoveragePreview(
     domainId: string,
@@ -101,7 +86,18 @@ function useCoveragePreview(
                 }))
         )
     })
-    const { people, memberships } = useMemo(() => foldPeople(rows ?? []), [rows])
+    // One row per (person, membership in a chosen group), or one row with no
+    // group for a person in none of them: fold them into the preview's inputs.
+    const { people, memberships } = useMemo(() => {
+        const byUser = new Map<string, Omit<NonNullable<typeof rows>[number], 'groupId'>>()
+        const groupsOf = new Map<string, string[]>()
+        for (const { groupId, ...person } of rows ?? []) {
+            byUser.set(person.userId, person)
+            if (!groupId) continue
+            groupsOf.set(person.userId, [...(groupsOf.get(person.userId) ?? []), groupId])
+        }
+        return { people: [...byUser.values()], memberships: groupsOf }
+    }, [rows])
     const { data: addressesOnDomain } = useLiveQuery(query =>
         query
             .from({ address: addressesCollection })
@@ -166,7 +162,10 @@ export function DomainCoverageControl({
     const target = useWatch({ control, name: 'coverage' })
     const targetGroups = useWatch({ control, name: 'coverage_groups' })
     const preview = useCoveragePreview(domainId, domainName, target, targetGroups)
-    const isChanged = target !== coverage || !sameGroups(targetGroups, coverageGroups)
+    // The picked groups count only for a groups rule: a pick left behind
+    // when the admin switches to another rule is not a change.
+    const isChanged =
+        target !== coverage || (target === 'groups' && !sameGroups(targetGroups, coverageGroups))
 
     const save = useMutation({
         mutationFn: mutation(function* (data: CoverageValues) {
@@ -175,10 +174,16 @@ export function DomainCoverageControl({
                 d.coverage_groups = data.coverage_groups
             })
         }),
-        onSuccess: () => reset(getValues()),
+        onSuccess: (_result, saved: CoverageValues) => reset(saved),
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
-    const onConfirm = handleSubmit(data => save.mutate(data))
+    // Another rule keeps the stored groups: the hidden pick is not saved.
+    const onConfirm = handleSubmit(data =>
+        save.mutate({
+            coverage: data.coverage,
+            coverage_groups: data.coverage === 'groups' ? data.coverage_groups : coverageGroups,
+        })
+    )
 
     return (
         <View className="gap-2">

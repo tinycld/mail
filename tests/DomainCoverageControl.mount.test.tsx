@@ -196,3 +196,36 @@ test('Apply writes the groups coverage and the chosen groups', async () => {
         coverage_groups: ['g_sales'],
     })
 })
+
+// A pick left behind in the hidden picker is not a change, and is not saved.
+test('a group pick left behind when switching back is not a change', async () => {
+    const { findByText, queryByText } = renderGroupsDomain()
+    await press(await findByText('Members of these groups'))
+    await press(await findByText('Sales'))
+    await findByText('Adds 1: ann@q.example')
+    await press(await findByText('Only people I add'))
+    await waitFor(() => expect(queryByText('Apply')).toBeNull())
+})
+
+test('switching to another rule keeps the stored groups', async () => {
+    const { findByText } = render(
+        withQueryClient(
+            <DomainCoverageControl
+                domainId="d_q"
+                domainName="q.example"
+                coverage="everyone"
+                coverageGroups={['g_ops']}
+            />
+        )
+    )
+    await press(await findByText('Members of these groups'))
+    await press(await findByText('Sales'))
+    await press(await findByText('Only people I add'))
+    await press(await findByText('Apply'))
+    await waitFor(() => expect(h.updated).toHaveLength(1))
+    expect(h.updated[0]).toMatchObject({
+        id: 'd_q',
+        coverage: 'manual',
+        coverage_groups: ['g_ops'],
+    })
+})
