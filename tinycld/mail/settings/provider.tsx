@@ -141,10 +141,7 @@ function DomainsSection({ storedProvider }: { storedProvider: string | undefined
 
             <NoDomainsBanner isVisible={domainRows.length === 0} />
 
-            <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
-                Drag to set the order. The first verified domain is the main domain: new people get
-                their inbox there, and people send from it unless they choose another address.
-            </Text>
+            <DomainOrderHelp isVisible={domainRows.length > 1} />
 
             <SortableList
                 data={domainRows}
@@ -160,6 +157,17 @@ function DomainsSection({ storedProvider }: { storedProvider: string | undefined
 
             <AddDomainForm />
         </View>
+    )
+}
+
+// One domain has no order to set, so the drag help would only confuse.
+function DomainOrderHelp({ isVisible }: { isVisible: boolean }) {
+    if (!isVisible) return null
+    return (
+        <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
+            Drag to set the order. The first verified domain is the main domain: new people get
+            their inbox there, and people send from it unless they choose another address.
+        </Text>
     )
 }
 
