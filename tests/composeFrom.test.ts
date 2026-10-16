@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { composeSendBlocker, resolveComposeFrom } from '~/tinycld/mail/hooks/composeFrom'
+import {
+    composeSendBlocker,
+    draftSaveRequest,
+    resolveComposeFrom,
+    resolveComposeState,
+} from '~/tinycld/mail/hooks/composeFrom'
 import type { SendableIdentity } from '~/tinycld/mail/hooks/groupSendableIdentities'
 
 const address = (id: string, email: string, domainVerified = true) => ({
@@ -109,5 +114,70 @@ describe('composeSendBlocker', () => {
             message: 'x',
         }
         expect(composeSendBlocker(null, unverified)).toEqual({ blocker: null, message: null })
+    })
+})
+
+describe('resolveComposeState with an open draft', () => {
+    it("offers only the draft's mailbox, still with all its addresses", () => {
+        const { choices, from } = resolveComposeState({
+            identities,
+            storeMailboxId: 'mb_support',
+            storeAddressId: null,
+            fallbackMailboxId: 'mb_support',
+            lockedMailboxId: 'mb_support',
+        })
+        expect(choices.map(i => i.mailboxId)).toEqual(['mb_support'])
+        expect(choices[0].addresses.map(a => a.id)).toEqual(['sup', 'pend'])
+        expect(from?.identity.mailboxId).toBe('mb_support')
+    })
+
+    it("keeps the draft's mailbox even if the store names another one", () => {
+        const { from } = resolveComposeState({
+            identities,
+            storeMailboxId: 'mb_me',
+            storeAddressId: 'org',
+            fallbackMailboxId: 'mb_support',
+            lockedMailboxId: 'mb_support',
+        })
+        expect(from?.identity.mailboxId).toBe('mb_support')
+        expect(from?.address.id).toBe('sup')
+    })
+
+    it('offers every mailbox without a draft', () => {
+        const { choices } = resolveComposeState({
+            identities,
+            storeMailboxId: '',
+            storeAddressId: null,
+            fallbackMailboxId: 'mb_me',
+            lockedMailboxId: null,
+        })
+        expect(choices.map(i => i.mailboxId)).toEqual(['mb_me', 'mb_support'])
+    })
+})
+
+describe('draftSaveRequest', () => {
+    it('saves a shared-mailbox draft into its own mailbox', () => {
+        const { from } = resolveComposeState({
+            identities,
+            storeMailboxId: '',
+            storeAddressId: null,
+            fallbackMailboxId: 'mb_support',
+            lockedMailboxId: 'mb_support',
+        })
+        if (!from) throw new Error('expected a From')
+        const request = draftSaveRequest(from, 'd1', {
+            subject: 'Plan',
+            html_body: '<p>x</p>',
+            text_body: 'x',
+        })
+        expect(request.mailbox_id).toBe('mb_support')
+        expect(request.from_address_id).toBe('sup')
+        expect(request.message_id).toBe('d1')
+    })
+
+    it('creates a new draft when none is open', () => {
+        const from = resolveComposeFrom(identities, '', null, '')
+        if (!from) throw new Error('expected a From')
+        expect(draftSaveRequest(from, null, { subject: '' }).message_id).toBeUndefined()
     })
 })

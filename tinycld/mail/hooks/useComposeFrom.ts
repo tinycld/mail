@@ -1,13 +1,22 @@
 import { useComposeStore } from '../stores/compose-store'
-import { resolveComposeFrom } from './composeFrom'
+import { resolveComposeState } from './composeFrom'
 import { useSendableIdentities } from './useSendableIdentities'
 
-/** The From a compose surface shows and sends; see resolveComposeFrom. */
-export function useComposeFrom(fallbackMailboxId: string) {
+/**
+ * The From choices a compose surface offers and the From it sends; see
+ * resolveComposeState. `lockedMailboxId` is the open draft's mailbox.
+ */
+export function useComposeFrom(fallbackMailboxId: string, lockedMailboxId: string | null = null) {
     const identities = useSendableIdentities()
-    const mailboxId = useComposeStore(s => s.mailboxId)
-    const fromAddressId = useComposeStore(s => s.fromAddressId)
+    const storeMailboxId = useComposeStore(s => s.mailboxId)
+    const storeAddressId = useComposeStore(s => s.fromAddressId)
     const setFrom = useComposeStore(s => s.setFrom)
-    const from = resolveComposeFrom(identities, mailboxId, fromAddressId, fallbackMailboxId)
-    return { identities, from, setFrom }
+    const { choices, from } = resolveComposeState({
+        identities,
+        storeMailboxId,
+        storeAddressId,
+        fallbackMailboxId,
+        lockedMailboxId,
+    })
+    return { choices, from, setFrom }
 }

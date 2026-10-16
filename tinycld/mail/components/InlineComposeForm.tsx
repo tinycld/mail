@@ -26,7 +26,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
     const backgroundColor = useThemeColor('background')
     // A reply goes from the mailbox the reply context chose (the mailbox of
     // the address the message arrived on), else the thread's mailbox.
-    const { identities, from, setFrom } = useComposeFrom(replyContext.mailboxId)
+    const { choices, from, setFrom } = useComposeFrom(replyContext.mailboxId)
     const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
         placeholder: 'Compose reply',
     })
@@ -117,7 +117,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
             }}
         >
             <View ref={dropRef} className="flex-1">
-                <ComposeFromRow identities={identities} from={from} onSelect={setFrom} />
+                <ComposeFromRow identities={choices} from={from} onSelect={setFrom} />
                 <ComposeFields control={control} errors={errors} autoFocusTo={toIsEmpty} />
                 <View className="p-3" style={{ minHeight: 120, maxHeight: 280 }}>
                     <EditorComponent />

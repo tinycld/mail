@@ -1,3 +1,4 @@
+import type { SaveDraftRequest } from '@tinycld/app-generated/mail-api'
 import type { SendableAddress, SendableIdentity } from './groupSendableIdentities'
 import type { MailSendBlocker, MailSendReadiness } from './useMailSendReadiness'
 
@@ -69,4 +70,53 @@ export function composeSendBlocker(
         return { blocker: readiness.blocker, message: readiness.message }
     }
     return { blocker: null, message: null }
+}
+
+interface ComposeStateParams {
+    identities: SendableIdentity[]
+    storeMailboxId: string
+    storeAddressId: string | null
+    fallbackMailboxId: string
+    // The open draft's mailbox. A draft keeps its mailbox: the server will
+    // not move one, so only that mailbox's addresses are offered.
+    lockedMailboxId: string | null
+}
+
+/** Pure: the From choices a compose offers, and the From it sends. */
+export function resolveComposeState({
+    identities,
+    storeMailboxId,
+    storeAddressId,
+    fallbackMailboxId,
+    lockedMailboxId,
+}: ComposeStateParams) {
+    const choices = lockedMailboxId
+        ? identities.filter(i => i.mailboxId === lockedMailboxId)
+        : identities
+    const from = resolveComposeFrom(
+        choices,
+        lockedMailboxId || storeMailboxId,
+        storeAddressId,
+        fallbackMailboxId
+    )
+    return { choices, from }
+}
+
+type DraftFields = Omit<
+    SaveDraftRequest,
+    'mailbox_id' | 'from_address_id' | 'message_id' | 'alias_id'
+>
+
+/** Pure: the draft save request for the resolved From. */
+export function draftSaveRequest(
+    from: ResolvedFrom,
+    draftId: string | null,
+    fields: DraftFields
+): SaveDraftRequest {
+    return {
+        ...fields,
+        mailbox_id: from.identity.mailboxId,
+        from_address_id: from.address.id,
+        message_id: draftId ?? undefined,
+    }
 }

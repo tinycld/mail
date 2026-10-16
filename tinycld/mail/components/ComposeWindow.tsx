@@ -1,7 +1,7 @@
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { usePickFiles } from '@tinycld/core/file-viewer/use-pick-files'
 import { useFileDrop } from '@tinycld/core/lib/file-drop/use-file-drop'
-import { mutation, performMutations, useMutation } from '@tinycld/core/lib/mutations'
+import { performMutations } from '@tinycld/core/lib/mutations'
 import { notify } from '@tinycld/core/lib/notify'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { captureMessageToSentry } from '@tinycld/core/lib/sentry'
@@ -10,9 +10,9 @@ import { useSafeAreaInsets } from '@tinycld/core/lib/use-safe-area'
 import { FormErrorSummary, useForm, zodResolver } from '@tinycld/core/ui/form'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, View } from 'react-native'
-import { composeSendBlocker } from '../hooks/composeFrom'
+import { closeWithDraft } from '../hooks/closeWithDraft'
+import { composeSendBlocker, draftSaveRequest } from '../hooks/composeFrom'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
-import { planDraftSave } from '../hooks/planDraftSave'
 import { useAttachments } from '../hooks/useAttachments'
 import { useComposeFrom } from '../hooks/useComposeFrom'
 import { useCompose } from '../hooks/useComposeState'
@@ -39,7 +39,7 @@ function notifyDraftSaveFailed(message: string) {
     notify.emit({
         event: 'mutation.error',
         title: "Your draft wasn't saved",
-        body: message,
+        body: `${message.replace(/\.$/, '')}. The message is still open.`,
         durationMs: 8000,
         data: { operation: 'mail.draft.save', error: message },
     })
@@ -56,8 +56,15 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const breakpoint = useBreakpoint()
     const insets = useSafeAreaInsets()
     const readiness = useMailSendReadiness()
-    // The picked mailbox wins; the personal mailbox is the default.
-    const { identities, from } = useComposeFrom(readiness.mailboxId ?? '')
+    // An open draft keeps its own mailbox (only its addresses are offered),
+    // so a shared-mailbox draft is never saved into the personal one.
+    // Otherwise the picked mailbox wins and the personal mailbox is the
+    // default.
+    const draftMailboxId = draftContext?.mailboxId ?? null
+    const { choices, from } = useComposeFrom(
+        draftMailboxId ?? readiness.mailboxId ?? '',
+        draftMailboxId
+    )
     const sendBlocker = composeSendBlocker(from, readiness)
     const fromMailboxId = from?.identity.mailboxId ?? null
     const draftIdRef = useRef<string | null>(null)
@@ -195,16 +202,9 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         },
     })
 
-    const { saveDraft, isPending: isSavingDraft } = useSaveDraft({
+    const { saveDraftAsync, isPending: isSavingDraft } = useSaveDraft({
         onError: notifyDraftSaveFailed,
-    })
-
-    // Deletes the draft a save into another mailbox replaced. The default
-    // onError reports a failure; the new draft is saved either way.
-    const removeDraft = useMutation({
-        mutationFn: mutation(function* (id: string) {
-            yield messagesCollection.delete(id)
-        }),
+        onOffline: notifyDraftSaveFailed,
     })
 
     const { isDragging, dropRef } = useFileDrop({
@@ -230,51 +230,31 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     }
 
     const handleClose = async () => {
-        // A move-to-another-mailbox save is still in flight; a second save
-        // would create a second draft.
+        // A save is still in flight; a second one would create a second draft.
         if (isSavingDraft) return
         const text = await editor.getText()
-        if (!text?.trim() || !from) {
+        if (!text?.trim()) {
             close()
+            return
+        }
+        if (!from) {
+            notifyDraftSaveFailed('No address to save it from has loaded yet')
             return
         }
 
         const data = getValues()
         const htmlBody = await editor.getHTML()
-        const to = data.to ? parseRecipients(data.to) : undefined
-        const cc = data.cc ? parseRecipients(data.cc) : undefined
-        const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
-        const plan = planDraftSave({
-            draftId: draftIdRef.current,
-            draftMailboxId: draftContext?.mailboxId ?? null,
-            saveMailboxId: from.identity.mailboxId,
-        })
-
-        const payload = {
-            mailbox_id: from.identity.mailboxId,
-            from_address_id: from.address.id,
-            message_id: plan.messageId,
-            to,
-            cc,
-            bcc,
+        const request = draftSaveRequest(from, draftIdRef.current, {
+            to: data.to ? parseRecipients(data.to) : undefined,
+            cc: data.cc ? parseRecipients(data.cc) : undefined,
+            bcc: data.bcc ? parseRecipients(data.bcc) : undefined,
             subject: data.subject,
             html_body: htmlBody,
             text_body: text,
-            attachments: attachments.map(a => a.file),
-        }
-
-        const replacesDraftId = plan.replacesDraftId
-        if (!replacesDraftId) {
-            saveDraft(payload)
-            finishClose()
-            return
-        }
-
-        // From moved the draft to another mailbox: keep compose open until
-        // the new draft is saved, so a failed save (toasted by onError) loses
-        // nothing; then delete the old draft and close.
-        saveDraft(payload, {
-            onSuccess: () => removeDraft.mutate(replacesDraftId, { onSettled: finishClose }),
+        })
+        await closeWithDraft({
+            save: () => saveDraftAsync({ ...request, attachments: attachments.map(a => a.file) }),
+            finish: finishClose,
         })
     }
 
@@ -354,7 +334,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                 onClose={handleClose}
             />
             <View ref={dropRef} className={isMinimized ? 'hidden' : 'flex-1'}>
-                <ComposeFromRow identities={identities} from={from} onSelect={setFrom} />
+                <ComposeFromRow identities={choices} from={from} onSelect={setFrom} />
                 <ComposeFields
                     control={control}
                     errors={errors}
