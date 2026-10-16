@@ -3,6 +3,7 @@ package mail
 import (
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -559,7 +560,7 @@ func TestInboxGroup_LeaveKeepsDirectAccess(t *testing.T) {
 	if err := app.Delete(membershipOf(t, app, s.sales, s.ann)); err != nil {
 		t.Fatal(err)
 	}
-	has, err := userHasMailboxRow(app, s.shared.Id, s.ann.Id, "")
+	has, err := userHasMailboxRow(app, s.shared.Id, s.ann.Id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -605,6 +606,69 @@ func TestInboxGroup_LastRowGoneRemovesState(t *testing.T) {
 	if n := inboxStateCount(t, app, s.shared, s.ann.Id); n != 1 {
 		t.Errorf("ann, still in Sales, has %d state rows, want 1", n)
 	}
+}
+
+// The cleanup and the backfill for one person must not interleave. The
+// cleanup lists the person's state rows, and the person gets access again
+// while it deletes them. A backfill that ran beside it would skip every
+// thread whose old row still exists, and the cleanup would then delete those
+// rows: the person would have access and no state. The test holds the
+// cleanup after its first delete, adds the person back, and checks that the
+// backfill waits and then gives the person every row.
+func TestInboxGroup_CleanupAndBackfillDoNotInterleave(t *testing.T) {
+	app := newInboxStateTestApp(t)
+	registerMemberBackfillHooks(app)
+	s := seedInboxGroup(t, app)
+	direct := addInboxPerson(t, app, s.shared, s.ann, "member")
+	const threads = 3
+	for i := range threads {
+		deliverToInbox(t, app, s.shared, "interleave-"+string(rune('a'+i)))
+	}
+	if n := inboxStateCount(t, app, s.shared, s.ann.Id); n != threads {
+		t.Fatalf("ann has %d state rows before the cleanup, want %d", n, threads)
+	}
+
+	cleanupDeleting := make(chan struct{})
+	gate := make(chan struct{})
+	var holdOnce, wroteOnce sync.Once
+	backfillWrote := make(chan struct{})
+	app.OnRecordAfterDeleteSuccess("mail_thread_state").BindFunc(func(e *core.RecordEvent) error {
+		if e.Record.GetString("user") == s.ann.Id {
+			holdOnce.Do(func() {
+				close(cleanupDeleting)
+				<-gate
+			})
+		}
+		return e.Next()
+	})
+	app.OnRecordAfterCreateSuccess("mail_thread_state").BindFunc(func(e *core.RecordEvent) error {
+		if e.Record.GetString("user") == s.ann.Id {
+			wroteOnce.Do(func() { close(backfillWrote) })
+		}
+		return e.Next()
+	})
+
+	if err := app.Delete(direct); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-cleanupDeleting:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the cleanup did not delete a row in 2s")
+	}
+	addInboxPerson(t, app, s.shared, s.ann, "member")
+
+	// The cleanup holds ann's key, so her backfill must not write yet.
+	select {
+	case <-backfillWrote:
+		t.Error("the backfill wrote a state row while the cleanup for the same person ran")
+	case <-time.After(300 * time.Millisecond):
+	}
+	close(gate)
+
+	waitFor(t, "ann has access again but not every state row", func() bool {
+		return inboxStateCount(t, app, s.shared, s.ann.Id) == threads && hasCountsRow(app, s.shared, s.ann)
+	})
 }
 
 func TestInboxGroup_GroupDeleteCascades(t *testing.T) {

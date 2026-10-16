@@ -93,12 +93,11 @@ func refuseDerivedRow(e *core.RecordRequestEvent, row *core.Record) error {
 	return e.ForbiddenError("This person has access through the group "+name+". Remove the group from the inbox, or ask an admin to remove the person from the group.", nil)
 }
 
-// userHasMailboxRow reports whether the user has a member row on the mailbox
-// other than exceptID: a direct row or a row derived from a group.
-func userHasMailboxRow(app core.App, mailboxID, userID string, exceptID string) (bool, error) {
+// userHasMailboxRow reports whether the user has a member row on the mailbox:
+// a direct row or a row derived from a group.
+func userHasMailboxRow(app core.App, mailboxID, userID string) (bool, error) {
 	n, err := app.CountRecords("mail_mailbox_members",
 		dbx.HashExp{"mailbox": mailboxID, "user": userID},
-		dbx.Not(dbx.HashExp{"id": exceptID}),
 	)
 	if err != nil {
 		return false, err
@@ -145,7 +144,7 @@ func cleanupLostMailboxAccess(app core.App, mailboxID, userID string) error {
 		if !appIsLive(app) {
 			return nil
 		}
-		has, err := userHasMailboxRow(app, mailboxID, userID, "")
+		has, err := userHasMailboxRow(app, mailboxID, userID)
 		if err != nil {
 			return fmt.Errorf("member rows of user %s on mailbox %s: %w", userID, mailboxID, err)
 		}

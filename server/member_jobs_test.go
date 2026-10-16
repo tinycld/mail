@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -31,8 +32,8 @@ func TestJobLimiter_RunsEveryJobWithinLimit(t *testing.T) {
 	gate := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(jobs)
-	for range jobs {
-		l.run(func() {
+	for i := range jobs {
+		l.runKeyed(fmt.Sprintf("key-%d", i), func() {
 			defer wg.Done()
 			n := active.Add(1)
 			for {
@@ -77,5 +78,61 @@ func TestJobLimiter_PanicReleasesSlot(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("the job after a panic did not run in 2s; the panic kept its slot")
+	}
+}
+
+// Jobs for one (mailbox, user) key run one at a time, in the order they were
+// queued. A job for another key does not wait for them.
+func TestMemberJobs_SameKeyRunsInOrder(t *testing.T) {
+	l := newJobLimiter(2)
+	firstStarted := make(chan struct{})
+	gate := make(chan struct{})
+	secondStarted := make(chan struct{})
+	otherRan := make(chan struct{})
+	var order []string
+	var mu sync.Mutex
+	record := func(s string) {
+		mu.Lock()
+		defer mu.Unlock()
+		order = append(order, s)
+	}
+
+	runMemberJob(l, "cleanup", "mb", "ann", func() error {
+		close(firstStarted)
+		<-gate
+		record("cleanup")
+		return nil
+	})
+	<-firstStarted
+	runMemberJob(l, "backfill", "mb", "ann", func() error {
+		record("backfill")
+		close(secondStarted)
+		return nil
+	})
+	runMemberJob(l, "backfill", "mb", "bob", func() error {
+		close(otherRan)
+		return nil
+	})
+
+	select {
+	case <-otherRan:
+	case <-time.After(2 * time.Second):
+		t.Fatal("a job for another person did not run in 2s while the first job held its key")
+	}
+	select {
+	case <-secondStarted:
+		t.Fatal("a second job for the same person started while the first one ran")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(gate)
+	select {
+	case <-secondStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the second job for the same person did not run in 2s after the first one ended")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(order) != 2 || order[0] != "cleanup" || order[1] != "backfill" {
+		t.Errorf("jobs ran in order %v, want [cleanup backfill]", order)
 	}
 }

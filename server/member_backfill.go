@@ -53,7 +53,7 @@ func backfillMemberThreadState(app core.App, mailboxID, userID string) error {
 		// The job can run after the person lost access again, and the
 		// cleanup for that loss can have run already. Rows written now would
 		// stay with nobody to remove them.
-		has, err := userHasMailboxRow(app, mailboxID, userID, "")
+		has, err := userHasMailboxRow(app, mailboxID, userID)
 		if err != nil {
 			return fmt.Errorf("member rows of user %s on mailbox %s: %w", userID, mailboxID, err)
 		}
