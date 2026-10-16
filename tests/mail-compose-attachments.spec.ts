@@ -79,12 +79,12 @@ test.describe('Mail — Compose attachments', () => {
 
         // And the attachment survived it. A transport that resolved without
         // delivering bytes would still list the draft — this is the part that
-        // would not survive.
-        await emailRow(page, subject).click()
-        await expect(page.getByTestId('mail-thread-detail')).toBeVisible({ timeout: 10_000 })
-        await expect(page.getByText('hippo.jpg', { exact: false }).first()).toBeVisible({
-            timeout: 15_000,
-        })
+        // would not survive. The server marks the thread only after it stores
+        // a file. The row is the read path: a draft row opens compose, not
+        // the thread.
+        await expect(
+            emailRow(page, subject).getByRole('img', { name: 'Has attachments' })
+        ).toBeVisible()
     })
 
     test('no progress bar renders before anything is uploading', async ({ page }) => {
