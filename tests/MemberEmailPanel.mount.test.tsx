@@ -49,6 +49,13 @@ const h = vi.hoisted(() => ({
         { id: 'mb_blank', type: 'shared', display_name: '', name: 'Support', address: 'support' },
         { id: 'mb_other', type: 'shared', display_name: 'Other inbox' },
     ],
+    users: [
+        { id: 'u1', role: 'admin' },
+        { id: 'u2', role: 'member' },
+        { id: 'u3', role: 'member' },
+        { id: 'u8', role: 'member' },
+        { id: 'u9', role: 'guest' },
+    ],
     members: [
         { id: 'm1', mailbox: 'mb_sales', user: 'u1' },
         { id: 'm2', mailbox: 'mb1', user: 'u1' },
@@ -78,6 +85,7 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
         mail_addresses: mk('mail_addresses', h.addresses),
         mail_domains: mk('mail_domains', h.domains),
         groups: mk('groups', []),
+        users: mk('users', h.users),
         mail_mailboxes: mk('mail_mailboxes', h.mailboxes),
         mail_mailbox_members: mk('mail_mailbox_members', h.members),
     }
@@ -99,7 +107,6 @@ test('shows the heading, addresses with badges, the email name and the picker', 
     expect(await findByText('Email')).toBeTruthy()
     // Also an option of the Default From picker.
     expect((await findAllByText('nathan@tinycld.com')).length).toBeGreaterThan(0)
-    expect(getByText('Main address')).toBeTruthy()
     expect(getByText('Main address')).toBeTruthy()
     expect(getByText('nathan')).toBeTruthy()
     expect(getByText('Edit')).toBeTruthy()
@@ -141,6 +148,12 @@ test('a guest has no identity and no form', async () => {
     expect(await findByText('Guests do not get email addresses.')).toBeTruthy()
     expect(queryByText('Send new mail from')).toBeNull()
     expect(queryByText('Edit')).toBeNull()
+})
+
+test('a member with no identity has no email yet', async () => {
+    const { findByText, queryByText } = renderPanel('u8')
+    expect(await findByText('This person has no email yet.')).toBeTruthy()
+    expect(queryByText('Guests do not get email addresses.')).toBeNull()
 })
 
 test('a retired identity says the person has left', async () => {

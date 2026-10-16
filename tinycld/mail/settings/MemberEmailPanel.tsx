@@ -2,6 +2,7 @@ import { and, eq } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import type { MemberDrawerPanelProps } from '@tinycld/core/lib/members/member-panel'
 import { useStore } from '@tinycld/core/lib/pocketbase'
+import { useRecord } from '@tinycld/core/lib/use-record'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { DefaultFromPicker } from './DefaultFromPicker'
@@ -94,17 +95,18 @@ function EmailNameFormSlot({
     return <EmailNameForm identity={identity} addresses={addresses} onDone={onDone} />
 }
 
+function SharedInboxName({ name }: { name: string }) {
+    return <Text className="text-foreground text-sm">{name}</Text>
+}
+
 function SharedInboxList({ userId }: { userId: string }) {
     const inboxes = useSharedInboxes(userId)
     if (inboxes.length === 0) return null
+    const names = inboxes.map(inbox => <SharedInboxName key={inbox.id} name={inbox.name} />)
     return (
         <View className="gap-1">
             <Text className="text-muted-foreground text-xs">Shared inboxes</Text>
-            {inboxes.map(inbox => (
-                <Text key={inbox.id} className="text-foreground text-sm">
-                    {inbox.name}
-                </Text>
-            ))}
+            {names}
         </View>
     )
 }
@@ -150,14 +152,16 @@ function IdentitySlot({
 /** Contributed to core's member drawer: a person's addresses, email name and shared inboxes. */
 export default function MemberEmailPanel({ userId }: MemberDrawerPanelProps) {
     const { identity, addresses, isReady } = usePersonEmail(userId)
+    const [usersCollection] = useStore('users')
+    const { record: user } = useRecord(usersCollection, userId)
     const isRetired = identity?.retired === true
+    const hasNoIdentity = isReady && identity === null && user !== undefined
+    const isGuest = user?.role === 'guest'
     return (
         <View className="gap-3">
             <Heading />
-            <Note
-                isVisible={isReady && identity === null}
-                text="Guests do not get email addresses."
-            />
+            <Note isVisible={hasNoIdentity && isGuest} text="Guests do not get email addresses." />
+            <Note isVisible={hasNoIdentity && !isGuest} text="This person has no email yet." />
             <Note isVisible={isRetired} text="This person has left. Their addresses are removed." />
             <IdentitySlot
                 isVisible={!isRetired}

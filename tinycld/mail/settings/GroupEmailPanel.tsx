@@ -7,7 +7,7 @@ import { domainsForGroup } from './group-domains'
 
 function useGroupDomains(groupId: string) {
     const [domainsCollection] = useStore('mail_domains')
-    const { data } = useLiveQuery({
+    const { data, isReady } = useLiveQuery({
         queryKey: ['mail_group_domains'],
         query: query =>
             query
@@ -20,7 +20,11 @@ function useGroupDomains(groupId: string) {
                     rank: domain.rank,
                 })),
     })
-    return domainsForGroup(data ?? [], groupId)
+    return { domains: domainsForGroup(data ?? [], groupId), isReady }
+}
+
+function DomainLine({ domain }: { domain: string }) {
+    return <Text className="text-foreground text-sm">Gives addresses on {domain}</Text>
 }
 
 function NoDomains({ isVisible }: { isVisible: boolean }) {
@@ -30,18 +34,15 @@ function NoDomains({ isVisible }: { isVisible: boolean }) {
 
 /** Contributed to core's group drawer: the domains that give this group's members addresses. */
 export default function GroupEmailPanel({ groupId }: GroupDrawerPanelProps) {
-    const domains = useGroupDomains(groupId)
+    const { domains, isReady } = useGroupDomains(groupId)
+    const lines = domains.map(d => <DomainLine key={d.id} domain={d.domain} />)
     return (
         <View className="gap-2">
             <Text className="text-[12px] font-semibold text-muted uppercase tracking-wide">
                 Email
             </Text>
-            {domains.map(d => (
-                <Text key={d.id} className="text-foreground text-sm">
-                    Gives addresses on {d.domain}
-                </Text>
-            ))}
-            <NoDomains isVisible={domains.length === 0} />
+            {lines}
+            <NoDomains isVisible={isReady && domains.length === 0} />
         </View>
     )
 }

@@ -50,6 +50,13 @@ const h = vi.hoisted(() => ({
         { id: 'mb_blank', type: 'shared', display_name: '', name: 'Support', address: 'support' },
         { id: 'mb_other', type: 'shared', display_name: 'Other inbox' },
     ],
+    users: [
+        { id: 'u1', role: 'admin' },
+        { id: 'u2', role: 'member' },
+        { id: 'u3', role: 'member' },
+        { id: 'u8', role: 'member' },
+        { id: 'u9', role: 'guest' },
+    ],
     members: [
         { id: 'm1', mailbox: 'mb_sales', user: 'u1' },
         { id: 'm2', mailbox: 'mb1', user: 'u1' },
@@ -83,6 +90,7 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
         mail_addresses: mk('mail_addresses', h.addresses),
         mail_domains: mk('mail_domains', h.domains),
         groups: mk('groups', []),
+        users: mk('users', h.users),
         mail_mailboxes: mk('mail_mailboxes', h.mailboxes),
         mail_mailbox_members: mk('mail_mailbox_members', h.members),
     }
@@ -119,6 +127,12 @@ test('a guest sees that guests get no addresses', async () => {
     const { findByText, queryByText } = renderPage('u9')
     expect(await findByText('Guests do not get email addresses.')).toBeTruthy()
     expect(queryByText('Send new mail from')).toBeNull()
+})
+
+test('a member with no identity has no email yet', async () => {
+    const { findByText, queryByText } = renderPage('u8')
+    expect(await findByText('You have no email yet.')).toBeTruthy()
+    expect(queryByText('Guests do not get email addresses.')).toBeNull()
 })
 
 test('the mail app link opens the IMAP help topic', async () => {

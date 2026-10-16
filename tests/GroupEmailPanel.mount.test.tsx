@@ -6,6 +6,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 afterEach(cleanup)
 
 const h = vi.hoisted(() => ({
+    ready: true,
     domains: [
         {
             id: 'd_q',
@@ -38,7 +39,13 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
         autoIndex: 'eager',
         defaultIndexType: BasicIndex,
     })
-    return { useStore: (...names: string[]) => names.map(() => collection) }
+    // A collection whose first load never finishes.
+    const loading = createCollection({
+        id: 'mail_domains_loading',
+        getKey: (r: { id: string }) => r.id,
+        sync: { sync: () => undefined },
+    })
+    return { useStore: (...names: string[]) => names.map(() => (h.ready ? collection : loading)) }
 })
 
 import GroupEmailPanel from '~/tinycld/mail/settings/GroupEmailPanel'
@@ -63,6 +70,14 @@ test('lists the domains whose coverage includes the group', async () => {
 test('says so when the group gives no addresses', async () => {
     const { findByText } = renderPanel('g_none')
     expect(await findByText('This group gives no addresses.')).toBeTruthy()
+})
+
+test('says nothing about addresses before the domains have loaded', async () => {
+    h.ready = false
+    const { findByText, queryByText } = renderPanel('g_none')
+    expect(await findByText('Email')).toBeTruthy()
+    expect(queryByText('This group gives no addresses.')).toBeNull()
+    h.ready = true
 })
 
 test('domainsForGroup keeps rows listing the group, in rank order', () => {

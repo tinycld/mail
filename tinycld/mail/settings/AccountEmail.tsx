@@ -1,7 +1,8 @@
 import { useStore } from '@tinycld/core/lib/pocketbase'
+import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
 import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { ScrollView, Text, View } from 'react-native'
-import { toAddressItems } from './address-items'
+import { type AddressItem, toAddressItems } from './address-items'
 import { DefaultFromPicker } from './DefaultFromPicker'
 import { MailAppLink } from './MailAppLink'
 import { personEmailQuery, toPersonEmail } from './usePersonEmail'
@@ -29,17 +30,18 @@ function Note({ isVisible, text }: { isVisible: boolean; text: string }) {
     return <Text className="text-muted-foreground text-sm">{text}</Text>
 }
 
-function AddressList({ addresses }: { addresses: PersonEmail['addresses'] }) {
+function AddressRow({ item }: { item: AddressItem }) {
     return (
-        <View className="gap-2">
-            {toAddressItems(addresses).map(item => (
-                <View key={item.id} className="flex-row items-center gap-3">
-                    <Text className="flex-1 text-foreground text-sm">{item.email}</Text>
-                    <Text className="text-muted-foreground text-xs">{item.badge}</Text>
-                </View>
-            ))}
+        <View className="flex-row items-center gap-3">
+            <Text className="flex-1 text-foreground text-sm">{item.email}</Text>
+            <Text className="text-muted-foreground text-xs">{item.badge}</Text>
         </View>
     )
+}
+
+function AddressList({ addresses }: { addresses: PersonEmail['addresses'] }) {
+    const rows = toAddressItems(addresses).map(item => <AddressRow key={item.id} item={item} />)
+    return <View className="gap-2">{rows}</View>
 }
 
 function IdentitySection({
@@ -69,13 +71,16 @@ function IdentitySection({
 /** Settings → Account → Email: the signed-in person's addresses and Default From. */
 export default function AccountEmail() {
     const { identity, addresses, isReady } = useAccountEmail()
+    const role = useCurrentRole()
     const isRetired = identity?.retired === true
+    const hasNoIdentity = isReady && role.isReady && identity === null
     return (
         <ScrollView contentContainerClassName="gap-4 p-4">
             <Note
-                isVisible={isReady && identity === null}
+                isVisible={hasNoIdentity && role.isGuest}
                 text="Guests do not get email addresses."
             />
+            <Note isVisible={hasNoIdentity && !role.isGuest} text="You have no email yet." />
             <IdentitySection isVisible={!isRetired} identity={identity} addresses={addresses} />
         </ScrollView>
     )

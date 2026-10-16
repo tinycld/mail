@@ -166,6 +166,11 @@ function useMailboxData(currentUserId: string) {
     }
 }
 
+function sharedInboxesFooter(count: number, mainDomain: string | undefined) {
+    const label = count === 1 ? '1 shared inbox' : `${count} shared inboxes`
+    return mainDomain ? `${label} · ${mainDomain}` : label
+}
+
 export default function MailboxesSettings() {
     const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
@@ -216,6 +221,7 @@ export default function MailboxesSettings() {
 
     const domainOptions = data.domains.map(d => ({ label: d.domain, value: d.id }))
     const hasDomains = data.domains.length > 0
+    const sharedFooter = sharedInboxesFooter(grouped.totals.shared, data.domains[0]?.domain)
 
     return (
         <>
@@ -348,11 +354,7 @@ export default function MailboxesSettings() {
                                         className="text-muted-foreground"
                                         style={{ fontSize: 12 }}
                                     >
-                                        {grouped.totals.shared} shared inbox
-                                        {grouped.totals.shared !== 1 ? 'es' : ''}
-                                        {data.domains[0]?.domain
-                                            ? ` · ${data.domains[0].domain}`
-                                            : ''}
+                                        {sharedFooter}
                                     </Text>
                                     <Link
                                         href={orgHref('settings/[...section]', {
