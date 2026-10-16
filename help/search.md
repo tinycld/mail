@@ -38,7 +38,7 @@ Text typed in the search box is always searched as literal words. Use the Advanc
 
 ## Scope
 
-Search is scoped to every mailbox you have access to — your personal mailbox plus every shared mailbox you're a member of. There's no per-mailbox switch yet; if you want to narrow it, combine with a **To** filter pointing at one mailbox's primary address.
+Search is scoped to every inbox you have access to — your personal inbox plus every shared inbox you're a member of. There's no per-inbox switch yet; if you want to narrow it, combine with a **To** filter pointing at one inbox's primary address.
 
 ## Match highlighting
 

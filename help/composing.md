@@ -17,7 +17,7 @@ The compose window opens in the bottom-right corner. You can move it, minimize i
 
 ## Filling the form
 
-- **From** — the address you send as. Click **Change** to choose any address of your own mailbox or of a shared mailbox you belong to. A reply or forward starts from the address the original message was sent to; for older mail, from one of your addresses in its To or Cc. An open draft keeps its mailbox: you can change its From only to another address of the same mailbox.
+- **From** — the address you send as. A new message starts from your Default From. Click **Change** to choose any address of your own inbox or of a shared inbox you belong to. A reply or forward starts from the address the original message was sent to; for older mail, from one of your addresses in its To or Cc. See [Your email addresses](help://mail:addresses). An open draft keeps its inbox: you can change its From only to another address of the same inbox.
 - **To** — primary recipients. Type and tab/comma to add multiple. Recipients auto-suggest from [Contacts](help://contacts:getting-started) if you have it installed.
 - **Cc / Bcc** — secondary recipients. Hidden by default; click **Cc Bcc** in the header to reveal. Bcc recipients are saved with the draft and kept on your Sent copy, so you can see later who was blind-copied (the recipients themselves never see the Bcc list).
 - **Subject** — required.
@@ -37,13 +37,13 @@ Drag an image into the body to embed it inline (vs as a separate attachment). Th
 
 ## Drafts
 
-Drafts auto-save every few seconds while you type. They live in the **Drafts** folder of the mailbox you're sending from. If you close the compose window, the draft stays — reopen it from Drafts to keep working. To discard, open the draft and click **Delete draft** (or **Move to trash** from the list).
+Drafts auto-save every few seconds while you type. They live in the **Drafts** folder of the inbox you're sending from. If you close the compose window, the draft stays — reopen it from Drafts to keep working. To discard, open the draft and click **Delete draft** (or **Move to trash** from the list).
 
 ## Sending
 
 Click **Send**. The message goes through this server's mail provider (Postmark or self-hosted SMTP — see [Provider setup](help://mail:provider-setup)), and:
 
-- Immediately appears in **Sent** for the sending mailbox.
+- Immediately appears in **Sent** for the sending inbox.
 - Gets a `delivery_status` of `sending`, updated to `sent` once the provider accepts it, then to `delivered`, `bounced`, or `spam_complaint` based on provider callbacks. See [Delivery tracking](help://mail:delivery-tracking).
 
 If the deployment has no mail provider configured, sending fails with a clear error. Configuring one is an administrator task; on a deployment run by a service provider it is already done for you.
@@ -71,4 +71,5 @@ In the compose window:
 
 - [Reading threads](help://mail:reading-threads)
 - [Delivery tracking](help://mail:delivery-tracking)
-- [Mailboxes and addresses](help://mail:mailboxes)
+- [Your email addresses](help://mail:addresses)
+- [Shared inboxes](help://mail:mailboxes)

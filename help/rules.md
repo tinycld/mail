@@ -76,11 +76,11 @@ can be added twice.
 ## Who a rule acts for
 
 This differs between personal and organization rules, and the difference
-matters most on a shared mailbox:
+matters most on a shared inbox:
 
 - **Personal rules** act only for you. Moving a message to Archive archives it
-  in your view; everyone else in a shared mailbox still sees it in their inbox.
-- **Organization rules** act for **every member of the mailbox**. An org rule
+  in your view; everyone else in a shared inbox still sees it in their inbox.
+- **Organization rules** act for **every member of the inbox**. An org rule
   that archives spam archives it for the whole team.
 
 Org rules are admin-authored, so this is deliberate — a shared "archive spam"
@@ -92,14 +92,14 @@ want a rule that affects only you, make it a personal rule.
 A rule that sends mail in response to arriving mail can, in principle, answer
 another auto-responder forever. Two things stop that.
 
-Mail caps how much a mailbox sends within an hour. Only outgoing mail counts —
+Mail caps how much an inbox sends within an hour. Only outgoing mail counts —
 messages you receive never use up the allowance. The cap is shared by all of
-that mailbox's rules, so adding more reply rules doesn't raise it, and an
+that inbox's rules, so adding more reply rules doesn't raise it, and an
 exchange between two auto-responders stops on its own. If you notice a reply
 rule going quiet, check its run history: hitting the cap is recorded there.
 
-A rule also can't send to the mailbox it's sending from. Both the mailbox's own
-address and any of its aliases are refused, so a forward rule pointed at itself
+A rule also can't send to the inbox it's sending from. Both the inbox's own
+address and any of its extra addresses are refused, so a forward rule pointed at itself
 can't feed itself. Forwarding or replying to any other address, including
 `{{sender_email}}`, works normally.
 
@@ -107,7 +107,7 @@ can't feed itself. Forwarding or replying to any other address, including
 
 The builder's **Test against recent items** button works the same way here as
 anywhere else — see [Automation rules](help://core:rules) for the general
-behavior. One thing specific to mail: because a shared mailbox's messages
+behavior. One thing specific to mail: because a shared inbox's messages
 aren't scoped to any single member, a personal rule on the "A message arrives"
 trigger usually can't be dry-run tested by a non-admin — you'll see a message
 explaining that an organization admin needs to test it instead. This doesn't

@@ -17,7 +17,7 @@ Threads group messages that are part of the same conversation. Grouping uses RFC
 
 1. **`In-Reply-To`** — if the incoming message references an existing message's ID, it joins that thread.
 2. **`References`** — fallback to the references chain when there's no direct parent.
-3. **Subject match** — last-resort fallback: messages with the same normalized subject (stripping `Re:` / `Fwd:`) within the same mailbox.
+3. **Subject match** — last-resort fallback: messages with the same normalized subject (stripping `Re:` / `Fwd:`) within the same inbox.
 
 Two unrelated emails with the same subject won't merge as long as one of the first two strategies fires. If both fail (e.g. someone manually typed your subject into a fresh email), they may collide — open the thread and use the message header dropdown to split.
 
@@ -40,7 +40,7 @@ The toolbar above an open thread has:
 - **Labels** — assign / unassign labels. See [Labels](help://mail:labels).
 - **Mark as unread** — flips read state for the thread.
 
-All of these are per-user — they don't affect what other members of a shared mailbox see. On a narrow window some of these buttons fold into a **More** menu at the end of the toolbar.
+All of these are per-user — they don't affect what other members of a shared inbox see. On a narrow window some of these buttons fold into a **More** menu at the end of the toolbar.
 
 ## Reply, Reply all, Forward
 
