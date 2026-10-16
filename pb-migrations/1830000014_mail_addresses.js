@@ -196,6 +196,11 @@ migrate(
             )
             .execute()
 
+        // Legacy addresses are copied as they are, even if they hold characters
+        // outside ^[a-z0-9._-]+$ (mail_mailboxes.address has no pattern): mail
+        // must keep arriving. A server Save of such a row would fail the
+        // local_part validation, so only raw SQL can write it.
+        //
         // PocketBase ids are 15 lowercase alphanumerics; 8 random bytes in hex
         // give 16, cut to 15. INSERT OR IGNORE because (address, domain) is
         // unique on mailboxes and the old hooks kept aliases off those
@@ -203,6 +208,19 @@ migrate(
         // must not abort the upgrade.
         const now = `strftime('%Y-%m-%d %H:%M:%fZ', 'now')`
         const newId = `substr(lower(hex(randomblob(8))), 1, 15)`
+        const warnDropped = (what, sql) => {
+            const row = new DynamicModel({ n: 0 })
+            app.db().newQuery(sql).one(row)
+            if (row.n > 0) {
+                app.logger().warn(`mail_addresses backfill: dropped ${what} that collide with another address`, 'count', row.n)
+            }
+        }
+        warnDropped(
+            'mailboxes',
+            `SELECT COUNT(*) AS n FROM mail_mailboxes WHERE trim(address) != '' AND domain != '' AND id NOT IN (
+                SELECT MIN(id) FROM mail_mailboxes WHERE trim(address) != '' AND domain != ''
+                GROUP BY lower(trim(address)), domain)`
+        )
         app.db()
             .newQuery(
                 `INSERT OR IGNORE INTO mail_addresses (id, local_part, domain, mailbox, source, is_primary, created, updated)
@@ -210,6 +228,15 @@ migrate(
                  FROM mail_mailboxes WHERE trim(address) != '' AND domain != ''`
             )
             .execute()
+        warnDropped(
+            'aliases',
+            `SELECT COUNT(*) AS n FROM mail_mailbox_aliases a JOIN mail_mailboxes mb ON mb.id = a.mailbox
+             WHERE trim(a.address) != '' AND mb.domain != '' AND (
+                EXISTS (SELECT 1 FROM mail_addresses x WHERE x.local_part = lower(trim(a.address)) AND x.domain = mb.domain)
+                OR a.id NOT IN (
+                    SELECT MIN(a2.id) FROM mail_mailbox_aliases a2 JOIN mail_mailboxes m2 ON m2.id = a2.mailbox
+                    WHERE trim(a2.address) != '' AND m2.domain != '' GROUP BY lower(trim(a2.address)), m2.domain))`
+        )
         app.db()
             .newQuery(
                 `INSERT OR IGNORE INTO mail_addresses (id, local_part, domain, mailbox, source, is_primary, created, updated)

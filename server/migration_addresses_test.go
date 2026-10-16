@@ -3,6 +3,7 @@ package mail
 import (
 	"testing"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/rlstest"
 )
@@ -40,11 +41,26 @@ func TestMigrations_AddressesBackfill(t *testing.T) {
 		}
 		return r
 	}
-	org := save("mail_domains", map[string]any{"domain": "tinycld.org", "verified": true, "created": "2026-09-30 17:11:29.416Z"})
-	com := save("mail_domains", map[string]any{"domain": "tinycld.com", "verified": true, "created": "2026-10-15 20:07:36.434Z"})
+	// created is an autodate field: a Set is ignored, so the dates go in by SQL.
+	seedDomain := func(domain string, verified bool, created string) *core.Record {
+		t.Helper()
+		r := save("mail_domains", map[string]any{"domain": domain, "verified": verified})
+		_, err := app.DB().NewQuery("UPDATE mail_domains SET created = {:c} WHERE id = {:id}").
+			Bind(dbx.Params{"c": created, "id": r.Id}).Execute()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	old := seedDomain("old.example", false, "2026-09-01 10:00:00.000Z")
+	org := seedDomain("tinycld.org", true, "2026-09-30 17:11:29.416Z")
+	com := seedDomain("tinycld.com", true, "2026-10-15 20:07:36.434Z")
 	personal := save("mail_mailboxes", map[string]any{"address": "nathan", "domain": org.Id, "type": "personal"})
 	shared := save("mail_mailboxes", map[string]any{"address": "support", "domain": org.Id, "type": "shared"})
 	save("mail_mailbox_aliases", map[string]any{"mailbox": personal.Id, "address": "admin"})
+	// Collides with the shared mailbox's own address: the mailbox must win.
+	save("mail_mailbox_aliases", map[string]any{"mailbox": personal.Id, "address": "support"})
+	messy := save("mail_mailboxes", map[string]any{"address": "  Mixed.Case ", "domain": org.Id, "type": "shared"})
 
 	rlstest.Apply(t, app, rlstest.MigrationsDir(t, "../pb-migrations"))
 
@@ -56,8 +72,13 @@ func TestMigrations_AddressesBackfill(t *testing.T) {
 	if got := comAfter.GetString("coverage"); got != "manual" {
 		t.Fatalf("newer domain coverage = %q, want manual", got)
 	}
-	if orgAfter.GetInt("rank") != 1 || comAfter.GetInt("rank") != 2 {
-		t.Fatalf("ranks = %d, %d; want 1, 2", orgAfter.GetInt("rank"), comAfter.GetInt("rank"))
+	oldAfter, _ := app.FindRecordById("mail_domains", old.Id)
+	if got := oldAfter.GetString("coverage"); got != "manual" {
+		t.Fatalf("older unverified domain coverage = %q, want manual", got)
+	}
+	if oldAfter.GetInt("rank") != 1 || orgAfter.GetInt("rank") != 2 || comAfter.GetInt("rank") != 3 {
+		t.Fatalf("ranks = %d, %d, %d; want 1, 2, 3",
+			oldAfter.GetInt("rank"), orgAfter.GetInt("rank"), comAfter.GetInt("rank"))
 	}
 
 	want := []struct {
@@ -67,6 +88,7 @@ func TestMigrations_AddressesBackfill(t *testing.T) {
 		{"nathan", personal.Id, true},
 		{"support", shared.Id, true},
 		{"admin", personal.Id, false},
+		{"mixed.case", messy.Id, true},
 	}
 	for _, w := range want {
 		row, err := app.FindFirstRecordByFilter("mail_addresses",
@@ -80,5 +102,9 @@ func TestMigrations_AddressesBackfill(t *testing.T) {
 			t.Fatalf("%s@tinycld.org row = mailbox %s primary %v source %q id %q",
 				w.local, row.GetString("mailbox"), row.GetBool("is_primary"), row.GetString("source"), row.Id)
 		}
+	}
+	n, err := app.CountRecords("mail_addresses", dbx.HashExp{"local_part": "support", "domain": org.Id})
+	if err != nil || n != 1 {
+		t.Fatalf("support@tinycld.org rows = %d (err %v), want 1", n, err)
 	}
 }
