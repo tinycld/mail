@@ -21,7 +21,11 @@ For more about the domain settings, see [Custom domains](help://mail:custom-doma
 
 Your email name is the part before the `@` in the addresses that the domain rules give you. For example, if your email name is `nathan`, a domain `example.com` set to **Everyone** gives you `nathan@example.com`.
 
-Only an admin can change an email name. When the email name changes, each address from a domain rule or a group changes to the new name. Your main address does not change, and you also get the new name on its domain. The **Keep the old addresses as extra addresses** switch is on by default. When the switch is on, the old rule addresses stay as extra addresses and continue to receive mail. When the switch is off, the old rule addresses stop receiving mail.
+Only an admin can change an email name. When the email name changes, your main address and each address from a domain rule or a group change to the new name. For example, if `nathan` becomes `nate`, the main address `nathan@example.com` becomes `nate@example.com`.
+
+The **Keep the old addresses as extra addresses** switch is on by default. When the switch is on, the old main address and the old rule addresses stay as extra addresses and continue to receive mail. When the switch is off, the old addresses stop receiving mail.
+
+If your Default From is your main address, it changes to the new main address. If your Default From is an old rule address, it stays on that old address when the switch is on. When the switch is off, it changes to **The main domain's address**.
 
 ## Choose your Default From
 

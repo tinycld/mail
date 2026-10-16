@@ -1,4 +1,5 @@
 import { z } from '@tinycld/core/ui/form'
+import { newRecordId } from 'pbtsdb/core'
 
 export const emailNameSchema = z.object({
     email_name: z
@@ -17,22 +18,53 @@ interface KeptRow {
     id: string
     localPart: string
     domainId: string
+    domainName: string
     source: string
+    isPrimary: boolean
 }
 
-/** Pure: the rule addresses a rename removes. Manual rows survive a rename. */
+/**
+ * The addresses a rename removes, each with a new id for its manual copy.
+ * The server moves the main address to the new name, and rule addresses follow
+ * the name; manual rows survive a rename.
+ */
 export function keptAddresses(rows: KeptRow[], oldName: string) {
     return rows
-        .filter(row => row.source === 'rule' && row.localPart === oldName)
-        .map(row => ({ localPart: row.localPart, domainId: row.domainId, oldId: row.id }))
+        .filter(row => row.localPart === oldName && (row.isPrimary || row.source === 'rule'))
+        .map(row => ({
+            localPart: row.localPart,
+            domainId: row.domainId,
+            email: `${row.localPart}@${row.domainName}`,
+            oldId: row.id,
+            newId: newRecordId(),
+            isPrimary: row.isPrimary,
+        }))
 }
 
-/** Pure: the new Default From when the current one is a kept address, else null. */
+/**
+ * Pure: the new Default From when the current one is a kept rule address, else
+ * null. The main address keeps its id through a rename, so a Default From on
+ * it follows the new name with no change.
+ */
 export function defaultFromAfterRename(
     currentDefault: string,
-    kept: { oldId: string }[],
-    newIds: Map<string, string>
+    kept: { oldId: string; newId: string; isPrimary: boolean }[]
 ) {
-    if (!currentDefault || !kept.some(k => k.oldId === currentDefault)) return null
-    return newIds.get(currentDefault) ?? null
+    if (!currentDefault) return null
+    return kept.find(k => k.oldId === currentDefault && !k.isPrimary)?.newId ?? null
+}
+
+/** Pure: the form error after a rename that saved the name but not every later step. */
+export function renameIncompleteMessage(notKept: string[], defaultFromFailed: boolean) {
+    const parts: string[] = []
+    if (notKept.length > 0) {
+        parts.push(
+            `These old addresses were not kept: ${notKept.join(', ')}. Add them again in the address list.`
+        )
+    }
+    if (defaultFromFailed) {
+        parts.push('Default From did not change to the kept address. Choose it again.')
+    }
+    if (parts.length === 0) return null
+    return ['The new email name is saved.', ...parts].join(' ')
 }

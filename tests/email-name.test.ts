@@ -3,41 +3,98 @@ import {
     defaultFromAfterRename,
     emailNameSchema,
     keptAddresses,
+    renameIncompleteMessage,
 } from '~/tinycld/mail/settings/email-name'
 
+const row = (
+    id: string,
+    localPart: string,
+    domainId: string,
+    source: string,
+    isPrimary = false
+) => ({
+    id,
+    localPart,
+    domainId,
+    domainName: `${domainId}.example`,
+    source,
+    isPrimary,
+})
+
 const rows = [
-    { id: 'a1', localPart: 'nathan', domainId: 'd1', source: 'rule' },
-    { id: 'a2', localPart: 'nathan', domainId: 'd2', source: 'rule' },
-    { id: 'a3', localPart: 'nathan', domainId: 'd3', source: 'manual' },
-    { id: 'a4', localPart: 'sales', domainId: 'd1', source: 'rule' },
+    row('a0', 'nathan', 'main', 'manual', true),
+    row('a1', 'nathan', 'd1', 'rule'),
+    row('a2', 'nathan', 'd2', 'rule'),
+    row('a3', 'nathan', 'd3', 'manual'),
+    row('a4', 'sales', 'd1', 'rule'),
 ]
 
 describe('keptAddresses', () => {
-    it('keeps only the rule rows with the old local part', () => {
+    it('keeps the main address and the rule rows with the old local part', () => {
         expect(keptAddresses(rows, 'nathan')).toEqual([
-            { localPart: 'nathan', domainId: 'd1', oldId: 'a1' },
-            { localPart: 'nathan', domainId: 'd2', oldId: 'a2' },
+            expect.objectContaining({
+                localPart: 'nathan',
+                domainId: 'main',
+                oldId: 'a0',
+                isPrimary: true,
+            }),
+            expect.objectContaining({
+                localPart: 'nathan',
+                domainId: 'd1',
+                oldId: 'a1',
+                isPrimary: false,
+            }),
+            expect.objectContaining({
+                localPart: 'nathan',
+                domainId: 'd2',
+                oldId: 'a2',
+                isPrimary: false,
+            }),
         ])
+    })
+    it('does not keep a main address with another local part', () => {
+        expect(keptAddresses([row('a0', 'legacy', 'main', 'manual', true)], 'nathan')).toEqual([])
+    })
+    it('gives each kept address a new id and its full address', () => {
+        const kept = keptAddresses(rows, 'nathan')
+        expect(new Set(kept.map(k => k.newId)).size).toBe(kept.length)
+        expect(kept[1].email).toBe('nathan@d1.example')
     })
 })
 
 describe('defaultFromAfterRename', () => {
-    const kept = [{ oldId: 'a1' }, { oldId: 'a2' }]
-    const newIds = new Map([
-        ['a1', 'n1'],
-        ['a2', 'n2'],
-    ])
+    const kept = keptAddresses(rows, 'nathan')
+    const newIdOf = (oldId: string) => kept.find(k => k.oldId === oldId)?.newId
     it('returns the new id when the default was a kept rule row', () => {
-        expect(defaultFromAfterRename('a2', kept, newIds)).toBe('n2')
+        expect(defaultFromAfterRename('a2', kept)).toBe(newIdOf('a2'))
+    })
+    it('returns null when the default is the main address, which keeps its id', () => {
+        expect(defaultFromAfterRename('a0', kept)).toBeNull()
     })
     it('returns null when the default is a manual row', () => {
-        expect(defaultFromAfterRename('a3', kept, newIds)).toBeNull()
+        expect(defaultFromAfterRename('a3', kept)).toBeNull()
     })
     it('returns null when the default is empty', () => {
-        expect(defaultFromAfterRename('', kept, newIds)).toBeNull()
+        expect(defaultFromAfterRename('', kept)).toBeNull()
     })
     it('returns null when keep-old is off', () => {
-        expect(defaultFromAfterRename('a1', [], new Map())).toBeNull()
+        expect(defaultFromAfterRename('a1', [])).toBeNull()
+    })
+})
+
+describe('renameIncompleteMessage', () => {
+    it('is null when every step worked', () => {
+        expect(renameIncompleteMessage([], false)).toBeNull()
+    })
+    it('names the addresses that were not kept', () => {
+        expect(renameIncompleteMessage(['a@x.example', 'a@y.example'], false)).toBe(
+            'The new email name is saved. These old addresses were not kept: a@x.example, a@y.example. Add them again in the address list.'
+        )
+    })
+    it('says when Default From did not change', () => {
+        expect(renameIncompleteMessage([], true)).toBe(
+            'The new email name is saved. Default From did not change to the kept address. Choose it again.'
+        )
     })
 })
 
