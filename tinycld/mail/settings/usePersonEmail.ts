@@ -27,10 +27,10 @@ export function personEmailQuery(
 ) {
     return query
         .from({ identity: collections.identities })
-        .innerJoin({ address: collections.addresses }, ({ identity, address }) =>
+        .join({ address: collections.addresses }, ({ identity, address }) =>
             eq(address.mailbox, identity.inbox)
         )
-        .innerJoin({ domain: collections.domains }, ({ address, domain }) =>
+        .join({ domain: collections.domains }, ({ address, domain }) =>
             eq(address.domain, domain.id)
         )
         .join({ group: collections.groups }, ({ address, group }) =>
@@ -43,13 +43,14 @@ export function personEmailQuery(
             inbox: identity.inbox,
             defaultFrom: identity.default_from,
             retired: identity.retired,
-            addressId: address.id,
-            localPart: address.local_part,
-            domainId: domain.id,
-            domainName: domain.domain,
-            source: address.source,
-            isPrimary: address.is_primary,
-            rank: domain.rank,
+            // Left joins: a person with no covered domain has an inbox and no address.
+            addressId: address?.id,
+            localPart: address?.local_part,
+            domainId: domain?.id,
+            domainName: domain?.domain,
+            source: address?.source,
+            isPrimary: address?.is_primary,
+            rank: domain?.rank,
             groupName: coalesce(group?.name, null),
         }))
 }
@@ -69,15 +70,17 @@ function usePersonEmailRows(userId: string) {
     })
 }
 
-function toAddressRow(row: PersonEmailRow): AddressRowData {
+function toAddressRow(row: PersonEmailRow): AddressRowData | null {
+    const { addressId, localPart, domainId, domainName, source, isPrimary, rank } = row
+    if (!addressId || !localPart || !domainId || !domainName) return null
     return {
-        id: row.addressId,
-        localPart: row.localPart,
-        domainId: row.domainId,
-        domainName: row.domainName,
-        source: row.source,
-        isPrimary: row.isPrimary,
-        rank: row.rank,
+        id: addressId,
+        localPart,
+        domainId,
+        domainName,
+        source: source ?? 'manual',
+        isPrimary: isPrimary ?? false,
+        rank: rank ?? 0,
         groupName: row.groupName,
     }
 }
@@ -98,7 +101,7 @@ export function usePersonEmail(userId: string) {
         : null
     return {
         identity,
-        addresses: rows.map(toAddressRow),
+        addresses: rows.map(toAddressRow).filter(a => a !== null),
         isReady,
     }
 }
