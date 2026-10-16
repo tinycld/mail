@@ -49,6 +49,7 @@ const h = vi.hoisted(() => ({
         { id: 'mb_sales', type: 'shared', display_name: 'Sales inbox' },
         { id: 'mb_blank', type: 'shared', display_name: '', name: 'Support', address: 'support' },
         { id: 'mb_other', type: 'shared', display_name: 'Other inbox' },
+        { id: 'mb_lost', type: 'shared', display_name: 'Lost inbox' },
         {
             id: 'mb_via',
             type: 'shared',
@@ -73,6 +74,8 @@ const h = vi.hoisted(() => ({
         { id: 'm3', mailbox: 'mb_other', user: 'u9' },
         { id: 'm5', mailbox: 'mb_via', user: 'u2', group: 'g_sales' },
         { id: 'm6', mailbox: 'mb_sales', user: 'u2', group: 'g_sales' },
+        // The group row is missing: still group access, not a direct row.
+        { id: 'm8', mailbox: 'mb_lost', user: 'u2', group: 'g_missing' },
         { id: 'm7', mailbox: 'mb_sales', user: 'u2', group: '' },
     ],
 }))
@@ -154,6 +157,11 @@ test('no shared inbox list when there are none', async () => {
 test('an inbox from a group says which group', async () => {
     const { findByText } = renderPanel('u2')
     expect(await findByText('support@q.example · through Sales')).toBeTruthy()
+})
+
+test('a group row that is missing still shows as group access', async () => {
+    const { findByText } = renderPanel('u2')
+    expect(await findByText('Lost inbox · through a group')).toBeTruthy()
 })
 
 test('an inbox with a direct row and a group row shows once, without the group', async () => {

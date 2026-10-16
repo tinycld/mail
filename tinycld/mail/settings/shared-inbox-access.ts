@@ -1,7 +1,11 @@
-/** One membership row of a person on a shared inbox; groupName '' is a direct row. */
+/**
+ * One membership row of a person on a shared inbox. groupId '' is a direct
+ * row; groupName is for display only, as the group row may not be loaded.
+ */
 export interface InboxMembershipRow {
     mailboxId: string
     label: string
+    groupId: string
     groupName: string
 }
 
@@ -10,19 +14,25 @@ export interface InboxMembershipRow {
  * the inbox without them; otherwise the lines name the groups that give it.
  */
 export function inboxAccessLines(rows: InboxMembershipRow[]) {
-    const byInbox = new Map<string, { label: string; isDirect: boolean; groups: string[] }>()
+    const byInbox = new Map<
+        string,
+        { label: string; isDirect: boolean; groups: Map<string, string> }
+    >()
     for (const row of rows) {
         const entry = byInbox.get(row.mailboxId) ?? {
             label: row.label,
             isDirect: false,
-            groups: [],
+            groups: new Map<string, string>(),
         }
-        if (!row.groupName) entry.isDirect = true
-        else if (!entry.groups.includes(row.groupName)) entry.groups.push(row.groupName)
+        if (!row.groupId) entry.isDirect = true
+        else entry.groups.set(row.groupId, row.groupName || 'a group')
         byInbox.set(row.mailboxId, entry)
     }
     return [...byInbox].map(([id, { label, isDirect, groups }]) => ({
         id,
-        text: isDirect || groups.length === 0 ? label : `${label} · through ${groups.join(', ')}`,
+        text:
+            isDirect || groups.size === 0
+                ? label
+                : `${label} · through ${[...groups.values()].join(', ')}`,
     }))
 }

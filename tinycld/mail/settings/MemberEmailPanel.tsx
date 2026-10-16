@@ -39,12 +39,13 @@ function useSharedInboxes(userId: string) {
                 .where(({ member, mailbox }) =>
                     and(eq(member.user, userId), eq(mailbox.type, 'shared'))
                 )
-                .select(({ mailbox, domain, group }) => ({
+                .select(({ member, mailbox, domain, group }) => ({
                     id: mailbox.id,
                     displayName: mailbox.display_name,
                     name: mailbox.name,
                     address: mailbox.address,
                     domainName: domain?.domain,
+                    groupId: member.group,
                     groupName: group?.name,
                 })),
     })
@@ -52,6 +53,7 @@ function useSharedInboxes(userId: string) {
     const rows = (data ?? []).map(m => ({
         mailboxId: m.id,
         label: m.displayName || m.name || inboxEmail(m.address, m.domainName),
+        groupId: m.groupId ?? '',
         groupName: m.groupName ?? '',
     }))
     return inboxAccessLines(rows)
