@@ -44,7 +44,7 @@ You can give all of the people in a group access to a shared inbox. You must be 
 3. Under **Groups**, click **Add group**.
 4. Find the group and click **Add**.
 
-Each person in the group can then read the mail and send from the inbox. **Members** shows each of these people with **Through group _name_**.
+Each person in the group can then read the mail and send from the inbox. **Members** shows each of these people with **Through group _name_**. When two or more groups give a person access, it shows **Through groups** and the names of the groups.
 
 Group access is always **Member**. A group cannot be an owner. To make a person in the group an owner, add that person directly with **Add member**, then make the person an owner.
 

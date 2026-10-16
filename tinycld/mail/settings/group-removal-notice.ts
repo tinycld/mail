@@ -55,31 +55,24 @@ export function inboxesLost(rows: InboxAccessRow[], removedGroupId: string) {
     return [...lost].sort()
 }
 
-function addressesPart(personName: string | null, addresses: string[]) {
-    if (addresses.length === 1) return addresses[0]
-    if (personName) return shortList(addresses)
-    return `${addresses.length} addresses (${shortList(addresses)})`
-}
-
-function inboxesPart(personName: string | null, inboxes: string[]) {
-    if (inboxes.length === 1 || personName) return `access to ${shortList(inboxes)}`
-    return `access to ${inboxes.length} shared inboxes (${shortList(inboxes)})`
-}
-
-function addressesOnlyText(who: string, personName: string | null, addresses: string[]) {
+function addressesText(who: string, personName: string | null, addresses: string[]) {
     const n = addresses.length
     if (n === 1) return `${who} the address ${addresses[0]}.`
     if (personName) return `${who} these addresses: ${shortList(addresses)}.`
     return `${who} ${n} addresses: ${shortList(addresses)}.`
 }
 
-function inboxesOnlyText(who: string, personName: string | null, inboxes: string[]) {
+function inboxesText(who: string, personName: string | null, inboxes: string[]) {
     if (inboxes.length === 1) return `${who} access to ${inboxes[0]}.`
     if (personName) return `${who} access to these shared inboxes: ${shortList(inboxes)}.`
     return `${who} access to ${inboxes.length} shared inboxes: ${shortList(inboxes)}.`
 }
 
-/** Pure: the notice sentence, or null when nothing is lost. personName null: the group is deleted. */
+/**
+ * Pure: the notice text, or null when nothing is lost. personName null: the
+ * group is deleted. Addresses and inboxes get one sentence each: a long list
+ * ends in "and 2 more", so one sentence for both would have two "and"s.
+ */
 export function removalNoticeText({
     personName,
     addresses,
@@ -89,10 +82,11 @@ export function removalNoticeText({
     addresses: string[]
     inboxes?: string[]
 }) {
-    const who = personName ? `${personName} loses` : 'Members lose'
+    const who = personName ?? 'Members'
+    const loses = personName ? 'loses' : 'lose'
     if (addresses.length === 0 && inboxes.length === 0) return null
-    if (inboxes.length === 0) return addressesOnlyText(who, personName, addresses)
-    if (addresses.length === 0) return inboxesOnlyText(who, personName, inboxes)
-    const lead = addressesPart(personName, addresses)
-    return `${who} ${lead} and ${inboxesPart(personName, inboxes)}.`
+    if (inboxes.length === 0) return addressesText(`${who} ${loses}`, personName, addresses)
+    if (addresses.length === 0) return inboxesText(`${who} ${loses}`, personName, inboxes)
+    const first = addressesText(`${who} ${loses}`, personName, addresses)
+    return `${first} ${inboxesText(`${who} also ${loses}`, personName, inboxes)}`
 }

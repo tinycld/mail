@@ -51,7 +51,9 @@ describe('removalNoticeText with inboxes', () => {
                 addresses: ['holly@q.example'],
                 inboxes: ['support@q.example'],
             })
-        ).toBe('Holly loses holly@q.example and access to support@q.example.')
+        ).toBe(
+            'Holly loses the address holly@q.example. Holly also loses access to support@q.example.'
+        )
     })
 
     it('names only inboxes', () => {
@@ -72,6 +74,44 @@ describe('removalNoticeText with inboxes', () => {
                 inboxes: ['support@q.example', 'sales@q.example'],
             })
         ).toBe('Members lose access to 2 shared inboxes: support@q.example, sales@q.example.')
+    })
+
+    // One list per sentence: a long address list ends in "and 2 more", so a
+    // second "and" in the same sentence would be unclear.
+    it('names several addresses and an inbox of a person in two sentences', () => {
+        expect(
+            removalNoticeText({
+                personName: 'Ann',
+                addresses: ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
+                inboxes: ['support@q.example'],
+            })
+        ).toBe(
+            'Ann loses these addresses: a, b, c, d, e and 2 more. Ann also loses access to support@q.example.'
+        )
+    })
+
+    it('names several inboxes of a person', () => {
+        expect(
+            removalNoticeText({
+                personName: 'Ann',
+                addresses: ['a'],
+                inboxes: ['sales@q.example', 'support@q.example'],
+            })
+        ).toBe(
+            'Ann loses the address a. Ann also loses access to these shared inboxes: sales@q.example, support@q.example.'
+        )
+    })
+
+    it('counts the addresses and inboxes members lose when the group is deleted', () => {
+        expect(
+            removalNoticeText({
+                personName: null,
+                addresses: ['a', 'b'],
+                inboxes: ['sales@q.example', 'support@q.example'],
+            })
+        ).toBe(
+            'Members lose 2 addresses: a, b. Members also lose access to 2 shared inboxes: sales@q.example, support@q.example.'
+        )
     })
 
     it('says nothing without addresses and inboxes', () => {

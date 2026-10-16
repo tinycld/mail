@@ -150,7 +150,7 @@ test('deleting the group lists every rule address its members lose', async () =>
     // Dan loses the support inbox too; Eve keeps it by her direct row.
     expect(
         await findByText(
-            'Members lose 2 addresses (ann@q.example, cat@q.example) and access to support@q.example.'
+            'Members lose 2 addresses: ann@q.example, cat@q.example. Members also lose access to support@q.example.'
         )
     ).toBeTruthy()
 })
