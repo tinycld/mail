@@ -56,4 +56,14 @@ describe('mail manifest', () => {
             expect(step.order < 'a3').toBe(true)
         }
     })
+
+    it("contributes the removal notice to core's group-member-removal slot", () => {
+        expect(manifest.sidebarContributions).toEqual([
+            {
+                target: 'core',
+                slot: 'group-member-removal',
+                component: 'settings/GroupRemovalNotice',
+            },
+        ])
+    })
 })

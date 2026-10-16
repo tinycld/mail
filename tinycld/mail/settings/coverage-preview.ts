@@ -57,7 +57,8 @@ export function coverageChangePreview({
 
 const LISTED = 5
 
-function shortList(addresses: string[]) {
+/** Pure: the first few addresses, and a count of the rest. */
+export function shortList(addresses: string[]) {
     const listed = addresses.slice(0, LISTED).join(', ')
     const rest = addresses.length - LISTED
     if (rest <= 0) return listed

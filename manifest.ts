@@ -7,6 +7,11 @@ const manifest = {
     nav: { label: 'Mail', icon: 'mail', order: 5, shortcut: 'm' },
     sidebar: { component: 'sidebar' },
     slots: ['sidebar.after-labels', 'setup-domain-options'],
+    // Inside core's confirm to remove a person from a group, or to delete a
+    // group: names the addresses the person or the members lose.
+    sidebarContributions: [
+        { target: 'core', slot: 'group-member-removal', component: 'settings/GroupRemovalNotice' },
+    ],
     setupSteps: [
         {
             id: 'email-domain',
