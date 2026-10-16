@@ -20,7 +20,7 @@ This is **not** the same as the SMTP your mail provider uses to deliver mail acr
 | **Server** | `{{server-host}}` |
 | **Port** | **465** |
 | **Encryption** | SSL / TLS (implicit) |
-| **Username** | your TinyCld username, or any of your email addresses |
+| **Username** | your TinyCld username, your sign-in email, or any address of your own mailbox (not a shared mailbox address) |
 | **Password** | your TinyCld password |
 | **Authentication** | Normal password |
 
@@ -91,7 +91,7 @@ Outbound messages are capped at **25 MB total** (including attachments). Larger 
 
 - **Connects, then immediately disconnects ("service unavailable")** — the server name in your client is wrong. It must be `{{server-host}}` exactly (your TinyCld web address); a `mail.` name, your mail domain, or an IP address all reach the server but don't identify your workspace, so it hangs up.
 - **"Relaying denied. To send mail, log in on port 465."** — your mail app is sending through port 25, which only receives mail. Set the outgoing server port to **465**, turn on **SSL/TLS**, and turn on password authentication. In Apple Mail, clear **Automatically manage connection settings** first.
-- **Auth failed** — wrong username, address or password. Same as IMAP — use your TinyCld username or any of your email addresses.
+- **Auth failed** — same as IMAP. Check your user name and password.
 - **Auth fails with `Your mail access is read-only; sending is not permitted`** — your account has read-only access to Mail on this server. You can still read over [IMAP](help://mail:imap); sending needs an administrator to grant full access.
 - **From address not owned** — see above; the From header has to match a mailbox or alias you have access to.
 - **Domain not verified** — the sending domain has to be fully verified (MX, SPF, DKIM, Return-Path). See [Custom domains](help://mail:custom-domains).

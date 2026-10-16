@@ -23,7 +23,7 @@ IMAP is **read + state**, not send. To also send from your client, set up [SMTP]
 | **Server** | `{{server-host}}` |
 | **Port** | **993** |
 | **Encryption** | SSL / TLS (implicit) |
-| **Username** | your TinyCld username, or any of your email addresses |
+| **Username** | your TinyCld username, your sign-in email, or any address of your own mailbox (not a shared mailbox address) |
 | **Password** | your TinyCld password |
 | **Authentication** | Normal password |
 
@@ -94,7 +94,7 @@ When you have multiple mailboxes, IMAP namespaces them — typically as separate
 ## Troubleshooting
 
 - **Connects, then immediately disconnects ("service unavailable" / BYE)** — the server name in your client is wrong. It must be `{{server-host}}` exactly (your TinyCld web address); a `mail.` name, your mail domain, or an IP address all reach the server but don't identify your workspace, so it hangs up.
-- **Auth failed** — use your TinyCld username or any of your email addresses, with your TinyCld password.
+- **Auth failed** — use your TinyCld username, your sign-in email, or any address of your own mailbox. A shared mailbox address does not work. Use your TinyCld password.
 - **Connection refused / timeout** — verify your TinyCld instance is reachable on port 993. Try `openssl s_client -connect {{server-host}}:993 -servername {{server-host}}` from a terminal to test.
 - **TLS certificate error** — Mail's IMAP server uses the same TLS certificate as your web UI. If your web UI works, IMAP should too. If not, check the cert hostname matches what you put in the client.
 - **Flagging, moving, or deleting fails with `Your mail access is read-only`** — your account has read-only access to Mail on this server. Reading and syncing still work, but any change your client tries to make (mark read, star, move, delete, save a draft) is refused. Ask an administrator to grant full access if you need to make changes.
