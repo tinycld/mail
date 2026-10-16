@@ -89,6 +89,8 @@ In every IMAP client you'll see these folder names per inbox (case may vary by c
 - **Spam** (flagged `\Junk`)
 - **Archive** (flagged `\Archive`)
 
+If you turn on **Show a folder for each address** in **Settings → Account → Email**, your personal inbox also has an **Addresses** folder. It holds one folder for each address, for example **Addresses/you@example.com**. Each folder shows the messages in your INBOX that use that address. You cannot move, copy, or save messages into these folders, and you cannot rename or delete them. To change which folders show, use the switches in **Settings → Account → Email**. See [Your email addresses](help://mail:addresses).
+
 When you have multiple inboxes, IMAP namespaces them — typically as separate sub-folders or as separate accounts (depending on your client). Each inbox's folders are independent.
 
 ## Troubleshooting
