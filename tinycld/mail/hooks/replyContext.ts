@@ -1,18 +1,20 @@
 import { filterOwnAddresses, pickReplyFrom } from './defaultFromIdentity'
 import type { SendableIdentity } from './groupSendableIdentities'
+import type { MailMessages } from '../types'
 import type { ReplyContext } from './useComposeState'
 
 export type ReplyKind = 'reply' | 'replyAll' | 'forward'
 
-export interface ReplySource {
-    id: string
-    subject: string
-    sender_name: string
-    sender_email: string
-    recipients_to?: { name: string; email: string }[]
-    recipients_cc?: { name: string; email: string }[]
-    delivered_to?: string
-}
+export type ReplySource = Pick<
+    MailMessages,
+    | 'id'
+    | 'subject'
+    | 'sender_name'
+    | 'sender_email'
+    | 'recipients_to'
+    | 'recipients_cc'
+    | 'delivered_to'
+>
 
 interface BuildReplyContextParams {
     kind: ReplyKind
@@ -26,7 +28,7 @@ function recipientsFor(kind: ReplyKind, message: ReplySource) {
     const sender = { name: message.sender_name, email: message.sender_email }
     if (kind === 'forward') return []
     if (kind === 'reply') return [sender]
-    return [sender, ...(message.recipients_to ?? []), ...(message.recipients_cc ?? [])]
+    return [sender, ...message.recipients_to, ...message.recipients_cc]
 }
 
 /**
@@ -41,10 +43,7 @@ export function buildReplyContext({
     threadMailboxId,
     identities,
 }: BuildReplyContextParams): ReplyContext {
-    const headerAddresses = [
-        ...(message.recipients_to ?? []),
-        ...(message.recipients_cc ?? []),
-    ].map(r => r.email)
+    const headerAddresses = [...message.recipients_to, ...message.recipients_cc].map(r => r.email)
     const from = pickReplyFrom({
         identities,
         deliveredToAddressId: message.delivered_to || null,
@@ -63,7 +62,6 @@ export function buildReplyContext({
         subject: kind === 'forward' ? `Fwd: ${message.subject}` : message.subject,
         to,
         mailboxId: threadMailboxId,
-        sentToAddresses: headerAddresses,
         from,
     }
 }

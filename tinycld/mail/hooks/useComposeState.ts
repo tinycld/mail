@@ -9,7 +9,6 @@ export interface ReplyContext {
     subject: string
     to: { name: string; email: string }[]
     mailboxId: string
-    sentToAddresses: string[]
     from: FromSelection
 }
 

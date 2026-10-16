@@ -9,7 +9,6 @@ const reply = {
     subject: 'Plan',
     to: [],
     mailboxId: 'mb_thread',
-    sentToAddresses: [],
     from: { mailboxId: 'mb_support', addressId: 'help' },
 }
 
