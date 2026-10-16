@@ -43,6 +43,12 @@ describe('splitMailboxes', () => {
         expect(got.shared.map(m => m.id)).toEqual(['mb_a', 'mb_b'])
     })
 
+    it('returns a shared mailbox once when the user has two member rows for it', () => {
+        const shared = makeMailbox({ id: 'mb2', type: 'shared' })
+        const got = splitMailboxes([shared, { ...shared }])
+        expect(got.shared.map(m => m.id)).toEqual(['mb2'])
+    })
+
     it('returns null personal when user has no personal mailbox', () => {
         const shared = makeMailbox({ id: 'mb2', type: 'shared' })
         const got = splitMailboxes([shared])
