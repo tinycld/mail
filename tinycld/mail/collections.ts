@@ -92,7 +92,9 @@ export function registerCollections(
         // pull a copy of its parent mail_threads row plus the alias row.
         // Both are already loaded elsewhere (mail_threads via
         // useThreadListItems' page query, mail_mailbox_aliases by its own
-        // on-demand query).
+        // on-demand query). The address relations only say where an
+        // expanded address files; nothing fetches them by default.
+        relations: { delivered_to: mail_addresses, sent_from: mail_addresses },
         // On-demand for the same reason as mail_threads: a power user can have
         // hundreds of thousands of message rows. Each useLiveQuery now runs
         // server-side filtered, e.g. messages for a single open thread.

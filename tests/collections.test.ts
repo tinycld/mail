@@ -43,6 +43,14 @@ describe('mail collections', () => {
             [...EXPECTED_COLLECTION_NAMES].sort()
         )
 
+        // A reply defaults its From to delivered_to and a reopened draft keeps
+        // sent_from, so both must file into mail_addresses when expanded.
+        const messageOptions = spy.mock.calls.find(([name]) => name === 'mail_messages')?.[1]
+        expect(messageOptions?.relations).toEqual({
+            delivered_to: collections.mail_addresses,
+            sent_from: collections.mail_addresses,
+        })
+
         for (const [name, options] of spy.mock.calls) {
             expect(options, `${name} options`).toMatchObject({
                 syncMode: 'on-demand',
