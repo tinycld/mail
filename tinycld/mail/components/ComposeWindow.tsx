@@ -61,7 +61,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     // Otherwise the picked mailbox wins and the personal mailbox is the
     // default.
     const draftMailboxId = draftContext?.mailboxId ?? null
-    const { choices, from } = useComposeFrom(
+    const { choices, from, missingFromMessage } = useComposeFrom(
         draftMailboxId ?? readiness.mailboxId ?? '',
         draftMailboxId
     )
@@ -238,7 +238,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             return
         }
         if (!from) {
-            notifyDraftSaveFailed('No address to save it from has loaded yet')
+            notifyDraftSaveFailed(missingFromMessage ?? 'No address to save it from')
             return
         }
 

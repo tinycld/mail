@@ -11,12 +11,12 @@ export function useComposeFrom(fallbackMailboxId: string, lockedMailboxId: strin
     const storeMailboxId = useComposeStore(s => s.mailboxId)
     const storeAddressId = useComposeStore(s => s.fromAddressId)
     const setFrom = useComposeStore(s => s.setFrom)
-    const { choices, from } = resolveComposeState({
+    const { choices, from, missingFromMessage } = resolveComposeState({
         identities,
         storeMailboxId,
         storeAddressId,
         fallbackMailboxId,
         lockedMailboxId,
     })
-    return { choices, from, setFrom }
+    return { choices, from, missingFromMessage, setFrom }
 }

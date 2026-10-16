@@ -99,7 +99,44 @@ export function resolveComposeState({
         storeAddressId,
         fallbackMailboxId
     )
-    return { choices, from }
+    return { choices, from, missingFromMessage: missingFromMessage(identities, choices, from) }
+}
+
+// Why a draft cannot be saved when no From resolves. Identities load in one
+// query, so with some loaded and none for the locked mailbox, that mailbox
+// lost its last sendable address (or the user left it); waiting will not help.
+function missingFromMessage(
+    identities: SendableIdentity[],
+    choices: SendableIdentity[],
+    from: ResolvedFrom | null
+) {
+    if (from) return null
+    if (identities.length > 0 && choices.length === 0) {
+        return "You can no longer send from this draft's mailbox"
+    }
+    return 'No address to save it from has loaded yet'
+}
+
+/**
+ * Pure: what the From row shows. With no resolved From but mailboxes that
+ * can send (the personal mailbox has no sendable address, say), the row
+ * still offers the picker so the user can choose a working one.
+ */
+export function composeFromRowView(choices: SendableIdentity[], from: ResolvedFrom | null) {
+    if (!from) {
+        return {
+            isVisible: choices.length > 0,
+            label: 'Choose an address to send from',
+            hasChoices: choices.length > 0,
+            selectedAddressId: '',
+        }
+    }
+    return {
+        isVisible: true,
+        label: `${from.identity.mailboxDisplayName} <${from.address.email}>`,
+        hasChoices: choices.length > 1 || from.identity.addresses.length > 1,
+        selectedAddressId: from.address.id,
+    }
 }
 
 type DraftFields = Omit<

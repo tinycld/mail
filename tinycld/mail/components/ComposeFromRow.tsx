@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import { Text, View } from 'react-native'
-import type { ResolvedFrom } from '../hooks/composeFrom'
+import { composeFromRowView, type ResolvedFrom } from '../hooks/composeFrom'
 import type { SendableIdentity } from '../hooks/groupSendableIdentities'
 import { FromIdentityPicker } from './FromIdentityPicker'
 
@@ -13,11 +13,8 @@ interface Props {
 }
 
 export function ComposeFromRow({ identities, from, onSelect }: Props) {
-    if (!from) return null
-
-    const { identity, address } = from
-    const hasChoices = identities.length > 1 || identity.addresses.length > 1
-    const label = `${identity.mailboxDisplayName} <${address.email}>`
+    const { isVisible, label, hasChoices, selectedAddressId } = composeFromRowView(identities, from)
+    if (!isVisible) return null
 
     return (
         <View
@@ -33,7 +30,7 @@ export function ComposeFromRow({ identities, from, onSelect }: Props) {
             <PickerSlot
                 isVisible={hasChoices}
                 identities={identities}
-                selectedAddressId={address.id}
+                selectedAddressId={selectedAddressId}
                 onSelect={onSelect}
             />
         </View>

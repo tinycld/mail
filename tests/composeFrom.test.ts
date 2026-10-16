@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+    composeFromRowView,
     composeSendBlocker,
     draftSaveRequest,
     resolveComposeFrom,
@@ -152,6 +153,75 @@ describe('resolveComposeState with an open draft', () => {
             lockedMailboxId: null,
         })
         expect(choices.map(i => i.mailboxId)).toEqual(['mb_me', 'mb_support'])
+    })
+})
+
+describe('resolveComposeState with no From', () => {
+    it("says the draft's mailbox can no longer send once identities have loaded", () => {
+        const { from, missingFromMessage } = resolveComposeState({
+            identities,
+            storeMailboxId: '',
+            storeAddressId: null,
+            fallbackMailboxId: 'mb_gone',
+            lockedMailboxId: 'mb_gone',
+        })
+        expect(from).toBeNull()
+        expect(missingFromMessage).toBe("You can no longer send from this draft's mailbox")
+    })
+
+    it('says the address has not loaded while there are no identities yet', () => {
+        const { missingFromMessage } = resolveComposeState({
+            identities: [],
+            storeMailboxId: '',
+            storeAddressId: null,
+            fallbackMailboxId: 'mb_gone',
+            lockedMailboxId: 'mb_gone',
+        })
+        expect(missingFromMessage).toBe('No address to save it from has loaded yet')
+    })
+
+    it('has no message when a From resolves', () => {
+        const { missingFromMessage } = resolveComposeState({
+            identities,
+            storeMailboxId: '',
+            storeAddressId: null,
+            fallbackMailboxId: 'mb_me',
+            lockedMailboxId: null,
+        })
+        expect(missingFromMessage).toBeNull()
+    })
+})
+
+describe('composeFromRowView', () => {
+    it('shows the resolved From and offers the picker when there is a choice', () => {
+        const from = resolveComposeFrom(identities, '', null, 'mb_me')
+        expect(composeFromRowView(identities, from)).toEqual({
+            isVisible: true,
+            label: 'Nathan <nathan@tinycld.org>',
+            hasChoices: true,
+            selectedAddressId: 'org',
+        })
+    })
+
+    it('hides the picker when the only mailbox has one address', () => {
+        const single = [{ ...support, addresses: [support.addresses[0]] }]
+        const from = resolveComposeFrom(single, '', null, 'mb_support')
+        expect(composeFromRowView(single, from).hasChoices).toBe(false)
+    })
+
+    // The personal mailbox has no sendable address, so nothing resolves; the
+    // user must still be able to pick the shared mailbox.
+    it('offers the picker when no From resolves but other mailboxes can send', () => {
+        expect(composeFromRowView([support], null)).toEqual({
+            isVisible: true,
+            label: 'Choose an address to send from',
+            hasChoices: true,
+            selectedAddressId: '',
+        })
+    })
+
+    it('hides the row when there is nothing to send from', () => {
+        expect(composeFromRowView([], null).isVisible).toBe(false)
     })
 })
 
