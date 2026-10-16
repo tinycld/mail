@@ -106,6 +106,11 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 		if err := app.Save(thread); err != nil {
 			return re.InternalServerError("Failed to update thread", err)
 		}
+		// After the thread save above: that copy was loaded before this
+		// change and would overwrite it.
+		if err := addAddressKeys(app, thread.Id, from.Address.Id); err != nil {
+			return re.InternalServerError("Failed to update thread", err)
+		}
 
 		return re.JSON(http.StatusOK, api.SendEmailResponse{
 			MessageID: record.Id,

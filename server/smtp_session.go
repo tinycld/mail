@@ -400,6 +400,9 @@ func (s *smtpSession) Data(r io.Reader) error {
 		if err := s.app.Save(existingMsg); err != nil {
 			s.app.Logger().Error("SMTP: failed to record the send on the deduped message", "error", err)
 		}
+		if err := addAddressKeys(s.app, existingThread.Id, s.address.Id); err != nil {
+			storeLog.Warn("SMTP: recording the deduped thread's addresses failed", "thread", existingThread.Id, "error", err)
+		}
 		if err := markThreadSent(s.app, existingThread.Id, s.user.Id); err != nil {
 			s.app.Logger().Error("SMTP: failed to mark deduped thread sent", "error", err)
 		}

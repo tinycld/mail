@@ -9,20 +9,21 @@ import (
 
 var threadStateSyncLog = logging.ForPackage("mail")
 
-// registerThreadStateSyncHooks keeps mail_thread_state.mailbox and
-// .latest_date equal to the thread's. The thread list is one live query on
+// registerThreadStateSyncHooks keeps mail_thread_state.mailbox, .latest_date
+// and .address_keys equal to the thread's. The thread list is one live query on
 // mail_thread_state, and a live query cannot sort or filter through a
 // relation, so the thread's values live on the state row too. Copied on
 // create for every writer (Go, the seed, tests), and propagated on every
-// thread save that changes latest_date. Record saves, not SQL, so PocketBase
-// emits the realtime events the list depends on.
+// thread save that changes latest_date or address_keys. Record saves, not
+// SQL, so PocketBase emits the realtime events the list depends on.
 //
-// Both columns are server-owned. The state updateRule lets a user write their
+// All three columns are server-owned. The state updateRule lets a user write their
 // own rows, so a client could otherwise point mailbox at a mailbox they are
-// not in (creating a counts row for it) or pin latest_date to float a thread.
-// Create always takes the thread's values; an API update keeps the stored
-// ones. propagateLatestDate is an app.Save, which the ...Request hook does not
-// see, so propagation still writes through.
+// not in (creating a counts row for it), pin latest_date to float a thread,
+// or add a thread to an address view. Create always takes the thread's
+// values; an API update keeps the stored ones. propagateThreadFields is an
+// app.Save, which the ...Request hook does not see, so propagation still
+// writes through.
 func registerThreadStateSyncHooks(app core.App) {
 	app.OnRecordCreate("mail_thread_state").BindFunc(func(e *core.RecordEvent) error {
 		if err := fillThreadStateFromThread(e.App, e.Record); err != nil {
@@ -32,40 +33,54 @@ func registerThreadStateSyncHooks(app core.App) {
 	})
 	app.OnRecordUpdateRequest("mail_thread_state").BindFunc(func(e *core.RecordRequestEvent) error {
 		// Restore rather than refuse: a client that saves an edited state row
-		// can send the whole record back, both columns included.
+		// can send the whole record back, these columns included.
 		original := e.Record.Original()
-		e.Record.Set("mailbox", original.GetString("mailbox"))
-		e.Record.Set("latest_date", original.GetString("latest_date"))
+		for _, field := range threadOwnedStateFields {
+			e.Record.Set(field, original.GetString(field))
+		}
 		return e.Next()
 	})
 	app.OnRecordAfterUpdateSuccess("mail_threads").BindFunc(func(e *core.RecordEvent) error {
-		before := e.Record.Original().GetString("latest_date")
-		after := e.Record.GetString("latest_date")
-		if before == after {
+		original := e.Record.Original()
+		changed := map[string]string{}
+		for _, field := range propagatedThreadFields {
+			if after := e.Record.GetString(field); after != original.GetString(field) {
+				changed[field] = after
+			}
+		}
+		if len(changed) == 0 {
 			return e.Next()
 		}
-		if err := propagateLatestDate(e.App, e.Record.Id, after); err != nil {
-			threadStateSyncLog.Warn("propagateLatestDate failed", "thread", e.Record.Id, "error", err)
+		if err := propagateThreadFields(e.App, e.Record.Id, changed); err != nil {
+			threadStateSyncLog.Warn("propagateThreadFields failed", "thread", e.Record.Id, "error", err)
 		}
 		return e.Next()
 	})
 }
 
-// fillThreadStateFromThread copies mailbox and latest_date from the thread
+// threadOwnedStateFields are the state columns copied from the thread. The
+// mailbox never changes after create, so only the others are propagated.
+var (
+	threadOwnedStateFields = []string{"mailbox", "latest_date", "address_keys"}
+	propagatedThreadFields = []string{"latest_date", "address_keys"}
+)
+
+// fillThreadStateFromThread copies the thread-owned columns from the thread
 // onto a new state row, replacing any value the writer supplied.
 func fillThreadStateFromThread(app core.App, state *core.Record) error {
 	thread, err := app.FindRecordById("mail_threads", state.GetString("thread"))
 	if err != nil {
 		return fmt.Errorf("thread for state row: %w", err)
 	}
-	state.Set("mailbox", thread.GetString("mailbox"))
-	state.Set("latest_date", thread.GetString("latest_date"))
+	for _, field := range threadOwnedStateFields {
+		state.Set(field, thread.GetString(field))
+	}
 	return nil
 }
 
-// propagateLatestDate writes the thread's new latest_date to each of its
-// state rows, skipping rows that already carry it.
-func propagateLatestDate(app core.App, threadID, latestDate string) error {
+// propagateThreadFields writes the thread's changed values to each of its
+// state rows, saving only rows that do not already carry them.
+func propagateThreadFields(app core.App, threadID string, values map[string]string) error {
 	states, err := app.FindRecordsByFilter(
 		"mail_thread_state",
 		"thread = {:thread}",
@@ -78,10 +93,16 @@ func propagateLatestDate(app core.App, threadID, latestDate string) error {
 		return err
 	}
 	for _, state := range states {
-		if state.GetString("latest_date") == latestDate {
+		stale := false
+		for field, value := range values {
+			if state.GetString(field) != value {
+				state.Set(field, value)
+				stale = true
+			}
+		}
+		if !stale {
 			continue
 		}
-		state.Set("latest_date", latestDate)
 		if err := app.Save(state); err != nil {
 			return err
 		}

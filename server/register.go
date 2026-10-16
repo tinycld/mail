@@ -302,6 +302,7 @@ func registerShared(app *pocketbase.PocketBase) {
 	registerAddressHooks(app)
 	registerThreadMarkerHooks(app)
 	registerThreadStateSyncHooks(app)
+	registerAddressKeysGuard(app)
 	registerFolderCountHooks(app)
 	registerMemberBackfillHooks(app)
 	registerMemberAccessCleanup(app)

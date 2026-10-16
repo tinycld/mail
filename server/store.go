@@ -281,6 +281,12 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 		return nil, fmt.Errorf("failed to store message: %w", err)
 	}
 
+	// Not fatal: the message is stored, and a missing key only leaves the
+	// thread out of one address view.
+	if err := addAddressKeys(app, threadID, msg.DeliveredTo, msg.SentFrom); err != nil {
+		storeLog.Warn("recording the thread's addresses failed", "thread", threadID, "message", record.Id, "error", err)
+	}
+
 	// Build cid → stored-filename map for inline images. Stored as JSON on
 	// the message so the client can resolve <img src="cid:foo"> against
 	// pb.files.getURL at render time. Doing the resolution client-side
@@ -379,6 +385,11 @@ func updateThreadMetadata(app core.App, thread *core.Record, senderName, senderE
 		thread.Set("participants", string(pJSON))
 	}
 
+	// Callers load the thread before storeMessage, and storeMessage and the
+	// message hooks save it too (address_keys, has_draft, has_attachments).
+	// Writing only the fields set here keeps this stale copy from overwriting
+	// those saves.
+	thread.IgnoreUnchangedFields(true)
 	if err := app.Save(thread); err != nil {
 		return fmt.Errorf("failed to update thread: %w", err)
 	}
