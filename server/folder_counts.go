@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -34,6 +35,48 @@ const folderCountsQuery = `
 	FROM mail_thread_state
 	WHERE user = {:user} AND mailbox = {:mailbox}`
 
+// Only the user's personal inbox (the one their identity points at) gets
+// per-address numbers, so the identity test sits in this query: one round trip
+// per recompute, and a shared inbox matches no rows. instr over the space-padded
+// list matches whole ids only.
+const addressCountsQuery = `
+	SELECT
+		a.id AS address,
+		COALESCE(SUM(CASE WHEN s.is_read = 0 THEN 1 ELSE 0 END), 0) AS unread,
+		COUNT(s.id) AS total
+	FROM mail_addresses a
+	JOIN mail_thread_state s ON s.user = {:user} AND s.mailbox = {:mailbox} AND s.folder = 'inbox'
+		AND instr(' ' || s.address_keys || ' ', ' ' || a.id || ' ') > 0
+	WHERE a.mailbox = {:mailbox}
+		AND EXISTS (SELECT 1 FROM mail_identities i WHERE i.user = {:user} AND i.inbox = {:mailbox})
+	GROUP BY a.id`
+
+type addressCountsRow struct {
+	Address string `db:"address"`
+	Unread  int    `db:"unread"`
+	Total   int    `db:"total"`
+}
+
+func inboxByAddress(app core.App, userID, mailboxID string) (string, error) {
+	var rows []addressCountsRow
+	if err := app.DB().NewQuery(addressCountsQuery).
+		Bind(map[string]any{"user": userID, "mailbox": mailboxID}).
+		All(&rows); err != nil {
+		return "", fmt.Errorf("aggregate address counts: %w", err)
+	}
+	byAddress := make(map[string]addressCount, len(rows))
+	for _, r := range rows {
+		byAddress[r.Address] = addressCount{Unread: r.Unread, Total: r.Total}
+	}
+	// Marshal sorts map keys, so equal maps give equal text and the compare
+	// against the stored value is a string compare.
+	encoded, err := json.Marshal(byAddress)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
 type folderCountsRow struct {
 	Inbox      int `db:"inbox"`
 	InboxTotal int `db:"inbox_total"`
@@ -44,6 +87,12 @@ type folderCountsRow struct {
 	Trash      int `db:"trash"`
 	Spam       int `db:"spam"`
 	Total      int `db:"total"`
+}
+
+// addressCount is one address's numbers inside inbox_by_address.
+type addressCount struct {
+	Unread int `json:"unread"`
+	Total  int `json:"total"`
 }
 
 func (r folderCountsRow) byColumn() map[string]int {
@@ -108,6 +157,11 @@ func writeFolderCounts(app core.App, userID, mailboxID string) error {
 		return fmt.Errorf("aggregate folder counts: %w", err)
 	}
 
+	byAddress, err := inboxByAddress(app, userID, mailboxID)
+	if err != nil {
+		return err
+	}
+
 	id := folderCountsID(userID, mailboxID)
 	record, err := app.FindRecordById("mail_folder_counts", id)
 	if err != nil {
@@ -133,6 +187,10 @@ func writeFolderCounts(app core.App, userID, mailboxID string) error {
 			record.Set(name, value)
 			changed = true
 		}
+	}
+	if record.GetString("inbox_by_address") != byAddress {
+		record.Set("inbox_by_address", json.RawMessage(byAddress))
+		changed = true
 	}
 	if !changed {
 		return nil
