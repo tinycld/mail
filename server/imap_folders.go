@@ -1,12 +1,20 @@
 package mail
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/emersion/go-imap/v2"
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/logging"
 )
+
+var imapLog = logging.ForPackage("mail")
 
 const imapDelim = '/'
 
@@ -31,7 +39,11 @@ var systemFolders = []systemFolder{
 	{Name: "Starred", Attr: imap.MailboxAttrFlagged, Selectable: true},
 	{Name: "All Mail", Attr: imap.MailboxAttrAll, Selectable: true},
 	{Name: "Labels", Attr: imap.MailboxAttrNoSelect, Selectable: false},
+	// Listed only while the user has address views (see listUserFolders).
+	{Name: addressFolderParent, Attr: imap.MailboxAttrNoSelect, Selectable: false},
 }
+
+const addressFolderParent = "Addresses"
 
 // imapNameToFolder maps an IMAP folder name to the PocketBase filter field values.
 // Returns: folderValue (for mail_thread_state.folder), isVirtual, filterExpr
@@ -106,6 +118,10 @@ func folderToUserFilter(app core.App, imapName, userID string) (string, map[stri
 		return labelFolderFilter(app, labelName, userID)
 	}
 
+	if email, ok := extractAddressView(imapName); ok {
+		return addressFolderFilter(app, email, userID)
+	}
+
 	// Standard folder
 	if folder != "" {
 		return "user = {:user} && folder = {:folder}",
@@ -161,15 +177,155 @@ func isLabelFolder(name string) bool {
 	return extractLabelName(name) != ""
 }
 
+// addressView is one address of the personal inbox shown as its own folder.
+type addressView struct {
+	ID    string
+	Email string
+}
+
+// addressViewsFor returns the address views of the user's personal inbox.
+func addressViewsFor(app core.App, userID string) ([]addressView, error) {
+	_, views, err := personalAddressViews(app, userID)
+	return views, err
+}
+
+// personalAddressViews returns the user's personal inbox and its visible
+// addresses, ordered by domain rank, then local part. A view of one address
+// is the whole inbox, so with the switch off or fewer than two visible
+// addresses there are no views.
+func personalAddressViews(app core.App, userID string) (inboxID string, views []addressView, err error) {
+	identity, err := app.FindFirstRecordByFilter("mail_identities",
+		"user = {:user} && retired != true && inbox != ''", dbx.Params{"user": userID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil, nil
+	}
+	if err != nil {
+		return "", nil, fmt.Errorf("identity lookup: %w", err)
+	}
+	inboxID = identity.GetString("inbox")
+	if !identity.GetBool("address_views") {
+		return inboxID, nil, nil
+	}
+	hidden := identity.GetStringSlice("hidden_address_views")
+
+	addresses, err := app.FindRecordsByFilter("mail_addresses", "mailbox = {:inbox}", "", 0, 0,
+		dbx.Params{"inbox": inboxID})
+	if err != nil {
+		return "", nil, fmt.Errorf("list inbox addresses: %w", err)
+	}
+	domainIDs := make([]string, 0, len(addresses))
+	for _, address := range addresses {
+		domainIDs = append(domainIDs, address.GetString("domain"))
+	}
+	domains, err := app.FindRecordsByIds("mail_domains", domainIDs)
+	if err != nil {
+		return "", nil, fmt.Errorf("load address domains: %w", err)
+	}
+	domainByID := make(map[string]*core.Record, len(domains))
+	for _, domain := range domains {
+		domainByID[domain.Id] = domain
+	}
+
+	type ranked struct {
+		view  addressView
+		rank  int
+		local string
+	}
+	var visible []ranked
+	for _, address := range addresses {
+		domain := domainByID[address.GetString("domain")]
+		if domain == nil || slices.Contains(hidden, address.Id) {
+			continue
+		}
+		local := address.GetString("local_part")
+		visible = append(visible, ranked{
+			view:  addressView{ID: address.Id, Email: local + "@" + domain.GetString("domain")},
+			rank:  domain.GetInt("rank"),
+			local: local,
+		})
+	}
+	if len(visible) < 2 {
+		return inboxID, nil, nil
+	}
+	sort.Slice(visible, func(i, j int) bool {
+		a, b := visible[i], visible[j]
+		if a.rank != b.rank {
+			return a.rank < b.rank
+		}
+		if a.local != b.local {
+			return a.local < b.local
+		}
+		return a.view.Email < b.view.Email
+	})
+	views = make([]addressView, len(visible))
+	for i, r := range visible {
+		views[i] = r.view
+	}
+	return inboxID, views, nil
+}
+
+// addressFolderFilter keeps the user's inbox rows whose thread used the
+// address. The email resolves only among the user's current views, so a
+// client that still has a view selected after the switch went off, or after
+// the address was hidden, sees an empty folder instead of an error.
+//
+// `~` is a substring test on the space-separated id list. Ids are 15
+// characters of [a-z0-9], so a match is the whole id.
+func addressFolderFilter(app core.App, email, userID string) (string, map[string]any) {
+	views, err := addressViewsFor(app, userID)
+	if err != nil {
+		imapLog.Warn("could not read the address views", "user", userID, "error", err)
+		return "id = ''", nil
+	}
+	for _, view := range views {
+		if strings.EqualFold(view.Email, email) {
+			return "user = {:user} && folder = 'inbox' && address_keys ~ {:address}",
+				map[string]any{"user": userID, "address": view.ID}
+		}
+	}
+	return "id = ''", nil
+}
+
+// extractAddressView returns the email of an "Addresses/<email>" folder path.
+func extractAddressView(name string) (email string, ok bool) {
+	email, ok = strings.CutPrefix(name, addressFolderParent+"/")
+	return email, ok && email != ""
+}
+
+// isAddressFolder returns true if the IMAP folder name is an address view.
+func isAddressFolder(name string) bool {
+	_, ok := extractAddressView(name)
+	return ok
+}
+
+// isReadOnlyFolder reports a folder that messages cannot be copied, moved or
+// appended into: a \Noselect parent, or an address view, whose content
+// follows the addresses a thread used.
+func isReadOnlyFolder(name string) bool {
+	if isAddressFolder(name) {
+		return true
+	}
+	for _, sf := range systemFolders {
+		if !sf.Selectable && strings.EqualFold(sf.Name, name) {
+			return true
+		}
+	}
+	return false
+}
+
 // listUserFolders returns all IMAP folders available to a user, including
 // system folders and label-based folders.
 // Label folders include shared labels (user = "") and the authenticated
-// user's personal labels (user = userID).
-func listUserFolders(app core.App, userID string) ([]imap.ListData, error) {
+// user's personal labels (user = userID). views are the address views to
+// list; the caller passes them only for the personal inbox.
+func listUserFolders(app core.App, userID string, views []addressView) ([]imap.ListData, error) {
 	var result []imap.ListData
 
 	// System folders
 	for _, sf := range systemFolders {
+		if sf.Name == addressFolderParent && len(views) == 0 {
+			continue
+		}
 		data := imap.ListData{
 			Mailbox: sf.Name,
 			Delim:   imapDelim,
@@ -177,7 +333,7 @@ func listUserFolders(app core.App, userID string) ([]imap.ListData, error) {
 		if sf.Attr != "" {
 			data.Attrs = append(data.Attrs, sf.Attr)
 		}
-		if !sf.Selectable {
+		if !sf.Selectable && sf.Attr != imap.MailboxAttrNoSelect {
 			data.Attrs = append(data.Attrs, imap.MailboxAttrNoSelect)
 		}
 		result = append(result, data)
@@ -199,6 +355,13 @@ func listUserFolders(app core.App, userID string) ([]imap.ListData, error) {
 				Delim:   imapDelim,
 			})
 		}
+	}
+
+	for _, view := range views {
+		result = append(result, imap.ListData{
+			Mailbox: addressFolderParent + "/" + view.Email,
+			Delim:   imapDelim,
+		})
 	}
 
 	return result, nil
@@ -293,6 +456,12 @@ func renameLabelFolder(app core.App, oldName, newName string) error {
 
 	labels[0].Set("name", newLabel)
 	return app.Save(labels[0])
+}
+
+// isServerFolder reports a folder a client cannot create, delete or rename:
+// a system folder or an address view.
+func isServerFolder(name string) bool {
+	return isSystemFolder(name) || isAddressFolder(name)
 }
 
 // isSystemFolder returns true if the folder name is a built-in system folder

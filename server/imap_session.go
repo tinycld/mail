@@ -169,8 +169,20 @@ func (s *imapSession) List(w *imapserver.ListWriter, ref string, patterns []stri
 
 	var allFolders []imap.ListData
 
+	// Read at each LIST, so a changed switch shows at the client's next
+	// refresh. A failed read lists the other folders without the views.
+	inboxID, views, err := personalAddressViews(s.app, s.user.Id)
+	if err != nil {
+		imapLog.Warn("could not read the address views", "user", s.user.Id, "error", err)
+	}
+
 	for _, ctx := range s.mailboxIndex {
-		folders, err := listUserFolders(s.app, s.user.Id)
+		// Address views belong to the personal inbox only.
+		var mailboxViews []addressView
+		if ctx.mailboxID == inboxID {
+			mailboxViews = views
+		}
+		folders, err := listUserFolders(s.app, s.user.Id, mailboxViews)
 		if err != nil {
 			continue
 		}
@@ -454,6 +466,9 @@ func (s *imapSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, err
 	}
 
 	destCtx, destBareName := s.matchMailboxContext(dest)
+	if isReadOnlyFolder(destBareName) {
+		return nil, errReadOnlyFolder
+	}
 	destMailboxID, err := s.resolveFolderWithContext(destCtx)
 	if err != nil {
 		return nil, &imap.Error{
@@ -505,6 +520,9 @@ func (s *imapSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest st
 	}
 
 	destCtx, destBareName := s.matchMailboxContext(dest)
+	if isReadOnlyFolder(destBareName) {
+		return errReadOnlyFolder
+	}
 	_, err := s.resolveFolderWithContext(destCtx)
 	if err != nil {
 		return &imap.Error{
@@ -556,6 +574,9 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 	}
 
 	ctx, bareName := s.matchMailboxContext(mailbox)
+	if isReadOnlyFolder(bareName) {
+		return nil, errReadOnlyFolder
+	}
 	mailboxID, err := s.resolveFolderWithContext(ctx)
 	if err != nil {
 		return nil, &imap.Error{
@@ -745,7 +766,7 @@ func (s *imapSession) Create(name string, options *imap.CreateOptions) error {
 	}
 
 	_, bareName := s.matchMailboxContext(name)
-	if isSystemFolder(bareName) {
+	if isServerFolder(bareName) {
 		return &imap.Error{
 			Type: imap.StatusResponseTypeNo,
 			Text: "Cannot create system folder",
@@ -767,7 +788,7 @@ func (s *imapSession) Delete(name string) error {
 	}
 
 	_, bareName := s.matchMailboxContext(name)
-	if isSystemFolder(bareName) {
+	if isServerFolder(bareName) {
 		return &imap.Error{
 			Type: imap.StatusResponseTypeNo,
 			Text: "Cannot delete system folder",
@@ -784,7 +805,7 @@ func (s *imapSession) Rename(oldName, newName string, options *imap.RenameOption
 
 	_, oldBareName := s.matchMailboxContext(oldName)
 	_, newBareName := s.matchMailboxContext(newName)
-	if isSystemFolder(oldBareName) || isSystemFolder(newBareName) {
+	if isServerFolder(oldBareName) || isServerFolder(newBareName) {
 		return &imap.Error{
 			Type: imap.StatusResponseTypeNo,
 			Text: "Cannot rename system folder",
@@ -835,6 +856,14 @@ func (s *imapSession) Idle(w *imapserver.UpdateWriter, stop <-chan struct{}) err
 }
 
 // --- Helper methods ---
+
+// errReadOnlyFolder refuses COPY, MOVE and APPEND into a folder whose content
+// the server decides (see isReadOnlyFolder).
+var errReadOnlyFolder = &imap.Error{
+	Type: imap.StatusResponseTypeNo,
+	Code: imap.ResponseCodeCannot,
+	Text: "Messages cannot be added to this folder",
+}
 
 // matchMailboxContext matches an IMAP folder name to a mailbox context.
 // For multi-mailbox sessions, it strips the mailbox name prefix.
