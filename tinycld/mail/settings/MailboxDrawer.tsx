@@ -425,7 +425,8 @@ export function MembersTab({
         }),
     })
 
-    const existingIds = new Set(members.map(m => m.userId))
+    // A person who has access only through a group can still get a direct row.
+    const existingIds = new Set(members.filter(m => m.viaGroupName === null).map(m => m.userId))
     const available = orgMembers.filter(o => !existingIds.has(o.userId))
     const ownerCount = members.filter(m => m.role === 'owner').length
 

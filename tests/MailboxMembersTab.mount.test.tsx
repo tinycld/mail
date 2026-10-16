@@ -5,36 +5,6 @@ import { afterEach, expect, test, vi } from 'vitest'
 
 afterEach(cleanup)
 
-vi.mock('@tinycld/core/lib/use-app-theme', () => ({ useThemeColor: () => '#000000' }))
-vi.mock('@tinycld/core/lib/use-writes-available', () => ({
-    useServerActionState: ({ isDisabled }: { isDisabled: boolean }) => ({
-        isDisabled,
-        accessibilityHint: '',
-    }),
-}))
-
-// The shared stub lists icons by name and has no UsersRound, which the core
-// group section draws.
-vi.mock('lucide-react-native', async importOriginal => ({
-    ...(await importOriginal<Record<string, unknown>>()),
-    UsersRound: () => null,
-}))
-
-// The real drawer portals into a native modal host that happy-dom does not
-// render; the members tab under test does not depend on it.
-vi.mock('@tinycld/core/ui/drawer', () => {
-    const Passthrough = ({ children }: { children?: React.ReactNode }) => <>{children}</>
-    return {
-        Drawer: Passthrough,
-        DrawerBackdrop: () => null,
-        DrawerBody: Passthrough,
-        DrawerCloseButton: Passthrough,
-        DrawerContent: Passthrough,
-        DrawerFooter: Passthrough,
-        DrawerHeader: Passthrough,
-    }
-})
-
 const h = vi.hoisted(() => ({
     stores: {} as Record<string, unknown>,
 }))
@@ -61,18 +31,8 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
 })
 
 import { OverlayProvider } from '@tinycld/core/ui/overlay'
-import { MailboxDrawer } from '~/tinycld/mail/settings/MailboxDrawer'
+import { MembersTab } from '~/tinycld/mail/settings/MailboxDrawer'
 import { foldMembers, type MemberRow } from '~/tinycld/mail/settings/member-rows'
-
-const mailbox = {
-    id: 'mb1',
-    address: 'support',
-    domain: 'd1',
-    domainName: 'example.com',
-    displayName: 'Support',
-    type: 'shared' as const,
-    createdAt: '',
-}
 
 function row(over: Partial<MemberRow>): MemberRow {
     return {
@@ -87,21 +47,17 @@ function row(over: Partial<MemberRow>): MemberRow {
     }
 }
 
+const orgMembers = [
+    { userId: 'me', userName: 'Me', userEmail: '' },
+    { userId: 'ann', userName: 'Ann', userEmail: '' },
+    { userId: 'zed', userName: 'Zed', userEmail: '' },
+]
+
 function mountDrawer(members: MemberRow[]) {
     return render(
         <QueryClientProvider client={new QueryClient()}>
             <OverlayProvider>
-                <MailboxDrawer
-                    mode={{ kind: 'view', mailboxId: 'mb1' }}
-                    onClose={() => {}}
-                    onSwitchToEdit={() => {}}
-                    onSwitchToView={() => {}}
-                    mailbox={mailbox}
-                    members={members}
-                    orgMembers={[]}
-                    domainOptions={[]}
-                    userId="me"
-                />
+                <MembersTab mailboxId="mb1" members={members} orgMembers={orgMembers} canWrite />
             </OverlayProvider>
         </QueryClientProvider>
     )
@@ -153,9 +109,24 @@ test('a person who only has access through a group shows the group and no remove
     expect(container.querySelector('[accessibilitylabel="Remove Me"]')).not.toBeNull()
 })
 
-test('the tab title counts distinct people', async () => {
-    const { findByText } = mountDrawer([me, derived])
-    expect(await findByText('Members · 2')).toBeTruthy()
+test('a person with only group access is offered in the picker and gets a direct row', async () => {
+    const { findByText, queryAllByText } = mountDrawer([me, derived])
+    fireEvent.click(await findByText('Add member'))
+    expect(await findByText('Zed')).toBeTruthy()
+    // Ann: once in the member list, once as a picker choice. Me has a direct row: list only.
+    expect(queryAllByText('Ann')).toHaveLength(2)
+    expect(queryAllByText('Me')).toHaveLength(1)
+    const choice = queryAllByText('Ann')[1]
+    fireEvent.click(choice)
+    fireEvent.click(await findByText('Add'))
+    const collection = h.stores.mail_mailbox_members as {
+        toArray: { group: string; user: string; mailbox: string; role: string }[]
+    }
+    await waitFor(() =>
+        expect(collection.toArray).toContainEqual(
+            expect.objectContaining({ mailbox: 'mb1', user: 'ann', group: '', role: 'member' })
+        )
+    )
 })
 
 test('foldMembers: one row per person, the direct row wins, group-only rows name their groups', () => {
