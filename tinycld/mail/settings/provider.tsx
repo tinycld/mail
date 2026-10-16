@@ -19,6 +19,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { MONOSPACE_FONT } from '../lib/monospace-font'
 import { AddDomainForm } from './AddDomainForm'
+import type { Coverage } from './coverage-preview'
 import { DnsRecordsPanel, hasUnpublishedDnsRecords } from './DnsRecordsPanel'
 import { DomainCoverageControl } from './DomainCoverageControl'
 import { isDomainReady } from './domain-ready'
@@ -78,7 +79,8 @@ interface DomainRow {
     return_path_verified: boolean
     last_checked_at: string
     verification_details: VerificationDetails | null
-    coverage: 'everyone' | 'manual'
+    coverage: Coverage
+    coverageGroups: string[]
     rank: number
 }
 
@@ -125,7 +127,9 @@ function DomainsSection({ storedProvider }: { storedProvider: string | undefined
         return_path_verified: d.return_path_verified,
         last_checked_at: d.last_checked_at,
         verification_details: d.verification_details ?? null,
-        coverage: d.coverage === 'everyone' ? 'everyone' : 'manual',
+        // The field is not required: an empty value is no rule, as on the server.
+        coverage: d.coverage || 'manual',
+        coverageGroups: d.coverage_groups ?? [],
         rank: d.rank ?? 0,
     }))
 
@@ -234,6 +238,7 @@ function DomainRowItem({ domain, provider }: { domain: DomainRow; provider: 'pos
                 domainId={domain.id}
                 domainName={domain.domain}
                 coverage={domain.coverage}
+                coverageGroups={domain.coverageGroups}
             />
 
             <RemoveDomainConfirm

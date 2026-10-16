@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
     domains: [
         { id: 'd_org', domain: 'tinycld.org', coverage: 'manual', rank: 1 },
         { id: 'd_com', domain: 'tinycld.com', coverage: 'everyone', rank: 2 },
+        { id: 'd_grp', domain: 'q.example', coverage: 'groups', rank: 3 },
     ],
     addresses: [{ id: 'a1', local_part: 'help', domain: 'd_org', mailbox: 'mb_other' }],
     identities: [{ id: 'i1', email_name: 'holly', inbox: 'mb_other', user: 'u_holly' }],
@@ -74,15 +75,22 @@ function renderForm() {
     return render(withQueryClient(<AddAddressForm mailboxId="mb1" onDone={vi.fn()} />))
 }
 
+const RESERVED = "This is a person's email name, and this domain's rule keeps that name for them"
+
 test("a person's email name is refused on a domain with an Everyone rule", async () => {
     const { container, findByText } = renderForm()
     await chooseDomain(findByText, 'tinycld.com')
     await typeAddress(container, 'holly')
-    expect(
-        await findByText(
-            "This is a person's email name, and everyone gets that name on this domain"
-        )
-    ).toBeTruthy()
+    expect(await findByText(RESERVED)).toBeTruthy()
+})
+
+// The server reserves email names on a groups domain too, for members and
+// non-members alike (server/addresses.go checkAddressAvailable).
+test("a person's email name is refused on a domain with a groups rule", async () => {
+    const { container, findByText } = renderForm()
+    await chooseDomain(findByText, 'q.example')
+    await typeAddress(container, 'holly')
+    expect(await findByText(RESERVED)).toBeTruthy()
 })
 
 test('an address that already exists on the domain is refused', async () => {

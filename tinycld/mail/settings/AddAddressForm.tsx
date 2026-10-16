@@ -47,8 +47,11 @@ function useAddressRules(mailboxId: string) {
                 reservedNames: new Set(
                     (identities ?? []).filter(i => i.inbox !== mailboxId).map(i => i.emailName)
                 ),
+                // Same rule as server/addresses.go domainHasRule.
                 ruleDomainIds: new Set(
-                    (domains ?? []).filter(d => d.coverage === 'everyone').map(d => d.id)
+                    (domains ?? [])
+                        .filter(d => d.coverage === 'everyone' || d.coverage === 'groups')
+                        .map(d => d.id)
                 ),
             }),
         [addresses, identities, domains, mailboxId]
