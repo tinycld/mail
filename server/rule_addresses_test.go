@@ -195,7 +195,7 @@ func TestRuleAddresses_AddressHeldByAnotherInboxIsLeftAlone(t *testing.T) {
 	app := newRuleTestApp(t)
 	logs := captureLogs(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
-	user := saveRealRecord(t, app, "users", map[string]any{"email": "s@ext.example", "username": "sam", "name": "Sam", "role": "member"})
+	saveRealRecord(t, app, "users", map[string]any{"email": "s@ext.example", "username": "sam", "name": "Sam", "role": "member"})
 	other := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "other.example", "verified": true})
 	desk := saveRealRecord(t, app, "mail_mailboxes", map[string]any{"address": "sam", "domain": other.Id, "type": "shared", "display_name": "Desk", "name": "Desk"})
 	// Raw SQL skips the coverage guard, standing in for drift.
@@ -212,7 +212,6 @@ func TestRuleAddresses_AddressHeldByAnotherInboxIsLeftAlone(t *testing.T) {
 	if !strings.Contains(logs.String(), "held by another inbox") {
 		t.Fatalf("the conflict was not logged: %s", logs.String())
 	}
-	_ = user
 }
 
 // A user created before any domain was verified gets an identity and
@@ -318,7 +317,7 @@ func seedRuleAPI(t *testing.T, app *tests.TestApp) *ruleAPISeed {
 	return s
 }
 
-func runRuleAPIScenario(t *testing.T, method, body string, expect []string, url func(*ruleAPISeed) string, payload func(*ruleAPISeed) string) {
+func runRuleAPIScenario(t *testing.T, method string, expect []string, url func(*ruleAPISeed) string, payload func(*ruleAPISeed) string) {
 	t.Helper()
 	var seed *ruleAPISeed
 	scenario := tests.ApiScenario{
@@ -342,13 +341,13 @@ func runRuleAPIScenario(t *testing.T, method, body string, expect []string, url 
 }
 
 func TestRuleAPI_CoverageConflictNamesTheAddress(t *testing.T) {
-	runRuleAPIScenario(t, http.MethodPatch, "", []string{`"coverage":{"code":"coverage_conflict"`, "sam@other.example"},
+	runRuleAPIScenario(t, http.MethodPatch, []string{`"coverage":{"code":"coverage_conflict"`, "sam@other.example"},
 		func(s *ruleAPISeed) string { return "/api/collections/mail_domains/records/" + s.other.Id },
 		func(*ruleAPISeed) string { return `{"coverage":"everyone"}` })
 }
 
 func TestRuleAPI_TakenAddressIsReportedOnLocalPart(t *testing.T) {
-	runRuleAPIScenario(t, http.MethodPost, "", []string{`"local_part":{"code":"address_taken"`},
+	runRuleAPIScenario(t, http.MethodPost, []string{`"local_part":{"code":"address_taken"`},
 		func(*ruleAPISeed) string { return "/api/collections/mail_addresses/records" },
 		func(s *ruleAPISeed) string {
 			return `{"local_part":"sam","domain":"` + s.other.Id + `","mailbox":"` + s.mailbx.Id + `"}`
