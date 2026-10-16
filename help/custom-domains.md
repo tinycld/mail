@@ -64,6 +64,11 @@ Each domain has a setting **Who gets an address here?**:
 
 - **Everyone** — each person gets their email name on this domain. For example, if Nathan's email name is `nathan`, Nathan gets `nathan@` on this domain. People who join later get it too.
 - **Only people I add** — nobody gets an address automatically. Add addresses to a mailbox in **Settings → Mail → Mailboxes**.
+- **Members of these groups** — only members of the groups you choose get their email name on this domain. When a person joins one of the groups, they get the address. When they leave all of the groups, the address stops receiving mail.
+
+To make groups, go to **Settings → Groups**. When you remove a person from a group, the confirm message shows the addresses that person loses.
+
+On a domain set to **Everyone** or **Members of these groups**, a person's email name is reserved for that person, so a shared mailbox cannot use it there.
 
 The first domain you add is set to **Everyone**. Each domain you add after that starts as **Only people I add**, so adding a domain never gives out addresses until you choose to.
 
