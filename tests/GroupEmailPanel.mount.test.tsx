@@ -134,6 +134,17 @@ test("lists the group's own addresses and not other groups' or people's", async 
     ).toBeTruthy()
 })
 
+test('a group with no address of its own says so', async () => {
+    const { findByText } = renderPanel('g_none')
+    expect(await findByText('This group has no address yet.')).toBeTruthy()
+})
+
+test('a group with an address does not show the empty line', async () => {
+    const { findByText, queryByText } = renderPanel('g_sales')
+    await findByText('sales@q.example')
+    expect(queryByText('This group has no address yet.')).toBeNull()
+})
+
 test('removes a group address', async () => {
     h.deleted.length = 0
     const { container, findByText } = renderPanel('g_sales')

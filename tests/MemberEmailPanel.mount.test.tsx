@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, getDefaultNormalizer, render } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 afterEach(cleanup)
@@ -147,6 +147,14 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
 
 import MemberEmailPanel from '~/tinycld/mail/settings/MemberEmailPanel'
 
+// Default matching trims and collapses whitespace, which hides a doubled or trailing space.
+const exactText = { normalizer: getDefaultNormalizer({ trim: false, collapseWhitespace: false }) }
+
+// react-native-web under happy-dom renders testID as a plain `testid` attribute.
+function byTestId(container: HTMLElement, testId: string) {
+    return container.querySelector(`[testid="${testId}"]`)
+}
+
 function renderPanel(userId: string) {
     return render(
         <QueryClientProvider client={new QueryClient()}>
@@ -210,13 +218,15 @@ test('an inbox with a direct row and a group row shows once, without the group',
 
 test('shows the group addresses of the groups the person is in', async () => {
     const { findByText, queryByText } = renderPanel('u2')
-    expect(await findByText('Gets mail sent to team@q.example (group Sales)')).toBeTruthy()
+    expect(
+        await findByText('Gets mail sent to team@q.example (group Sales)', exactText)
+    ).toBeTruthy()
     expect(queryByText(/ops@q\.example/)).toBeNull()
 })
 
 test('a group row that is missing leaves the group name out', async () => {
     const { findByText } = renderPanel('u4')
-    expect(await findByText('Gets mail sent to lost@q.example')).toBeTruthy()
+    expect(await findByText('Gets mail sent to lost@q.example', exactText)).toBeTruthy()
 })
 
 test('a person with an inbox and no address says so', async () => {
@@ -255,4 +265,16 @@ test('a person in no group gets no group address line', async () => {
     const { findByText, queryByText } = renderPanel('u1')
     await findByText('Send new mail from')
     expect(queryByText(/Gets mail sent to/)).toBeNull()
+})
+
+test('a person with a group address gets the group address list', async () => {
+    const { container, findByText } = renderPanel('u2')
+    await findByText(/Gets mail sent to team@q\.example/)
+    expect(byTestId(container, 'group-address-list')).toBeTruthy()
+})
+
+test('a person in no group with an address renders no group address list', async () => {
+    const { container, findByText } = renderPanel('u1')
+    await findByText('Send new mail from')
+    expect(byTestId(container, 'group-address-list')).toBeNull()
 })

@@ -98,25 +98,31 @@ function useGroupAddressLines(userId: string) {
                     ),
                 })),
     })
-    const lines = (data ?? []).flatMap(({ group, addresses }) =>
-        addresses
+    const lines = (data ?? []).flatMap(({ group, addresses }) => {
+        const groupSuffix = group?.name ? ` (group ${group.name})` : ''
+        return addresses
             .filter(a => a.domain)
             .map(a => ({
                 id: a.id,
-                text: `Gets mail sent to ${a.localPart}@${a.domain?.domain} ${group?.name ? ` (group ${group.name})` : ''}`,
+                text: `Gets mail sent to ${a.localPart}@${a.domain?.domain}${groupSuffix}`,
             }))
-    )
+    })
     return lines.sort((a, b) => a.text.localeCompare(b.text))
 }
 
 function GroupAddressList({ userId }: { userId: string }) {
     const lines = useGroupAddressLines(userId)
+    if (lines.length === 0) return null
     const rows = lines.map(line => (
         <Text key={line.id} className="text-foreground text-sm">
             {line.text}
         </Text>
     ))
-    return <View className="gap-1">{rows}</View>
+    return (
+        <View testID="group-address-list" className="gap-1">
+            {rows}
+        </View>
+    )
 }
 
 function inboxEmail(address: string, domainName: string | undefined) {

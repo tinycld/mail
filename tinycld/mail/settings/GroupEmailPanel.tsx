@@ -3,6 +3,8 @@ import { useLiveQuery } from '@tanstack/react-db'
 import type { GroupDrawerPanelProps } from '@tinycld/core/lib/groups/group-panel'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
+import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
+import { Plus } from 'lucide-react-native'
 import { materialize } from 'pbtsdb'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
@@ -121,19 +123,35 @@ function AddFormSlot({
     return <AddAddressForm target={{ kind: 'group', groupId }} onDone={onDone} />
 }
 
+function NoGroupAddresses({ isVisible }: { isVisible: boolean }) {
+    if (!isVisible) return null
+    return <Text className="text-muted-foreground text-sm">This group has no address yet.</Text>
+}
+
 function GroupAddresses({ groupId }: { groupId: string }) {
+    const primaryColor = useThemeColor('primary')
     const [isAdding, setIsAdding] = useState(false)
     const { addresses, remove } = useGroupAddresses(groupId)
+    const toggleLabel = isAdding ? 'Cancel' : 'Add address'
     const rows = addresses.map(a => (
         <GroupAddressRow key={a.id} email={a.email} onRemove={() => remove.mutate(a.id)} />
     ))
     return (
         <View className="gap-2">
             <View className="flex-row items-center justify-between">
-                <Text className="text-muted-foreground text-xs">Group addresses</Text>
-                <Pressable onPress={() => setIsAdding(s => !s)}>
-                    <Text className="text-primary text-xs font-semibold">
-                        {isAdding ? 'Cancel' : 'Add address'}
+                <Text
+                    className="text-muted-foreground uppercase"
+                    style={{ fontSize: 11, fontWeight: '600', letterSpacing: 0.6 }}
+                >
+                    Group addresses
+                </Text>
+                <Pressable
+                    onPress={() => setIsAdding(s => !s)}
+                    className="flex-row gap-1 items-center"
+                >
+                    <Plus size={12} color={primaryColor} />
+                    <Text className="text-primary" style={{ fontSize: 12, fontWeight: '600' }}>
+                        {toggleLabel}
                     </Text>
                 </Pressable>
             </View>
@@ -141,6 +159,7 @@ function GroupAddresses({ groupId }: { groupId: string }) {
                 Mail to these addresses goes to every member of the group.
             </Text>
             {rows}
+            <NoGroupAddresses isVisible={addresses.length === 0} />
             <AddFormSlot isVisible={isAdding} groupId={groupId} onDone={() => setIsAdding(false)} />
         </View>
     )
