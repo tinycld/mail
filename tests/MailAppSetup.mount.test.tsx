@@ -1,13 +1,21 @@
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, waitFor } from '@testing-library/react'
-import { afterEach, expect, test, vi } from 'vitest'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { log } from '@tinycld/core/lib/logger'
+import { Linking } from 'react-native'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 afterEach(() => {
     cleanup()
     h.updated.length = 0
     h.qrValues.length = 0
     h.mailHost = 'mail.acme.example'
+    vi.restoreAllMocks()
+    h.send.mockReset()
+})
+
+beforeEach(() => {
+    h.send.mockResolvedValue({ token: 'profile-token' })
 })
 
 const h = vi.hoisted(() => ({
@@ -16,6 +24,7 @@ const h = vi.hoisted(() => ({
     userId: 'u1',
     updated: [] as Record<string, unknown>[],
     qrValues: [] as string[],
+    send: vi.fn(),
     identities: [
         {
             id: 'i1',
@@ -158,9 +167,6 @@ vi.mock('react-native-svg', () => ({
     Path: () => <span />,
 }))
 vi.mock('@tinycld/core/lib/use-mail-host', () => ({ useMailHost: () => h.mailHost }))
-vi.mock('@tinycld/core/file-viewer/use-authed-file-url', () => ({
-    useFileToken: () => ({ data: 'file-token' }),
-}))
 vi.mock('@tinycld/core/lib/server-address', () => ({
     getResolvedAddress: () => 'https://acme.tinycld.org',
 }))
@@ -191,7 +197,10 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
         mail_mailboxes: mk('mail_mailboxes', h.mailboxes),
         mail_mailbox_members: mk('mail_mailbox_members', h.members),
     }
-    return { useStore: (...names: string[]) => names.map(n => stores[n]) }
+    return {
+        useStore: (...names: string[]) => names.map(n => stores[n]),
+        pb: { send: h.send, authStore: { isValid: true } },
+    }
 })
 
 import MailAppSetup from '~/tinycld/mail/settings/MailAppSetup'
@@ -231,8 +240,10 @@ test('the QR code opens the set-up page and holds no token', async () => {
     const qr = container.querySelector('[aria-label="QR code that opens this page on your phone"]')
     expect(qr).not.toBeNull()
     expect(h.qrValues).toContain('https://acme.tinycld.org/a/settings/account/mail/mail-apps')
-    expect(h.qrValues.join(' ')).not.toContain('file-token')
-    expect(byId('mail-app-profile-button')?.getAttribute('data-disabled')).toBe('false')
+    expect(h.qrValues.join(' ')).not.toContain('profile-token')
+    await waitFor(() =>
+        expect(byId('mail-app-profile-button')?.getAttribute('data-disabled')).toBe('false')
+    )
 })
 
 test('tells a guest that guests get no address', async () => {
@@ -264,4 +275,33 @@ test('hides the host rows when the mail host becomes unknown', async () => {
     )
     expect(byId('mail-app-imap-host')).toBeNull()
     expect(byId('mail-app-address')).toBeNull()
+})
+
+async function pressProfileButton(findById: (id: string) => Promise<Element | null>) {
+    const button = await findById('mail-app-profile-button')
+    await waitFor(() => expect(button?.getAttribute('data-disabled')).toBe('false'))
+    fireEvent.click(button as Element)
+}
+
+test('the profile link holds the profile token fetched from the server', async () => {
+    h.userId = 'u1'
+    const open = vi.spyOn(Linking, 'openURL').mockResolvedValue(undefined)
+    const { findById } = renderSetup()
+    await pressProfileButton(findById)
+    expect(h.send).toHaveBeenCalledWith('/api/mail/mobileconfig/token', { method: 'POST' })
+    expect(open).toHaveBeenCalledWith(
+        'https://acme.tinycld.org/api/mail/mobileconfig?token=profile-token'
+    )
+})
+
+test('logs a failed open of the profile link and does not throw', async () => {
+    h.userId = 'u1'
+    const failure = new Error('blocked')
+    vi.spyOn(Linking, 'openURL').mockRejectedValue(failure)
+    const error = vi.spyOn(log, 'error').mockImplementation(() => undefined)
+    const { findById } = renderSetup()
+    await pressProfileButton(findById)
+    await waitFor(() =>
+        expect(error).toHaveBeenCalledWith('mail.client-setup', failure, { url: 'profile' })
+    )
 })

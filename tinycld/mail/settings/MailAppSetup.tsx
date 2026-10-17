@@ -1,5 +1,4 @@
 import { QrCode } from '@tinycld/core/components/settings/security/QrCode'
-import { useFileToken } from '@tinycld/core/file-viewer/use-authed-file-url'
 import { openHelp } from '@tinycld/core/lib/help/open-help'
 import { log } from '@tinycld/core/lib/logger'
 import { getResolvedAddress } from '@tinycld/core/lib/server-address'
@@ -10,6 +9,7 @@ import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
 import { CopyButton } from './CopyButton'
 import { IMAP_PORT, profileUrl, SMTP_PORT, setupAddress, setupPageUrl } from './mail-app-setup'
 import { useMyPersonEmail } from './usePersonEmail'
+import { useProfileToken } from './useProfileToken'
 
 const IMAP_SECURITY = `Port ${IMAP_PORT}, SSL/TLS`
 const SMTP_SECURITY = `Port ${SMTP_PORT}, SSL/TLS`
@@ -21,11 +21,12 @@ function openUrl(url: string) {
 function useMailAppSetup() {
     const { identity, addresses, isReady } = useMyPersonEmail()
     const host = useMailHost()
-    const { data: fileToken } = useFileToken()
+    const { data: profileToken } = useProfileToken()
     const serverAddress = getResolvedAddress()
     const address =
         identity && !identity.retired ? setupAddress(identity.defaultFrom, addresses) : null
-    const profileHref = serverAddress && fileToken ? profileUrl(serverAddress, fileToken) : null
+    const profileHref =
+        serverAddress && profileToken ? profileUrl(serverAddress, profileToken) : null
     return {
         address,
         host,

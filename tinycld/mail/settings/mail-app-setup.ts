@@ -25,8 +25,8 @@ export function setupAddress(defaultFrom: string, addresses: PersonAddress[]): s
     return pick ? `${pick.localPart}@${pick.domainName}` : null
 }
 
-export function profileUrl(serverAddress: string, fileToken: string): string {
-    return `${serverAddress}/api/mail/mobileconfig?token=${encodeURIComponent(fileToken)}`
+export function profileUrl(serverAddress: string, profileToken: string): string {
+    return `${serverAddress}/api/mail/mobileconfig?token=${encodeURIComponent(profileToken)}`
 }
 
 export function setupPageUrl(serverAddress: string): string {

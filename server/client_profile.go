@@ -11,9 +11,12 @@ import (
 	"slices"
 	"strings"
 	"text/template"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/security"
 
 	"tinycld.org/core/mailhost"
 )
@@ -22,6 +25,71 @@ var (
 	errNoProfileUser    = errors.New("sign in to download the profile")
 	errNoProfileAddress = errors.New("no address to set up")
 )
+
+// A browser cannot send a header when it opens a link, so the profile link
+// carries a token. The token is its own type, so it opens the profile and
+// nothing else: PocketBase refuses it as a file token or an auth token, and
+// the profile refuses those in turn. It is short-lived because it lands in
+// history and logs.
+const (
+	profileTokenType     = "mailProfile"
+	profileTokenDuration = 10 * time.Minute
+)
+
+// handleProfileToken gives the signed-in person a token for the profile link.
+func handleProfileToken(re *core.RequestEvent) error {
+	if re.Auth == nil || re.Auth.Collection().Name != "users" {
+		return re.UnauthorizedError("Sign in to download the profile.", nil)
+	}
+	token, err := newProfileToken(re.Auth, profileTokenDuration)
+	if err != nil {
+		return re.InternalServerError("", err)
+	}
+	re.Response.Header().Set("Cache-Control", "no-store")
+	return re.JSON(http.StatusOK, map[string]string{"token": token})
+}
+
+// profileTokenKey is built as PocketBase builds the file token key, so a
+// change of the person's password or token key revokes the token too.
+func profileTokenKey(user *core.Record) string {
+	return user.TokenKey() + user.Collection().FileToken.Secret
+}
+
+func newProfileToken(user *core.Record, duration time.Duration) (string, error) {
+	return security.NewJWT(jwt.MapClaims{
+		core.TokenClaimType:         profileTokenType,
+		core.TokenClaimId:           user.Id,
+		core.TokenClaimCollectionId: user.Collection().Id,
+	}, profileTokenKey(user), duration)
+}
+
+// userByProfileToken returns the person a valid, unexpired profile token names.
+func userByProfileToken(app core.App, token string) (*core.Record, error) {
+	claims, err := security.ParseUnverifiedJWT(token)
+	if err != nil {
+		return nil, err
+	}
+	id, _ := claims[core.TokenClaimId].(string)
+	collectionID, _ := claims[core.TokenClaimCollectionId].(string)
+	if id == "" || collectionID == "" {
+		return nil, errNoProfileUser
+	}
+	user, err := app.FindRecordById(collectionID, id)
+	if err != nil {
+		return nil, err
+	}
+	if user.Collection().Name != "users" {
+		return nil, errNoProfileUser
+	}
+	verified, err := security.ParseJWT(token, profileTokenKey(user))
+	if err != nil {
+		return nil, err
+	}
+	if tokenType, _ := verified[core.TokenClaimType].(string); tokenType != profileTokenType {
+		return nil, errNoProfileUser
+	}
+	return user, nil
+}
 
 // handleMobileconfig serves an Apple configuration profile with the IMAP and
 // SMTP settings of the signed-in person's Default From address. It holds no
@@ -77,14 +145,14 @@ func isLoopbackHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// profileUser is the person asking. A browser cannot send a header when it
-// opens a link, so a file token in the query also works; an auth token there
-// does not, because a link is easy to leak and a file token is short-lived.
+// profileUser is the person asking: a profile token in the query, or the
+// session. A file token or an auth token in the query does not work, because
+// a link is easy to leak.
 func profileUser(app core.App, re *core.RequestEvent) (*core.Record, error) {
 	user := re.Auth
 	if token := re.Request.URL.Query().Get("token"); token != "" {
 		var err error
-		user, err = app.FindAuthRecordByToken(token, core.TokenTypeFile)
+		user, err = userByProfileToken(app, token)
 		if err != nil {
 			return nil, err
 		}

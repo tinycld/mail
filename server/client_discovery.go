@@ -45,6 +45,7 @@ func registerClientSetupRoutes(app core.App) {
 			e.Router.POST(path, func(re *core.RequestEvent) error { return handleAutodiscover(app, re) })
 		}
 		e.Router.GET("/api/mail/mobileconfig", func(re *core.RequestEvent) error { return handleMobileconfig(app, re) })
+		e.Router.POST("/api/mail/mobileconfig/token", handleProfileToken)
 		return e.Next()
 	})
 }

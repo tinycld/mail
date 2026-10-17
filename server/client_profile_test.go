@@ -1,13 +1,17 @@
 package mail
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"regexp"
 	"testing"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
+	"github.com/pocketbase/pocketbase/tools/security"
 
 	"tinycld.org/core/syscfg"
 )
@@ -54,13 +58,24 @@ func fileToken(t *testing.T, user *core.Record) string {
 	return token
 }
 
+func profileToken(t *testing.T, user *core.Record) string {
+	t.Helper()
+	token, err := newProfileToken(user, profileTokenDuration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return token
+}
+
 // runProfile runs s against the fixture and returns the response body and
 // headers (ApiScenario checks content, not headers).
 func runProfile(t *testing.T, f profileFixture, s tests.ApiScenario) (string, http.Header) {
 	t.Helper()
 	var body string
 	var header http.Header
-	s.Method = http.MethodGet
+	if s.Method == "" {
+		s.Method = http.MethodGet
+	}
 	s.TestAppFactory = func(_ testing.TB) *tests.TestApp { return f.app }
 	s.DisableTestAppCleanup = true
 	s.AfterTestFunc = func(_ testing.TB, _ *tests.TestApp, res *http.Response) {
@@ -75,8 +90,8 @@ func runProfile(t *testing.T, f profileFixture, s tests.ApiScenario) (string, ht
 func TestProfileForTheDefaultFromAddress(t *testing.T) {
 	f := newProfileFixture(t, "Nathan")
 	body, header := runProfile(t, f, tests.ApiScenario{
-		Name:           "profile by file token",
-		URL:            "/api/mail/mobileconfig?token=" + fileToken(t, f.user),
+		Name:           "profile by profile token",
+		URL:            "/api/mail/mobileconfig?token=" + profileToken(t, f.user),
 		ExpectedStatus: http.StatusOK,
 		ExpectedContent: []string{
 			"<key>EmailAddress</key><string>nathan@acme.example</string>",
@@ -115,7 +130,7 @@ func TestProfileFollowsTheChosenDefaultFrom(t *testing.T) {
 	}
 	runProfile(t, f, tests.ApiScenario{
 		Name:            "chosen default from",
-		URL:             "/api/mail/mobileconfig?token=" + fileToken(t, f.user),
+		URL:             "/api/mail/mobileconfig?token=" + profileToken(t, f.user),
 		ExpectedStatus:  http.StatusOK,
 		ExpectedContent: []string{"<key>EmailAddress</key><string>nathan@acme.com</string>"},
 	})
@@ -136,7 +151,7 @@ func TestProfileHostIsThePublicURLNotTheProxyHost(t *testing.T) {
 	f.app.Settings().Meta.AppURL = "https://Web.Acme.example"
 	runProfile(t, f, tests.ApiScenario{
 		Name:               "bogus Host header",
-		URL:                "http://127.0.0.1:8090/api/mail/mobileconfig?token=" + fileToken(t, f.user),
+		URL:                "http://127.0.0.1:8090/api/mail/mobileconfig?token=" + profileToken(t, f.user),
 		ExpectedStatus:     http.StatusOK,
 		ExpectedContent:    []string{"<key>IncomingMailServerHostName</key><string>web.acme.example</string>"},
 		NotExpectedContent: []string{"127.0.0.1"},
@@ -150,7 +165,7 @@ func TestProfileHostFallsBackToTheRequestHost(t *testing.T) {
 		f.app.Settings().Meta.AppURL = appURL
 		runProfile(t, f, tests.ApiScenario{
 			Name:            "AppURL " + name,
-			URL:             "https://web.acme.example/api/mail/mobileconfig?token=" + fileToken(t, f.user),
+			URL:             "https://web.acme.example/api/mail/mobileconfig?token=" + profileToken(t, f.user),
 			ExpectedStatus:  http.StatusOK,
 			ExpectedContent: []string{"<key>IncomingMailServerHostName</key><string>web.acme.example</string>"},
 		})
@@ -187,23 +202,32 @@ func TestProfileEscapesTheName(t *testing.T) {
 	f := newProfileFixture(t, "Ann & <Co>")
 	body, _ := runProfile(t, f, tests.ApiScenario{
 		Name:            "escaped name",
-		URL:             "/api/mail/mobileconfig?token=" + fileToken(t, f.user),
+		URL:             "/api/mail/mobileconfig?token=" + profileToken(t, f.user),
 		ExpectedStatus:  http.StatusOK,
 		ExpectedContent: []string{"<key>EmailAccountName</key><string>Ann &amp; &lt;Co&gt;</string>"},
 	})
 	assertWellFormedXML(t, body)
 }
 
-func TestProfileRefusesWithoutAFileTokenOrSession(t *testing.T) {
+func TestProfileRefusesWithoutAProfileTokenOrSession(t *testing.T) {
 	f := newProfileFixture(t, "Nathan")
 	authToken, err := f.user.NewAuthToken()
 	if err != nil {
 		t.Fatal(err)
 	}
+	expired, err := newProfileToken(f.user, -time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Signed with the key of the other user, but claiming this user.
+	forged := forgeProfileToken(t, f.user, f.guest)
 	for name, url := range map[string]string{
 		"no auth":             "/api/mail/mobileconfig",
 		"bad token":           "/api/mail/mobileconfig?token=nope",
 		"auth token in query": "/api/mail/mobileconfig?token=" + authToken,
+		"file token in query": "/api/mail/mobileconfig?token=" + fileToken(t, f.user),
+		"expired token":       "/api/mail/mobileconfig?token=" + expired,
+		"wrong signature":     "/api/mail/mobileconfig?token=" + forged,
 	} {
 		runProfile(t, f, tests.ApiScenario{
 			Name:               name,
@@ -218,7 +242,7 @@ func TestProfileForAPersonWithNoAddress(t *testing.T) {
 	f := newProfileFixture(t, "Nathan")
 	runProfile(t, f, tests.ApiScenario{
 		Name:            "guest has no identity",
-		URL:             "/api/mail/mobileconfig?token=" + fileToken(t, f.guest),
+		URL:             "/api/mail/mobileconfig?token=" + profileToken(t, f.guest),
 		ExpectedStatus:  http.StatusNotFound,
 		ExpectedContent: []string{"You have no email address yet."},
 	})
@@ -234,7 +258,7 @@ func TestProfileForAPersonWithNoAddress(t *testing.T) {
 	}
 	runProfile(t, f, tests.ApiScenario{
 		Name:            "retired identity",
-		URL:             "/api/mail/mobileconfig?token=" + fileToken(t, f.user),
+		URL:             "/api/mail/mobileconfig?token=" + profileToken(t, f.user),
 		ExpectedStatus:  http.StatusNotFound,
 		ExpectedContent: []string{"You have no email address yet."},
 	})
@@ -257,5 +281,71 @@ func TestStableUUID(t *testing.T) {
 func TestReverseHost(t *testing.T) {
 	if got := reverseHost("mail.acme.example"); got != "example.acme.mail" {
 		t.Fatalf("reverseHost = %q", got)
+	}
+}
+
+// forgeProfileToken claims to be victim but is signed with the key of signer.
+func forgeProfileToken(t *testing.T, victim, signer *core.Record) string {
+	t.Helper()
+	token, err := security.NewJWT(jwt.MapClaims{
+		core.TokenClaimId:           victim.Id,
+		core.TokenClaimCollectionId: victim.Collection().Id,
+		core.TokenClaimType:         profileTokenType,
+	}, signer.TokenKey()+signer.Collection().FileToken.Secret, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return token
+}
+
+func TestProfileTokenRouteNeedsASession(t *testing.T) {
+	f := newProfileFixture(t, "Nathan")
+	runProfile(t, f, tests.ApiScenario{
+		Name:            "no auth",
+		Method:          http.MethodPost,
+		URL:             "/api/mail/mobileconfig/token",
+		ExpectedStatus:  http.StatusUnauthorized,
+		ExpectedContent: []string{"Sign in to download the profile."},
+	})
+}
+
+func TestProfileTokenRouteIssuesATokenTheProfileAccepts(t *testing.T) {
+	f := newProfileFixture(t, "Nathan")
+	authToken, err := f.user.NewAuthToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, header := runProfile(t, f, tests.ApiScenario{
+		Name:            "issue",
+		Method:          http.MethodPost,
+		URL:             "/api/mail/mobileconfig/token",
+		Headers:         map[string]string{"Authorization": authToken},
+		ExpectedStatus:  http.StatusOK,
+		ExpectedContent: []string{`"token":"`},
+	})
+	if got := header.Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+	var parsed struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal([]byte(body), &parsed); err != nil {
+		t.Fatal(err)
+	}
+	runProfile(t, f, tests.ApiScenario{
+		Name:            "profile by issued token",
+		URL:             "/api/mail/mobileconfig?token=" + parsed.Token,
+		ExpectedStatus:  http.StatusOK,
+		ExpectedContent: []string{"nathan@acme.example"},
+	})
+}
+
+func TestProfileTokenIsNotAFileToken(t *testing.T) {
+	f := newProfileFixture(t, "Nathan")
+	if _, err := f.app.FindAuthRecordByToken(profileToken(t, f.user), core.TokenTypeFile); err == nil {
+		t.Fatal("PocketBase accepted a profile token as a file token")
+	}
+	if _, err := f.app.FindAuthRecordByToken(profileToken(t, f.user), core.TokenTypeAuth); err == nil {
+		t.Fatal("PocketBase accepted a profile token as an auth token")
 	}
 }
