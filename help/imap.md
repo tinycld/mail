@@ -16,18 +16,24 @@ IMAP lets you read your TinyCld mail from any desktop or phone mail client. Once
 
 IMAP is **read + state**, not send. To also send from your client, set up [SMTP](help://mail:smtp).
 
+## The quickest way
+
+Open **Settings → Account → Mail apps**. The page shows your exact settings. On a Mac, iPhone or iPad, **Download the profile** puts them in Mail; your device then asks for your password. To set up your phone, scan the QR code on the page with its camera.
+
+Most mail apps also find the settings by themselves when you type your email address and password, if your admin published the [DNS records for mail apps](help://mail:custom-domains).
+
 ## Connection settings
 
 | Setting | Value |
 |---|---|
-| **Server** | `{{server-host}}` |
+| **Server** | `{{mail-host}}` |
 | **Port** | **993** |
 | **Encryption** | SSL / TLS (implicit) |
-| **Username** | your TinyCld username, your sign-in email, or any address of your own inbox (not a shared inbox address) |
+| **Username** | your full email address |
 | **Password** | your TinyCld password |
 | **Authentication** | Normal password |
 
-> **The server is your TinyCld web address** — the hostname in your browser's address bar, shown above. It is *not* your mail domain: even if your address is `you@yourdomain.com`, the server to enter is `{{server-host}}`, never `mail.yourdomain.com`. TinyCld identifies your workspace by the hostname your client connects with, so any other name (or an IP address) is refused with "service unavailable".
+> **The server is `{{mail-host}}`.** Type it exactly. Your mail domain or a `mail.` name works only when your admin published the DNS records for mail apps and the server has a certificate for that name. Otherwise the server cannot tell which workspace you want, and it hangs up ("service unavailable").
 
 There is no separate "IMAP password" — use your regular TinyCld login.
 
@@ -38,10 +44,11 @@ There is no separate "IMAP password" — use your regular TinyCld login.
 3. Enter your name, email address, and TinyCld password. Click **Sign In**.
 4. Apple Mail will probably fail auto-config — that's expected; the manual page appears.
 5. **Account Type**: IMAP.
-6. **Incoming Mail Server**: `{{server-host}}`.
-7. **User Name**: your email address (any of your addresses works).
+6. **Incoming Mail Server**: `{{mail-host}}`.
+7. **User Name**: your full email address.
 8. **Password**: your TinyCld password.
-9. Click **Sign In**.
+9. **Outgoing Mail Server**: `{{mail-host}}`, the same user name and password. Port 465 with SSL/TLS.
+10. Click **Sign In**.
 
 The mail account appears in the sidebar. Each inbox you have access to shows up as a separate account folder.
 
@@ -51,7 +58,7 @@ The mail account appears in the sidebar. Each inbox you have access to shows up 
 2. Fill in your name, email, password.
 3. Tap **Next** — iOS will try to auto-config and fail; the manual screen appears.
 4. Pick **IMAP**.
-5. Incoming Mail Server — Host Name: `{{server-host}}`, User Name: your email address (any of your addresses works), Password: your password.
+5. Incoming Mail Server — Host Name: `{{mail-host}}`, User Name: your full email address, Password: your password.
 6. Outgoing Mail Server — same hostname, port 465. (Set up [SMTP](help://mail:smtp) to send.)
 7. Tap **Save**.
 
@@ -60,7 +67,7 @@ The mail account appears in the sidebar. Each inbox you have access to shows up 
 1. **File → New → Existing Mail Account**.
 2. Enter your name, email, password. Click **Continue**.
 3. Thunderbird auto-discovers; if it doesn't, click **Configure manually**.
-4. **Incoming**: Protocol IMAP, Hostname `{{server-host}}`, Port 993, SSL/TLS, Authentication Normal password.
+4. **Incoming**: Protocol IMAP, Hostname `{{mail-host}}`, Port 993, SSL/TLS, Authentication Normal password.
 5. **Outgoing**: SMTP, same hostname, Port 465, SSL/TLS — see [SMTP](help://mail:smtp).
 6. Click **Done**.
 
@@ -69,9 +76,9 @@ The mail account appears in the sidebar. Each inbox you have access to shows up 
 In your `~/.muttrc`:
 
 ```muttrc
-set imap_user = "your-username"
+set imap_user = "you@yourdomain.com"  # your full email address
 set imap_pass = "your-tinycld-password"
-set folder = "imaps://{{server-host}}:993"
+set folder = "imaps://{{mail-host}}:993"
 set spoolfile = "+INBOX"
 set ssl_force_tls = yes
 
@@ -95,9 +102,9 @@ When you have multiple inboxes, IMAP namespaces them — typically as separate s
 
 ## Troubleshooting
 
-- **Connects, then immediately disconnects ("service unavailable" / BYE)** — the server name in your client is wrong. It must be `{{server-host}}` exactly (your TinyCld web address); a `mail.` name, your mail domain, or an IP address all reach the server but don't identify your workspace, so it hangs up.
-- **Auth failed** — use your TinyCld username, your sign-in email, or any address of your own inbox. A shared inbox address does not work. Use your TinyCld password.
-- **Connection refused / timeout** — verify your TinyCld instance is reachable on port 993. Try `openssl s_client -connect {{server-host}}:993 -servername {{server-host}}` from a terminal to test.
+- **Connects, then immediately disconnects ("service unavailable" / BYE)** — the server name in your client is wrong. It must be `{{mail-host}}` exactly (your TinyCld web address); a `mail.` name, your mail domain, or an IP address identifies your workspace only when your admin published the DNS records for mail apps.
+- **Auth failed** — use your full email address (an address of your own inbox, not of a shared inbox) and the password you sign in with.
+- **Connection refused / timeout** — verify your TinyCld instance is reachable on port 993. Try `openssl s_client -connect {{mail-host}}:993 -servername {{mail-host}}` from a terminal to test.
 - **TLS certificate error** — Mail's IMAP server uses the same TLS certificate as your web UI. If your web UI works, IMAP should too. If not, check the cert hostname matches what you put in the client.
 - **Flagging, moving, or deleting fails with `Your mail access is read-only`** — your account has read-only access to Mail on this server. Reading and syncing still work, but any change your client tries to make (mark read, star, move, delete, save a draft) is refused. Ask an administrator to grant full access if you need to make changes.
 - **Folders don't sync** — IMAP IDLE should push new messages within a second, but some clients only check every 5–15 minutes by default. Look for a "check for new mail every N minutes" setting.

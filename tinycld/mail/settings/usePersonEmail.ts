@@ -1,6 +1,7 @@
 import { coalesce, eq, type InitialQueryBuilder, not } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
+import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import type { AddressRowData } from './address-items'
 
 type Stores = ReturnType<
@@ -117,5 +118,21 @@ export function toPersonEmail(rows: PersonEmailRow[]) {
 /** A person's identity and every address of its inbox, from one live query. */
 export function usePersonEmail(userId: string) {
     const { data, isReady } = usePersonEmailRows(userId)
+    return { ...toPersonEmail(data ?? []), isReady }
+}
+
+/** The signed-in person's identity and addresses (Account → Email, Account → Mail apps). */
+export function useMyPersonEmail() {
+    const [identities, addresses, domains, groups] = useStore(
+        'mail_identities',
+        'mail_addresses',
+        'mail_domains',
+        'groups'
+    )
+    const { data, isReady } = useMyLiveQuery(
+        (query, { userId }) =>
+            personEmailQuery(query, { identities, addresses, domains, groups }, userId),
+        { queryKey: ['mail_account_email'] }
+    )
     return { ...toPersonEmail(data ?? []), isReady }
 }

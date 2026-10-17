@@ -1,11 +1,9 @@
 import type { OutboundCheckResult } from '@tinycld/app-generated/mail-api'
-import { useMutation } from '@tinycld/core/lib/mutations'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import * as Clipboard from 'expo-clipboard'
-import { Check, Copy } from 'lucide-react-native'
-import { useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Check } from 'lucide-react-native'
+import { Text, View } from 'react-native'
 import { MONOSPACE_FONT } from '../lib/monospace-font'
+import { CopyButton } from './CopyButton'
 
 export type DnsRecord = {
     label: string
@@ -91,19 +89,7 @@ export function DnsRecordsPanel({
 }
 
 function DnsRecordRow({ record }: { record: DnsRecord }) {
-    const mutedColor = useThemeColor('muted-foreground')
     const successColor = useThemeColor('success')
-    const [copied, setCopied] = useState(false)
-
-    const copy = useMutation({
-        mutationFn: async () => {
-            await Clipboard.setStringAsync(record.value)
-        },
-        onSuccess: () => {
-            setCopied(true)
-            setTimeout(() => setCopied(false), 1500)
-        },
-    })
 
     return (
         <View className="border border-border rounded p-2 gap-1">
@@ -124,16 +110,7 @@ function DnsRecordRow({ record }: { record: DnsRecord }) {
                 >
                     {record.value}
                 </Text>
-                <Pressable
-                    onPress={() => copy.mutate()}
-                    accessibilityLabel={`Copy ${record.label} value`}
-                >
-                    {copied ? (
-                        <Check size={14} color={successColor} />
-                    ) : (
-                        <Copy size={14} color={mutedColor} />
-                    )}
-                </Pressable>
+                <CopyButton value={record.value} label={`Copy ${record.label} value`} />
             </View>
         </View>
     )

@@ -40,7 +40,10 @@ const manifest = {
         { slug: 'provider', label: 'Domains', component: 'settings/provider' },
         { slug: 'mailboxes', label: 'Shared inboxes', component: 'settings/mailboxes' },
     ],
-    accountSettings: [{ slug: 'email', label: 'Email', component: 'settings/AccountEmail' }],
+    accountSettings: [
+        { slug: 'email', label: 'Email', component: 'settings/AccountEmail' },
+        { slug: 'mail-apps', label: 'Mail apps', component: 'settings/MailAppSetup' },
+    ],
     // keyPrefix: these are deployment-wide credentials. Where a service provider
     // owns them, this panel is hidden — it could not save there, because the
     // values live in the provider's memory and never reach this deployment's
