@@ -53,7 +53,7 @@ func startRuleEngine(t *testing.T, e *loopEnv) {
 			},
 		},
 	}}
-	automation.RegisterCoreNativeActions()
+	automation.RegisterCoreNativeActionsForTest()
 	registerAutomationResolver()
 	registerAutomationActions()
 	automation.NewEngine(e.app, defs).Start()

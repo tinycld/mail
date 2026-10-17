@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -34,10 +35,31 @@ func ensureIdentity(app core.App, user *core.Record) (*core.Record, error) {
 	return ensureIdentityWith(app, user, adoptOrCreateInbox)
 }
 
+// identityLocks holds one mutex per user id. ensureIdentityWith reads the
+// user's identity and inbox and then creates what is missing. Two callers can
+// run it for the same user at the same time: a new user's create hook and a
+// domain-verified hook (ensureIdentities over every user) run on two
+// requests. Without the lock both read "nothing yet", and the second save
+// fails on a unique index. A process lock is enough: one deployment runs in
+// one process.
+var identityLocks sync.Map
+
+// lockIdentity locks ensureIdentityWith for one user and returns the unlock.
+// A caller must not hold a transaction: the lock holder may be waiting for
+// the database write that the transaction holds.
+func lockIdentity(userID string) func() {
+	lock, _ := identityLocks.LoadOrStore(userID, &sync.Mutex{})
+	mu := lock.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
 func ensureIdentityWith(app core.App, user *core.Record, policy inboxPolicy) (*core.Record, error) {
 	if user.GetString("role") == "guest" {
 		return nil, nil
 	}
+	unlock := lockIdentity(user.Id)
+	defer unlock()
 	existing, err := app.FindFirstRecordByFilter("mail_identities", "user = {:user}", dbx.Params{"user": user.Id})
 	if err == nil {
 		if existing.GetBool("retired") {
