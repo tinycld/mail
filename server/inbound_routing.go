@@ -32,10 +32,13 @@ func routingRecipients(msg *InboundMessage) []string {
 }
 
 // routeInbound delivers msg to every inbox one of its recipients resolves to.
-// processInboundForMailbox dedups by Message-ID per inbox, so two addresses of
-// one inbox store one copy, with delivered_to set to the first that matched.
+// A group address resolves to each member's own inbox. One targetSet covers
+// all recipients, so an inbox reached through two addresses (its own and a
+// list, or two lists) stores one copy, with delivered_to set to the first
+// that matched.
 func routeInbound(app core.App, msg *InboundMessage) routingResult {
 	result := routingResult{}
+	var delivered targetSet
 	for _, email := range routingRecipients(msg) {
 		localPart, domain := splitAddress(email)
 		if localPart == "" || domain == "" {
@@ -44,7 +47,7 @@ func routeInbound(app core.App, msg *InboundMessage) routingResult {
 		}
 		localPart = stripPlusTag(localPart)
 
-		target, err := resolveAddress(app, localPart, domain)
+		targets, err := deliveryTargets(app, localPart, domain)
 		fullAddr := localPart + "@" + domain
 		if errors.Is(err, errAddressNotFound) {
 			result.unknownAddrs = append(result.unknownAddrs, fullAddr)
@@ -60,13 +63,18 @@ func routeInbound(app core.App, msg *InboundMessage) routingResult {
 			continue
 		}
 
-		if err := processInboundForMailbox(app, target.Mailbox, msg, target.Address.Id); err != nil {
-			result.storageFailures = append(result.storageFailures, err)
-			app.Logger().Error("inbound: storage failed",
-				"mailboxID", target.Mailbox.Id, "messageID", msg.MessageID, "error", err)
-			continue
+		for _, target := range targets {
+			if !delivered.add(target) {
+				continue
+			}
+			if err := processInboundForMailbox(app, target.Mailbox, msg, target.AddressID); err != nil {
+				result.storageFailures = append(result.storageFailures, err)
+				app.Logger().Error("inbound: storage failed",
+					"mailboxID", target.Mailbox.Id, "messageID", msg.MessageID, "error", err)
+				continue
+			}
+			result.storedCount++
 		}
-		result.storedCount++
 	}
 	return result
 }

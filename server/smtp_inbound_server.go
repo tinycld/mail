@@ -173,7 +173,8 @@ func (b *smtpInboundBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 // smtpInboundSession implements smtp.Session for one incoming connection.
 // Recipients are accepted only when they resolve to a local mailbox (no open
 // relay); DATA is parsed via the SMTP provider's ParseInbound and dispatched
-// through processInboundForMailbox once per accepted recipient.
+// through processInboundForMailbox once per inbox the accepted recipients
+// reach.
 //
 // The app field is typed as core.App (the minimal interface this code needs)
 // so production core.App and the test *tests.TestApp both
@@ -183,13 +184,12 @@ type smtpInboundSession struct {
 	hostname string
 
 	from      string
-	mailboxes []recipientBinding // accepted recipients + resolved mailbox
+	mailboxes []recipientBinding // accepted recipients + the inboxes they reach
 }
 
 type recipientBinding struct {
-	address   string
-	mailbox   *core.Record
-	addressID string
+	address string
+	targets []deliveryTarget
 }
 
 // AuthMechanisms returns no mechanisms — AUTH is disabled on the inbound
@@ -240,10 +240,12 @@ var errMXRelayDenied = &smtp.SMTPError{
 	Message:      "Relaying denied. To send mail, log in on port 465.",
 }
 
-// Rcpt resolves each recipient to a local mailbox. Unknown recipients get
-// 550 5.1.1 so the sending MTA generates a clean bounce instead of
-// silently accepting and discarding. Plus-tags are stripped (support+tag@
-// → support@) to mirror the webhook path's resolveAddress.
+// Rcpt resolves each recipient to the local inboxes it delivers to: one for
+// an inbox address, one per member for a group address. Unknown recipients,
+// and a group with no member who can receive mail, get 550 5.1.1 so the
+// sending MTA generates a clean bounce instead of silently accepting and
+// discarding. Plus-tags are stripped (support+tag@ → support@) to mirror the
+// webhook path.
 func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 	localPart, domain := splitAddress(to)
 	if localPart == "" || domain == "" {
@@ -257,7 +259,7 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 	if !mailDomainHosted(s.app, domain) {
 		return errMXRelayDenied
 	}
-	target, err := resolveAddress(s.app, localPart, domain)
+	targets, err := deliveryTargets(s.app, localPart, domain)
 	if errors.Is(err, errAddressNotFound) {
 		return &smtp.SMTPError{
 			Code:         550,
@@ -269,11 +271,12 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 		addressLog.Error("inbound SMTP: recipient lookup failed", "rcpt", to, "error", err)
 		return errRecipientLookupFailed
 	}
-	s.mailboxes = append(s.mailboxes, recipientBinding{address: to, mailbox: target.Mailbox, addressID: target.Address.Id})
+	s.mailboxes = append(s.mailboxes, recipientBinding{address: to, targets: targets})
 	return nil
 }
 
-// Data reads the RFC 5322 message and dispatches it to every accepted mailbox.
+// Data reads the RFC 5322 message and dispatches it to every inbox the
+// accepted recipients reach, once per inbox, in RCPT order.
 // Storage failures on individual mailboxes are logged but don't fail the SMTP
 // transaction — the sender would retry the whole batch and we'd risk infinite
 // loops; better to surface partial delivery in logs than to bounce the rest.
@@ -314,13 +317,19 @@ func (s *smtpInboundSession) Data(r io.Reader) error {
 	}
 
 	storedAny := false
+	var delivered targetSet
 	for _, binding := range s.mailboxes {
-		if err := processInboundForMailbox(s.app, binding.mailbox, msg, binding.addressID); err != nil {
-			s.app.Logger().Error("inbound SMTP: storage failed",
-				"mailboxID", binding.mailbox.Id, "address", binding.address, "error", err)
-			continue
+		for _, target := range binding.targets {
+			if !delivered.add(target) {
+				continue
+			}
+			if err := processInboundForMailbox(s.app, target.Mailbox, msg, target.AddressID); err != nil {
+				s.app.Logger().Error("inbound SMTP: storage failed",
+					"mailboxID", target.Mailbox.Id, "address", binding.address, "error", err)
+				continue
+			}
+			storedAny = true
 		}
-		storedAny = true
 	}
 
 	if !storedAny {

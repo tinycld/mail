@@ -242,14 +242,17 @@ func realIMAPDial(ctx context.Context, addr string, useTLS bool) (*imapclient.Cl
 
 // dispatchInbound routes a parsed message to each recipient's mailbox. The
 // system IMAP account receives mail for every served domain, so routing is
-// purely by recipient address: resolveAddress finds the mailbox via its
-// own domain (and thus the owning org), which keeps org isolation intact without
-// a separate org filter. Reuses processInboundForMailbox (same path the webhook +
+// purely by recipient address: deliveryTargets finds the inboxes via the
+// address's own domain (and thus the owning org), which keeps org isolation
+// intact without a separate org filter. A group address reaches each member's
+// own inbox, and one targetSet stores one copy per inbox. Reuses processInboundForMailbox (same path the webhook +
 // inbound SMTP listener use), so threading, FTS, notifications and dedup behave
 // identically.
 func dispatchInbound(app core.App, msg *InboundMessage) error {
 	var dispatched int
 	var firstErr, lookupErr error
+
+	var delivered targetSet
 
 	for _, email := range routingRecipients(msg) {
 		localPart, domain := splitAddress(email)
@@ -258,7 +261,7 @@ func dispatchInbound(app core.App, msg *InboundMessage) error {
 		}
 		localPart = stripPlusTag(localPart)
 
-		target, err := resolveAddress(app, localPart, domain)
+		targets, err := deliveryTargets(app, localPart, domain)
 		if errors.Is(err, errAddressNotFound) {
 			continue
 		}
@@ -268,13 +271,18 @@ func dispatchInbound(app core.App, msg *InboundMessage) error {
 			lookupErr = errors.Join(lookupErr, fmt.Errorf("look up %s: %w", email, err))
 			continue
 		}
-		if err := processInboundForMailbox(app, target.Mailbox, msg, target.Address.Id); err != nil {
-			if firstErr == nil {
-				firstErr = err
+		for _, target := range targets {
+			if !delivered.add(target) {
+				continue
 			}
-			continue
+			if err := processInboundForMailbox(app, target.Mailbox, msg, target.AddressID); err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
+			}
+			dispatched++
 		}
-		dispatched++
 	}
 
 	if lookupErr != nil {

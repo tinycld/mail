@@ -51,7 +51,7 @@ type resolvedAddress struct {
 
 // Email returns the full address, local@domain.
 func (r *resolvedAddress) Email() string {
-	return r.Address.GetString("local_part") + "@" + r.Domain.GetString("domain")
+	return addressText(r.Address, r.Domain)
 }
 
 var localPartPattern = regexp.MustCompile(`^[a-z0-9._-]{1,64}$`)
@@ -102,36 +102,62 @@ func notFoundOr(err error, what string) error {
 	return fmt.Errorf("%s: %w", what, err)
 }
 
-// resolveAddress is the one lookup for "which inbox receives mail for
-// local@domain" and "which inbox may send as it". It reads mail_addresses
-// only; plus-tag stripping is the caller's job. It returns errAddressNotFound
-// when a row is missing or is a group address; other errors are database
-// failures.
+// resolveAddress is the one lookup for "which inbox owns local@domain", used
+// to send as an address and to log in with one. It reads mail_addresses only;
+// plus-tag stripping is the caller's job. It returns errAddressNotFound when a
+// row is missing or is a group address; other errors are database failures.
 //
-// A group address is never a sender or a login, so both lookups report it as
-// not found; mail to it is delivered through deliveryTargets.
+// A group address is never a sender or a login, so it is reported as not
+// found here. Inbound mail is routed through deliveryTargets, which also
+// resolves group addresses.
 func resolveAddress(app core.App, localPart, domainName string) (*resolvedAddress, error) {
-	local := normalizeLocalPart(localPart)
-	name := strings.ToLower(strings.TrimSpace(domainName))
-	if local == "" || name == "" {
-		return nil, errAddressNotFound
-	}
-	domain, err := app.FindFirstRecordByFilter("mail_domains", "domain = {:domain}", dbx.Params{"domain": name})
-	if err != nil {
-		return nil, notFoundOr(err, "domain "+name)
-	}
-	address, err := findAddressRow(app, local, domain.Id)
+	address, domain, err := findAddress(app, localPart, domainName)
 	if err != nil {
 		return nil, err
 	}
-	if address == nil || isGroupAddress(address) {
-		return nil, fmt.Errorf("%w: %s@%s", errAddressNotFound, local, name)
+	if isGroupAddress(address) {
+		return nil, fmt.Errorf("%w: %s is a group address", errAddressNotFound, addressText(address, domain))
 	}
-	mailbox, err := app.FindRecordById("mail_mailboxes", address.GetString("mailbox"))
+	mailbox, err := inboxOfAddress(app, address, domain)
 	if err != nil {
-		return nil, notFoundOr(err, "mailbox of "+local+"@"+name)
+		return nil, err
 	}
 	return &resolvedAddress{Address: address, Mailbox: mailbox, Domain: domain}, nil
+}
+
+// findAddress returns the row for local@domain, of an inbox or of a group,
+// with its domain. errAddressNotFound means there is no such row.
+func findAddress(app core.App, localPart, domainName string) (address, domain *core.Record, err error) {
+	local := normalizeLocalPart(localPart)
+	name := strings.ToLower(strings.TrimSpace(domainName))
+	if local == "" || name == "" {
+		return nil, nil, errAddressNotFound
+	}
+	domain, err = app.FindFirstRecordByFilter("mail_domains", "domain = {:domain}", dbx.Params{"domain": name})
+	if err != nil {
+		return nil, nil, notFoundOr(err, "domain "+name)
+	}
+	address, err = findAddressRow(app, local, domain.Id)
+	if err != nil {
+		return nil, nil, err
+	}
+	if address == nil {
+		return nil, nil, fmt.Errorf("%w: %s@%s", errAddressNotFound, local, name)
+	}
+	return address, domain, nil
+}
+
+// inboxOfAddress loads the inbox an inbox address delivers to.
+func inboxOfAddress(app core.App, address, domain *core.Record) (*core.Record, error) {
+	mailbox, err := app.FindRecordById("mail_mailboxes", address.GetString("mailbox"))
+	if err != nil {
+		return nil, notFoundOr(err, "mailbox of "+addressText(address, domain))
+	}
+	return mailbox, nil
+}
+
+func addressText(address, domain *core.Record) string {
+	return address.GetString("local_part") + "@" + domain.GetString("domain")
 }
 
 // loadResolvedAddress loads an address row by id with its inbox and domain.
