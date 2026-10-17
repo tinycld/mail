@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -35,31 +34,34 @@ func ensureIdentity(app core.App, user *core.Record) (*core.Record, error) {
 	return ensureIdentityWith(app, user, adoptOrCreateInbox)
 }
 
-// identityLocks holds one mutex per user id. ensureIdentityWith reads the
-// user's identity and inbox and then creates what is missing. Two callers can
-// run it for the same user at the same time: a new user's create hook and a
-// domain-verified hook (ensureIdentities over every user) run on two
-// requests. Without the lock both read "nothing yet", and the second save
-// fails on a unique index. A process lock is enough: one deployment runs in
-// one process.
-var identityLocks sync.Map
-
-// lockIdentity locks ensureIdentityWith for one user and returns the unlock.
-// A caller must not hold a transaction: the lock holder may be waiting for
-// the database write that the transaction holds.
-func lockIdentity(userID string) func() {
-	lock, _ := identityLocks.LoadOrStore(userID, &sync.Mutex{})
-	mu := lock.(*sync.Mutex)
-	mu.Lock()
-	return mu.Unlock
-}
-
+// ensureIdentityWith runs in one transaction. Two callers can run it at the
+// same time: a new user's create hook and a domain-verified hook
+// (ensureIdentities over every user) run on two requests. Each reads what
+// exists and then creates what is missing; PocketBase has a single database
+// writer, so in a transaction the read and the writes of one caller run
+// before the next caller reads. The second caller for the same user finds the
+// identity, and a second user finds the email name taken. A caller that holds
+// a transaction already joins it. After-success hooks of the saves (the
+// mailbox's primary address, the identity's rule addresses) run after commit.
 func ensureIdentityWith(app core.App, user *core.Record, policy inboxPolicy) (*core.Record, error) {
 	if user.GetString("role") == "guest" {
 		return nil, nil
 	}
-	unlock := lockIdentity(user.Id)
-	defer unlock()
+	var identity *core.Record
+	err := app.RunInTransaction(func(txApp core.App) error {
+		var err error
+		identity, err = ensureIdentityIn(txApp, user, policy)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return identity, nil
+}
+
+// ensureIdentityIn is ensureIdentityWith inside its transaction: app is the
+// transaction, and every read and write goes through it.
+func ensureIdentityIn(app core.App, user *core.Record, policy inboxPolicy) (*core.Record, error) {
 	existing, err := app.FindFirstRecordByFilter("mail_identities", "user = {:user}", dbx.Params{"user": user.Id})
 	if err == nil {
 		if existing.GetBool("retired") {
