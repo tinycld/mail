@@ -299,6 +299,7 @@ func registerShared(app *pocketbase.PocketBase) {
 		return e.Next()
 	})
 
+	registerGroupAddressHooks(app)
 	registerAddressHooks(app)
 	registerThreadMarkerHooks(app)
 	registerThreadStateSyncHooks(app)
