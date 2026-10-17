@@ -465,17 +465,9 @@ func (s *imapSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, err
 		return nil, err
 	}
 
-	destCtx, destBareName := s.matchMailboxContext(dest)
-	if isReadOnlyFolder(destBareName) {
-		return nil, errReadOnlyFolder
-	}
-	destMailboxID, err := s.resolveFolderWithContext(destCtx)
+	target, err := s.resolveDestination(dest)
 	if err != nil {
-		return nil, &imap.Error{
-			Type: imap.StatusResponseTypeNo,
-			Code: imap.ResponseCodeTryCreate,
-			Text: "No such mailbox",
-		}
+		return nil, err
 	}
 
 	messages, err := s.resolveMessages(numSet)
@@ -484,27 +476,16 @@ func (s *imapSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, err
 	}
 
 	var sourceUIDs, destUIDs imap.UIDSet
-	destFolder, _ := imapNameToFolder(destBareName)
-
 	for _, msg := range messages {
+		if err := s.fileThread(s.app, msg.GetString("thread"), target); err != nil {
+			return nil, err
+		}
 		srcUID := imap.UID(msg.GetInt("imap_uid"))
 		sourceUIDs.AddNum(srcUID)
-
-		if isLabelFolder(destBareName) {
-			s.addLabelToThread(msg.GetString("thread"), destBareName)
-		} else if destFolder != "" {
-			threadID := msg.GetString("thread")
-			ensureThreadState(s.app, threadID, s.user.Id, destFolder, false)
-			if destFolder == "sent" {
-				// The Sent folder lists threads flagged sent (see folderToUserFilter).
-				markThreadSent(s.app, threadID, s.user.Id)
-			}
-		}
-
 		destUIDs.AddNum(srcUID)
 	}
 
-	uidValidity, _ := getMailboxUIDValidity(s.app, destMailboxID)
+	uidValidity, _ := getMailboxUIDValidity(s.app, target.mailboxID)
 
 	return &imap.CopyData{
 		UIDValidity: uidValidity,
@@ -519,17 +500,9 @@ func (s *imapSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest st
 		return err
 	}
 
-	destCtx, destBareName := s.matchMailboxContext(dest)
-	if isReadOnlyFolder(destBareName) {
-		return errReadOnlyFolder
-	}
-	_, err := s.resolveFolderWithContext(destCtx)
+	target, err := s.resolveDestination(dest)
 	if err != nil {
-		return &imap.Error{
-			Type: imap.StatusResponseTypeNo,
-			Code: imap.ResponseCodeTryCreate,
-			Text: "No such mailbox",
-		}
+		return err
 	}
 
 	messages, err := s.resolveMessages(numSet)
@@ -537,25 +510,14 @@ func (s *imapSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest st
 		return err
 	}
 
-	destFolder, _ := imapNameToFolder(destBareName)
 	var sourceUIDs, destUIDs imap.UIDSet
-
 	for _, msg := range messages {
+		if err := s.fileThread(s.app, msg.GetString("thread"), target); err != nil {
+			return err
+		}
 		srcUID := imap.UID(msg.GetInt("imap_uid"))
 		sourceUIDs.AddNum(srcUID)
 		destUIDs.AddNum(srcUID)
-
-		threadID := msg.GetString("thread")
-
-		if isLabelFolder(destBareName) {
-			s.addLabelToThread(threadID, destBareName)
-		} else if destFolder != "" {
-			ensureThreadState(s.app, threadID, s.user.Id, destFolder, false)
-			if destFolder == "sent" {
-				// The Sent folder lists threads flagged sent (see folderToUserFilter).
-				markThreadSent(s.app, threadID, s.user.Id)
-			}
-		}
 	}
 
 	destValidity, _ := getMailboxUIDValidity(s.app, s.selectedMailboxID)
@@ -573,18 +535,11 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 		return nil, err
 	}
 
-	ctx, bareName := s.matchMailboxContext(mailbox)
-	if isReadOnlyFolder(bareName) {
-		return nil, errReadOnlyFolder
-	}
-	mailboxID, err := s.resolveFolderWithContext(ctx)
+	target, err := s.resolveDestination(mailbox)
 	if err != nil {
-		return nil, &imap.Error{
-			Type: imap.StatusResponseTypeNo,
-			Code: imap.ResponseCodeTryCreate,
-			Text: "No such mailbox",
-		}
+		return nil, err
 	}
+	mailboxID := target.mailboxID
 
 	raw, err := io.ReadAll(r)
 	if err != nil {
@@ -596,14 +551,8 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 		return nil, fmt.Errorf("failed to parse message: %w", err)
 	}
 
-	// Determine folder from the target mailbox name (stripped of prefix)
-	folder, _ := imapNameToFolder(bareName)
-	if folder == "" || folder == "starred" || folder == "all" {
-		folder = "inbox"
-	}
-
 	// Set delivery status based on folder
-	switch folder {
+	switch target.folder {
 	case "drafts":
 		msg.DeliveryStatus = "draft"
 	case "sent":
@@ -618,7 +567,7 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 	// the existing thread and message. Folder/flag updates below still apply,
 	// so a subsequent APPEND-to-Drafts of the same message correctly retags.
 	existingMsg, existingThread, _ := findMessageInMailbox(s.app, mailboxID, msg.MessageID)
-	if existingMsg != nil && folder == "sent" && !isOutgoingMessage(existingMsg) {
+	if existingMsg != nil && target.folder == "sent" && !isOutgoingMessage(existingMsg) {
 		// A copy saved to Sent matches only a message this mailbox sent; a
 		// received message with the same id (a redirect) stays as it is.
 		existingMsg, existingThread = nil, nil
@@ -665,15 +614,19 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 			if snippet == "" {
 				snippet = msg.Subject
 			}
-			updateThreadMetadata(txApp, thread.Id, msg.SenderName, msg.SenderEmail, snippet, msg.Date)
+			if err := updateThreadMetadata(txApp, thread.Id, msg.SenderName, msg.SenderEmail, snippet, msg.Date); err != nil {
+				return err
+			}
 		}
 
-		if folder == "sent" {
-			// The client's copy of a message it just sent: a reply must not
-			// move the conversation out of the Inbox.
-			return markThreadSent(txApp, thread.Id, s.user.Id)
+		if target.folder == "" || target.folder == "sent" {
+			// A label or the star, or the client's copy of a message it just
+			// sent: the thread stays where it is (a reply must not move the
+			// conversation out of the Inbox), and a new thread goes to the Inbox.
+			return s.fileThread(txApp, thread.Id, target)
 		}
-		return ensureThreadState(txApp, thread.Id, s.user.Id, folder, false)
+		// A new message is unread unless the client sends \Seen (below).
+		return ensureThreadState(txApp, thread.Id, s.user.Id, target.folder, false)
 	})
 	if err != nil {
 		return nil, err
@@ -772,7 +725,7 @@ func (s *imapSession) Create(name string, options *imap.CreateOptions) error {
 			Text: "Cannot create system folder",
 		}
 	}
-	if !isLabelFolder(bareName) && !strings.HasPrefix(bareName, "Labels/") {
+	if !isLabelFolder(bareName) {
 		return &imap.Error{
 			Type: imap.StatusResponseTypeNo,
 			Text: "Can only create label folders (Labels/<name>)",
@@ -863,6 +816,78 @@ var errReadOnlyFolder = &imap.Error{
 	Type: imap.StatusResponseTypeNo,
 	Code: imap.ResponseCodeCannot,
 	Text: "Messages cannot be added to this folder",
+}
+
+// errNoSuchDestination refuses COPY, MOVE and APPEND into a folder that does
+// not exist. RFC 3501 6.4.7: unless the server is certain that the folder
+// cannot be created, it must send [TRYCREATE].
+var errNoSuchDestination = &imap.Error{
+	Type: imap.StatusResponseTypeNo,
+	Code: imap.ResponseCodeTryCreate,
+	Text: "No such mailbox",
+}
+
+// destination is where a COPY, MOVE or APPEND files a thread: exactly one of
+// a real folder (a mail_thread_state.folder value), a label, or the star.
+type destination struct {
+	mailboxID string
+	folder    string
+	labelID   string
+	starred   bool
+}
+
+// resolveDestination resolves the folder that a COPY, MOVE or APPEND names,
+// before any message changes. A folder whose content the server decides is
+// refused with [CANNOT]; an unknown folder or label with [TRYCREATE].
+func (s *imapSession) resolveDestination(name string) (destination, error) {
+	ctx, bareName := s.matchMailboxContext(name)
+	if isReadOnlyFolder(bareName) {
+		return destination{}, errReadOnlyFolder
+	}
+	mailboxID, err := s.resolveFolderWithContext(ctx)
+	if err != nil {
+		return destination{}, errNoSuchDestination
+	}
+	target := destination{mailboxID: mailboxID}
+
+	if labelName := extractLabelName(bareName); labelName != "" {
+		label, err := findFolderLabel(s.app, labelName, s.user.Id)
+		if err != nil {
+			return destination{}, err
+		}
+		if label == nil {
+			return destination{}, errNoSuchDestination
+		}
+		target.labelID = label.Id
+		return target, nil
+	}
+
+	folder, isVirtual := imapNameToFolder(bareName)
+	switch {
+	case folder == "starred":
+		target.starred = true
+	case folder != "" && !isVirtual:
+		target.folder = folder
+	default:
+		return destination{}, errNoSuchDestination
+	}
+	return target, nil
+}
+
+// fileThread files one thread at the destination for this user. A move keeps
+// the read state: filing a message says nothing about whether it was read.
+func (s *imapSession) fileThread(app core.App, threadID string, target destination) error {
+	switch {
+	case target.labelID != "":
+		return addThreadLabel(app, threadID, s.user.Id, target.labelID)
+	case target.starred:
+		return setThreadStarred(app, threadID, s.user.Id, true)
+	case target.folder == "sent":
+		// The Sent folder lists threads flagged sent (see folderToUserFilter).
+		return markThreadSent(app, threadID, s.user.Id)
+	default:
+		return setThreadFolder(app, threadID, s.user.Id, target.folder)
+	}
 }
 
 // matchMailboxContext matches an IMAP folder name to a mailbox context.
@@ -1358,68 +1383,6 @@ func (s *imapSession) markSeen(msg *core.Record) {
 	}
 	states[0].Set("is_read", true)
 	s.app.Save(states[0])
-}
-
-// addLabelToThread tags a thread with a label by creating a label_assignments
-// row (collection = "mail_thread_state", record_id = thread_state.id). This
-// matches how the web UI writes labels, so IMAP tags are immediately visible
-// there. The label lookup matches both org-level labels and the user's personal
-// labels. Idempotent — a second tag of the same label is a no-op.
-func (s *imapSession) addLabelToThread(threadID, imapName string) {
-	labelName := extractLabelName(imapName)
-	if labelName == "" {
-		return
-	}
-
-	labels, err := s.app.FindRecordsByFilter(
-		"labels",
-		`name = {:name} && (user = "" || user = {:user})`,
-		"",
-		1,
-		0,
-		map[string]any{"name": labelName, "user": s.user.Id},
-	)
-	if err != nil || len(labels) == 0 {
-		return
-	}
-
-	states, err := s.app.FindRecordsByFilter(
-		"mail_thread_state",
-		"thread = {:thread} && user = {:user}",
-		"",
-		1,
-		0,
-		map[string]any{"thread": threadID, "user": s.user.Id},
-	)
-	if err != nil || len(states) == 0 {
-		return
-	}
-
-	labelID := labels[0].Id
-	stateID := states[0].Id
-
-	existing, err := s.app.FindRecordsByFilter(
-		"label_assignments",
-		`label = {:label} && record_id = {:recordId} && collection = "mail_thread_state" && user = {:user}`,
-		"",
-		1,
-		0,
-		map[string]any{"label": labelID, "recordId": stateID, "user": s.user.Id},
-	)
-	if err == nil && len(existing) > 0 {
-		return
-	}
-
-	collection, err := s.app.FindCollectionByNameOrId("label_assignments")
-	if err != nil {
-		return
-	}
-	record := core.NewRecord(collection)
-	record.Set("label", labelID)
-	record.Set("record_id", stateID)
-	record.Set("collection", "mail_thread_state")
-	record.Set("user", s.user.Id)
-	s.app.Save(record)
 }
 
 // storeRawHeaders saves original RFC 5322 headers to a message record.

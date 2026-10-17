@@ -38,7 +38,7 @@ var systemFolders = []systemFolder{
 	{Name: "Archive", Attr: imap.MailboxAttrArchive, Selectable: true},
 	{Name: "Starred", Attr: imap.MailboxAttrFlagged, Selectable: true},
 	{Name: "All Mail", Attr: imap.MailboxAttrAll, Selectable: true},
-	{Name: "Labels", Attr: imap.MailboxAttrNoSelect, Selectable: false},
+	{Name: labelFolderParent, Attr: imap.MailboxAttrNoSelect, Selectable: false},
 	// Listed only while the user has address views (see listUserFolders).
 	{Name: addressFolderParent, Attr: imap.MailboxAttrNoSelect, Selectable: false},
 }
@@ -143,15 +143,8 @@ func folderToUserFilter(app core.App, imapName, userID string) (string, map[stri
 // All four conditions share the alias `la`, so they test the same assignment
 // row.
 func labelFolderFilter(app core.App, labelName, userID string) (string, map[string]any) {
-	labels, err := app.FindRecordsByFilter(
-		"labels",
-		`name = {:name} && (user = "" || user = {:user})`,
-		"",
-		1,
-		0,
-		map[string]any{"name": labelName, "user": userID},
-	)
-	if err != nil || len(labels) == 0 {
+	label, err := findFolderLabel(app, labelName, userID)
+	if err != nil || label == nil {
 		return "id = ''", nil
 	}
 
@@ -160,16 +153,47 @@ func labelFolderFilter(app core.App, labelName, userID string) (string, map[stri
 			` && @collection.label_assignments:la.label ?= {:label}` +
 			` && @collection.label_assignments:la.collection ?= "mail_thread_state"` +
 			` && @collection.label_assignments:la.user ?= {:user}`,
-		map[string]any{"user": userID, "label": labels[0].Id}
+		map[string]any{"user": userID, "label": label.Id}
+}
+
+// findFolderLabel returns the label a "Labels/<name>" folder shows: a shared
+// label (user = "") or one of the user's personal labels. It returns nil
+// when there is no such label.
+func findFolderLabel(app core.App, labelName, userID string) (*core.Record, error) {
+	labels, err := app.FindRecordsByFilter(
+		"labels",
+		`name = {:name} && (user = "" || user = {:user})`,
+		"",
+		1,
+		0,
+		map[string]any{"name": labelName, "user": userID},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("label lookup: %w", err)
+	}
+	if len(labels) == 0 {
+		return nil, nil
+	}
+	return labels[0], nil
+}
+
+const labelFolderParent = "Labels"
+
+// cutFolderPrefix returns the rest of name after "<parent>/". The parent
+// matches without regard to case, as the system folder names do.
+func cutFolderPrefix(name, parent string) (rest string, ok bool) {
+	prefix := parent + "/"
+	if len(name) <= len(prefix) || !strings.EqualFold(name[:len(prefix)], prefix) {
+		return "", false
+	}
+	return name[len(prefix):], true
 }
 
 // extractLabelName returns the label name from a "Labels/<name>" folder path,
 // or empty string if the name doesn't match the pattern.
 func extractLabelName(imapName string) string {
-	if strings.HasPrefix(imapName, "Labels/") && len(imapName) > 7 {
-		return imapName[7:]
-	}
-	return ""
+	name, _ := cutFolderPrefix(imapName, labelFolderParent)
+	return name
 }
 
 // isLabelFolder returns true if the IMAP folder name represents a label.
@@ -288,8 +312,7 @@ func addressFolderFilter(app core.App, email, userID string) (string, map[string
 
 // extractAddressView returns the email of an "Addresses/<email>" folder path.
 func extractAddressView(name string) (email string, ok bool) {
-	email, ok = strings.CutPrefix(name, addressFolderParent+"/")
-	return email, ok && email != ""
+	return cutFolderPrefix(name, addressFolderParent)
 }
 
 // isAddressFolder returns true if the IMAP folder name is an address view.
@@ -299,10 +322,14 @@ func isAddressFolder(name string) bool {
 }
 
 // isReadOnlyFolder reports a folder that messages cannot be copied, moved or
-// appended into: a \Noselect parent, or an address view, whose content
-// follows the addresses a thread used.
+// appended into: a \Noselect parent, All Mail, which lists every thread and
+// so has no folder value to file one under, or an address view, whose
+// content follows the addresses a thread used.
 func isReadOnlyFolder(name string) bool {
 	if isAddressFolder(name) {
+		return true
+	}
+	if folder, isVirtual := imapNameToFolder(name); isVirtual && folder == "all" {
 		return true
 	}
 	for _, sf := range systemFolders {
@@ -351,7 +378,7 @@ func listUserFolders(app core.App, userID string, views []addressView) ([]imap.L
 	if err == nil {
 		for _, label := range labels {
 			result = append(result, imap.ListData{
-				Mailbox: "Labels/" + label.GetString("name"),
+				Mailbox: labelFolderParent + "/" + label.GetString("name"),
 				Delim:   imapDelim,
 			})
 		}

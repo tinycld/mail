@@ -475,6 +475,57 @@ func setThreadFolder(app core.App, threadID, userID, folder string) error {
 	return app.Save(record)
 }
 
+// threadStateOrNew returns the user's state row for the thread, or a new
+// unsaved one in the Inbox when the user has none yet.
+func threadStateOrNew(app core.App, threadID, userID string) (*core.Record, error) {
+	if record := findThreadState(app, threadID, userID); record != nil {
+		return record, nil
+	}
+	return newThreadState(app, threadID, userID)
+}
+
+// addThreadLabel gives one user's state row of a thread the label, the way
+// the web UI writes labels (a label_assignments row on mail_thread_state), so
+// the label shows there at once. The thread stays in its folder. A second
+// call with the same label changes nothing.
+func addThreadLabel(app core.App, threadID, userID, labelID string) error {
+	state, err := threadStateOrNew(app, threadID, userID)
+	if err != nil {
+		return err
+	}
+	if state.IsNew() {
+		if err := app.Save(state); err != nil {
+			return err
+		}
+	}
+
+	existing, err := app.FindRecordsByFilter(
+		"label_assignments",
+		`label = {:label} && record_id = {:recordId} && collection = "mail_thread_state" && user = {:user}`,
+		"",
+		1,
+		0,
+		map[string]any{"label": labelID, "recordId": state.Id, "user": userID},
+	)
+	if err != nil {
+		return fmt.Errorf("label assignment lookup: %w", err)
+	}
+	if len(existing) > 0 {
+		return nil
+	}
+
+	collection, err := app.FindCollectionByNameOrId("label_assignments")
+	if err != nil {
+		return fmt.Errorf("label_assignments collection not found: %w", err)
+	}
+	record := core.NewRecord(collection)
+	record.Set("label", labelID)
+	record.Set("record_id", state.Id)
+	record.Set("collection", "mail_thread_state")
+	record.Set("user", userID)
+	return app.Save(record)
+}
+
 // isOutgoingMessage reports whether a stored message is one this mailbox sent.
 // sent_by is empty on messages stored before it existed, so an outgoing
 // delivery status also counts; inbound mail is "delivered", or "sending"
