@@ -250,7 +250,7 @@ func realIMAPDial(ctx context.Context, addr string, useTLS bool) (*imapclient.Cl
 // identically.
 func dispatchInbound(app core.App, msg *InboundMessage) error {
 	var dispatched int
-	var firstErr, lookupErr error
+	var storeErr, lookupErr error
 
 	var delivered targetSet
 
@@ -276,9 +276,9 @@ func dispatchInbound(app core.App, msg *InboundMessage) error {
 				continue
 			}
 			if err := processInboundForMailbox(app, target.Mailbox, msg, target.AddressID); err != nil {
-				if firstErr == nil {
-					firstErr = err
-				}
+				addressLog.Error("imap fetcher: storage failed",
+					"mailboxID", target.Mailbox.Id, "address", email, "messageID", msg.MessageID, "error", err)
+				storeErr = errors.Join(storeErr, fmt.Errorf("store for %s in inbox %s: %w", email, target.Mailbox.Id, err))
 				continue
 			}
 			dispatched++
@@ -288,8 +288,12 @@ func dispatchInbound(app core.App, msg *InboundMessage) error {
 	if lookupErr != nil {
 		return lookupErr
 	}
-	if dispatched == 0 && firstErr != nil {
-		return firstErr
+	// A storage error leaves the UID unseen so the next tick retries, which
+	// stores only the missing copies (see retryIsSafe). Without a Message-ID
+	// the retry would duplicate the copies already stored, so once anything
+	// is stored the message is kept as seen; the failure is logged above.
+	if storeErr != nil && (dispatched == 0 || retryIsSafe(msg)) {
+		return storeErr
 	}
 	return nil
 }

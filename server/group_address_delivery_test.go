@@ -1,10 +1,13 @@
 package mail
 
 import (
+	"bytes"
 	"errors"
+	"net"
 	"net/http"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -338,4 +341,218 @@ func TestDeliveryTargets(t *testing.T) {
 			t.Fatal("another inbox's target was not new")
 		}
 	})
+}
+
+// failStoresIn makes every message store in the inbox fail until the
+// returned function is called, so one target of a fan-out fails while the
+// others store.
+func failStoresIn(t *testing.T, app core.App, inbox *core.Record) (stop func()) {
+	t.Helper()
+	var failing atomic.Bool
+	failing.Store(true)
+	app.OnRecordCreate("mail_messages").BindFunc(func(e *core.RecordEvent) error {
+		if !failing.Load() {
+			return e.Next()
+		}
+		thread, err := e.App.FindRecordById("mail_threads", e.Record.GetString("thread"))
+		if err == nil && thread.GetString("mailbox") == inbox.Id {
+			return errors.New("injected storage failure")
+		}
+		return e.Next()
+	})
+	return func() { failing.Store(false) }
+}
+
+// A store that fails in one inbox leaves the IMAP message unseen, so the next
+// tick stores the missing copy. The inbox that stored skips the retry by
+// Message-ID.
+func TestGroupAddress_FetcherPartialFailureRetries(t *testing.T) {
+	s := seedGroupDelivery(t)
+	stop := failStoresIn(t, s.app, s.inboxOf(t, s.bob))
+	msg := groupMessage("<fetch-partial-1@sender.example>", []string{"sales@q.example"}, nil)
+
+	if err := dispatchInbound(s.app, msg); err == nil {
+		t.Fatal("dispatchInbound = nil after a store failed, want the error so the UID stays unseen")
+	}
+	s.requireOneCopy(t, s.ann, s.salesAddr)
+	s.requireNoCopy(t, s.bob)
+
+	stop()
+	if err := dispatchInbound(s.app, msg); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	s.requireOneCopy(t, s.ann, s.salesAddr)
+	s.requireOneCopy(t, s.bob, s.salesAddr)
+}
+
+// Without a Message-ID a retry would store a second copy for ann, so the
+// partial delivery is kept and logged as an error.
+func TestGroupAddress_FetcherPartialFailureNoMessageID(t *testing.T) {
+	s := seedGroupDelivery(t)
+	logs := captureLogs(t)
+	failStoresIn(t, s.app, s.inboxOf(t, s.bob))
+	msg := groupMessage("", []string{"sales@q.example"}, nil)
+
+	if err := dispatchInbound(s.app, msg); err != nil {
+		t.Fatalf("dispatchInbound = %v, want nil: a retry would duplicate ann's copy", err)
+	}
+	s.requireOneCopy(t, s.ann, s.salesAddr)
+	s.requireNoCopy(t, s.bob)
+	requireErrorLog(t, logs, "imap fetcher: storage failed")
+}
+
+func requireErrorLog(t *testing.T, logs *bytes.Buffer, text string) {
+	t.Helper()
+	for _, line := range strings.Split(logs.String(), "\n") {
+		if strings.Contains(line, text) && strings.Contains(line, `"level":"ERROR"`) {
+			return
+		}
+	}
+	t.Fatalf("no error log %q; logs:\n%s", text, logs.String())
+}
+
+func smtpDeliver(t *testing.T, app core.App, rcpt, raw string) error {
+	t.Helper()
+	session := &smtpInboundSession{app: app, hostname: "mx.example"}
+	if err := session.Mail("sender@sender.example", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.Rcpt(rcpt, nil); err != nil {
+		t.Fatalf("RCPT %s: %v", rcpt, err)
+	}
+	return session.Data(stringsReader(raw))
+}
+
+func salesRaw(messageIDHeader string) string {
+	return "From: Sender <sender@sender.example>\r\nTo: sales@q.example\r\nSubject: Via SMTP\r\n" +
+		messageIDHeader + "Date: Thu, 15 Oct 2026 20:00:00 +0000\r\n\r\nBody\r\n"
+}
+
+// A store that fails in one inbox defers the whole message (451). The MTA's
+// retry stores bob's copy, and ann's inbox skips it by Message-ID.
+func TestGroupAddress_SMTPPartialFailureDefers(t *testing.T) {
+	s := seedGroupDelivery(t)
+	stop := failStoresIn(t, s.app, s.inboxOf(t, s.bob))
+	raw := salesRaw("Message-ID: <smtp-partial-1@sender.example>\r\n")
+
+	var refusal *smtp.SMTPError
+	err := smtpDeliver(t, s.app, "sales@q.example", raw)
+	if !errors.As(err, &refusal) || refusal.Code != 451 || refusal.EnhancedCode != (smtp.EnhancedCode{4, 3, 0}) {
+		t.Fatalf("DATA with one failed inbox = %v, want 451 4.3.0", err)
+	}
+	s.requireOneCopy(t, s.ann, s.salesAddr)
+	s.requireNoCopy(t, s.bob)
+
+	stop()
+	if err := smtpDeliver(t, s.app, "sales@q.example", raw); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	s.requireOneCopy(t, s.ann, s.salesAddr)
+	s.requireOneCopy(t, s.bob, s.salesAddr)
+}
+
+// Without a Message-ID a retry would store a second copy for ann, so the
+// partial delivery is accepted and logged as an error.
+func TestGroupAddress_SMTPPartialFailureNoMessageID(t *testing.T) {
+	s := seedGroupDelivery(t)
+	logs := captureLogs(t)
+	failStoresIn(t, s.app, s.inboxOf(t, s.bob))
+
+	if err := smtpDeliver(t, s.app, "sales@q.example", salesRaw("")); err != nil {
+		t.Fatalf("DATA = %v, want 250: a retry would duplicate ann's copy", err)
+	}
+	s.requireOneCopy(t, s.ann, s.salesAddr)
+	s.requireNoCopy(t, s.bob)
+	requireErrorLog(t, logs, "inbound SMTP: storage failed")
+}
+
+// Every RCPT runs a lookup and holds the inboxes it reaches, so a session
+// cannot repeat a group address without limit.
+func TestInboundSMTP_RecipientLimit(t *testing.T) {
+	s := seedGroupDelivery(t)
+	server := newInboundSMTPServer(s.app, "mx.example", nil)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _ = server.Serve(ln) }()
+	t.Cleanup(func() { _ = server.Close() })
+
+	client, err := smtp.Dial(ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	if err := client.Mail("sender@sender.example", nil); err != nil {
+		t.Fatal(err)
+	}
+	for i := range maxInboundRecipients {
+		if err := client.Rcpt("sales@q.example", nil); err != nil {
+			t.Fatalf("RCPT %d refused: %v", i+1, err)
+		}
+	}
+	var refusal *smtp.SMTPError
+	err = client.Rcpt("sales@q.example", nil)
+	if !errors.As(err, &refusal) || refusal.Code != 452 {
+		t.Fatalf("RCPT %d = %v, want 452 too many recipients", maxInboundRecipients+1, err)
+	}
+}
+
+// Only people who can receive mail get a group copy: a guest is left out,
+// as is a person with no inbox. A disabled person still receives, as for
+// every other address (see processInboundForMailbox): the mail waits for
+// the account to be enabled again.
+func TestGroupAddress_MemberConstraints(t *testing.T) {
+	s := seedGroupDelivery(t)
+
+	// gus joins as a member, then is made a guest. In production core's
+	// groups hook removes a demoted user from every group, so a guest member
+	// row exists only if that removal is missed. This app does not bind
+	// core's groups hooks, so the row stays. The demotion keeps his identity
+	// and inbox, so only delivery's own guest rule leaves him out.
+	gus := seedGroupUser(t, s.app, "gus")
+	saveRealRecord(t, s.app, "group_members", map[string]any{"group": s.sales.Id, "user": gus.Id})
+	gus.Set("role", "guest")
+	if err := s.app.Save(gus); err != nil {
+		t.Fatalf("demote gus: %v", err)
+	}
+	if identity := identityOf(t, s.app, gus.Id); identity == nil || identity.GetString("inbox") == "" || identity.GetBool("retired") {
+		t.Fatalf("precondition: gus's identity = %v, want live with an inbox", identity)
+	}
+	gusInbox := s.inboxOf(t, gus)
+
+	dee := seedGroupUser(t, s.app, "dee")
+	saveRealRecord(t, s.app, "group_members", map[string]any{"group": s.sales.Id, "user": dee.Id})
+	dee.Set("disabled", true)
+	if err := s.app.Save(dee); err != nil {
+		t.Fatalf("disable dee: %v", err)
+	}
+	if !reloaded(t, s.app, dee).GetBool("disabled") {
+		t.Fatal("precondition: dee is not disabled")
+	}
+
+	// A live identity with no inbox is not made by any server path; the
+	// direct save stands for an inbox lost before the repair runs.
+	nia := seedGroupUser(t, s.app, "nia")
+	saveRealRecord(t, s.app, "group_members", map[string]any{"group": s.sales.Id, "user": nia.Id})
+	niaInbox := s.inboxOf(t, nia)
+	identity := identityOf(t, s.app, nia.Id)
+	identity.Set("inbox", "")
+	if err := s.app.Save(identity); err != nil {
+		t.Fatalf("clear nia's inbox: %v", err)
+	}
+
+	msg := groupMessage("<constraints-1@sender.example>", []string{"sales@q.example"}, nil)
+	if status := postWebhook(t, s.app, msg); status != http.StatusOK {
+		t.Fatalf("webhook status = %d, want 200", status)
+	}
+	s.requireOneCopy(t, s.ann, s.salesAddr)
+	s.requireOneCopy(t, s.bob, s.salesAddr)
+	s.requireOneCopy(t, dee, s.salesAddr)
+	if rows := messagesIn(t, s.app, gusInbox); len(rows) != 0 {
+		t.Fatalf("guest gus has %d copies, want none", len(rows))
+	}
+	if rows := messagesIn(t, s.app, niaInbox); len(rows) != 0 {
+		t.Fatalf("nia's old inbox has %d copies, want none", len(rows))
+	}
 }

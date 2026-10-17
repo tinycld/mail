@@ -97,6 +97,9 @@ func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func()
 	}, nil
 }
 
+// maxInboundRecipients is the RCPT limit of one inbound transaction.
+const maxInboundRecipients = 100
+
 // newInboundSMTPServer builds the inbound-MX server around the shared inbound
 // backend; both the own-ports TCP bind and the injected-listener path
 // serve exactly this instance.
@@ -106,6 +109,10 @@ func newInboundSMTPServer(app core.App, hostname string, tlsConfig *tls.Config) 
 	server.Domain = hostname
 	server.AllowInsecureAuth = false
 	server.MaxMessageBytes = 25 << 20
+	// Each RCPT runs an address lookup and holds the inboxes it reaches (one
+	// per member for a group address), so the count is capped. 100 is the
+	// least RFC 5321 (4.5.3.1.8) lets a server accept.
+	server.MaxRecipients = maxInboundRecipients
 	server.EnableSMTPUTF8 = true
 	server.ReadTimeout = 60 * time.Second
 	server.WriteTimeout = 60 * time.Second
@@ -277,9 +284,13 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 
 // Data reads the RFC 5322 message and dispatches it to every inbox the
 // accepted recipients reach, once per inbox, in RCPT order.
-// Storage failures on individual mailboxes are logged but don't fail the SMTP
-// transaction — the sender would retry the whole batch and we'd risk infinite
-// loops; better to surface partial delivery in logs than to bounce the rest.
+//
+// A storage failure in any inbox answers 451 when the message has a
+// Message-ID: the sending MTA retries the whole message, and the retry skips
+// the inboxes that already hold that Message-ID, so only the missing copies
+// are stored. Without a Message-ID a retry would store a second copy in every
+// inbox that succeeded, so a partial failure is accepted (250) and logged as
+// an error instead. When nothing is stored the answer is always 451.
 func (s *smtpInboundSession) Data(r io.Reader) error {
 	// Read-only can begin after MAIL FROM was accepted, so DATA checks again
 	// before it stores anything.
@@ -316,7 +327,7 @@ func (s *smtpInboundSession) Data(r io.Reader) error {
 		}
 	}
 
-	storedAny := false
+	storedAny, failedAny := false, false
 	var delivered targetSet
 	for _, binding := range s.mailboxes {
 		for _, target := range binding.targets {
@@ -324,20 +335,25 @@ func (s *smtpInboundSession) Data(r io.Reader) error {
 				continue
 			}
 			if err := processInboundForMailbox(s.app, target.Mailbox, msg, target.AddressID); err != nil {
-				s.app.Logger().Error("inbound SMTP: storage failed",
-					"mailboxID", target.Mailbox.Id, "address", binding.address, "error", err)
+				addressLog.Error("inbound SMTP: storage failed",
+					"mailboxID", target.Mailbox.Id, "address", binding.address, "messageID", msg.MessageID, "error", err)
+				failedAny = true
 				continue
 			}
 			storedAny = true
 		}
 	}
 
-	if !storedAny {
+	if !storedAny || (failedAny && retryIsSafe(msg)) {
 		return &smtp.SMTPError{
 			Code:         451,
 			EnhancedCode: smtp.EnhancedCode{4, 3, 0},
 			Message:      "Temporary storage failure",
 		}
+	}
+	if failedAny {
+		addressLog.Error("inbound SMTP: accepted a partial delivery; with no Message-ID a retry would store duplicates",
+			"from", s.from)
 	}
 	return nil
 }

@@ -58,7 +58,7 @@ func routeInbound(app core.App, msg *InboundMessage) routingResult {
 		// the provider retries, rather than the message being dropped.
 		if err != nil {
 			result.storageFailures = append(result.storageFailures, err)
-			app.Logger().Error("inbound: recipient lookup failed",
+			addressLog.Error("inbound: recipient lookup failed",
 				"address", fullAddr, "messageID", msg.MessageID, "error", err)
 			continue
 		}
@@ -69,7 +69,7 @@ func routeInbound(app core.App, msg *InboundMessage) routingResult {
 			}
 			if err := processInboundForMailbox(app, target.Mailbox, msg, target.AddressID); err != nil {
 				result.storageFailures = append(result.storageFailures, err)
-				app.Logger().Error("inbound: storage failed",
+				addressLog.Error("inbound: storage failed",
 					"mailboxID", target.Mailbox.Id, "messageID", msg.MessageID, "error", err)
 				continue
 			}
@@ -77,4 +77,12 @@ func routeInbound(app core.App, msg *InboundMessage) routingResult {
 		}
 	}
 	return result
+}
+
+// retryIsSafe reports whether msg can be delivered again after a partial
+// failure. processInboundForMailbox skips an inbox that already holds the
+// Message-ID, so a retry stores only the missing copies. With no Message-ID
+// a retry stores a second copy in every inbox that succeeded.
+func retryIsSafe(msg *InboundMessage) bool {
+	return normalizeMessageID(msg.MessageID) != ""
 }
