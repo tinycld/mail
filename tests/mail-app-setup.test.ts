@@ -36,7 +36,7 @@ describe('setupAddress', () => {
         expect(setupAddress('', [unverified, second, main])).toBe('nathan@acme.example')
     })
 
-    it('prefers the main address over a later rank tie', () => {
+    it('prefers the main address when the rank ties', () => {
         const other = address({ id: 'a4', localPart: 'aaa' })
         expect(setupAddress('', [other, main])).toBe('nathan@acme.example')
     })

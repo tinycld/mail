@@ -291,11 +291,87 @@ func forgeProfileToken(t *testing.T, victim, signer *core.Record) string {
 		core.TokenClaimId:           victim.Id,
 		core.TokenClaimCollectionId: victim.Collection().Id,
 		core.TokenClaimType:         profileTokenType,
-	}, signer.TokenKey()+signer.Collection().FileToken.Secret, time.Minute)
+	}, profileTokenKey(signer), time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return token
+}
+
+// plainKeyToken is signed with the key PocketBase uses for a file token,
+// without the purpose suffix.
+func plainKeyToken(t *testing.T, user *core.Record) string {
+	t.Helper()
+	token, err := security.NewJWT(jwt.MapClaims{
+		core.TokenClaimId:           user.Id,
+		core.TokenClaimCollectionId: user.Collection().Id,
+		core.TokenClaimType:         profileTokenType,
+	}, user.TokenKey()+user.Collection().FileToken.Secret, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return token
+}
+
+func TestProfileRefusesATokenSignedWithThePlainFileTokenKey(t *testing.T) {
+	f := newProfileFixture(t, "Nathan")
+	runProfile(t, f, tests.ApiScenario{
+		Name:               "plain key",
+		URL:                "/api/mail/mobileconfig?token=" + plainKeyToken(t, f.user),
+		ExpectedStatus:     http.StatusUnauthorized,
+		NotExpectedContent: []string{"nathan@acme.example"},
+	})
+}
+
+func TestProfileRefusesASuperuserToken(t *testing.T) {
+	f := newProfileFixture(t, "Nathan")
+	super := saveRealRecord(t, f.app, core.CollectionNameSuperusers, map[string]any{
+		"email": "root@argosity.com", "password": "supersecret123",
+	})
+	token, err := security.NewJWT(jwt.MapClaims{
+		core.TokenClaimId:           super.Id,
+		core.TokenClaimCollectionId: super.Collection().Id,
+		core.TokenClaimType:         profileTokenType,
+	}, profileTokenKey(super), time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runProfile(t, f, tests.ApiScenario{
+		Name:               "superuser token",
+		URL:                "/api/mail/mobileconfig?token=" + token,
+		ExpectedStatus:     http.StatusUnauthorized,
+		NotExpectedContent: []string{"EmailAddress"},
+	})
+}
+
+func TestProfileTokenRouteRefusesASuperuser(t *testing.T) {
+	f := newProfileFixture(t, "Nathan")
+	super := saveRealRecord(t, f.app, core.CollectionNameSuperusers, map[string]any{
+		"email": "root@argosity.com", "password": "supersecret123",
+	})
+	authToken, err := super.NewAuthToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	runProfile(t, f, tests.ApiScenario{
+		Name:            "superuser session",
+		Method:          http.MethodPost,
+		URL:             "/api/mail/mobileconfig/token",
+		Headers:         map[string]string{"Authorization": authToken},
+		ExpectedStatus:  http.StatusUnauthorized,
+		ExpectedContent: []string{"Sign in to download the profile."},
+	})
+}
+
+func TestProfileTokenNeedsASigningKey(t *testing.T) {
+	f := newProfileFixture(t, "Nathan")
+	blank := f.user.Collection().FileToken.Secret
+	f.user.Collection().FileToken.Secret = ""
+	f.user.SetTokenKey("")
+	defer func() { f.user.Collection().FileToken.Secret = blank }()
+	if _, err := newProfileToken(f.user, time.Minute); err == nil {
+		t.Fatal("issued a token with no signing key")
+	}
 }
 
 func TestProfileTokenRouteNeedsASession(t *testing.T) {

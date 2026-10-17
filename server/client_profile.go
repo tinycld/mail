@@ -50,17 +50,27 @@ func handleProfileToken(re *core.RequestEvent) error {
 }
 
 // profileTokenKey is built as PocketBase builds the file token key, so a
-// change of the person's password or token key revokes the token too.
+// change of the person's password or token key revokes the token too. The
+// purpose suffix keeps a file token's key from signing a profile token. The
+// key is empty when the person has no token key to base it on.
 func profileTokenKey(user *core.Record) string {
-	return user.TokenKey() + user.Collection().FileToken.Secret
+	base := user.TokenKey() + user.Collection().FileToken.Secret
+	if base == "" {
+		return ""
+	}
+	return base + ":" + profileTokenType
 }
 
 func newProfileToken(user *core.Record, duration time.Duration) (string, error) {
+	key := profileTokenKey(user)
+	if key == "" {
+		return "", core.ErrMissingSigningKey
+	}
 	return security.NewJWT(jwt.MapClaims{
 		core.TokenClaimType:         profileTokenType,
 		core.TokenClaimId:           user.Id,
 		core.TokenClaimCollectionId: user.Collection().Id,
-	}, profileTokenKey(user), duration)
+	}, key, duration)
 }
 
 // userByProfileToken returns the person a valid, unexpired profile token names.
@@ -81,7 +91,11 @@ func userByProfileToken(app core.App, token string) (*core.Record, error) {
 	if user.Collection().Name != "users" {
 		return nil, errNoProfileUser
 	}
-	verified, err := security.ParseJWT(token, profileTokenKey(user))
+	key := profileTokenKey(user)
+	if key == "" {
+		return nil, core.ErrMissingSigningKey
+	}
+	verified, err := security.ParseJWT(token, key)
 	if err != nil {
 		return nil, err
 	}

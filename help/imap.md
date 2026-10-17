@@ -18,7 +18,7 @@ IMAP is **read + state**, not send. To also send from your client, set up [SMTP]
 
 ## The quickest way
 
-Open **Settings → Account → Mail apps**. The page shows your exact settings. On a Mac, iPhone or iPad, **Download the profile** puts them in Mail; your device then asks for your password. A downloaded profile does not install by itself. On an iPhone or iPad, open Settings and tap **Profile Downloaded**, then **Install**. On a Mac, open System Settings and search for **Profiles**; it is in Privacy & Security. The device says the profile is "Unverified". This is normal. To set up your phone, scan the QR code on the page with its camera.
+Open **Settings → Account → Mail apps**. The page shows your exact settings. On a Mac, iPhone or iPad, **Download the profile** puts them in Mail; your device then asks for your password. A downloaded profile does not install by itself. On an iPhone or iPad, open Settings and tap **Profile Downloaded**, then **Install**. On a Mac, open System Settings and search for **Profiles**. The device says the profile is "Unverified". This is normal. To set up your phone, scan the QR code on the page with its camera.
 
 Most mail apps also find the settings by themselves when you type your email address and password, if your admin published the [DNS records for mail apps](help://mail:custom-domains).
 
@@ -30,12 +30,14 @@ Most mail apps also find the settings by themselves when you type your email add
 | **Port** | **993** |
 | **Encryption** | SSL / TLS (implicit) |
 | **Username** | your full email address |
-| **Password** | your TinyCld password |
+| **Password** | your TinyCld password, or an app password |
 | **Authentication** | Normal password |
 
 > **The server is `{{mail-host}}`.** Type it exactly. Your mail domain or a `mail.` name works only when your admin published the DNS records for mail apps and the server has a certificate for that name. Otherwise the mail app shows a certificate error or cannot connect.
 
-There is no separate "IMAP password" — use your regular TinyCld login.
+There is no separate "IMAP password". Use your regular TinyCld login.
+
+> **Two-step verification.** If two-step verification is on, or your organization requires it, your sign-in password does not work in mail apps. Create an app password in **Settings → Security → App passwords** and use it. See [App passwords](help://core:security-app-passwords).
 
 ## Connecting Apple Mail (macOS)
 

@@ -21,18 +21,21 @@ function openUrl(url: string) {
 function useMailAppSetup() {
     const { identity, addresses, isReady } = useMyPersonEmail()
     const host = useMailHost()
-    const { data: profileToken } = useProfileToken()
+    const { hasToken, isError, withFreshToken } = useProfileToken()
     const serverAddress = getResolvedAddress()
     const address =
         identity && !identity.retired ? setupAddress(identity.defaultFrom, addresses) : null
-    const profileHref =
-        serverAddress && profileToken ? profileUrl(serverAddress, profileToken) : null
+    const canOpenProfile = serverAddress !== null && hasToken
     return {
         address,
         host,
         hasNoAddress: isReady && address === null,
         pageUrl: serverAddress ? setupPageUrl(serverAddress) : null,
-        openProfile: profileHref ? () => openUrl(profileHref) : null,
+        isProfileFailed: isError,
+        openProfile:
+            canOpenProfile && serverAddress
+                ? () => withFreshToken(token => openUrl(profileUrl(serverAddress, token)))
+                : null,
     }
 }
 
@@ -73,13 +76,20 @@ function ServerSettings({ address, host }: { address: string; host: string }) {
             <Text className="text-muted-foreground text-xs">{SMTP_SECURITY}</Text>
             <SettingRow label="User name" value={address} testID="mail-app-user-name" />
             <Text className="text-muted-foreground text-xs">
-                Password: the password you sign in with.
+                Password: the password you sign in with. If two-step verification is on, or your
+                organization requires it, your sign-in password does not work in mail apps. Use an
+                app password.
             </Text>
+            <Pressable onPress={() => openHelp('core:security-app-passwords')}>
+                <Text className="text-primary text-xs font-semibold">
+                    Create an app password in Settings → Security → App passwords
+                </Text>
+            </Pressable>
         </View>
     )
 }
 
-function AppleProfile({ onPress }: { onPress: (() => void) | null }) {
+function AppleProfile({ onPress, isFailed }: { onPress: (() => void) | null; isFailed: boolean }) {
     return (
         <View className="gap-2">
             <Text className="text-sm font-semibold text-foreground">Apple Mail</Text>
@@ -87,8 +97,8 @@ function AppleProfile({ onPress }: { onPress: (() => void) | null }) {
                 On a Mac, iPhone or iPad, the profile puts these settings in Mail. The profile does
                 not hold your password: your device asks for it. After you download it, open it to
                 install it. On an iPhone or iPad, open Settings and tap Profile Downloaded. On a
-                Mac, open System Settings, Privacy & Security, then Profiles. The device says the
-                profile is Unverified. This is normal.
+                Mac, open System Settings and search for Profiles. The device says the profile is
+                Unverified. This is normal.
             </Text>
             <Button
                 size="sm"
@@ -98,6 +108,7 @@ function AppleProfile({ onPress }: { onPress: (() => void) | null }) {
             >
                 <ButtonText>Download the profile</ButtonText>
             </Button>
+            <Note isVisible={isFailed} text="The profile is not available. Try again later." />
         </View>
     )
 }
@@ -125,12 +136,14 @@ function SetupDetails({
     host,
     pageUrl,
     openProfile,
+    isProfileFailed,
 }: {
     isVisible: boolean
     address: string | null
     host: string | null
     pageUrl: string | null
     openProfile: (() => void) | null
+    isProfileFailed: boolean
 }) {
     if (!isVisible || !address || !host) return null
     return (
@@ -140,7 +153,7 @@ function SetupDetails({
                 apps find them when you type your address and password.
             </Text>
             <ServerSettings address={address} host={host} />
-            <AppleProfile onPress={openProfile} />
+            <AppleProfile onPress={openProfile} isFailed={isProfileFailed} />
             <PhoneQr pageUrl={pageUrl} />
             <Pressable onPress={() => openHelp('mail:imap')}>
                 <Text className="text-primary text-xs font-semibold">More help</Text>
@@ -151,7 +164,7 @@ function SetupDetails({
 
 /** Settings → Account → Mail apps: the person's server settings, an Apple profile and a QR code. */
 export default function MailAppSetup() {
-    const { address, host, hasNoAddress, pageUrl, openProfile } = useMailAppSetup()
+    const { address, host, hasNoAddress, pageUrl, openProfile, isProfileFailed } = useMailAppSetup()
     const role = useCurrentRole()
     return (
         <ScrollView contentContainerClassName="gap-4 p-4">
@@ -166,6 +179,7 @@ export default function MailAppSetup() {
                 host={host}
                 pageUrl={pageUrl}
                 openProfile={openProfile}
+                isProfileFailed={isProfileFailed}
             />
         </ScrollView>
     )

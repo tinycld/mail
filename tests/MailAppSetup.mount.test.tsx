@@ -1,14 +1,15 @@
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { qrPath } from '@tinycld/core/components/settings/security/qr-matrix'
 import { log } from '@tinycld/core/lib/logger'
 import { Linking } from 'react-native'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { setupPageUrl } from '~/tinycld/mail/settings/mail-app-setup'
 
 afterEach(() => {
     cleanup()
     h.updated.length = 0
-    h.qrValues.length = 0
     h.mailHost = 'mail.acme.example'
     vi.restoreAllMocks()
     h.send.mockReset()
@@ -23,7 +24,6 @@ const h = vi.hoisted(() => ({
     mailHost: 'mail.acme.example' as string | null,
     userId: 'u1',
     updated: [] as Record<string, unknown>[],
-    qrValues: [] as string[],
     send: vi.fn(),
     identities: [
         {
@@ -156,15 +156,11 @@ vi.mock('@tinycld/core/lib/auth', () => ({
 }))
 
 vi.mock('@tinycld/core/lib/help/open-help', () => ({ openHelp: h.openHelp }))
-vi.mock('@tinycld/core/components/settings/security/QrCode', () => ({
-    QrCode: ({ value, accessibilityLabel }: { value: string; accessibilityLabel: string }) => {
-        h.qrValues.push(value)
-        return <span role="img" aria-label={accessibilityLabel} />
-    },
-}))
+// The real QrCode renders; the SVG mock exposes the path it draws, so a test can
+// compare the code with the one core makes for a URL.
 vi.mock('react-native-svg', () => ({
     default: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-    Path: () => <span />,
+    Path: ({ d }: { d: string }) => <span data-d={d} />,
 }))
 vi.mock('@tinycld/core/lib/use-mail-host', () => ({ useMailHost: () => h.mailHost }))
 vi.mock('@tinycld/core/lib/server-address', () => ({
@@ -228,19 +224,20 @@ test('shows the settings for the Default From address', async () => {
     expect((await findById('mail-app-user-name'))?.textContent).toBe('nathan@tinycld.com')
     expect((await findById('mail-app-imap-host'))?.textContent).toBe('mail.acme.example')
     expect((await findById('mail-app-smtp-host'))?.textContent).toBe('mail.acme.example')
-    expect(
-        container.querySelector('[aria-label="QR code that opens this page on your phone"]')
-    ).not.toBeNull()
+    expect(container.querySelector(QR_LABEL)).not.toBeNull()
 })
 
-test('the QR code opens the set-up page and holds no token', async () => {
+// react-native-web under happy-dom renders accessibilityLabel as a plain lower-case attribute.
+const QR_LABEL = '[accessibilitylabel="QR code that opens this page on your phone"]'
+
+test('the QR code draws the set-up page and holds no token', async () => {
     h.userId = 'u1'
     const { container, findById, byId } = renderSetup()
     await findById('mail-app-address')
-    const qr = container.querySelector('[aria-label="QR code that opens this page on your phone"]')
-    expect(qr).not.toBeNull()
-    expect(h.qrValues).toContain('https://acme.tinycld.org/a/settings/account/mail/mail-apps')
-    expect(h.qrValues.join(' ')).not.toContain('profile-token')
+    const drawn = container.querySelector(`${QR_LABEL} [data-d]`)?.getAttribute('data-d')
+    const pageUrl = setupPageUrl('https://acme.tinycld.org')
+    expect(drawn).toBe(qrPath(pageUrl).path)
+    expect(drawn).not.toBe(qrPath(`${pageUrl}?token=profile-token`).path)
     await waitFor(() =>
         expect(byId('mail-app-profile-button')?.getAttribute('data-disabled')).toBe('false')
     )
@@ -304,4 +301,83 @@ test('logs a failed open of the profile link and does not throw', async () => {
     await waitFor(() =>
         expect(error).toHaveBeenCalledWith('mail.client-setup', failure, { url: 'profile' })
     )
+})
+
+const MINUTE = 60_000
+
+test('an old profile token is fetched again before the link opens', async () => {
+    h.userId = 'u1'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const open = vi.spyOn(Linking, 'openURL').mockResolvedValue(undefined)
+    const { findById } = renderSetup()
+    const button = await findById('mail-app-profile-button')
+    await waitFor(() => expect(button?.getAttribute('data-disabled')).toBe('false'))
+    expect(h.send).toHaveBeenCalledTimes(1)
+
+    h.send.mockResolvedValue({ token: 'fresh-token' })
+    vi.setSystemTime(Date.now() + 10 * MINUTE)
+    fireEvent.click(button as Element)
+
+    await waitFor(() =>
+        expect(open).toHaveBeenCalledWith(
+            'https://acme.tinycld.org/api/mail/mobileconfig?token=fresh-token'
+        )
+    )
+    expect(h.send).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
+})
+
+test('a fresh profile token opens the link with no new fetch', async () => {
+    h.userId = 'u1'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const open = vi.spyOn(Linking, 'openURL').mockResolvedValue(undefined)
+    const { findById } = renderSetup()
+    const button = await findById('mail-app-profile-button')
+    await waitFor(() => expect(button?.getAttribute('data-disabled')).toBe('false'))
+
+    vi.setSystemTime(Date.now() + 8 * MINUTE)
+    fireEvent.click(button as Element)
+
+    expect(open).toHaveBeenCalledWith(
+        'https://acme.tinycld.org/api/mail/mobileconfig?token=profile-token'
+    )
+    expect(h.send).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+})
+
+test('logs a failed refetch of an old token and does not open the link', async () => {
+    h.userId = 'u1'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const open = vi.spyOn(Linking, 'openURL').mockResolvedValue(undefined)
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined)
+    const { findById } = renderSetup()
+    const button = await findById('mail-app-profile-button')
+    await waitFor(() => expect(button?.getAttribute('data-disabled')).toBe('false'))
+
+    const failure = new Error('offline')
+    h.send.mockRejectedValue(failure)
+    vi.setSystemTime(Date.now() + 10 * MINUTE)
+    fireEvent.click(button as Element)
+
+    await waitFor(() =>
+        expect(warn).toHaveBeenCalledWith('mail.client-setup', 'profile token fetch failed', {
+            error: String(failure),
+        })
+    )
+    expect(open).not.toHaveBeenCalled()
+    vi.useRealTimers()
+})
+
+test('says the profile is not available when the token fetch fails', async () => {
+    h.userId = 'u1'
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined)
+    const failure = new Error('offline')
+    h.send.mockRejectedValue(failure)
+    const { findByText, findById } = renderSetup()
+    expect(await findByText('The profile is not available. Try again later.')).toBeTruthy()
+    expect((await findById('mail-app-profile-button'))?.getAttribute('data-disabled')).toBe('true')
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledWith('mail.client-setup', 'profile token fetch failed', {
+        error: String(failure),
+    })
 })

@@ -80,7 +80,8 @@ function usePersonEmailRows(userId: string) {
     })
 }
 
-/** An address of the person's inbox; `verified` says whether mail can go out from it; `created` breaks Default From ties. */
+/** An address of the person's inbox; `verified` says whether mail can go out from it;
+ * `created` breaks Default From ties. */
 export type PersonAddress = AddressRowData & { verified: boolean; created: string }
 
 function toAddressRow(row: PersonEmailRow): PersonAddress | null {

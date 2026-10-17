@@ -75,3 +75,18 @@ func TestSearchSourceScopesAreRegistered(t *testing.T) {
 		}
 	}
 }
+
+// The profile routes are for a signed-in session only. A bearer token must not
+// reach them: the profile link carries a credential of its own.
+func TestOAuthLeavesTheProfileRoutesToSessions(t *testing.T) {
+	oauth.RegisterPackage(oauthPackage())
+
+	for _, r := range []struct{ method, path string }{
+		{"POST", "/api/mail/mobileconfig/token"},
+		{"GET", "/api/mail/mobileconfig"},
+	} {
+		if rule := oauth.ScopeForRoute(r.method, r.path); len(rule) != 0 {
+			t.Errorf("%s %s must have no OAuth scope, got %v", r.method, r.path, rule)
+		}
+	}
+}
