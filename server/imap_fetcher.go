@@ -175,7 +175,7 @@ func (m *imapFetcherManager) tick(ctx context.Context, cfg SMTPConfig) error {
 			continue
 		}
 		if err := dispatchInbound(m.app, msg); err != nil {
-			m.app.Logger().Warn("imap fetcher: dispatch failed",
+			addressLog.Warn("imap fetcher: dispatch failed; the next tick retries",
 				"messageID", msg.MessageID, "error", err)
 			// Do not mark this UID seen — next tick retries.
 			continue
@@ -266,7 +266,7 @@ func dispatchInbound(app core.App, msg *InboundMessage) error {
 			continue
 		}
 		// A failed lookup leaves the message unseen even when another
-		// recipient was stored: the retry dedups by Message-ID per inbox.
+		// recipient was stored (see the retry rule below).
 		if err != nil {
 			lookupErr = errors.Join(lookupErr, fmt.Errorf("look up %s: %w", email, err))
 			continue
@@ -285,16 +285,20 @@ func dispatchInbound(app core.App, msg *InboundMessage) error {
 		}
 	}
 
-	if lookupErr != nil {
-		return lookupErr
+	// A failed lookup or store leaves the UID unseen so the next tick
+	// retries, which stores only the missing copies (see retryIsSafe).
+	// Without a Message-ID the retry would duplicate the copies already
+	// stored, so once anything is stored the message is kept as seen and the
+	// lost copies are logged.
+	failed := errors.Join(lookupErr, storeErr)
+	if failed == nil {
+		return nil
 	}
-	// A storage error leaves the UID unseen so the next tick retries, which
-	// stores only the missing copies (see retryIsSafe). Without a Message-ID
-	// the retry would duplicate the copies already stored, so once anything
-	// is stored the message is kept as seen; the failure is logged above.
-	if storeErr != nil && (dispatched == 0 || retryIsSafe(msg)) {
-		return storeErr
+	if dispatched == 0 || retryIsSafe(msg) {
+		return failed
 	}
+	addressLog.Error("imap fetcher: kept a partial delivery; with no Message-ID a retry would store duplicates",
+		"stored", dispatched, "error", failed)
 	return nil
 }
 

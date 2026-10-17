@@ -3,6 +3,7 @@ package mail
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"slices"
@@ -399,6 +400,7 @@ func TestGroupAddress_FetcherPartialFailureNoMessageID(t *testing.T) {
 	s.requireOneCopy(t, s.ann, s.salesAddr)
 	s.requireNoCopy(t, s.bob)
 	requireErrorLog(t, logs, "imap fetcher: storage failed")
+	requireErrorLog(t, logs, "imap fetcher: kept a partial delivery")
 }
 
 func requireErrorLog(t *testing.T, logs *bytes.Buffer, text string) {
@@ -555,4 +557,105 @@ func TestGroupAddress_MemberConstraints(t *testing.T) {
 	if rows := messagesIn(t, s.app, niaInbox); len(rows) != 0 {
 		t.Fatalf("nia's old inbox has %d copies, want none", len(rows))
 	}
+}
+
+// After a partial fan-out to a large group, a retry must find each inbox's
+// own copy. More than 10 copies share the Message-ID, so a capped search
+// across all inboxes could miss one and store it twice.
+func TestGroupAddress_RetryAfterLargeFanOut(t *testing.T) {
+	s := seedGroupDelivery(t)
+	members := make([]*core.Record, 12)
+	for i := range members {
+		members[i] = seedGroupUser(t, s.app, fmt.Sprintf("member%02d", i))
+	}
+	big := seedGroup(t, s.app, "Big", members...)
+	saveGroupAddress(t, s.app, "big", s.domain, big)
+	targets, err := deliveryTargets(s.app, "big", "q.example")
+	if err != nil || len(targets) != len(members) {
+		t.Fatalf("deliveryTargets = %d targets, %v; want %d", len(targets), err, len(members))
+	}
+	// The last inbox in delivery order fails, so 11 copies exist before
+	// the retry reaches the inboxes that stored.
+	stop := failStoresIn(t, s.app, targets[len(targets)-1].Mailbox)
+
+	msg := groupMessage("<big-1@sender.example>", []string{"big@q.example"}, nil)
+	if status := postWebhook(t, s.app, msg); status != http.StatusInternalServerError {
+		t.Fatalf("first try status = %d, want 500 so the provider retries", status)
+	}
+	stop()
+	if status := postWebhook(t, s.app, msg); status != http.StatusOK {
+		t.Fatalf("retry status = %d, want 200", status)
+	}
+	for _, target := range targets {
+		if rows := messagesIn(t, s.app, target.Mailbox); len(rows) != 1 {
+			t.Fatalf("inbox %s has %d copies after the retry, want 1", target.Mailbox.GetString("address"), len(rows))
+		}
+	}
+}
+
+// The webhook keeps a partial delivery with no Message-ID: a retry would
+// store a second copy for ann.
+func TestGroupAddress_WebhookPartialFailureNoMessageID(t *testing.T) {
+	s := seedGroupDelivery(t)
+	logs := captureLogs(t)
+	failStoresIn(t, s.app, s.inboxOf(t, s.bob))
+
+	msg := groupMessage("", []string{"sales@q.example"}, nil)
+	if status := postWebhook(t, s.app, msg); status != http.StatusOK {
+		t.Fatalf("webhook status = %d, want 200: a retry would duplicate ann's copy", status)
+	}
+	s.requireOneCopy(t, s.ann, s.salesAddr)
+	s.requireNoCopy(t, s.bob)
+	requireErrorLog(t, logs, "inbound: storage failed")
+	requireErrorLog(t, logs, "inbound: accepted a partial delivery")
+}
+
+// With a Message-ID the webhook answers 500, and the provider's retry adds
+// only bob's copy.
+func TestGroupAddress_WebhookPartialFailureRetries(t *testing.T) {
+	s := seedGroupDelivery(t)
+	stop := failStoresIn(t, s.app, s.inboxOf(t, s.bob))
+	msg := groupMessage("<webhook-partial-1@sender.example>", []string{"sales@q.example"}, nil)
+
+	if status := postWebhook(t, s.app, msg); status != http.StatusInternalServerError {
+		t.Fatalf("webhook status = %d, want 500", status)
+	}
+	stop()
+	if status := postWebhook(t, s.app, msg); status != http.StatusOK {
+		t.Fatalf("retry status = %d, want 200", status)
+	}
+	s.requireOneCopy(t, s.ann, s.salesAddr)
+	s.requireOneCopy(t, s.bob, s.salesAddr)
+}
+
+// A lookup that fails for one recipient follows the same retry rule as a
+// failed store: ann's copy is stored through her own address while the group
+// lookup fails (its table is dropped).
+func TestGroupAddress_FetcherLookupFailureRetryRule(t *testing.T) {
+	dropGroupMembers := func(t *testing.T, app core.App) {
+		t.Helper()
+		if _, err := app.DB().NewQuery("DROP TABLE group_members").Execute(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Run("with Message-ID", func(t *testing.T) {
+		s := seedGroupDelivery(t)
+		dropGroupMembers(t, s.app)
+		msg := groupMessage("<fetch-lookup-1@sender.example>", []string{"ann@q.example", "sales@q.example"}, nil)
+		if err := dispatchInbound(s.app, msg); err == nil {
+			t.Fatal("dispatchInbound = nil after a lookup failed, want the error so the UID stays unseen")
+		}
+		s.requireOneCopy(t, s.ann, s.ownAddress(t, s.ann))
+	})
+	t.Run("no Message-ID", func(t *testing.T) {
+		s := seedGroupDelivery(t)
+		logs := captureLogs(t)
+		dropGroupMembers(t, s.app)
+		msg := groupMessage("", []string{"ann@q.example", "sales@q.example"}, nil)
+		if err := dispatchInbound(s.app, msg); err != nil {
+			t.Fatalf("dispatchInbound = %v, want nil: a retry would duplicate ann's copy", err)
+		}
+		s.requireOneCopy(t, s.ann, s.ownAddress(t, s.ann))
+		requireErrorLog(t, logs, "imap fetcher: kept a partial delivery")
+	})
 }
