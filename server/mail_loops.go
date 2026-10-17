@@ -6,10 +6,8 @@ import (
 
 	gomail "github.com/emersion/go-message/mail"
 	"github.com/pocketbase/pocketbase/core"
-	"tinycld.org/core/logging"
+	"tinycld.org/core/automation"
 )
-
-var loopLog = logging.ForPackage("mail")
 
 // loopHeader names the header every rule send carries. A message that comes
 // back with it was sent by a rule, even when a relay on the way dropped
@@ -78,15 +76,27 @@ func ruleLoopHost(app core.App) string {
 	return "tinycld"
 }
 
-// skipAutomaticMail reports whether a send action must not run on the
-// trigger message, because the message was sent automatically: answering it
-// could start a loop with the other sender. The automation engine records a
-// run as "ok" or "error" only, and a skip is not a failure, so the caller
-// returns nil and the skip is logged here.
-func skipAutomaticMail(action string, message *core.Record) bool {
-	if message == nil || !message.GetBool("is_auto_submitted") {
-		return false
+// automaticMailReason is what run history shows for a rule send skipped
+// because the trigger message was sent automatically.
+const automaticMailReason = "The message was sent automatically."
+
+// automaticMailSendGuard is mail's send guard for mail_messages: core's rule
+// actions that send mail (core:send-email) skip a message that was sent
+// automatically, the same as mail's own send actions do.
+func automaticMailSendGuard(_ core.App, message *core.Record) (bool, string) {
+	if !message.GetBool("is_auto_submitted") {
+		return false, ""
 	}
-	loopLog.Info("rule did not send in reply to automatic mail", "action", action, "message", message.Id)
-	return true
+	return true, automaticMailReason
+}
+
+// skipAutomaticMail returns a skip when a send action must not run on the
+// trigger message, because the message was sent automatically: answering it
+// could start a loop with the other sender. The run history shows the
+// action as "Skipped" with the reason.
+func skipAutomaticMail(message *core.Record) error {
+	if message == nil || !message.GetBool("is_auto_submitted") {
+		return nil
+	}
+	return automation.Skip(automaticMailReason)
 }

@@ -325,8 +325,8 @@ func actionForwardMessage(app core.App, req automation.ActionRequest) error {
 	if req.Record == nil {
 		return fmt.Errorf("mail:forward-message: no trigger record")
 	}
-	if skipAutomaticMail("mail:forward-message", req.Record) {
-		return nil
+	if err := skipAutomaticMail(req.Record); err != nil {
+		return err
 	}
 
 	if err := checkSendRateLimit(app, req); err != nil {
@@ -463,8 +463,8 @@ func formatForwardDate(stored string) string {
 
 // actionSendMessage sends a new message with a templated subject and body.
 func actionSendMessage(app core.App, req automation.ActionRequest) error {
-	if skipAutomaticMail("mail:send-message", req.Record) {
-		return nil
+	if err := skipAutomaticMail(req.Record); err != nil {
+		return err
 	}
 	if err := checkSendRateLimit(app, req); err != nil {
 		return err

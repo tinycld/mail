@@ -26,6 +26,10 @@ func registerAutomationResolver() {
 	// mailbox members the received-message resolver serves.
 	automation.RegisterOwnerResolver("mail:message-bounced", messageOwnerResolver)
 	automation.RegisterTriggerFilter("mail:message-bounced", messageDidBounce)
+
+	// Core's "Send an email" action can run on a received message too, so it
+	// must not answer automatic mail either.
+	automation.RegisterSendGuard("mail_messages", automaticMailSendGuard)
 }
 
 // deliveryFailureStatuses are the two delivery_status values that mean the

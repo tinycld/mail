@@ -369,26 +369,36 @@ func TestRuleLoopHost(t *testing.T) {
 
 func TestRuleSends_SkipAutomaticMail(t *testing.T) {
 	e := seedLoopEnv(t)
-	logs := captureLogs(t)
 	postmarkInbound(t, e.app, inboundPayload("ann@q.example", "Out of office", "<ooo-1@sender.example>",
 		Header{Name: "Auto-Submitted", Value: "auto-replied"}))
 	message := e.received(t, e.ann, "Out of office")
 
-	if err := e.forward(t, e.ann, message, "accounts@ext.example"); err != nil {
-		t.Fatalf("forward on automatic mail = %v, want nil (skipped, not failed)", err)
+	if err := e.forward(t, e.ann, message, "accounts@ext.example"); !automation.IsSkip(err) {
+		t.Fatalf("forward on automatic mail = %v, want a skip", err)
 	}
 	err := actionSendMessage(e.app, automation.ActionRequest{
 		Rule: e.rule(t, e.ann), OwnerID: e.ann.Id, Record: message,
 		Params: map[string]string{"to": "sender@sender.example", "subject": "Got it", "body": "Thanks"},
 	})
-	if err != nil {
-		t.Fatalf("send-message on automatic mail = %v, want nil (skipped, not failed)", err)
+	if !automation.IsSkip(err) || err.Error() != "skipped: The message was sent automatically." {
+		t.Fatalf("send-message on automatic mail = %v, want the automatic-mail skip", err)
 	}
 	requireSends(t, e.sent, 0)
-	requireLog(t, logs, "INFO", "rule did not send in reply to automatic mail",
-		`"action":"mail:forward-message"`, `"message":"`+message.Id+`"`)
-	requireLog(t, logs, "INFO", "rule did not send in reply to automatic mail",
-		`"action":"mail:send-message"`)
+}
+
+func TestAutomaticMailSendGuard(t *testing.T) {
+	e := seedLoopEnv(t)
+	postmarkInbound(t, e.app, inboundPayload("ann@q.example", "Out of office", "<ooo-2@sender.example>",
+		Header{Name: "Auto-Submitted", Value: "auto-replied"}))
+	postmarkInbound(t, e.app, inboundPayload("ann@q.example", "Question", "<q-2@sender.example>"))
+
+	skip, reason := automaticMailSendGuard(e.app, e.received(t, e.ann, "Out of office"))
+	if !skip || reason != "The message was sent automatically." {
+		t.Fatalf("guard on automatic mail = %v, %q; want a skip with the reason", skip, reason)
+	}
+	if skip, _ := automaticMailSendGuard(e.app, e.received(t, e.ann, "Question")); skip {
+		t.Fatal("guard skipped mail from a person")
+	}
 }
 
 func TestRuleMove_RunsOnAutomaticMail(t *testing.T) {
@@ -463,8 +473,8 @@ func TestRuleLoop_GroupMembersForwardingToTheirGroup(t *testing.T) {
 		if !fwd.GetBool("is_auto_submitted") {
 			t.Fatalf("%s's copy of the forward is not marked automatic", member.GetString("username"))
 		}
-		if err := e.forward(t, member, fwd, "sales@q.example"); err != nil {
-			t.Fatalf("%s's forward of automatic mail = %v, want nil (skipped)", member.GetString("username"), err)
+		if err := e.forward(t, member, fwd, "sales@q.example"); !automation.IsSkip(err) {
+			t.Fatalf("%s's forward of automatic mail = %v, want a skip", member.GetString("username"), err)
 		}
 	}
 	requireSends(t, e.sent, 1)
@@ -486,8 +496,8 @@ func TestRuleLoop_LoopHeaderStopsTheSecondForward(t *testing.T) {
 	if !fwd.GetBool("is_auto_submitted") {
 		t.Fatal("bob's copy with only X-TinyCld-Loop is not marked automatic")
 	}
-	if err := e.forward(t, e.bob, fwd, "ann@q.example"); err != nil {
-		t.Fatalf("bob's forward back = %v, want nil (skipped)", err)
+	if err := e.forward(t, e.bob, fwd, "ann@q.example"); !automation.IsSkip(err) {
+		t.Fatalf("bob's forward back = %v, want a skip", err)
 	}
 	requireSends(t, e.sent, 1)
 }

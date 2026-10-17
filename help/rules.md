@@ -93,8 +93,9 @@ A rule that sends mail in response to arriving mail can, in principle, answer
 another auto-responder forever. These things stop that.
 
 A rule does not forward or send mail in reply to automatic mail, for example
-auto-replies, mailing lists or mail that another rule sent. Rules that move,
-mark or star mail still run.
+auto-replies, mailing lists or mail that another rule sent. This applies to
+**Send an email** too. The rule's run history shows these actions as
+**Skipped**, with the reason. Rules that move, mark or star mail still run.
 
 Mail that a rule sends has a mark that shows it is automatic mail. Rules in
 other inboxes do not reply to it, and most other mail servers also do not
