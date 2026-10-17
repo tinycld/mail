@@ -10,13 +10,12 @@ export const MAIL_APPS_PATH = 'settings/account/mail/mail-apps'
 
 // The order the server picks a sender in when none is chosen
 // (send_address.go defaultSendAddress): verified, domain order, main address.
-// The server breaks a last tie by creation time, which the client does not
-// read; the name breaks it here.
+// Both break a last tie by creation time (PocketBase dates sort as text).
 function compareForDefault(a: PersonAddress, b: PersonAddress) {
     if (a.verified !== b.verified) return a.verified ? -1 : 1
     if (a.rank !== b.rank) return a.rank - b.rank
     if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1
-    return a.localPart.localeCompare(b.localPart)
+    return a.created < b.created ? -1 : a.created > b.created ? 1 : 0
 }
 
 /** The address the set-up page and the profile use: the person's Default From. */

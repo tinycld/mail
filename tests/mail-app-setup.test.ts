@@ -16,6 +16,7 @@ function address(over: Partial<PersonAddress> & { id: string; localPart: string 
         rank: 0,
         verified: true,
         groupName: null,
+        created: '2026-01-01 00:00:00.000Z',
         ...over,
     }
 }
@@ -33,6 +34,17 @@ describe('setupAddress', () => {
     // order, then the main address.
     it('picks as the server does when none is chosen', () => {
         expect(setupAddress('', [unverified, second, main])).toBe('nathan@acme.example')
+    })
+
+    it('prefers the main address over a later rank tie', () => {
+        const other = address({ id: 'a4', localPart: 'aaa' })
+        expect(setupAddress('', [other, main])).toBe('nathan@acme.example')
+    })
+
+    it('breaks the last tie by the earlier creation time, not the local part', () => {
+        const earlier = address({ id: 'a5', localPart: 'zed', created: '2026-01-01 00:00:00.000Z' })
+        const later = address({ id: 'a6', localPart: 'amy', created: '2026-02-01 00:00:00.000Z' })
+        expect(setupAddress('', [later, earlier])).toBe('zed@acme.example')
     })
 
     it('ignores a chosen id that is no longer an address of the inbox', () => {

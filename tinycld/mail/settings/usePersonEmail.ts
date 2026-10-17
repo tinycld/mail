@@ -58,6 +58,7 @@ export function personEmailQuery(
             domainName: domain?.domain,
             source: address?.source,
             isPrimary: address?.is_primary,
+            created: address?.created,
             rank: domain?.rank,
             verified: domain?.verified,
             groupName: coalesce(group?.name, null),
@@ -79,11 +80,21 @@ function usePersonEmailRows(userId: string) {
     })
 }
 
-/** An address of the person's inbox; `verified` says whether mail can go out from it. */
-export type PersonAddress = AddressRowData & { verified: boolean }
+/** An address of the person's inbox; `verified` says whether mail can go out from it; `created` breaks Default From ties. */
+export type PersonAddress = AddressRowData & { verified: boolean; created: string }
 
 function toAddressRow(row: PersonEmailRow): PersonAddress | null {
-    const { addressId, localPart, domainId, domainName, source, isPrimary, rank, verified } = row
+    const {
+        addressId,
+        localPart,
+        domainId,
+        domainName,
+        source,
+        isPrimary,
+        rank,
+        verified,
+        created,
+    } = row
     if (!addressId || !localPart || !domainId || !domainName) return null
     return {
         id: addressId,
@@ -94,6 +105,7 @@ function toAddressRow(row: PersonEmailRow): PersonAddress | null {
         isPrimary: isPrimary ?? false,
         rank: rank ?? 0,
         verified: verified ?? false,
+        created: created ?? '',
         groupName: row.groupName,
     }
 }

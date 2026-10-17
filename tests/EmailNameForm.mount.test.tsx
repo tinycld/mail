@@ -96,7 +96,7 @@ const addresses = [
     { id: 'a1', localPart: 'nathan', domainId: 'd_com', domainName: 'tinycld.com', source: 'rule' },
     { id: 'a2', localPart: 'nathan', domainId: 'd_q', domainName: 'q.example', source: 'rule' },
     { id: 'a3', localPart: 'sales', domainId: 'd_q', domainName: 'q.example', source: 'manual' },
-].map(a => ({ isPrimary: false, ...a, rank: 1, groupName: null, verified: true }))
+].map(a => ({ isPrimary: false, ...a, rank: 1, groupName: null, verified: true, created: '' }))
 
 function renderForm(onDone = vi.fn(), defaultFrom = 'a1') {
     return render(
