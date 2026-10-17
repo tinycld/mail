@@ -50,6 +50,16 @@ const h = vi.hoisted(() => ({
             via_group: '',
         },
         {
+            id: 'a5',
+            local_part: 'lost',
+            domain: 'd2',
+            mailbox: '',
+            group: 'g_gone',
+            source: 'manual',
+            is_primary: false,
+            via_group: '',
+        },
+        {
             id: 'a4',
             local_part: 'ops',
             domain: 'd2',
@@ -124,7 +134,10 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
             { id: 'g_sales', name: 'Sales' },
             { id: 'g_ops', name: 'Ops' },
         ]),
-        group_members: mk('group_members', [{ id: 'gm1', group: 'g_sales', user: 'u2' }]),
+        group_members: mk('group_members', [
+            { id: 'gm1', group: 'g_sales', user: 'u2' },
+            { id: 'gm2', group: 'g_gone', user: 'u4' },
+        ]),
         users: mk('users', h.users),
         mail_mailboxes: mk('mail_mailboxes', h.mailboxes),
         mail_mailbox_members: mk('mail_mailbox_members', h.members),
@@ -201,10 +214,9 @@ test('shows the group addresses of the groups the person is in', async () => {
     expect(queryByText(/ops@q\.example/)).toBeNull()
 })
 
-test('a person in no group gets no group address line', async () => {
-    const { findByText, queryByText } = renderPanel('u4')
-    await findByText('Send new mail from')
-    expect(queryByText(/Gets mail sent to/)).toBeNull()
+test('a group row that is missing leaves the group name out', async () => {
+    const { findByText } = renderPanel('u4')
+    expect(await findByText('Gets mail sent to lost@q.example')).toBeTruthy()
 })
 
 test('a person with an inbox and no address says so', async () => {
@@ -237,4 +249,10 @@ test('the mail app link opens the IMAP help topic', async () => {
         fireEvent.click(await findByText('Set up a mail app'))
     })
     expect(h.openHelp).toHaveBeenCalledWith('mail:imap')
+})
+
+test('a person in no group gets no group address line', async () => {
+    const { findByText, queryByText } = renderPanel('u1')
+    await findByText('Send new mail from')
+    expect(queryByText(/Gets mail sent to/)).toBeNull()
 })

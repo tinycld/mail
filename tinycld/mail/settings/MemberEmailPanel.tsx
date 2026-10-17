@@ -103,7 +103,7 @@ function useGroupAddressLines(userId: string) {
             .filter(a => a.domain)
             .map(a => ({
                 id: a.id,
-                text: `Gets mail sent to ${a.localPart}@${a.domain?.domain} (group ${group?.name ?? ''})`,
+                text: `Gets mail sent to ${a.localPart}@${a.domain?.domain} ${group?.name ? ` (group ${group.name})` : ''}`,
             }))
     )
     return lines.sort((a, b) => a.text.localeCompare(b.text))
