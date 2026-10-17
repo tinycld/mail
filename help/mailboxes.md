@@ -7,6 +7,8 @@ order: 20
 
 A shared inbox is for an address that a team uses together, for example `support@`, `sales@`, or `team@`. All members can read the mail and send from the inbox.
 
+To share one inbox with a team, use a shared inbox. To send a copy of each message to each member of a group, use a group address. See [Give a group its own address](help://mail:addresses).
+
 Each person also has a personal inbox. TinyCld makes it when the account is made. You manage a personal inbox in **Settings → Members**, not here. Click the person and use the **Email** section. See [Your email addresses](help://mail:addresses).
 
 ## What an admin sees
