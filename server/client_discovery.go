@@ -34,7 +34,8 @@ var (
 )
 
 // registerClientSetupRoutes serves what mail apps ask for to set themselves
-// up: Mozilla autoconfig, Outlook Autodiscover, and the Apple profile.
+// up: Mozilla autoconfig, Outlook Autodiscover, and the Apple profile. The
+// profile route is here because it is the third way a mail app gets its settings.
 func registerClientSetupRoutes(app core.App) {
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		for _, path := range autoconfigPaths {
@@ -43,6 +44,7 @@ func registerClientSetupRoutes(app core.App) {
 		for _, path := range autodiscoverPaths {
 			e.Router.POST(path, func(re *core.RequestEvent) error { return handleAutodiscover(app, re) })
 		}
+		e.Router.GET("/api/mail/mobileconfig", func(re *core.RequestEvent) error { return handleMobileconfig(app, re) })
 		return e.Next()
 	})
 }
