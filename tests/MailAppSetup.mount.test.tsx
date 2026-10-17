@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 afterEach(() => {
@@ -225,20 +225,17 @@ test('says so when the person has no address', async () => {
 
 test('waits for the mail host', async () => {
     h.userId = 'u1'
-    h.mailHost = null
-    const { byId, rerender } = renderSetup()
-    // The person's rows load from a local collection; give the live query time
-    // to settle so a missing guard would have rendered the rows by now.
-    await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 50))
-    })
-    expect(byId('mail-app-imap-host')).toBeNull()
+    const { byId, findById, rerender } = renderSetup()
+    // The host row shows once the person's data has loaded, so the data is in
+    // the store when the host goes back to pending below.
+    await findById('mail-app-imap-host')
 
-    h.mailHost = 'mail.acme.example'
+    h.mailHost = null
     rerender(
         <QueryClientProvider client={new QueryClient()}>
             <MailAppSetup />
         </QueryClientProvider>
     )
-    await waitFor(() => expect(byId('mail-app-imap-host')).not.toBeNull())
+    expect(byId('mail-app-imap-host')).toBeNull()
+    expect(byId('mail-app-address')).toBeNull()
 })
