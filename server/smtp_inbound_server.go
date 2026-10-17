@@ -327,7 +327,7 @@ func (s *smtpInboundSession) Data(r io.Reader) error {
 		}
 	}
 
-	storedAny, failedAny := false, false
+	stored, failed := 0, 0
 	var delivered targetSet
 	for _, binding := range s.mailboxes {
 		for _, target := range binding.targets {
@@ -337,23 +337,23 @@ func (s *smtpInboundSession) Data(r io.Reader) error {
 			if err := processInboundForMailbox(s.app, target.Mailbox, msg, target.AddressID); err != nil {
 				addressLog.Error("inbound SMTP: storage failed",
 					"mailboxID", target.Mailbox.Id, "address", binding.address, "messageID", msg.MessageID, "error", err)
-				failedAny = true
+				failed++
 				continue
 			}
-			storedAny = true
+			stored++
 		}
 	}
 
-	if !storedAny || (failedAny && retryIsSafe(msg)) {
+	if stored == 0 || (failed > 0 && retryIsSafe(msg)) {
 		return &smtp.SMTPError{
 			Code:         451,
 			EnhancedCode: smtp.EnhancedCode{4, 3, 0},
 			Message:      "Temporary storage failure",
 		}
 	}
-	if failedAny {
+	if failed > 0 {
 		addressLog.Error("inbound SMTP: accepted a partial delivery; with no Message-ID a retry would store duplicates",
-			"from", s.from)
+			"from", s.from, "stored", stored, "failed", failed)
 	}
 	return nil
 }

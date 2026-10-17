@@ -144,23 +144,6 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMessage, deliveredTo string) error {
 	mailboxID := mailbox.Id
 
-	// Idempotency: skip if message with this message_id already exists in a thread for this mailbox.
-	// A failed check is a storage failure: storing anyway could duplicate a
-	// copy that a retry after a partial fan-out finds already stored.
-	existing, existingThread, err := findMessageInMailbox(app, mailboxID, msg.MessageID)
-	if err != nil {
-		return err
-	}
-	if existing != nil {
-		if existing.GetString("sent_by") == "" {
-			return nil // already processed
-		}
-		// Mail this mailbox sent to itself: the send path stored it under the
-		// same Message-ID, so this delivery is that message arriving, and it
-		// belongs in the Inbox as well as Sent.
-		return fileIntoInbox(app, mailboxID, existingThread.Id)
-	}
-
 	stored := &storedMessage{
 		DeliveredTo:   deliveredTo,
 		MessageID:     msg.MessageID,
@@ -195,6 +178,26 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 	// Rollback also removes a thread this call created, which is why there is
 	// no manual thread cleanup on the storeMessage error path any more.
 	return app.RunInTransaction(func(txApp core.App) error {
+		// Idempotency: skip a message whose Message-ID this mailbox already
+		// holds. The check runs inside the transaction: SQLite allows one
+		// writer, so a provider retry that arrives while this delivery is
+		// still storing waits for it to commit and then finds its copy.
+		// A failed check is a storage failure: storing anyway could duplicate
+		// a copy that a retry after a partial fan-out finds already stored.
+		existing, existingThread, err := findMessageInMailbox(txApp, mailboxID, msg.MessageID)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			if existing.GetString("sent_by") == "" {
+				return nil // already processed
+			}
+			// Mail this mailbox sent to itself: the send path stored it under
+			// the same Message-ID, so this delivery is that message arriving,
+			// and it belongs in the Inbox as well as Sent.
+			return fileIntoInbox(txApp, mailboxID, existingThread.Id)
+		}
+
 		thread, err := findOrCreateThread(txApp, mailboxID, msg.Subject, msg.InReplyTo, msg.References)
 		if err != nil {
 			return fmt.Errorf("findOrCreateThread: %w", err)

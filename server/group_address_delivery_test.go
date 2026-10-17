@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -466,6 +467,41 @@ func TestGroupAddress_SMTPPartialFailureNoMessageID(t *testing.T) {
 	s.requireOneCopy(t, s.ann, s.salesAddr)
 	s.requireNoCopy(t, s.bob)
 	requireErrorLog(t, logs, "inbound SMTP: storage failed")
+	requireLog(t, logs, "ERROR", "inbound SMTP: accepted a partial delivery", `"stored":1`, `"failed":1`)
+}
+
+// The fetcher has no sender to bounce to, so a recipient it cannot deliver
+// for is skipped. Each skip is logged with the address and the reason, as
+// the webhook logs an unknown recipient.
+func TestGroupAddress_FetcherLogsSkippedRecipients(t *testing.T) {
+	s := seedGroupDelivery(t)
+	saveGroupAddress(t, s.app, "quiet", s.domain, seedGroup(t, s.app, "Quiet"))
+	logs := captureLogs(t)
+	msg := groupMessage("<skip-1@sender.example>",
+		[]string{"nobody@q.example", "quiet@q.example", "sales@q.example"}, nil)
+
+	if err := dispatchInbound(s.app, msg); err != nil {
+		t.Fatalf("dispatchInbound = %v", err)
+	}
+	s.requireOneCopy(t, s.ann, s.salesAddr)
+	requireLog(t, logs, "INFO", "imap fetcher: skipped recipient",
+		`"address":"nobody@q.example"`, `"reason":`)
+	requireLog(t, logs, "INFO", "imap fetcher: skipped recipient",
+		`"address":"quiet@q.example"`, "a group with no member who can receive mail")
+}
+
+// requireLog finds one log line at level with text and every attr in it.
+func requireLog(t *testing.T, logs *bytes.Buffer, level, text string, attrs ...string) {
+	t.Helper()
+	for _, line := range strings.Split(logs.String(), "\n") {
+		if !strings.Contains(line, text) || !strings.Contains(line, `"level":"`+level+`"`) {
+			continue
+		}
+		if !slices.ContainsFunc(attrs, func(a string) bool { return !strings.Contains(line, a) }) {
+			return
+		}
+	}
+	t.Fatalf("no %s log %q with %v; logs:\n%s", level, text, attrs, logs.String())
 }
 
 // Every RCPT runs a lookup and holds the inboxes it reaches, so a session
@@ -658,4 +694,51 @@ func TestGroupAddress_FetcherLookupFailureRetryRule(t *testing.T) {
 		s.requireOneCopy(t, s.ann, s.ownAddress(t, s.ann))
 		requireErrorLog(t, logs, "imap fetcher: kept a partial delivery")
 	})
+}
+
+// A provider retry can arrive while the first delivery of the message is
+// still being stored. The Message-ID check runs inside the delivery's
+// transaction, and SQLite allows one writer, so the retry waits for the
+// first delivery to commit, finds its copy and stores none.
+func TestProcessInbound_ConcurrentRetryStoresOneCopy(t *testing.T) {
+	s := seedGroupDelivery(t)
+	inbox := s.inboxOf(t, s.ann)
+	own := s.ownAddress(t, s.ann)
+
+	firstStoring := make(chan struct{})
+	secondStarted := make(chan struct{})
+	var stores atomic.Int32
+	s.app.OnRecordCreate("mail_messages").BindFunc(func(e *core.RecordEvent) error {
+		if stores.Add(1) == 1 {
+			close(firstStoring)
+			// Hold the first delivery open so the retry runs its check while
+			// the first copy is not yet committed.
+			<-secondStarted
+			time.Sleep(200 * time.Millisecond)
+		}
+		return e.Next()
+	})
+
+	msg := groupMessage("<concurrent-1@sender.example>", []string{"ann@q.example"}, nil)
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		errs[0] = processInboundForMailbox(s.app, inbox, msg, own.Id)
+	}()
+	go func() {
+		defer wg.Done()
+		<-firstStoring
+		close(secondStarted)
+		errs[1] = processInboundForMailbox(s.app, inbox, msg, own.Id)
+	}()
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("delivery %d: %v", i+1, err)
+		}
+	}
+	s.requireOneCopy(t, s.ann, own)
 }

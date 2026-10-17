@@ -257,12 +257,16 @@ func dispatchInbound(app core.App, msg *InboundMessage) error {
 	for _, email := range routingRecipients(msg) {
 		localPart, domain := splitAddress(email)
 		if localPart == "" || domain == "" {
+			addressLog.Info("imap fetcher: skipped recipient",
+				"address", email, "reason", "malformed address", "messageID", msg.MessageID)
 			continue
 		}
 		localPart = stripPlusTag(localPart)
 
 		targets, err := deliveryTargets(app, localPart, domain)
 		if errors.Is(err, errAddressNotFound) {
+			addressLog.Info("imap fetcher: skipped recipient",
+				"address", localPart+"@"+domain, "reason", err.Error(), "messageID", msg.MessageID)
 			continue
 		}
 		// A failed lookup leaves the message unseen even when another
