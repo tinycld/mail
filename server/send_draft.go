@@ -20,9 +20,10 @@ import (
 var sendDraftLog = logging.ForPackage("mail")
 
 // storedNameSuffix matches the random part PocketBase adds to a stored file
-// name ("hippo_ab12cd34ef.jpg"). The client strips it the same way for
-// display (cleanFilename in attachment-preview-source.ts).
-var storedNameSuffix = regexp.MustCompile(`^(.+)_[a-zA-Z0-9]{10}(\.\w+)$`)
+// name ("hippo_ab12cd34ef.jpg", or "README_ab12cd34ef" with no extension).
+// The client strips it the same way for display (cleanFilename in
+// attachment-preview-source.ts).
+var storedNameSuffix = regexp.MustCompile(`^(.+)_[a-zA-Z0-9]{10}(\.\w+)?$`)
 
 // originalAttachmentName is a stored file name without PocketBase's random
 // suffix: the name the sender attached it under. A copied file must carry
@@ -107,7 +108,13 @@ func draftAttachments(app core.App, draft *core.Record, kept []string) ([]Attach
 	defer fsys.Close()
 
 	out := make([]Attachment, 0, len(kept))
+	// A name sent twice would attach the same file twice.
+	seen := make(map[string]bool, len(kept))
 	for _, stored := range kept {
+		if seen[stored] {
+			continue
+		}
+		seen[stored] = true
 		name := originalAttachmentName(stored)
 		if !slices.Contains(onDraft, stored) {
 			return nil, &sendError{

@@ -371,11 +371,34 @@ func TestOriginalAttachmentName(t *testing.T) {
 		"my_report_0123456789.pdf": "my_report.pdf",
 		"plain.txt":                "plain.txt",
 		"short_abc.txt":            "short_abc.txt",
+		"README_ab12cd34ef":        "README",
+		"my_notes_0123456789":      "my_notes",
+		"README":                   "README",
 	}
 	for in, want := range cases {
 		if got := originalAttachmentName(in); got != want {
 			t.Errorf("originalAttachmentName(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// A kept name sent twice attaches the file once.
+func TestDraftAttachments_KeptNameTwiceAttachesOnce(t *testing.T) {
+	env := setupDraftSendEnv(t)
+	draft := seedDraft(t, env.app, env.inbox.Id, "draft", map[string]string{"alpha.txt": "a", "beta.txt": "b"})
+	a := storedNameOf(t, draft, "alpha.txt")
+	b := storedNameOf(t, draft, "beta.txt")
+
+	got, err := draftAttachments(env.app, draft, []string{a, b, a})
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, len(got))
+	for i, att := range got {
+		names[i] = att.Name
+	}
+	if strings.Join(names, ",") != "alpha.txt,beta.txt" {
+		t.Fatalf("attachments = %v, want alpha.txt,beta.txt once each in the kept order", names)
 	}
 }
 
