@@ -85,7 +85,7 @@ func seedAuthUser(t *testing.T, app core.App, email, role string) *core.Record {
 }
 
 // authTokenFor mints a request auth token for the given user record.
-func authTokenFor(t *testing.T, user *core.Record) string {
+func authTokenFor(t testing.TB, user *core.Record) string {
 	t.Helper()
 	token, err := user.NewAuthToken()
 	if err != nil {

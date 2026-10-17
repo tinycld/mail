@@ -3,9 +3,9 @@
 // Group addresses (design 2026-10-17, phase 4). An address can deliver to a
 // group instead of an inbox: mail to it reaches every member's own inbox.
 //
-// A row holds exactly one target, mailbox or group. PocketBase checks a
-// required field before any hook runs, so mailbox is now optional and the
-// server's create hook (server/group_addresses.go) enforces the rule.
+// A row holds exactly one target, mailbox or group. A group row has no
+// inbox, so mailbox is now optional, and the server's create hook
+// (server/group_addresses.go) enforces the exactly-one rule.
 // cascadeDelete is true on group: an address of a deleted group has nowhere
 // to deliver. The mail it delivered stays; PocketBase clears delivered_to.
 migrate(

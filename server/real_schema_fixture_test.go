@@ -13,7 +13,7 @@ import (
 // and omit collections, so a bug that only the real schema triggers — a
 // required field, a 200-expression filter limit over real label rows — passes
 // against them.
-func newRealSchemaApp(t *testing.T) *tests.TestApp {
+func newRealSchemaApp(t testing.TB) *tests.TestApp {
 	t.Helper()
 	return rlstest.NewAssembledApp(t, rlstest.MigrationsDir(t, "../pb-migrations"))
 }
@@ -21,7 +21,7 @@ func newRealSchemaApp(t *testing.T) *tests.TestApp {
 // saveRealRecord saves one record with the given fields and fails the test on
 // any validation error. A users record gets a password so it passes the auth
 // collection's validation.
-func saveRealRecord(t *testing.T, app core.App, collection string, fields map[string]any) *core.Record {
+func saveRealRecord(t testing.TB, app core.App, collection string, fields map[string]any) *core.Record {
 	t.Helper()
 	col, err := app.FindCollectionByNameOrId(collection)
 	if err != nil {

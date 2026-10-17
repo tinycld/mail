@@ -12,7 +12,7 @@ import (
 	"github.com/pocketbase/pocketbase/tests"
 )
 
-func newGroupAddressTestApp(t *testing.T) *tests.TestApp {
+func newGroupAddressTestApp(t testing.TB) *tests.TestApp {
 	t.Helper()
 	app := newRealSchemaApp(t)
 	registerGroupAddressHooks(app)
@@ -32,7 +32,7 @@ type groupAddressSeed struct {
 
 // seedGroupAddress makes an everyone domain (the first domain), an admin, and
 // ann, a member of the Sales group with her own inbox.
-func seedGroupAddress(t *testing.T, app core.App) *groupAddressSeed {
+func seedGroupAddress(t testing.TB, app core.App) *groupAddressSeed {
 	t.Helper()
 	s := &groupAddressSeed{}
 	s.domain = saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "q.example", "verified": true})
@@ -49,7 +49,7 @@ func seedGroupAddress(t *testing.T, app core.App) *groupAddressSeed {
 	return s
 }
 
-func saveGroupAddress(t *testing.T, app core.App, local string, domain, group *core.Record) *core.Record {
+func saveGroupAddress(t testing.TB, app core.App, local string, domain, group *core.Record) *core.Record {
 	t.Helper()
 	return saveRealRecord(t, app, "mail_addresses", map[string]any{
 		"local_part": local, "domain": domain.Id, "group": group.Id, "source": addressSourceManual,
@@ -58,46 +58,64 @@ func saveGroupAddress(t *testing.T, app core.App, local string, domain, group *c
 
 type groupAddressPost struct {
 	name    string
-	prepare func(t *testing.T, app *tests.TestApp, s *groupAddressSeed)
+	prepare func(t testing.TB, app *tests.TestApp, s *groupAddressSeed)
 	body    func(s *groupAddressSeed) string
 	status  int
 	content string
-	after   func(t *testing.T, app *tests.TestApp, s *groupAddressSeed)
+	after   func(t testing.TB, app *tests.TestApp, s *groupAddressSeed)
+	// method defaults to POST; target is the record path after the
+	// collection URL (for a DELETE); actor defaults to the admin.
+	method string
+	target func(s *groupAddressSeed) string
+	actor  func(s *groupAddressSeed) *core.Record
 }
 
 func runGroupAddressPost(t *testing.T, c groupAddressPost) {
 	t.Helper()
 	var seed *groupAddressSeed
+	method := c.method
+	if method == "" {
+		method = http.MethodPost
+	}
 	scenario := tests.ApiScenario{
 		Name:            c.name,
-		Method:          http.MethodPost,
-		URL:             "/api/collections/mail_addresses/records",
+		Method:          method,
 		ExpectedStatus:  c.status,
 		ExpectedContent: []string{c.content},
 		Headers:         map[string]string{"Content-Type": "application/json"},
 	}
-	scenario.TestAppFactory = func(_ testing.TB) *tests.TestApp {
-		app := newGroupAddressTestApp(t)
-		seed = seedGroupAddress(t, app)
+	scenario.TestAppFactory = func(tb testing.TB) *tests.TestApp {
+		app := newGroupAddressTestApp(tb)
+		seed = seedGroupAddress(tb, app)
 		if c.prepare != nil {
-			c.prepare(t, app, seed)
+			c.prepare(tb, app, seed)
 		}
-		scenario.Body = strings.NewReader(c.body(seed))
+		scenario.URL = "/api/collections/mail_addresses/records"
+		if c.target != nil {
+			scenario.URL += c.target(seed)
+		}
+		if c.body != nil {
+			scenario.Body = strings.NewReader(c.body(seed))
+		}
 		return app
 	}
-	scenario.BeforeTestFunc = func(_ testing.TB, _ *tests.TestApp, _ *core.ServeEvent) {
-		scenario.Headers["Authorization"] = authTokenFor(t, seed.admin)
+	scenario.BeforeTestFunc = func(tb testing.TB, _ *tests.TestApp, _ *core.ServeEvent) {
+		actor := seed.admin
+		if c.actor != nil {
+			actor = c.actor(seed)
+		}
+		scenario.Headers["Authorization"] = authTokenFor(tb, actor)
 	}
-	scenario.AfterTestFunc = func(_ testing.TB, app *tests.TestApp, _ *http.Response) {
+	scenario.AfterTestFunc = func(tb testing.TB, app *tests.TestApp, _ *http.Response) {
 		if c.after != nil {
-			c.after(t, app, seed)
+			c.after(tb, app, seed)
 		}
 	}
 	scenario.Test(t)
 }
 
-func noAddressRow(local string) func(t *testing.T, app *tests.TestApp, s *groupAddressSeed) {
-	return func(t *testing.T, app *tests.TestApp, s *groupAddressSeed) {
+func noAddressRow(local string) func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
+	return func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
 		t.Helper()
 		row, err := findAddressRow(app, local, s.domain.Id)
 		if err != nil {
@@ -117,7 +135,7 @@ func TestGroupAddress_ExactlyOneTarget(t *testing.T) {
 				return `{"local_part":"sales","domain":"` + s.domain.Id + `","mailbox":"` + s.inbox.Id +
 					`","group":"` + s.sales.Id + `"}`
 			},
-			after: func(t *testing.T, app *tests.TestApp, s *groupAddressSeed) {
+			after: func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
 				if row, _ := findAddressRow(app, "sales", s.domain.Id); row != nil {
 					t.Fatalf("a row with two targets was saved: %v", row)
 				}
@@ -130,7 +148,7 @@ func TestGroupAddress_ExactlyOneTarget(t *testing.T) {
 			body: func(s *groupAddressSeed) string {
 				return `{"local_part":"sales","domain":"` + s.domain.Id + `"}`
 			},
-			after: func(t *testing.T, app *tests.TestApp, s *groupAddressSeed) {
+			after: func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
 				if row, _ := findAddressRow(app, "sales", s.domain.Id); row != nil {
 					t.Fatalf("a row with no target was saved: %v", row)
 				}
@@ -143,7 +161,7 @@ func TestGroupAddress_ExactlyOneTarget(t *testing.T) {
 			body: func(s *groupAddressSeed) string {
 				return `{"local_part":"sales","domain":"` + s.domain.Id + `","group":"` + s.sales.Id + `"}`
 			},
-			after: func(t *testing.T, app *tests.TestApp, s *groupAddressSeed) {
+			after: func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
 				row, err := findAddressRow(app, "sales", s.domain.Id)
 				if err != nil || row == nil {
 					t.Fatalf("group address missing: %v", err)
@@ -157,7 +175,7 @@ func TestGroupAddress_ExactlyOneTarget(t *testing.T) {
 	})
 }
 
-func assertManualNotPrimary(t *testing.T, row *core.Record) {
+func assertManualNotPrimary(t testing.TB, row *core.Record) {
 	t.Helper()
 	if row.GetString("source") != addressSourceManual || row.GetBool("is_primary") || row.GetString("via_group") != "" {
 		t.Fatalf("source %q primary %v via_group %q; want manual, false, empty",
@@ -173,7 +191,7 @@ func TestGroupAddress_IsManualAndNotPrimary(t *testing.T) {
 				return `{"local_part":"sales","domain":"` + s.domain.Id + `","group":"` + s.sales.Id +
 					`","source":"rule","is_primary":true,"via_group":"` + s.sales.Id + `"}`
 			},
-			after: func(t *testing.T, app *tests.TestApp, s *groupAddressSeed) {
+			after: func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
 				row, err := findAddressRow(app, "sales", s.domain.Id)
 				if err != nil || row == nil {
 					t.Fatalf("group address missing: %v", err)
@@ -214,14 +232,14 @@ func TestGroupAddress_ReservedNameRefused(t *testing.T) {
 		var groupsDomain *core.Record
 		runGroupAddressPost(t, groupAddressPost{
 			name: "a non-member's email name", status: http.StatusBadRequest, content: `"address_reserved"`,
-			prepare: func(t *testing.T, app *tests.TestApp, s *groupAddressSeed) {
+			prepare: func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
 				support := seedGroup(t, app, "Support")
 				groupsDomain = saveGroupsDomain(t, app, "g.example", support)
 			},
 			body: func(s *groupAddressSeed) string {
 				return `{"local_part":"ann","domain":"` + groupsDomain.Id + `","group":"` + s.sales.Id + `"}`
 			},
-			after: func(t *testing.T, app *tests.TestApp, s *groupAddressSeed) {
+			after: func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
 				if row, _ := findAddressRow(app, "ann", groupsDomain.Id); row != nil {
 					t.Fatalf("ann@g.example was saved: %v", row)
 				}
@@ -233,7 +251,7 @@ func TestGroupAddress_ReservedNameRefused(t *testing.T) {
 func TestGroupAddress_TakenRefused(t *testing.T) {
 	runGroupAddressPost(t, groupAddressPost{
 		name: "an inbox address", status: http.StatusBadRequest, content: `"address_taken"`,
-		prepare: func(t *testing.T, app *tests.TestApp, s *groupAddressSeed) {
+		prepare: func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
 			saveRealRecord(t, app, "mail_mailboxes", map[string]any{
 				"address": "team", "domain": s.domain.Id, "type": "shared", "display_name": "Team", "name": "Team",
 			})
@@ -374,4 +392,70 @@ func TestIdentityEdit_DefaultFromNotAGroupAddress(t *testing.T) {
 			},
 		})
 	})
+}
+
+// Only an admin adds or removes an address, for an inbox or for a group. A
+// member who could add one could take mail meant for someone else.
+func TestGroupAddress_OnlyAdminCreatesAndDeletes(t *testing.T) {
+	asAnn := func(s *groupAddressSeed) *core.Record { return s.ann }
+	asAdmin := func(s *groupAddressSeed) *core.Record { return s.admin }
+	inboxBody := func(s *groupAddressSeed) string {
+		return `{"local_part":"extra","domain":"` + s.domain.Id + `","mailbox":"` + s.inbox.Id + `"}`
+	}
+	groupBody := func(s *groupAddressSeed) string {
+		return `{"local_part":"extra","domain":"` + s.domain.Id + `","group":"` + s.sales.Id + `"}`
+	}
+	var existing *core.Record
+	addRows := map[string]func(t testing.TB, app *tests.TestApp, s *groupAddressSeed){
+		"inbox": func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
+			existing = saveRealRecord(t, app, "mail_addresses", map[string]any{
+				"local_part": "extra", "domain": s.domain.Id, "mailbox": s.inbox.Id, "source": addressSourceManual,
+			})
+		},
+		"group": func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
+			existing = saveGroupAddress(t, app, "extra", s.domain, s.sales)
+		},
+	}
+	saved := func(want bool) func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
+		return func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
+			row, err := findAddressRow(app, "extra", s.domain.Id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (row != nil) != want {
+				t.Fatalf("extra@q.example saved = %v, want %v", row != nil, want)
+			}
+		}
+	}
+	target := func(*groupAddressSeed) string { return "/" + existing.Id }
+
+	for kind, body := range map[string]func(*groupAddressSeed) string{"inbox": inboxBody, "group": groupBody} {
+		t.Run("member creates "+kind, func(t *testing.T) {
+			runGroupAddressPost(t, groupAddressPost{
+				name: "member creates " + kind, actor: asAnn, body: body,
+				status: http.StatusBadRequest, content: `"Failed to create record."`, after: saved(false),
+			})
+		})
+		t.Run("admin creates "+kind, func(t *testing.T) {
+			runGroupAddressPost(t, groupAddressPost{
+				name: "admin creates " + kind, actor: asAdmin, body: body,
+				status: http.StatusOK, content: `"local_part":"extra"`, after: saved(true),
+			})
+		})
+	}
+	for kind, prepare := range addRows {
+		t.Run("member deletes "+kind, func(t *testing.T) {
+			runGroupAddressPost(t, groupAddressPost{
+				name: "member deletes " + kind, method: http.MethodDelete, actor: asAnn,
+				prepare: prepare, target: target, status: http.StatusNotFound, content: `"status":404`,
+				after: saved(true),
+			})
+		})
+		t.Run("admin deletes "+kind, func(t *testing.T) {
+			runGroupAddressPost(t, groupAddressPost{
+				name: "admin deletes " + kind, method: http.MethodDelete, actor: asAdmin,
+				prepare: prepare, target: target, status: http.StatusNoContent, after: saved(false),
+			})
+		})
+	}
 }
