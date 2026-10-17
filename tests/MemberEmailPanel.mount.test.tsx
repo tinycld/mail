@@ -39,6 +39,26 @@ const h = vi.hoisted(() => ({
             is_primary: false,
             via_group: '',
         },
+        {
+            id: 'a3',
+            local_part: 'team',
+            domain: 'd2',
+            mailbox: '',
+            group: 'g_sales',
+            source: 'manual',
+            is_primary: false,
+            via_group: '',
+        },
+        {
+            id: 'a4',
+            local_part: 'ops',
+            domain: 'd2',
+            mailbox: '',
+            group: 'g_ops',
+            source: 'manual',
+            is_primary: false,
+            via_group: '',
+        },
     ],
     domains: [
         { id: 'd1', domain: 'tinycld.com', rank: 1 },
@@ -100,7 +120,11 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
         mail_identities: mk('mail_identities', h.identities),
         mail_addresses: mk('mail_addresses', h.addresses),
         mail_domains: mk('mail_domains', h.domains),
-        groups: mk('groups', [{ id: 'g_sales', name: 'Sales' }]),
+        groups: mk('groups', [
+            { id: 'g_sales', name: 'Sales' },
+            { id: 'g_ops', name: 'Ops' },
+        ]),
+        group_members: mk('group_members', [{ id: 'gm1', group: 'g_sales', user: 'u2' }]),
         users: mk('users', h.users),
         mail_mailboxes: mk('mail_mailboxes', h.mailboxes),
         mail_mailbox_members: mk('mail_mailbox_members', h.members),
@@ -169,6 +193,18 @@ test('an inbox with a direct row and a group row shows once, without the group',
     await findByText('support@q.example · through Sales')
     expect(getAllByText('Sales inbox')).toHaveLength(1)
     expect(queryByText(/Sales inbox ·/)).toBeNull()
+})
+
+test('shows the group addresses of the groups the person is in', async () => {
+    const { findByText, queryByText } = renderPanel('u2')
+    expect(await findByText('Gets mail sent to team@q.example (group Sales)')).toBeTruthy()
+    expect(queryByText(/ops@q\.example/)).toBeNull()
+})
+
+test('a person in no group gets no group address line', async () => {
+    const { findByText, queryByText } = renderPanel('u4')
+    await findByText('Send new mail from')
+    expect(queryByText(/Gets mail sent to/)).toBeNull()
 })
 
 test('a person with an inbox and no address says so', async () => {

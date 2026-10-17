@@ -97,7 +97,7 @@ function AddFormSlot({
     onDone: () => void
 }) {
     if (!isVisible) return null
-    return <AddAddressForm mailboxId={mailboxId} onDone={onDone} />
+    return <AddAddressForm target={{ kind: 'inbox', mailboxId }} onDone={onDone} />
 }
 
 function AddressRow({ item, onRemove }: { item: AddressItem; onRemove: () => void }) {
@@ -131,7 +131,7 @@ function Badge({ label }: { label: string | null }) {
     )
 }
 
-function RemoveButton({
+export function RemoveButton({
     isVisible,
     email,
     onRemove,

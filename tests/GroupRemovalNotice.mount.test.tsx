@@ -91,6 +91,16 @@ const h = vi.hoisted(() => ({
             is_primary: false,
             via_group: 'g_sales',
         },
+        {
+            id: 'a_group',
+            local_part: 'team',
+            domain: 'd_q',
+            mailbox: '',
+            group: 'g_ops',
+            source: 'manual',
+            is_primary: false,
+            via_group: '',
+        },
     ],
 }))
 
@@ -173,5 +183,14 @@ test('an inbox the person also has directly is not listed', async () => {
 
 test('deleting the group names the inboxes its members lose', async () => {
     const { findByText } = render(<GroupRemovalNotice groupId="g_ops" userId={null} />)
-    expect(await findByText('Members lose access to ops@q.example.')).toBeTruthy()
+    expect(
+        await findByText(
+            'Members lose access to ops@q.example. The address team@q.example is deleted.'
+        )
+    ).toBeTruthy()
+})
+
+test('removing a person names the group address they stop getting', async () => {
+    const { findByText } = render(<GroupRemovalNotice groupId="g_ops" userId="ann" />)
+    expect(await findByText('Ann stops getting mail sent to team@q.example.')).toBeTruthy()
 })

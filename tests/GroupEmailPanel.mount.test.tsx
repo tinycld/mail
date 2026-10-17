@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 afterEach(cleanup)
@@ -24,6 +24,14 @@ const h = vi.hoisted(() => ({
             rank: 3,
         },
     ],
+    addresses: [
+        { id: 'ga1', local_part: 'sales', domain: 'd_q', mailbox: '', group: 'g_sales' },
+        { id: 'ga2', local_part: 'ops', domain: 'd_r', mailbox: '', group: 'g_ops' },
+        { id: 'pa1', local_part: 'ann', domain: 'd_q', mailbox: 'mb_ann', group: '' },
+    ],
+    identities: [{ id: 'i1', email_name: 'holly', inbox: 'mb_h', user: 'u_h', retired: false }],
+    inserted: [] as Record<string, unknown>[],
+    deleted: [] as string[],
     mailboxes: [{ id: 'mb_support', type: 'shared', address: 'support', domain: 'd_q' }],
     members: [
         { id: 'g1', mailbox: 'mb_support', group: 'g_sales', user: '', role: 'member' },
@@ -39,7 +47,17 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
     )
     const mk = (id: string, initialData: { id: string }[]) =>
         createCollection({
-            ...localOnlyCollectionOptions({ id, getKey: (r: { id: string }) => r.id, initialData }),
+            ...localOnlyCollectionOptions({
+                id,
+                getKey: (r: { id: string }) => r.id,
+                initialData,
+                onInsert: async ({ transaction }) => {
+                    for (const m of transaction.mutations) h.inserted.push(m.modified)
+                },
+                onDelete: async ({ transaction }) => {
+                    for (const m of transaction.mutations) h.deleted.push(String(m.key))
+                },
+            }),
             autoIndex: 'eager',
             defaultIndexType: BasicIndex,
         })
@@ -47,6 +65,8 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
         mail_domains: mk('mail_domains', h.domains),
         mail_mailboxes: mk('mail_mailboxes', h.mailboxes),
         mail_mailbox_members: mk('mail_mailbox_members', h.members),
+        mail_addresses: mk('mail_addresses', h.addresses),
+        mail_identities: mk('mail_identities', h.identities),
     }
     // A collection whose first load never finishes.
     const loading = createCollection({
@@ -101,6 +121,57 @@ test('says nothing about addresses before the domains have loaded', async () => 
     expect(await findByText('Email')).toBeTruthy()
     expect(queryByText('This group gives no addresses.')).toBeNull()
     h.ready = true
+})
+
+test("lists the group's own addresses and not other groups' or people's", async () => {
+    const { findByText, queryByText } = renderPanel('g_sales')
+    expect(await findByText('Group addresses')).toBeTruthy()
+    expect(await findByText('sales@q.example')).toBeTruthy()
+    expect(queryByText('ops@r.example')).toBeNull()
+    expect(queryByText('ann@q.example')).toBeNull()
+    expect(
+        await findByText('Mail to these addresses goes to every member of the group.')
+    ).toBeTruthy()
+})
+
+test('removes a group address', async () => {
+    h.deleted.length = 0
+    const { container, findByText } = renderPanel('g_sales')
+    await findByText('sales@q.example')
+    const button = container.querySelector('[accessibilitylabel="Remove address sales@q.example"]')
+    if (!button) throw new Error('no remove button rendered')
+    await act(async () => {
+        fireEvent.click(button)
+    })
+    await waitFor(() => expect(h.deleted).toEqual(['ga1']))
+})
+
+test('adds a group address through the form', async () => {
+    h.inserted.length = 0
+    const { findByText, container } = renderPanel('g_sales')
+    expect(container.querySelector('rn-textinput')).toBeNull()
+    await act(async () => {
+        fireEvent.click(await findByText('Add address'))
+    })
+    const input = container.querySelector<HTMLInputElement>('rn-textinput')
+    if (!input) throw new Error('no input rendered')
+    await act(async () => {
+        fireEvent.input(input, { target: { value: 'team' } })
+    })
+    await act(async () => {
+        fireEvent.click(await findByText('q.example'))
+    })
+    await waitFor(() => expect(container.querySelector('[aria-disabled="true"]')).toBeNull())
+    await act(async () => {
+        fireEvent.click(await findByText('Add address'))
+    })
+    await waitFor(() => expect(h.inserted).toHaveLength(1))
+    expect(h.inserted[0]).toMatchObject({
+        local_part: 'team',
+        domain: 'd_q',
+        mailbox: '',
+        group: 'g_sales',
+    })
 })
 
 test('domainsForGroup keeps rows listing the group, in rank order', () => {

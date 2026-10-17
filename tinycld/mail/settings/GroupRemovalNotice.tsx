@@ -2,6 +2,7 @@ import { and, eq, not } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import type { GroupMemberRemovalNoticeProps } from '@tinycld/core/lib/groups/removal-notice'
 import { useStore } from '@tinycld/core/lib/pocketbase'
+import { useRecord } from '@tinycld/core/lib/use-record'
 import { materialize } from 'pbtsdb'
 import { useMemo } from 'react'
 import { Text } from 'react-native'
@@ -136,11 +137,37 @@ function useAddressRows({ groupId, userId }: GroupMemberRemovalNoticeProps) {
     return { data, isReady: result.isReady }
 }
 
+// The group's own addresses: the person stops getting them on leaving, and
+// they are deleted with the group.
+function useGroupAddressRows({ groupId }: GroupMemberRemovalNoticeProps) {
+    const [addressesCollection, domainsCollection] = useStore('mail_addresses', 'mail_domains')
+    return useLiveQuery({
+        queryKey: ['mail_group_removal_group_addresses', groupId],
+        query: query =>
+            query
+                .from({ address: addressesCollection })
+                .where(({ address }) => eq(address.group, groupId))
+                .select(({ address }) => ({
+                    id: address.id,
+                    localPart: address.local_part,
+                    domain: materialize(
+                        query
+                            .from({ domain: domainsCollection })
+                            .where(({ domain }) => eq(domain.id, address.domain))
+                            .findOne()
+                    ),
+                })),
+    })
+}
+
 function useRemovalNotice(props: GroupMemberRemovalNoticeProps) {
     const { groupId, userId } = props
     const inboxes = useInboxRows(props)
     const addresses = useAddressRows(props)
-    const isReady = inboxes.isReady && addresses.isReady
+    const groupAddresses = useGroupAddressRows(props)
+    const [usersCollection] = useStore('users')
+    const { record: person } = useRecord(usersCollection, userId)
+    const isReady = inboxes.isReady && addresses.isReady && groupAddresses.isReady
     return useMemo(() => {
         // Text from one query alone would name only part of the loss.
         if (!isReady) return null
@@ -174,13 +201,21 @@ function useRemovalNotice(props: GroupMemberRemovalNoticeProps) {
                 names.push(person.user?.name || person.user?.email)
             }
         }
-        const personName = userId === null ? null : (names.find(Boolean) ?? null)
+        const personName =
+            userId === null ? null : person?.name || person?.email || names.find(Boolean) || null
+        // Without the name the text would read as the group's deletion.
+        if (userId !== null && !personName) return null
+        const groupEmails = (groupAddresses.data ?? [])
+            .filter(row => row.domain)
+            .map(row => `${row.localPart}@${row.domain?.domain}`)
+            .sort()
         return removalNoticeText({
             personName,
             addresses: addressesLost(addressRows, memberships, groupId),
             inboxes: inboxesLost(accessRows, groupId),
+            groupAddresses: groupEmails,
         })
-    }, [isReady, addresses.data, inboxes.data, userId, groupId])
+    }, [isReady, addresses.data, inboxes.data, groupAddresses.data, person, userId, groupId])
 }
 
 /** Contributed to core's group-member-removal slot: the mail a person or the members lose. */

@@ -64,6 +64,7 @@ describe('mail collections', () => {
             domain: collections.mail_domains,
             mailbox: collections.mail_mailboxes,
             via_group: fakeCoreStores.groups,
+            group: fakeCoreStores.groups,
         })
 
         for (const [name, options] of spy.mock.calls) {

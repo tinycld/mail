@@ -20,7 +20,17 @@ import { type AddressFormValues, addressSchemaFor } from './addressSchema'
 // an admin screen and the sets are small (people × domains), and loading them
 // up front keeps the schema independent of what is typed, so the form has one
 // resolver that does not change while the user types.
-function useAddressRules(mailboxId: string) {
+export type AddressTarget =
+    | { kind: 'inbox'; mailboxId: string }
+    | { kind: 'group'; groupId: string }
+
+// An inbox's own owner may use their email name; no inbox owns a group address.
+function ownInboxOf(target: AddressTarget) {
+    return target.kind === 'inbox' ? target.mailboxId : null
+}
+
+function useAddressRules(target: AddressTarget) {
+    const ownInbox = ownInboxOf(target)
     const [addressesCollection, domainsCollection, identitiesCollection] = useStore(
         'mail_addresses',
         'mail_domains',
@@ -45,6 +55,7 @@ function useAddressRules(mailboxId: string) {
             query.from({ identity: identitiesCollection }).select(({ identity }) => ({
                 emailName: identity.email_name,
                 inbox: identity.inbox,
+                retired: identity.retired,
             })),
     })
 
@@ -53,7 +64,9 @@ function useAddressRules(mailboxId: string) {
             addressSchemaFor({
                 taken: new Set((addresses ?? []).map(a => `${a.localPart}@${a.domain}`)),
                 reservedNames: new Set(
-                    (identities ?? []).filter(i => i.inbox !== mailboxId).map(i => i.emailName)
+                    (identities ?? [])
+                        .filter(i => !i.retired && i.inbox !== ownInbox)
+                        .map(i => i.emailName)
                 ),
                 // Same rule as server/addresses.go domainHasRule.
                 ruleDomainIds: new Set(
@@ -62,15 +75,15 @@ function useAddressRules(mailboxId: string) {
                         .map(d => d.id)
                 ),
             }),
-        [addresses, identities, domains, mailboxId]
+        [addresses, identities, domains, ownInbox]
     )
     const domainOptions = (domains ?? []).map(d => ({ label: d.domain, value: d.id }))
     return { schema, domainOptions }
 }
 
-export function AddAddressForm({ mailboxId, onDone }: { mailboxId: string; onDone: () => void }) {
+export function AddAddressForm({ target, onDone }: { target: AddressTarget; onDone: () => void }) {
     const [addressesCollection] = useStore('mail_addresses')
-    const { schema, domainOptions } = useAddressRules(mailboxId)
+    const { schema, domainOptions } = useAddressRules(target)
     const {
         control,
         handleSubmit,
@@ -89,11 +102,11 @@ export function AddAddressForm({ mailboxId, onDone }: { mailboxId: string; onDon
                 id: newRecordId(),
                 local_part: data.local_part,
                 domain: data.domain,
-                mailbox: mailboxId,
+                mailbox: target.kind === 'inbox' ? target.mailboxId : '',
                 source: 'manual',
                 is_primary: false,
                 via_group: '',
-                group: '',
+                group: target.kind === 'group' ? target.groupId : '',
                 created: '',
                 updated: '',
             })

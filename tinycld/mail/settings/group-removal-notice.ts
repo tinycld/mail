@@ -68,20 +68,17 @@ function inboxesText(who: string, personName: string | null, inboxes: string[]) 
     return `${who} access to ${inboxes.length} shared inboxes: ${shortList(inboxes)}.`
 }
 
-/**
- * Pure: the notice text, or null when nothing is lost. personName null: the
- * group is deleted. Addresses and inboxes get one sentence each: a long list
- * ends in "and 2 more", so one sentence for both would have two "and"s.
- */
-export function removalNoticeText({
-    personName,
-    addresses,
-    inboxes = [],
-}: {
-    personName: string | null
-    addresses: string[]
-    inboxes?: string[]
-}) {
+function groupAddressesText(personName: string | null, groupAddresses: string[]) {
+    const one = groupAddresses.length === 1
+    if (personName) {
+        const target = one ? groupAddresses[0] : `these addresses: ${shortList(groupAddresses)}`
+        return `${personName} stops getting mail sent to ${target}.`
+    }
+    if (one) return `The address ${groupAddresses[0]} is deleted.`
+    return `These addresses are deleted: ${shortList(groupAddresses)}.`
+}
+
+function lossText(personName: string | null, addresses: string[], inboxes: string[]) {
     const who = personName ?? 'Members'
     const loses = personName ? 'loses' : 'lose'
     if (addresses.length === 0 && inboxes.length === 0) return null
@@ -89,4 +86,27 @@ export function removalNoticeText({
     if (addresses.length === 0) return inboxesText(`${who} ${loses}`, personName, inboxes)
     const first = addressesText(`${who} ${loses}`, personName, addresses)
     return `${first} ${inboxesText(`${who} also ${loses}`, personName, inboxes)}`
+}
+
+/**
+ * Pure: the notice text, or null when nothing is lost. personName null: the
+ * group is deleted. Addresses and inboxes get one sentence each: a long list
+ * ends in "and 2 more", so one sentence for both would have two "and"s. The
+ * group's own addresses come last, as a sentence of their own.
+ */
+export function removalNoticeText({
+    personName,
+    addresses,
+    inboxes = [],
+    groupAddresses = [],
+}: {
+    personName: string | null
+    addresses: string[]
+    inboxes?: string[]
+    groupAddresses?: string[]
+}) {
+    const loss = lossText(personName, addresses, inboxes)
+    if (groupAddresses.length === 0) return loss
+    const own = groupAddressesText(personName, groupAddresses)
+    return loss ? `${loss} ${own}` : own
 }
