@@ -52,6 +52,22 @@ Each domain has four checks, all four green is required for full send + receive.
 
 The DKIM and Return-Path records appear as a **DNS records to publish** list under the checklist. Each record shows its host, type, and value, ready to copy. Most DNS providers (Cloudflare, AWS Route 53, GoDaddy) let you paste these directly. This list shows only while the domain is not yet fully verified. Once every check is green, the checklist alone is enough.
 
+## DNS records for mail apps
+
+A verified domain shows **DNS records for mail apps (optional)**. With these records, Apple Mail, Outlook, Thunderbird and other apps find the server settings when a person types an address on the domain. They do not change verification. All of them point at `{{mail-host}}`.
+
+| Record | For |
+|---|---|
+| `_imaps._tcp` SRV → `{{mail-host}}` port 993 | mail apps that read SRV records |
+| `_submissions._tcp` SRV → `{{mail-host}}` port 465 | mail apps that read SRV records |
+| `_autodiscover._tcp` SRV → `{{mail-host}}` port 443 | Outlook |
+| `autoconfig` CNAME → `{{mail-host}}` | Thunderbird |
+| `mail` CNAME → `{{mail-host}}` | Apple Mail, which tries `mail.<your domain>` |
+
+The two CNAME records work only when this server has a TLS certificate for `autoconfig.<your domain>` and `mail.<your domain>`. Without one, leave them out; the SRV records work with the certificate the server already has.
+
+People can also get their settings from **Settings → Account → Mail apps**. See [IMAP](help://mail:imap).
+
 ## Verifying
 
 After publishing the DNS records, click **Verify** in the domain row. Mail re-runs every check. DNS propagation can take a few minutes (occasionally hours), so it's OK to come back later.

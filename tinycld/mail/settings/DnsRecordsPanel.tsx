@@ -7,11 +7,12 @@ import { CopyButton } from './CopyButton'
 
 export type DnsRecord = {
     label: string
-    type: 'MX' | 'TXT' | 'CNAME'
+    type: 'MX' | 'TXT' | 'CNAME' | 'SRV'
     host: string
     value: string
     // null: not checked yet — a row whose stored details predate the flag.
     verified: boolean | null
+    note?: string
 }
 
 // buildDnsRecords turns the provider's reported outbound check into the DNS
@@ -88,7 +89,7 @@ export function DnsRecordsPanel({
     )
 }
 
-function DnsRecordRow({ record }: { record: DnsRecord }) {
+export function DnsRecordRow({ record }: { record: DnsRecord }) {
     const successColor = useThemeColor('success')
 
     return (
@@ -112,7 +113,17 @@ function DnsRecordRow({ record }: { record: DnsRecord }) {
                 </Text>
                 <CopyButton value={record.value} label={`Copy ${record.label} value`} />
             </View>
+            <RecordNote note={record.note} />
         </View>
+    )
+}
+
+function RecordNote({ note }: { note?: string }) {
+    if (!note) return null
+    return (
+        <Text className="text-muted-foreground" style={{ fontSize: 11 }}>
+            {note}
+        </Text>
     )
 }
 
