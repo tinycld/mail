@@ -31,7 +31,6 @@ After `x`-ing one or more conversations, the top of the list shows a bulk-action
 | Shortcut | Action |
 |---|---|
 | ⌘⏎ | Send the current message |
-| **Esc** | Close the compose window (drafts auto-save) |
 | ⌘B | Bold |
 | ⌘I | Italic |
 | ⌘U | Underline |
