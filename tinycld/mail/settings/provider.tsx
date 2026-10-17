@@ -22,6 +22,7 @@ import { AddDomainForm } from './AddDomainForm'
 import { DnsRecordsPanel, hasUnpublishedDnsRecords } from './DnsRecordsPanel'
 import { DomainCoverageControl } from './DomainCoverageControl'
 import { isDomainReady } from './domain-ready'
+import { MailAppRecordsPanel } from './MailAppRecordsPanel'
 import { DeleteDomainButton, RemoveDomainConfirm, useRemoveDomain } from './RemoveDomain'
 import { useReorderDomains } from './useReorderDomains'
 import { assertVerifySaved } from './verify-domain'
@@ -240,6 +241,8 @@ function DomainRowItem({ domain, provider }: { domain: DomainRow; provider: 'pos
             />
 
             <DomainVerificationPanel domain={domain} provider={provider} />
+
+            <MailAppRecordsPanel domainName={domain.domain} isVisible={domain.verified} />
 
             <PostmarkWebhookURLsBlock isVisible={provider === 'postmark'} domainId={domain.id} />
 

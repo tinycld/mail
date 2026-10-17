@@ -13,20 +13,28 @@ This is **not** the same as the SMTP your mail provider uses to deliver mail acr
 
 > **Note**: this page is about connecting *your client* to TinyCld over SMTP. It is unrelated to the **self-hosted SMTP provider** option in [Provider setup](help://mail:provider-setup), which controls how TinyCld delivers and receives mail on the wire.
 
+## The quickest way
+
+Open **Settings → Account → Mail apps**. The page shows your exact settings. On a Mac, iPhone or iPad, **Download the profile** puts them in Mail; your device then asks for your password. A downloaded profile does not install by itself. On an iPhone or iPad, open Settings and tap **Profile Downloaded**, then **Install**. On a Mac, open System Settings and search for **Profiles**. The device says the profile is "Unverified". This is normal. To set up your phone, scan the QR code on the page with its camera.
+
+Most mail apps also find the settings by themselves when you type your email address and password, if your admin published the [DNS records for mail apps](help://mail:custom-domains).
+
 ## Connection settings
 
 | Setting | Value |
 |---|---|
-| **Server** | `{{server-host}}` |
+| **Server** | `{{mail-host}}` |
 | **Port** | **465** |
 | **Encryption** | SSL / TLS (implicit) |
-| **Username** | your TinyCld username, your sign-in email, or any address of your own inbox (not a shared inbox address) |
-| **Password** | your TinyCld password |
+| **Username** | your full email address |
+| **Password** | your TinyCld password, or an app password |
 | **Authentication** | Normal password |
 
-> **The server is your TinyCld web address** — the hostname in your browser's address bar, shown above. It is *not* your mail domain: even if you send as `you@yourdomain.com`, the server to enter is `{{server-host}}`, never `mail.yourdomain.com`. TinyCld identifies your workspace by the hostname your client connects with, so any other name (or an IP address) is refused with "service unavailable".
+> **The server is `{{mail-host}}`.** Type it exactly. Your mail domain or a `mail.` name works only when your admin published the DNS records for mail apps and the server has a certificate for that name. Otherwise the mail app shows a certificate error or cannot connect.
 
-The same credentials as [IMAP](help://mail:imap) — your regular TinyCld login.
+The same credentials as [IMAP](help://mail:imap): your regular TinyCld login.
+
+> **Two-step verification.** If two-step verification is on, or your organization requires it, your sign-in password does not work in mail apps. Create an app password in **Settings → Security → App passwords** and use it. See [App passwords](help://core:security-app-passwords).
 
 ## Why port 465 (not 587)
 
@@ -41,8 +49,8 @@ This is usually done as part of [IMAP setup](help://mail:imap) — the same acco
 1. **Mail → Settings → Accounts**, pick the TinyCld account.
 2. Click the **Server Settings** tab.
 3. Under **Outgoing Mail Server (SMTP)**:
-   - Host Name: `{{server-host}}`.
-   - User Name: your email address (any of your addresses works).
+   - Host Name: `{{mail-host}}`.
+   - User Name: your full email address.
    - Password: your TinyCld password.
    - Use TLS/SSL: **Yes**.
    - Port: **465**.
@@ -53,11 +61,11 @@ This is usually done as part of [IMAP setup](help://mail:imap) — the same acco
 
 1. **Account Settings → Outgoing Server (SMTP) → Add**.
 2. Description: anything (e.g. "TinyCld").
-3. Server Name: `{{server-host}}`.
+3. Server Name: `{{mail-host}}`.
 4. Port: **465**.
 5. Connection security: **SSL/TLS**.
 6. Authentication method: **Normal password**.
-7. User Name: your email address (any of your addresses works).
+7. User Name: your full email address.
 8. Click **OK**.
 
 Then in your account's Server Settings, set this SMTP server as the outgoing server for the account.
@@ -67,7 +75,7 @@ Then in your account's Server Settings, set this SMTP server as the outgoing ser
 In your `~/.muttrc`:
 
 ```muttrc
-set smtp_url = "smtps://your-username@{{server-host}}:465"
+set smtp_url = "smtps://you%40yourdomain.com@{{mail-host}}:465"
 set smtp_pass = "your-tinycld-password"
 set ssl_force_tls = yes
 set from = "you@yourdomain.com"
@@ -89,7 +97,7 @@ Outbound messages are capped at **25 MB total** (including attachments). Larger 
 
 ## Why messages might be rejected
 
-- **Connects, then immediately disconnects ("service unavailable")** — the server name in your client is wrong. It must be `{{server-host}}` exactly (your TinyCld web address); a `mail.` name, your mail domain, or an IP address all reach the server but don't identify your workspace, so it hangs up.
+- **Connects, then immediately disconnects ("service unavailable")** — the server name in your client is wrong. It must be `{{mail-host}}`. Another name works only when your admin published the DNS records for mail apps and the server has a certificate for that name.
 - **"Relaying denied. To send mail, log in on port 465."** — your mail app is sending through port 25, which only receives mail. Set the outgoing server port to **465**, turn on **SSL/TLS**, and turn on password authentication. In Apple Mail, clear **Automatically manage connection settings** first.
 - **Auth failed** — same as IMAP. Check your user name and password.
 - **Auth fails with `Your mail access is read-only; sending is not permitted`** — your account has read-only access to Mail on this server. You can still read over [IMAP](help://mail:imap); sending needs an administrator to grant full access.

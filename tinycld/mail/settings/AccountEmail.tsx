@@ -1,31 +1,16 @@
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
-import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import { Switch } from '@tinycld/core/ui/switch'
 import { ScrollView, Text, View } from 'react-native'
 import { type AddressItem, toAddressItems } from './address-items'
 import { DefaultFromPicker } from './DefaultFromPicker'
-import { MailAppLink } from './MailAppLink'
-import { personEmailQuery, toPersonEmail } from './usePersonEmail'
+import { MailAppSetupLink } from './MailAppLink'
+import type { toPersonEmail } from './usePersonEmail'
+import { useMyPersonEmail } from './usePersonEmail'
 
 type PersonEmail = ReturnType<typeof toPersonEmail>
 type Identity = NonNullable<PersonEmail['identity']>
-
-function useAccountEmail() {
-    const [identities, addresses, domains, groups] = useStore(
-        'mail_identities',
-        'mail_addresses',
-        'mail_domains',
-        'groups'
-    )
-    const { data, isReady } = useMyLiveQuery(
-        (query, { userId }) =>
-            personEmailQuery(query, { identities, addresses, domains, groups }, userId),
-        { queryKey: ['mail_account_email'] }
-    )
-    return { ...toPersonEmail(data ?? []), isReady }
-}
 
 function Note({ isVisible, text }: { isVisible: boolean; text: string }) {
     if (!isVisible) return null
@@ -230,7 +215,7 @@ function IdentityDetails({
                 addresses={addresses}
                 value={identity.defaultFrom}
             />
-            <MailAppLink />
+            <MailAppSetupLink />
         </View>
     )
 }
@@ -240,7 +225,7 @@ function IdentityDetails({
  * Default From, and which addresses get a folder of their own.
  */
 export default function AccountEmail() {
-    const { identity, addresses, isReady } = useAccountEmail()
+    const { identity, addresses, isReady } = useMyPersonEmail()
     const role = useCurrentRole()
     const isRetired = identity?.retired === true
     const hasNoIdentity = isReady && role.isReady && identity === null

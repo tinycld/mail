@@ -52,7 +52,7 @@ const addresses = [
         rank: 3,
         verified: false,
     },
-].map(a => ({ verified: true, ...a, domainId: 'd', source: 'rule', groupName: null }))
+].map(a => ({ verified: true, ...a, domainId: 'd', source: 'rule', groupName: null, created: '' }))
 
 function renderPicker(value: string) {
     return render(
