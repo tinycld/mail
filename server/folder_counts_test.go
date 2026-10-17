@@ -320,3 +320,73 @@ func TestFolderCounts_UnchangedAddressMapDoesNotSave(t *testing.T) {
 		t.Errorf("an unchanged recompute saved %d times, want 0", saves)
 	}
 }
+
+// clearAddressNumbers puts the counts row back where the address views
+// migration leaves it: the column added, with no value.
+func (env *addressCountsEnv) clearAddressNumbers(t *testing.T) {
+	t.Helper()
+	if _, err := env.app.DB().NewQuery("UPDATE mail_folder_counts SET inbox_by_address = NULL").Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if got := env.byAddress(t, env.inbox); len(got) != 0 {
+		t.Fatalf("precondition: inbox_by_address = %v, want empty", got)
+	}
+}
+
+func (env *addressCountsEnv) identity(t *testing.T) *core.Record {
+	t.Helper()
+	identity, err := env.app.FindFirstRecordByFilter("mail_identities", "user = {:user}", map[string]any{"user": env.user.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return identity
+}
+
+func (env *addressCountsEnv) wantAddressNumbers(t *testing.T, when string) {
+	t.Helper()
+	want := map[string]addressCount{
+		env.addrA.Id: {Unread: 1, Total: 2},
+		env.addrB.Id: {Unread: 0, Total: 1},
+	}
+	if got := env.byAddress(t, env.inbox); !reflect.DeepEqual(got, want) {
+		t.Fatalf("%s: inbox_by_address = %v, want %v", when, got, want)
+	}
+}
+
+func TestFolderCounts_SwitchOnFillsAddressNumbers(t *testing.T) {
+	env := setupAddressCountsEnv(t)
+	env.seedThread(t, env.inbox, false, env.addrA)
+	env.seedThread(t, env.inbox, true, env.addrA, env.addrB)
+	env.clearAddressNumbers(t)
+
+	identity := env.identity(t)
+	identity.Set("address_views", true)
+	if err := env.app.Save(identity); err != nil {
+		t.Fatal(err)
+	}
+	env.wantAddressNumbers(t, "after the switch went on")
+
+	env.clearAddressNumbers(t)
+	identity.Set("hidden_address_views", []string{env.addrB.Id})
+	if err := env.app.Save(identity); err != nil {
+		t.Fatal(err)
+	}
+	env.wantAddressNumbers(t, "after an address was hidden")
+}
+
+func TestFolderCounts_BootFillsAddressNumbersOfViewsThatAreOn(t *testing.T) {
+	env := setupAddressCountsEnv(t)
+	env.seedThread(t, env.inbox, false, env.addrA)
+	env.seedThread(t, env.inbox, true, env.addrA, env.addrB)
+	identity := env.identity(t)
+	identity.Set("address_views", true)
+	if err := env.app.Save(identity); err != nil {
+		t.Fatal(err)
+	}
+	env.clearAddressNumbers(t)
+
+	if err := backfillAddressViewCounts(env.app); err != nil {
+		t.Fatal(err)
+	}
+	env.wantAddressNumbers(t, "after the boot backfill")
+}

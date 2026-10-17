@@ -315,6 +315,10 @@ func registerShared(app *pocketbase.PocketBase) {
 	})
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
+		if err := backfillAddressViewCounts(app); err != nil {
+			folderCountsLog.Error("could not fill the address view counts", "error", err)
+		}
+
 		// Send endpoint (requires auth, resolves provider from org settings)
 		e.Router.POST("/api/mail/send", func(re *core.RequestEvent) error {
 			return handleSend(app, re)
