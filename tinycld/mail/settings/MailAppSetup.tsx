@@ -1,13 +1,22 @@
 import { QrCode } from '@tinycld/core/components/settings/security/QrCode'
 import { useFileToken } from '@tinycld/core/file-viewer/use-authed-file-url'
 import { openHelp } from '@tinycld/core/lib/help/open-help'
+import { log } from '@tinycld/core/lib/logger'
 import { getResolvedAddress } from '@tinycld/core/lib/server-address'
+import { useCurrentRole } from '@tinycld/core/lib/use-current-role'
 import { useMailHost } from '@tinycld/core/lib/use-mail-host'
 import { Button, ButtonText } from '@tinycld/core/ui/button'
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
 import { CopyButton } from './CopyButton'
 import { IMAP_PORT, profileUrl, SMTP_PORT, setupAddress, setupPageUrl } from './mail-app-setup'
 import { useMyPersonEmail } from './usePersonEmail'
+
+const IMAP_SECURITY = `Port ${IMAP_PORT}, SSL/TLS`
+const SMTP_SECURITY = `Port ${SMTP_PORT}, SSL/TLS`
+
+function openUrl(url: string) {
+    Linking.openURL(url).catch(err => log.error('mail.client-setup', err, { url: 'profile' }))
+}
 
 function useMailAppSetup() {
     const { identity, addresses, isReady } = useMyPersonEmail()
@@ -22,7 +31,7 @@ function useMailAppSetup() {
         host,
         hasNoAddress: isReady && address === null,
         pageUrl: serverAddress ? setupPageUrl(serverAddress) : null,
-        openProfile: profileHref ? () => Linking.openURL(profileHref) : null,
+        openProfile: profileHref ? () => openUrl(profileHref) : null,
     }
 }
 
@@ -46,7 +55,6 @@ function Note({ isVisible, text }: { isVisible: boolean; text: string }) {
 }
 
 function ServerSettings({ address, host }: { address: string; host: string }) {
-    const security = 'SSL/TLS'
     return (
         <View className="gap-3 rounded-xl border border-border p-3">
             <SettingRow label="Email address" value={address} testID="mail-app-address" />
@@ -55,13 +63,13 @@ function ServerSettings({ address, host }: { address: string; host: string }) {
                 value={host}
                 testID="mail-app-imap-host"
             />
-            <Text className="text-muted-foreground text-xs">{`Port ${IMAP_PORT}, ${security}`}</Text>
+            <Text className="text-muted-foreground text-xs">{IMAP_SECURITY}</Text>
             <SettingRow
                 label="Outgoing mail server (SMTP)"
                 value={host}
                 testID="mail-app-smtp-host"
             />
-            <Text className="text-muted-foreground text-xs">{`Port ${SMTP_PORT}, ${security}`}</Text>
+            <Text className="text-muted-foreground text-xs">{SMTP_SECURITY}</Text>
             <SettingRow label="User name" value={address} testID="mail-app-user-name" />
             <Text className="text-muted-foreground text-xs">
                 Password: the password you sign in with.
@@ -76,7 +84,10 @@ function AppleProfile({ onPress }: { onPress: (() => void) | null }) {
             <Text className="text-sm font-semibold text-foreground">Apple Mail</Text>
             <Text className="text-xs text-muted-foreground">
                 On a Mac, iPhone or iPad, the profile puts these settings in Mail. The profile does
-                not hold your password: your device asks for it.
+                not hold your password: your device asks for it. After you download it, open it to
+                install it. On an iPhone or iPad, open Settings and tap Profile Downloaded. On a
+                Mac, open System Settings, Privacy & Security, then Profiles. The device says the
+                profile is Unverified. This is normal.
             </Text>
             <Button
                 size="sm"
@@ -140,9 +151,14 @@ function SetupDetails({
 /** Settings → Account → Mail apps: the person's server settings, an Apple profile and a QR code. */
 export default function MailAppSetup() {
     const { address, host, hasNoAddress, pageUrl, openProfile } = useMailAppSetup()
+    const role = useCurrentRole()
     return (
         <ScrollView contentContainerClassName="gap-4 p-4">
-            <Note isVisible={hasNoAddress} text="You have no email address yet." />
+            <Note
+                isVisible={hasNoAddress && role.isGuest}
+                text="Guests do not get email addresses."
+            />
+            <Note isVisible={hasNoAddress && !role.isGuest} text="You have no email address yet." />
             <SetupDetails
                 isVisible={!hasNoAddress}
                 address={address}

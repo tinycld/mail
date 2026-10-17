@@ -15,7 +15,7 @@ This is **not** the same as the SMTP your mail provider uses to deliver mail acr
 
 ## The quickest way
 
-Open **Settings → Account → Mail apps**. The page shows your exact settings. On a Mac, iPhone or iPad, **Download the profile** puts them in Mail; your device then asks for your password. To set up your phone, scan the QR code on the page with its camera.
+Open **Settings → Account → Mail apps**. The page shows your exact settings. On a Mac, iPhone or iPad, **Download the profile** puts them in Mail; your device then asks for your password. A downloaded profile does not install by itself. On an iPhone or iPad, open Settings and tap **Profile Downloaded**, then **Install**. On a Mac, open System Settings and search for **Profiles**; it is in Privacy & Security. The device says the profile is "Unverified". This is normal. To set up your phone, scan the QR code on the page with its camera.
 
 Most mail apps also find the settings by themselves when you type your email address and password, if your admin published the [DNS records for mail apps](help://mail:custom-domains).
 
@@ -30,7 +30,7 @@ Most mail apps also find the settings by themselves when you type your email add
 | **Password** | your TinyCld password |
 | **Authentication** | Normal password |
 
-> **The server is `{{mail-host}}`.** Type it exactly. Your mail domain or a `mail.` name works only when your admin published the DNS records for mail apps and the server has a certificate for that name. Otherwise the server cannot tell which workspace you want, and it hangs up ("service unavailable").
+> **The server is `{{mail-host}}`.** Type it exactly. Your mail domain or a `mail.` name works only when your admin published the DNS records for mail apps and the server has a certificate for that name. Otherwise the mail app shows a certificate error or cannot connect.
 
 The same credentials as [IMAP](help://mail:imap) — your regular TinyCld login.
 

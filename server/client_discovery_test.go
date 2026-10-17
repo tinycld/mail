@@ -35,6 +35,26 @@ func newDiscoveryTestApp(t *testing.T) *tests.TestApp {
 	return app
 }
 
+// seedAnn creates a real person with the address ann@acme.example, so a test
+// can compare a real address with an unknown one.
+func seedAnn(t *testing.T, app *tests.TestApp) {
+	t.Helper()
+	org, err := app.FindFirstRecordByFilter("mail_domains", "domain = 'acme.example'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := saveRealRecord(t, app, "users", map[string]any{
+		"email": "ann@argosity.com", "username": "ann", "name": "Ann", "role": "member",
+	})
+	inbox := saveRealRecord(t, app, "mail_mailboxes", map[string]any{
+		"address": "ann", "domain": org.Id, "type": "personal", "display_name": "Ann", "name": "Ann",
+	})
+	saveRealRecord(t, app, "mail_identities", map[string]any{"user": user.Id, "inbox": inbox.Id, "email_name": "ann"})
+	if _, err := app.FindFirstRecordByFilter("mail_addresses", "local_part = 'ann' && mailbox = {:m}", map[string]any{"m": inbox.Id}); err != nil {
+		t.Fatalf("ann@acme.example is not a real address: %v", err)
+	}
+}
+
 func runDiscovery(t *testing.T, app *tests.TestApp, s tests.ApiScenario) {
 	t.Helper()
 	s.TestAppFactory = func(_ testing.TB) *tests.TestApp { return app }
@@ -105,6 +125,7 @@ func TestAutoconfigRefusesOtherDomains(t *testing.T) {
 // addresses exist.
 func TestAutoconfigGivesTheSameAnswerForEveryLocalPart(t *testing.T) {
 	app := newDiscoveryTestApp(t)
+	seedAnn(t, app)
 	var bodies []string
 	for _, email := range []string{"ann@acme.example", "nobody@acme.example"} {
 		runDiscovery(t, app, tests.ApiScenario{
@@ -189,6 +210,31 @@ func TestAutodiscoverAnswersForAVerifiedDomain(t *testing.T) {
 				assertWellFormedXML(t, string(body))
 			},
 		})
+	}
+}
+
+// A real address and an unknown one differ only in the LoginName the caller
+// sent, so the answer does not tell a caller which addresses exist.
+func TestAutodiscoverGivesTheSameAnswerForEveryLocalPart(t *testing.T) {
+	app := newDiscoveryTestApp(t)
+	seedAnn(t, app)
+	var bodies []string
+	for _, email := range []string{"ann@acme.example", "nobody@acme.example"} {
+		runDiscovery(t, app, tests.ApiScenario{
+			Name:            "autodiscover " + email,
+			Method:          http.MethodPost,
+			URL:             "/autodiscover/autodiscover.xml",
+			Body:            strings.NewReader(autodiscoverBody(email)),
+			ExpectedStatus:  http.StatusOK,
+			ExpectedContent: []string{"<LoginName>" + email + "</LoginName>"},
+			AfterTestFunc: func(_ testing.TB, _ *tests.TestApp, res *http.Response) {
+				body, _ := io.ReadAll(res.Body)
+				bodies = append(bodies, strings.ReplaceAll(string(body), email, "ADDRESS"))
+			},
+		})
+	}
+	if len(bodies) != 2 || bodies[0] != bodies[1] {
+		t.Fatalf("answers differ by local part:\n%v", bodies)
 	}
 }
 

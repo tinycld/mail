@@ -6,6 +6,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 afterEach(() => {
     cleanup()
     h.updated.length = 0
+    h.qrValues.length = 0
     h.mailHost = 'mail.acme.example'
 })
 
@@ -14,6 +15,7 @@ const h = vi.hoisted(() => ({
     mailHost: 'mail.acme.example' as string | null,
     userId: 'u1',
     updated: [] as Record<string, unknown>[],
+    qrValues: [] as string[],
     identities: [
         {
             id: 'i1',
@@ -145,6 +147,12 @@ vi.mock('@tinycld/core/lib/auth', () => ({
 }))
 
 vi.mock('@tinycld/core/lib/help/open-help', () => ({ openHelp: h.openHelp }))
+vi.mock('@tinycld/core/components/settings/security/QrCode', () => ({
+    QrCode: ({ value, accessibilityLabel }: { value: string; accessibilityLabel: string }) => {
+        h.qrValues.push(value)
+        return <span role="img" aria-label={accessibilityLabel} />
+    },
+}))
 vi.mock('react-native-svg', () => ({
     default: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     Path: () => <span />,
@@ -212,8 +220,26 @@ test('shows the settings for the Default From address', async () => {
     expect((await findById('mail-app-imap-host'))?.textContent).toBe('mail.acme.example')
     expect((await findById('mail-app-smtp-host'))?.textContent).toBe('mail.acme.example')
     expect(
-        container.querySelector('[accessibilitylabel="QR code that opens this page on your phone"]')
+        container.querySelector('[aria-label="QR code that opens this page on your phone"]')
     ).not.toBeNull()
+})
+
+test('the QR code opens the set-up page and holds no token', async () => {
+    h.userId = 'u1'
+    const { container, findById, byId } = renderSetup()
+    await findById('mail-app-address')
+    const qr = container.querySelector('[aria-label="QR code that opens this page on your phone"]')
+    expect(qr).not.toBeNull()
+    expect(h.qrValues).toContain('https://acme.tinycld.org/a/settings/account/mail/mail-apps')
+    expect(h.qrValues.join(' ')).not.toContain('file-token')
+    expect(byId('mail-app-profile-button')?.getAttribute('data-disabled')).toBe('false')
+})
+
+test('tells a guest that guests get no address', async () => {
+    h.userId = 'u9'
+    const { findByText, queryByText } = renderSetup()
+    expect(await findByText('Guests do not get email addresses.')).toBeTruthy()
+    expect(queryByText('You have no email address yet.')).toBeNull()
 })
 
 test('says so when the person has no address', async () => {
@@ -223,7 +249,7 @@ test('says so when the person has no address', async () => {
     expect(byId('mail-app-address')).toBeNull()
 })
 
-test('waits for the mail host', async () => {
+test('hides the host rows when the mail host becomes unknown', async () => {
     h.userId = 'u1'
     const { byId, findById, rerender } = renderSetup()
     // The host row shows once the person's data has loaded, so the data is in

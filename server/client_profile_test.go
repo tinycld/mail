@@ -8,6 +8,8 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
+
+	"tinycld.org/core/syscfg"
 )
 
 type profileFixture struct {
@@ -117,6 +119,53 @@ func TestProfileFollowsTheChosenDefaultFrom(t *testing.T) {
 		ExpectedStatus:  http.StatusOK,
 		ExpectedContent: []string{"<key>EmailAddress</key><string>nathan@acme.com</string>"},
 	})
+}
+
+// unsetMailHost removes the configured mail host, so the profile falls back to
+// the public URL or the request.
+func unsetMailHost(t *testing.T) {
+	t.Helper()
+	syscfg.SetResolver(func(string) string { return "" })
+}
+
+// A proxy may forward its own address as the Host header; the public URL
+// names the host people use, as the set-up page shows.
+func TestProfileHostIsThePublicURLNotTheProxyHost(t *testing.T) {
+	f := newProfileFixture(t, "Nathan")
+	unsetMailHost(t)
+	f.app.Settings().Meta.AppURL = "https://Web.Acme.example"
+	runProfile(t, f, tests.ApiScenario{
+		Name:               "bogus Host header",
+		URL:                "http://127.0.0.1:8090/api/mail/mobileconfig?token=" + fileToken(t, f.user),
+		ExpectedStatus:     http.StatusOK,
+		ExpectedContent:    []string{"<key>IncomingMailServerHostName</key><string>web.acme.example</string>"},
+		NotExpectedContent: []string{"127.0.0.1"},
+	})
+}
+
+func TestProfileHostFallsBackToTheRequestHost(t *testing.T) {
+	for name, appURL := range map[string]string{"empty": "", "loopback": "http://localhost:8090"} {
+		f := newProfileFixture(t, "Nathan")
+		unsetMailHost(t)
+		f.app.Settings().Meta.AppURL = appURL
+		runProfile(t, f, tests.ApiScenario{
+			Name:            "AppURL " + name,
+			URL:             "https://web.acme.example/api/mail/mobileconfig?token=" + fileToken(t, f.user),
+			ExpectedStatus:  http.StatusOK,
+			ExpectedContent: []string{"<key>IncomingMailServerHostName</key><string>web.acme.example</string>"},
+		})
+	}
+}
+
+func TestIsLoopbackHost(t *testing.T) {
+	for host, want := range map[string]bool{
+		"localhost": true, "127.0.0.1": true, "127.9.9.9": true, "::1": true,
+		"web.acme.example": false, "10.0.0.1": false, "": false,
+	} {
+		if got := isLoopbackHost(host); got != want {
+			t.Errorf("isLoopbackHost(%q) = %v, want %v", host, got, want)
+		}
+	}
 }
 
 func TestProfileByAuthHeader(t *testing.T) {

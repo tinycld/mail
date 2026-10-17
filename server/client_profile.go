@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"slices"
 	"strings"
@@ -37,9 +38,7 @@ func handleMobileconfig(app core.App, re *core.RequestEvent) error {
 	if err != nil {
 		return re.InternalServerError("", err)
 	}
-	// The request reached the web host the app talks to, so that host is the
-	// default: the set-up page shows the same one.
-	host := mailhost.Host(re.Request.Host)
+	host := profileHost(app, re.Request.Host)
 	if host == "" {
 		return re.InternalServerError("", errors.New("no mail host for the profile"))
 	}
@@ -56,6 +55,26 @@ func handleMobileconfig(app core.App, re *core.RequestEvent) error {
 	re.Response.Header().Set("Content-Disposition", `attachment; filename="mail.mobileconfig"`)
 	re.Response.Header().Set("Cache-Control", "no-store")
 	return re.Blob(http.StatusOK, "application/x-apple-aspen-config", body)
+}
+
+// profileHost is the mail host for the profile. The public URL is the default,
+// as it is for the set-up page and discovery. A reverse proxy often forwards
+// its own address as the Host header, so the request host is only a fallback
+// for an install with no public URL set or one that points at this machine.
+func profileHost(app core.App, requestHost string) string {
+	host := mailhost.Host(app.Settings().Meta.AppURL)
+	if host == "" || isLoopbackHost(host) {
+		return mailhost.Host(requestHost)
+	}
+	return host
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // profileUser is the person asking. A browser cannot send a header when it
