@@ -4,7 +4,8 @@
 // UI: the invite, the group and its members, the group's address, and the
 // removal from the group. Only the inbound messages come in through the
 // provider webhook, as real mail does. The invitee keeps a page open, so the
-// second message staying out of that inbox is checked on a live list.
+// second message staying out of that inbox is checked on a live list, after
+// a later marker message to the invitee's own address has arrived.
 import { expect, type Page, test } from '@playwright/test'
 import { createInvitedUser, navigateToPackage, TEST_USER_EMAIL } from '@tinycld/core/e2e-helpers'
 import {
@@ -93,8 +94,11 @@ test.describe('Mail — A group’s own address', () => {
     let closeInvitee: (() => Promise<void>) | null = null
 
     test.afterEach(async ({ page }) => {
-        if (isGroupCreated) await deleteGroup(page, groupName)
-        if (closeInvitee) await closeInvitee()
+        try {
+            if (isGroupCreated) await deleteGroup(page, groupName)
+        } finally {
+            if (closeInvitee) await closeInvitee()
+        }
     })
 
     test('mail to the group address reaches each member, and stops for a removed member', async ({
@@ -149,9 +153,16 @@ test.describe('Mail — A group’s own address', () => {
         await openMailInbox(page)
         await expectRowVisible(page, second)
 
-        // The first message proves the invitee's list loaded. The second is
-        // newer and sorts above it, so it would be on screen if it had arrived.
-        await expectRowVisible(inviteePage, first)
+        // The invitee's list is live, so an absence check alone could pass
+        // before a copy of the second message arrives. A marker sent to the
+        // invitee's own address after the second message arrives after any
+        // copy of it would, so once the marker shows, the second is absent
+        // for good.
+        const { subject: marker } = await deliverInbound(request, {
+            subject: uniqueSubject('Marker after removal'),
+            to: `${user.username}@${MAIN_DOMAIN}`,
+        })
+        await expectRowVisible(inviteePage, marker)
         await expect(emailRow(inviteePage, second)).toHaveCount(0)
     })
 })
