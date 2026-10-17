@@ -115,6 +115,9 @@ type sendParams struct {
 	// files of it to send; see api.SendEmailRequest.
 	DraftID          string
 	DraftAttachments []string
+	// Headers are extra headers the message carries, such as the
+	// Auto-Submitted and loop headers of a rule send.
+	Headers []Header
 }
 
 // sendResultRecord is what a completed send produces: the stored message and
@@ -236,6 +239,7 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 		TextBody:    p.TextBody,
 		InReplyTo:   inReplyToHeader,
 		References:  referencesHeader,
+		Headers:     p.Headers,
 		Attachments: attachments,
 
 		// Echoed back on the provider's delivery and bounce notifications,
@@ -304,6 +308,7 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 		DeliveryStatus:    deliveryStatus,
 		BounceReason:      bounceReason,
 		Attachments:       storedAttachments,
+		Headers:           p.Headers,
 	}
 
 	record, err := storeMessage(app, thread.Id, msg)

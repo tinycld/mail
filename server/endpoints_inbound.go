@@ -158,6 +158,7 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 		TextBody:      msg.TextBody,
 		StrippedReply: msg.StrippedReply,
 		Attachments:   msg.Attachments,
+		Headers:       msg.Headers,
 	}
 
 	// One transaction around the whole delivery.

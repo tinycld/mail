@@ -90,7 +90,15 @@ want a rule that affects only you, make it a personal rule.
 ## Auto-replies won't loop
 
 A rule that sends mail in response to arriving mail can, in principle, answer
-another auto-responder forever. Two things stop that.
+another auto-responder forever. These things stop that.
+
+A rule does not forward or send mail in reply to automatic mail, for example
+auto-replies, mailing lists or mail that another rule sent. Rules that move,
+mark or star mail still run.
+
+Mail that a rule sends has a mark that shows it is automatic mail. Rules in
+other inboxes do not reply to it, and most other mail servers also do not
+reply to it.
 
 Mail caps how much an inbox sends within an hour. Only outgoing mail counts —
 messages you receive never use up the allowance. The cap is shared by all of
@@ -100,8 +108,9 @@ rule going quiet, check its run history: hitting the cap is recorded there.
 
 A rule also can't send to the inbox it's sending from. Both the inbox's own
 address and any of its extra addresses are refused, so a forward rule pointed at itself
-can't feed itself. Forwarding or replying to any other address, including
-`{{sender_email}}`, works normally.
+can't feed itself. A group address that delivers to the inbox is also refused,
+for example the address of a group that you are a member of. Forwarding or
+replying to any other address, including `{{sender_email}}`, works normally.
 
 ## Testing before you rely on it
 

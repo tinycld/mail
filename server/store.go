@@ -210,6 +210,7 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 	}
 	record.Set("snippet", truncateSnippet(snippetSource, 200))
 	record.Set("has_attachments", len(msg.Attachments) > 0)
+	record.Set("is_auto_submitted", isAutoSubmitted(msg.Headers))
 
 	totalSize := int64(len(msg.HTMLBody))
 	for _, att := range msg.Attachments {
@@ -355,6 +356,11 @@ type storedMessage struct {
 	Attachments    []InboundAttachment
 	DeliveryStatus string // "sending", "sent", "delivered", "bounced", "spam_complaint", "draft"
 	BounceReason   string // only populated when DeliveryStatus == "bounced"
+	// Headers are the message's top-level header fields as received or sent.
+	// They are not stored as such; storeMessage reads the flags it derives
+	// from them (is_auto_submitted), so every path that stores a message
+	// derives them the same way.
+	Headers []Header
 }
 
 // updateThreadMetadata updates the thread's snippet, latest_date, message_count, and participants.
