@@ -58,20 +58,3 @@ func addAddressKeys(app core.App, threadID string, ids ...string) error {
 	thread.Set("address_keys", next)
 	return app.Save(thread)
 }
-
-// registerAddressKeysGuard makes mail_threads.address_keys server-owned. The
-// thread updateRule lets any member write the thread, and the after-update
-// hook copies the keys to every member's state row, so a client write would
-// change which address views list the thread for the whole inbox. Restore
-// rather than refuse, as the state row guard does: a client may send the
-// whole record back.
-func registerAddressKeysGuard(app core.App) {
-	app.OnRecordCreateRequest("mail_threads").BindFunc(func(e *core.RecordRequestEvent) error {
-		e.Record.Set("address_keys", "")
-		return e.Next()
-	})
-	app.OnRecordUpdateRequest("mail_threads").BindFunc(func(e *core.RecordRequestEvent) error {
-		e.Record.Set("address_keys", e.Record.Original().GetString("address_keys"))
-		return e.Next()
-	})
-}

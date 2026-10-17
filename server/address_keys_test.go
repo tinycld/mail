@@ -35,7 +35,7 @@ func setupAddressKeysEnv(t *testing.T) *addressKeysEnv {
 	app := newRealSchemaApp(t)
 	registerAddressHooks(app)
 	registerThreadStateSyncHooks(app)
-	registerAddressKeysGuard(app)
+	registerThreadOwnedFieldsGuard(app)
 	registerThreadMarkerHooks(app)
 	q := saveRealRecord(t, app, "mail_domains", map[string]any{
 		"domain": "q.example", "verified": true,
@@ -340,10 +340,10 @@ func TestAddressKeys_ClientCannotWriteThread(t *testing.T) {
 	update := tests.ApiScenario{
 		Name:            "a member PATCHes address_keys on a thread",
 		Method:          http.MethodPatch,
-		Body:            strings.NewReader(`{"address_keys":"zzz","snippet":"edited"}`),
+		Body:            strings.NewReader(`{"address_keys":"zzz","subject":"edited"}`),
 		Headers:         map[string]string{"Content-Type": "application/json"},
 		ExpectedStatus:  http.StatusOK,
-		ExpectedContent: []string{`"snippet":"edited"`},
+		ExpectedContent: []string{`"subject":"edited"`},
 	}
 	update.TestAppFactory = func(_ testing.TB) *tests.TestApp {
 		env = setupAddressKeysEnv(t)
