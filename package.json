@@ -17,6 +17,7 @@
         "./system-settings/*": "./tinycld/mail/system-settings/*.tsx",
         "./hooks/*": "./tinycld/mail/hooks/*.ts",
         "./components/*": "./tinycld/mail/components/*.tsx",
+        "./notify-events": "./tinycld/mail/notify-events.ts",
         "./search-adapter": "./tinycld/mail/search-adapter.ts"
     },
     "scripts": {

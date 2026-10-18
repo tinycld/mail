@@ -105,7 +105,7 @@ When you have multiple inboxes, IMAP namespaces them — typically as separate s
 ## Troubleshooting
 
 - **Connects, then immediately disconnects ("service unavailable" / BYE)** — the server name in your client is wrong. It must be `{{mail-host}}`. Another name works only when your admin published the DNS records for mail apps and the server has a certificate for that name.
-- **Auth failed** — use your full email address (an address of your own inbox, not of a shared inbox) and the password you sign in with.
+- **Auth failed** — use your full email address (an address of your own inbox, not of a shared inbox) and the password you sign in with. With two-step verification on, the password must be an [app password](help://core:security-app-passwords).
 - **Connection refused / timeout** — verify your TinyCld instance is reachable on port 993. Try `openssl s_client -connect {{mail-host}}:993 -servername {{mail-host}}` from a terminal to test.
 - **TLS certificate error** — Mail's IMAP server uses the TLS certificate of `{{mail-host}}`. Check that the server name in your client is exactly `{{mail-host}}`.
 - **Flagging, moving, or deleting fails with `Your mail access is read-only`** — your account has read-only access to Mail on this server. Reading and syncing still work, but any change your client tries to make (mark read, star, move, delete, save a draft) is refused. Ask an administrator to grant full access if you need to make changes.
