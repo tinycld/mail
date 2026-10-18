@@ -121,19 +121,53 @@ export async function navigateToPersonalInbox(page: Page) {
     })
 }
 
-// Navigate to the mail package's "Mailboxes" settings screen
+// Navigate to the mail package's "Shared inboxes" settings screen
 // (/settings/mail/mailboxes) purely through the SPA — the rail's
 // settings button lands on the settings index, whose per-package section
-// exposes the "Mailboxes" link. A page.goto here would tear down the SPA and
-// cancel the in-flight settings chunk. Requires an org admin/owner session:
-// the package-settings group only renders for isAdmin (owner || admin).
-export async function navigateToMailboxSettings(page: Page) {
+// exposes the "Shared inboxes" link. A page.goto here would tear down the SPA
+// and cancel the in-flight settings chunk. Requires an org admin/owner
+// session: the package-settings group only renders for isAdmin (owner || admin).
+export async function navigateToSharedInboxSettings(page: Page) {
     await page.getByTestId('nav-settings').click()
     // No URL waits: each click auto-waits for its target to be actionable,
     // which proves the screen rendered — the URL only proves the router
     // accepted the push, and gating on it raced a still-mounting screen.
-    await page.getByText('Mailboxes', { exact: true }).first().click()
-    await expect(page.getByText('Mailboxes', { exact: true }).first()).toBeVisible()
+    await page.getByText('Shared inboxes', { exact: true }).first().click()
+    await expect(page.getByText('Shared inboxes', { exact: true }).first()).toBeVisible()
+}
+
+// Opens a person's Members drawer, whose Email section manages their inbox
+// and addresses. The drawer is modal: the caller closes it before navigating
+// away, because its backdrop covers the app rail.
+export async function openPersonEmail(page: Page, username: string) {
+    await page.getByTestId('nav-settings').click()
+    await page.getByText('Members', { exact: true }).first().click()
+    await page.getByTestId(`member-row-${username}`).click()
+    const drawer = page.getByRole('dialog')
+    await expect(drawer.getByText('Email', { exact: true }).first()).toBeVisible()
+    return drawer
+}
+
+// Sets a domain's "Who gets an address here?" to Everyone on the Domains
+// screen and applies it, so each person gets their email name on it.
+export async function giveEveryoneAnAddressOn(page: Page, domain: string) {
+    await page.getByTestId('nav-settings').click()
+    await page.getByText('Domains', { exact: true }).first().click()
+    await expect(page.getByText('Mail Domains', { exact: true })).toBeVisible()
+
+    // The nearest ancestor holding this domain's name and its rule control,
+    // so a click cannot land in another domain's card.
+    const card = page
+        .locator('div')
+        .filter({ has: page.getByText(domain, { exact: true }) })
+        .filter({ has: page.getByText('Who gets an address here?', { exact: true }) })
+        .last()
+    await expect(card.getByText('Only people I add', { exact: true })).toBeVisible()
+
+    await card.getByText('Everyone', { exact: true }).click()
+    await expect(card.getByText(new RegExp(`^Adds .*@${domain}`))).toBeVisible()
+    await card.getByText('Apply', { exact: true }).click()
+    await expect(card.getByText('Apply', { exact: true })).toBeHidden()
 }
 
 // PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
@@ -200,7 +234,8 @@ export interface DeliverOptions {
 // tester@tinycld.org. Deriving the default recipient from the email
 // local-part is the exact bug commit 4d52992 fixed; with `user@…` every
 // deliverInbound 403s "No mailbox for recipient(s)".
-export const TEST_USER_MAILBOX = `${process.env.TEST_USER_USERNAME || 'tester'}@tinycld.org`
+export const TEST_USER_USERNAME = process.env.TEST_USER_USERNAME || 'tester'
+export const TEST_USER_MAILBOX = `${TEST_USER_USERNAME}@tinycld.org`
 
 export async function deliverInbound(
     request: APIRequestContext,
@@ -248,7 +283,7 @@ export function uniqueSubject(label: string): string {
 
 const MAIL_DOMAIN = 'tinycld.org'
 
-// Creates a shared mailbox through the Mailboxes settings screen, returns to
+// Creates a shared inbox through the Shared inboxes settings screen, returns to
 // mail, and returns its address. The display name is the unique local part,
 // so the mailbox's sidebar section is found by that text.
 // A fresh mailbox is the way to get a small, known inbox: the seeded personal
@@ -256,9 +291,9 @@ const MAIL_DOMAIN = 'tinycld.org'
 // inbox is small (a full page accidentally widens the realtime filter).
 export async function createSharedMailbox(page: Page, label: string): Promise<string> {
     const local = `${label}-${Date.now().toString(36)}`.toLowerCase()
-    await navigateToMailboxSettings(page)
-    await page.getByText('New mailbox', { exact: true }).click()
-    await expect(page.getByText('New shared mailbox')).toBeVisible()
+    await navigateToSharedInboxSettings(page)
+    await page.getByText('New shared inbox', { exact: true }).click()
+    await expect(page.getByText('Set up a shared inbox')).toBeVisible()
     await page.getByTestId('address').fill(local)
     // The domain choice renders only when the org has more than one domain
     // (the custom-domain spec adds some), and it defaults to the first one.
@@ -273,8 +308,8 @@ export async function createSharedMailbox(page: Page, label: string): Promise<st
     if (await domainChoice.isVisible()) await domainChoice.click()
     await expect(page.getByText(`will be: ${local}@${MAIL_DOMAIN}`)).toBeVisible()
     await page.getByTestId('display_name').fill(local)
-    await page.getByText('Create mailbox', { exact: true }).click()
-    await expect(page.getByText('New shared mailbox')).toBeHidden()
+    await page.getByText('Create inbox', { exact: true }).click()
+    await expect(page.getByText('Set up a shared inbox')).toBeHidden()
     await expect(page.getByText(local).first()).toBeVisible()
     await navigateToPackage(page, 'mail', {
         waitFor: mailboxSection(page, local),

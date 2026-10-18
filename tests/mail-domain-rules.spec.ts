@@ -9,7 +9,13 @@
 // address in the mailbox and in compose — is driven through the UI.
 import { expect, test } from '@playwright/test'
 import { login, navigateToPackage } from '@tinycld/core/e2e-helpers'
-import { navigateToMailboxSettings, seedVerifiedDomain, TEST_USER_MAILBOX } from './helpers'
+import {
+    giveEveryoneAnAddressOn,
+    openPersonEmail,
+    seedVerifiedDomain,
+    TEST_USER_MAILBOX,
+    TEST_USER_USERNAME,
+} from './helpers'
 
 test.describe('Mail — Domain rule', () => {
     test('setting a domain to Everyone gives the test user an address on it', async ({ page }) => {
@@ -24,30 +30,14 @@ test.describe('Mail — Domain rule', () => {
         await navigateToPackage(page, 'mail', {
             waitFor: page.getByTestId('package-sidebar-mounted'),
         })
-        await page.getByTestId('nav-settings').click()
-        await page.getByText('Domains', { exact: true }).first().click()
-        await expect(page.getByText('Mail Domains', { exact: true })).toBeVisible()
+        await giveEveryoneAnAddressOn(page, domain)
 
-        // The nearest ancestor holding this domain's name and its rule control,
-        // so a click cannot land in another domain's card.
-        const card = page
-            .locator('div')
-            .filter({ has: page.getByText(domain, { exact: true }) })
-            .filter({ has: page.getByText('Who gets an address here?', { exact: true }) })
-            .last()
-        await expect(card.getByText('Only people I add', { exact: true })).toBeVisible()
-
-        await card.getByText('Everyone', { exact: true }).click()
-        await expect(card.getByText(new RegExp(`^Adds .*@${domain}`))).toBeVisible()
-        await card.getByText('Apply', { exact: true }).click()
-        await expect(card.getByText('Apply', { exact: true })).toBeHidden()
-
-        await navigateToMailboxSettings(page)
-        await page.getByTestId(`mailbox-row-${TEST_USER_MAILBOX}`).click()
-        const drawer = page.getByRole('dialog')
+        const drawer = await openPersonEmail(page, TEST_USER_USERNAME)
         await expect(drawer.getByText('Addresses', { exact: true })).toBeVisible()
-        await expect(drawer.getByText(address, { exact: true })).toBeVisible()
-        await expect(drawer.getByText('From the domain rule', { exact: true })).toBeVisible()
+        // The row, not the bare text: the Default From choices list each address too.
+        const row = drawer.getByTestId(`address-row-${address}`)
+        await expect(row).toBeVisible()
+        await expect(row.getByText('From the domain rule', { exact: true })).toBeVisible()
         // The drawer is modal: its backdrop covers the app rail until it closes.
         await drawer.getByRole('button', { name: 'Close' }).click()
         await expect(drawer).toBeHidden()

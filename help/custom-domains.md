@@ -64,13 +64,13 @@ Each domain has a setting **Who gets an address here?**:
 
 - **Everyone** — each person gets their email name on this domain. For example, if Nathan's email name is `nathan`, Nathan gets `nathan@` on this domain. People who join later also get it.
 - **Members of these groups** — only members of the groups that you choose get their email name on this domain. When a person joins one of the groups, the person gets the address. When the person leaves all of the groups, the address stops receiving mail.
-- **Only people I add** — nobody gets an address automatically. Add addresses to a mailbox in **Settings → Mail → Mailboxes**.
+- **Only people I add** — nobody gets an address automatically. To add an address for a person, open **Settings → Members**, click the person, and use the **Email** section. To add an address for a shared inbox, use **Settings → Mail → Shared inboxes**.
 
 To make groups, go to **Settings → Groups**. When you remove a person from a group, the confirm message shows the addresses that the person loses.
 
 If you delete the last group of a domain, nobody gets an address on that domain. The domain shows a warning until you choose a group.
 
-On a domain set to **Everyone** or **Members of these groups**, a person's email name is reserved for that person, so a shared mailbox cannot use it there.
+On a domain set to **Everyone** or **Members of these groups**, a person's email name is reserved for that person, so a shared inbox cannot use it there.
 
 The first domain you add is set to **Everyone**. Each domain you add after that starts as **Only people I add**, so adding a domain never gives out addresses until you choose to.
 
@@ -85,7 +85,7 @@ Drag the domains to set their order. The first verified domain in the order is t
 ## What "fully verified" enables
 
 - **Send** — outbound from any address on this domain works.
-- **Receive** — inbound mail to an [address](help://mail:mailboxes) on this domain appears in the Inbox of the mailbox that has the address.
+- **Receive** — inbound mail to an [address](help://mail:addresses) on this domain appears in the inbox that has the address.
 - **Bounce tracking** — delivery callbacks update each sent message's status. A delivered message shows "Delivered" and keeps `delivery_status` "sent". A failed message gets `delivery_status` "bounced" or "spam_complaint". See [Delivery tracking](help://mail:delivery-tracking).
 
 ## Inbound routing
@@ -96,8 +96,8 @@ When a message arrives at `someone@yourdomain.com`, what happens next depends on
 
 1. Postmark receives the message (because of your MX records).
 2. Postmark POSTs the parsed JSON to your TinyCld instance at `/api/mail/inbound/{webhook_secret}`.
-3. TinyCld looks up the recipient against the addresses of each mailbox (`mail_addresses`), scoped to this domain.
-4. If a match is found, the message is delivered to that mailbox's Inbox and replicated to every member.
+3. TinyCld looks up the recipient against the addresses of each inbox (`mail_addresses`), scoped to this domain.
+4. If a match is found, the message is delivered to the Inbox folder of that inbox and replicated to every member.
 5. If no match is found, TinyCld returns a 403 and Postmark generates a bounce back to the sender.
 
 The webhook secret is a per-domain random 32-character hex string, auto-generated when the domain is created. URLs containing this secret are visible to owners and admins at **Settings → Mail → Domains → Webhook URLs** (Postmark only — self-hosted SMTP doesn't use webhooks).
@@ -106,7 +106,7 @@ The webhook secret is a per-domain random 32-character hex string, auto-generate
 
 1. TinyCld's port 25 listener accepts the connection from the sending MTA.
 2. RCPT TO is resolved against the same address table. Unknown recipients are rejected with `550 5.1.1 No such mailbox` so the sending MTA bounces.
-3. The DATA payload is parsed and dispatched to every matching mailbox via the same code path Postmark webhooks use.
+3. The DATA payload is parsed and dispatched to every matching inbox via the same code path Postmark webhooks use.
 
 **Self-hosted SMTP (IMAP fetcher)**:
 
@@ -124,12 +124,13 @@ Removing a domain also does these things:
 - It releases the domain at your email provider.
 - If the service manages DNS for the domain, it removes the domain's DNS records.
 - It deletes every address on the domain.
-- It deletes every mailbox whose main address is on the domain, and all their mail.
+- It deletes every inbox whose main address is on the domain, and all their mail.
 
 You cannot undo this. Make sure that no one uses the addresses before you remove the domain. If you manage the DNS records yourself, remove them at your DNS provider.
 
 ## See also
 
 - [Provider setup](help://mail:provider-setup)
-- [Mailboxes and addresses](help://mail:mailboxes)
+- [Your email addresses](help://mail:addresses)
+- [Shared inboxes](help://mail:mailboxes)
 - [Delivery tracking](help://mail:delivery-tracking)

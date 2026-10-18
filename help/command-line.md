@@ -51,9 +51,9 @@ a bare address or `Name <address>`. For a longer message, `--body-file
 notes.txt` reads from a file and `--body-file -` reads from standard input —
 handy at the end of a pipeline.
 
-Mail goes out from your first mailbox unless you choose otherwise. `--from`
-takes a full address and can select one of your aliases; `--mailbox` takes a
-mailbox and always uses its own address. `tinycld mail mailboxes` lists what
+Mail goes out from your first inbox unless you choose otherwise. `--from`
+takes a full address and can select one of your extra addresses; `--mailbox`
+takes an inbox and always uses its own address. `tinycld mail mailboxes` lists what
 you can send as.
 
 ## Replying
@@ -90,7 +90,7 @@ tinycld mail star <thread-id>...           # or: unstar
 ```
 
 Each of these takes any number of threads. They change only your view: a
-co-member of a shared mailbox still sees the thread where they left it.
+co-member of a shared inbox still sees the thread where they left it.
 
 ```
 tinycld mail labels                        # labels you can use
@@ -104,7 +104,7 @@ app. See [Labels](help://mail:labels) and [Folders](help://mail:folders).
 ## Keeping an eye on things
 
 ```
-tinycld mail status     # unread and folder counts per mailbox
+tinycld mail status     # unread and folder counts per inbox
 ```
 
 Every command accepts `--json` for stable, machine-readable output, so a cron

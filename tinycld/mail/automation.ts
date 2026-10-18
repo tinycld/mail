@@ -16,7 +16,7 @@ const automation = {
                 { key: 'sender_email', label: 'Sender' },
                 { key: 'sender_name', label: 'Sender name' },
                 'has_attachments',
-                { key: 'alias', label: 'Received via alias' },
+                { key: 'alias', label: 'Received at address' },
             ],
         },
         {

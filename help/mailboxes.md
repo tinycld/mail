@@ -1,74 +1,76 @@
 ---
-title: Mailboxes, members, and addresses
-summary: Personal vs shared mailboxes, managing access, and multiple addresses
-tags: [mailbox, shared, address, alias, members, owner]
+title: Shared inboxes
+summary: Inboxes that a team uses together, their members, roles, and addresses
+tags: [shared inbox, inbox, shared, address, members, owner]
 order: 20
 ---
 
-## Personal mailboxes
+A shared inbox is for an address that a team uses together, for example `support@`, `sales@`, or `team@`. All members can read the mail and send from the inbox.
 
-When your account is created on a server that has Mail installed, a personal mailbox is created automatically. The address is derived from your **username**; you can rename it from **Settings → Mail → Mailboxes**. You're the **owner** of your personal mailbox and you're the only member — nobody else on the server can read it.
+Each person also has a personal inbox. TinyCld makes it when the account is made. You manage a personal inbox in **Settings → Members**, not here. Click the person and use the **Email** section. See [Your email addresses](help://mail:addresses).
 
-If your account is deleted, your personal mailbox and all its messages are deleted. This also applies if you shared the mailbox with other people: they lose access to it. Its messages do not go to the person who takes over your content.
+## What an admin sees
 
-## Shared mailboxes
+An admin or an owner of the workspace sees every shared inbox in **Settings → Mail → Shared inboxes**, with its members. An admin cannot read the mail of an inbox, unless the admin is a member of it. Only an owner of the inbox can change its members and settings.
 
-A shared mailbox is for an address that multiple people work out of — `support@`, `sales@`, `team@`. To create one:
+## Make a shared inbox
 
-1. Open **Settings → Mail → Mailboxes**.
-2. Click **+ New mailbox**.
-3. Pick **Shared** as the type and fill in the local part of the address, display name, and domain.
-4. Click **Save**.
+1. Open **Settings → Mail → Shared inboxes**.
+2. Click **New shared inbox**.
+3. Type the part of the address before the `@`, choose the domain, and type a display name.
+4. Click **Create inbox**.
 
-You're automatically the owner. To add other members, open the mailbox row and click **Add member**.
+You become the owner. To add other members, click the inbox row, open **Members**, and click **Add member**.
 
 ## Roles
 
-Every mailbox member has one of two roles:
+Each member of a shared inbox has one of two roles:
 
-- **Owner** — can add and remove members, rename the mailbox, manage addresses, and delete it.
-- **Member** — can read and send from the mailbox, but can't change membership or settings.
+- **Owner** — can add and remove members, edit the inbox, manage its addresses, and delete it.
+- **Member** — can read and send from the inbox, but cannot change the members or the settings.
 
-You can't have a mailbox with zero owners — removing the last owner is blocked. If you need to transfer a mailbox, promote someone to owner first, then remove yourself.
+A shared inbox must always have an owner. You cannot remove the last owner. To give the inbox to a different person, first make that person an owner, then remove yourself.
 
-If you are the only owner of a shared mailbox that other people use, you cannot delete your account until the mailbox has another owner. Make one of its members an owner or delete the mailbox. You can also choose someone to take over your content when you delete your account; that person then becomes the owner.
+If you are the only owner of a shared inbox that other people use, you cannot delete your account until the inbox has another owner. Make one of its members an owner, or delete the inbox. You can also choose a person to take your content when you delete your account. That person then becomes the owner.
+
+If a person's account is deleted, their personal inbox and all of its messages are deleted. The messages do not go to the person who takes the content.
 
 ## Addresses
 
-A mailbox can have more than one address, on any of your domains. Mail sent to any of them arrives in the same mailbox.
+A shared inbox can have more than one address, on any of your domains. Mail sent to each address arrives in the same inbox.
 
-To add an address, open the mailbox in **Settings → Mail → Mailboxes**, open **Addresses**, and click **Add address**. Type the part before the `@` and choose the domain.
+To add an address, click the inbox row in **Settings → Mail → Shared inboxes**, open **Addresses**, and click **Add address**. Type the part before the `@` and choose the domain.
 
-The list marks three kinds of address that you cannot remove there:
+The list marks the addresses that you cannot remove there:
 
-- **Main address** — the mailbox's own address. To change it, edit the mailbox.
-- **From the domain rule** — given to each person by a domain set to **Everyone**. To remove these, change the domain's setting in [Custom domains](help://mail:custom-domains).
-- **From group _name_** — given by a group on a domain set to **Members of these groups**. To remove it, remove the person from the group in **Settings → Groups**, or change the domain's setting.
+- **Main address** — the inbox's own address. To change it, edit the inbox.
+- **From the domain rule** and **From group _name_** — addresses that a domain setting gives. To remove them, change the domain setting in [Custom domains](help://mail:custom-domains), or the group in **Settings → Groups**.
 
-You can remove only addresses that were added by hand.
+You can remove only the addresses that a person added by hand.
 
-On a domain set to **Everyone** or **Members of these groups**, a person's email name is reserved for that person, so a shared mailbox cannot use it there.
+On a domain set to **Everyone** or **Members of these groups**, each person's email name is kept for that person. A shared inbox cannot use the email name as an address on that domain.
 
-When you compose, the **From** picker lets you choose which address to send as. Replies use whichever address the incoming message was sent *to*, so threading stays clean.
+When you compose, you can choose the address to send from in the **From** list. A reply uses the address that received the message. See [Your email addresses](help://mail:addresses).
 
-## What every member sees
+## What each member sees
 
-When you join a shared mailbox, you immediately see:
+When you join a shared inbox, you see immediately:
 
-- Existing threads in their folders (the actual message data — Inbox, Sent, etc.).
-- New incoming messages in real time.
+- The threads in their folders (Inbox, Sent, and the other folders).
+- New messages when they arrive.
 
-But each member has their own:
+Each member has their own:
 
-- Read / unread state.
+- Read and unread state.
 - Starred flag.
-- Folder placement (you can archive a thread without affecting other members).
-- Label assignments.
+- Folder placement. You can archive a thread, and the thread stays in the Inbox for other members.
+- Labels.
 
-So if Alice and Bob both have access to `support@`, Alice can star a thread without changing what Bob sees, and Bob can move it to Archive while Alice keeps it in Inbox.
+For example, Alice and Bob are members of `support@`. Alice can star a thread, and Bob does not see the star. Bob can move the thread to Archive, and the thread stays in Alice's Inbox.
 
 ## See also
 
+- [Your email addresses](help://mail:addresses)
 - [Provider setup](help://mail:provider-setup)
 - [Custom domains](help://mail:custom-domains)
 - [Folders](help://mail:folders)

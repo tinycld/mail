@@ -11,6 +11,18 @@ const manifest = {
     // group: names the addresses the person or the members lose.
     sidebarContributions: [
         { target: 'core', slot: 'group-member-removal', component: 'settings/GroupRemovalNotice' },
+        {
+            target: 'core',
+            slot: 'member-drawer',
+            component: 'settings/MemberEmailPanel',
+            label: 'Email',
+        },
+        {
+            target: 'core',
+            slot: 'group-drawer',
+            component: 'settings/GroupEmailPanel',
+            label: 'Email',
+        },
     ],
     setupSteps: [
         {
@@ -26,8 +38,9 @@ const manifest = {
         // distinct from the systemSettings 'Provider' panel below, which is
         // where the provider itself is chosen.
         { slug: 'provider', label: 'Domains', component: 'settings/provider' },
-        { slug: 'mailboxes', label: 'Mailboxes', component: 'settings/mailboxes' },
+        { slug: 'mailboxes', label: 'Shared inboxes', component: 'settings/mailboxes' },
     ],
+    accountSettings: [{ slug: 'email', label: 'Email', component: 'settings/AccountEmail' }],
     // keyPrefix: these are deployment-wide credentials. Where a service provider
     // owns them, this panel is hidden — it could not save there, because the
     // values live in the provider's memory and never reach this deployment's

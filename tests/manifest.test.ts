@@ -35,6 +35,12 @@ describe('mail manifest', () => {
         expect(manifest.settings?.length).toBeGreaterThan(0)
     })
 
+    it('declares the Account email page', () => {
+        expect(manifest.accountSettings).toEqual([
+            { slug: 'email', label: 'Email', component: 'settings/AccountEmail' },
+        ])
+    })
+
     it('declares the setup wizard steps and the domain options slot', () => {
         expect(manifest.setupSteps).toEqual([
             {
@@ -57,12 +63,24 @@ describe('mail manifest', () => {
         }
     })
 
-    it("contributes the removal notice to core's group-member-removal slot", () => {
+    it("contributes the removal notice and the Email panels to core's slots", () => {
         expect(manifest.sidebarContributions).toEqual([
             {
                 target: 'core',
                 slot: 'group-member-removal',
                 component: 'settings/GroupRemovalNotice',
+            },
+            {
+                target: 'core',
+                slot: 'member-drawer',
+                component: 'settings/MemberEmailPanel',
+                label: 'Email',
+            },
+            {
+                target: 'core',
+                slot: 'group-drawer',
+                component: 'settings/GroupEmailPanel',
+                label: 'Email',
             },
         ])
     })

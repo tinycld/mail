@@ -10,7 +10,12 @@
 // away — is driven through the UI.
 import { expect, type Page, test } from '@playwright/test'
 import { login, navigateToPackage, TEST_USER_EMAIL } from '@tinycld/core/e2e-helpers'
-import { navigateToMailboxSettings, seedVerifiedDomain, TEST_USER_MAILBOX } from './helpers'
+import {
+    openPersonEmail,
+    seedVerifiedDomain,
+    TEST_USER_MAILBOX,
+    TEST_USER_USERNAME,
+} from './helpers'
 
 async function openGroupsSettings(page: Page) {
     await page.getByTestId('nav-settings').click()
@@ -25,14 +30,12 @@ async function closeDrawer(page: Page) {
     await expect(drawer).toBeHidden()
 }
 
-async function openTestUserMailbox(page: Page) {
-    await navigateToMailboxSettings(page)
-    await page.getByTestId(`mailbox-row-${TEST_USER_MAILBOX}`).click()
-    const drawer = page.getByRole('dialog')
+async function openTestUserEmail(page: Page) {
+    const drawer = await openPersonEmail(page, TEST_USER_USERNAME)
     await expect(drawer.getByText('Addresses', { exact: true })).toBeVisible()
     // The main address proves the address list loaded, so a missing address
     // below is an answer and not a list that has not rendered yet.
-    await expect(drawer.getByText(TEST_USER_MAILBOX, { exact: true }).first()).toBeVisible()
+    await expect(drawer.getByTestId(`address-row-${TEST_USER_MAILBOX}`)).toBeVisible()
     return drawer
 }
 
@@ -86,11 +89,11 @@ test.describe('Mail — Domains for members of groups', () => {
         await card.getByText('Apply', { exact: true }).click()
         await expect(card.getByText('Apply', { exact: true })).toBeHidden()
 
-        const mailboxDrawer = await openTestUserMailbox(page)
-        await expect(mailboxDrawer.getByText(address, { exact: true })).toBeVisible()
-        await expect(
-            mailboxDrawer.getByText(`From group ${groupName}`, { exact: true })
-        ).toBeVisible()
+        const mailboxDrawer = await openTestUserEmail(page)
+        // The row, not the bare text: the Default From choices list each address too.
+        const row = mailboxDrawer.getByTestId(`address-row-${address}`)
+        await expect(row).toBeVisible()
+        await expect(row.getByText(`From group ${groupName}`, { exact: true })).toBeVisible()
         await closeDrawer(page)
 
         await openGroupsSettings(page)
@@ -109,8 +112,8 @@ test.describe('Mail — Domains for members of groups', () => {
         await expect(memberRow).toBeHidden()
         await closeDrawer(page)
 
-        const reopenedDrawer = await openTestUserMailbox(page)
-        await expect(reopenedDrawer.getByText(address, { exact: true })).toBeHidden()
+        const reopenedDrawer = await openTestUserEmail(page)
+        await expect(reopenedDrawer.getByTestId(`address-row-${address}`)).toBeHidden()
         await closeDrawer(page)
     })
 })

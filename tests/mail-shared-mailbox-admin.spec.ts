@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import PocketBase from 'pocketbase'
-import { navigateToMailboxSettings } from './helpers'
+import { navigateToSharedInboxSettings } from './helpers'
 
 // PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
 // through to PB transparently — see scripts/dev.ts::isPbPath.
@@ -74,7 +74,7 @@ test.describe('Mail — Shared mailbox lifecycle as admin', () => {
         const admin = await seedUser('admin', 'dupadmin')
 
         await loginAs(page, admin)
-        await navigateToMailboxSettings(page)
+        await navigateToSharedInboxSettings(page)
 
         // Create a baseline mailbox owned by this test, then attempt to
         // create a second one with the same address. The unique index
@@ -84,24 +84,24 @@ test.describe('Mail — Shared mailbox lifecycle as admin', () => {
         // delete/rename it.
         const address = `dup-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 
-        await page.getByText('New mailbox', { exact: true }).click()
-        await expect(page.getByText('New shared mailbox')).toBeVisible()
+        await page.getByText('New shared inbox', { exact: true }).click()
+        await expect(page.getByText('Set up a shared inbox')).toBeVisible()
         await page.getByTestId('address').fill(address)
         await page.getByTestId('display_name').fill('Original')
-        await page.getByText('Create mailbox', { exact: true }).click()
-        await expect(page.getByText('New shared mailbox')).toBeHidden()
+        await page.getByText('Create inbox', { exact: true }).click()
+        await expect(page.getByText('Set up a shared inbox')).toBeHidden()
 
         // Now the duplicate attempt.
-        await page.getByText('New mailbox', { exact: true }).click()
-        await expect(page.getByText('New shared mailbox')).toBeVisible()
+        await page.getByText('New shared inbox', { exact: true }).click()
+        await expect(page.getByText('Set up a shared inbox')).toBeVisible()
         await page.getByTestId('address').fill(address)
         await page.getByTestId('display_name').fill('Duplicate Test')
-        await page.getByText('Create mailbox', { exact: true }).click()
+        await page.getByText('Create inbox', { exact: true }).click()
 
         // The drawer must stay open and surface the error to the user. Scope
         // the match to the form's own error summary — /already|in use|exists/
         // anywhere in the DOM is satisfiable by any other package's content.
-        await expect(page.getByText('New shared mailbox')).toBeVisible()
+        await expect(page.getByText('Set up a shared inbox')).toBeVisible()
         await expect(page.getByTestId('mailbox-form-errors')).toBeVisible()
         await expect(page.getByTestId('mailbox-form-errors')).toContainText(
             /already|unique|in use|exists/i
@@ -113,18 +113,18 @@ test.describe('Mail — Shared mailbox lifecycle as admin', () => {
         const teammate = await seedUser('member', 'mate')
 
         await loginAs(page, admin)
-        await navigateToMailboxSettings(page)
+        await navigateToSharedInboxSettings(page)
 
         const address = `admin-${Date.now().toString(36)}`
 
-        await page.getByText('New mailbox', { exact: true }).click()
-        await expect(page.getByText('New shared mailbox')).toBeVisible()
+        await page.getByText('New shared inbox', { exact: true }).click()
+        await expect(page.getByText('Set up a shared inbox')).toBeVisible()
         await page.getByTestId('address').fill(address)
         await page.getByTestId('display_name').fill('Admin Test')
-        await page.getByText('Create mailbox', { exact: true }).click()
+        await page.getByText('Create inbox', { exact: true }).click()
 
         // Drawer closes only when both inserts (mailbox + first owner member) succeed.
-        await expect(page.getByText('New shared mailbox')).toBeHidden()
+        await expect(page.getByText('Set up a shared inbox')).toBeHidden()
         await expect(page.getByText(`Admin Test · 1 member`)).toBeVisible()
 
         // Open the mailbox in view mode to access the Members tab.

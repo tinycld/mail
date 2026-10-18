@@ -11,7 +11,7 @@ IMAP lets you read your TinyCld mail from any desktop or phone mail client. Once
 
 - **Folders sync** — Inbox, Sent, Drafts, Spam, Trash, Archive show up in your client.
 - **Unread state syncs** — marking a message read in your client updates TinyCld and vice versa.
-- **Multi-mailbox support** — every mailbox you're a member of (personal + shared) appears in your client.
+- **Multi-inbox support** — every inbox you're a member of (personal + shared) appears in your client.
 - **IDLE** — modern IMAP clients use the IDLE extension to get push-style updates. TinyCld supports it, so new messages appear within a second of arriving.
 
 IMAP is **read + state**, not send. To also send from your client, set up [SMTP](help://mail:smtp).
@@ -23,7 +23,7 @@ IMAP is **read + state**, not send. To also send from your client, set up [SMTP]
 | **Server** | `{{server-host}}` |
 | **Port** | **993** |
 | **Encryption** | SSL / TLS (implicit) |
-| **Username** | your TinyCld username, your sign-in email, or any address of your own mailbox (not a shared mailbox address) |
+| **Username** | your TinyCld username, your sign-in email, or any address of your own inbox (not a shared inbox address) |
 | **Password** | your TinyCld password, or an [app password](help://core:security-app-passwords) if two-step verification is on |
 | **Authentication** | Normal password |
 
@@ -43,7 +43,7 @@ There is no separate "IMAP password" — use your regular TinyCld login. If you 
 8. **Password**: your TinyCld password.
 9. Click **Sign In**.
 
-The mail account appears in the sidebar. Each mailbox you have access to shows up as a separate account folder.
+The mail account appears in the sidebar. Each inbox you have access to shows up as a separate account folder.
 
 ## Connecting Apple Mail (iOS / iPadOS)
 
@@ -80,7 +80,7 @@ set ssl_force_tls = yes
 
 ## Folder names
 
-In every IMAP client you'll see these folder names per mailbox (case may vary by client):
+In every IMAP client you'll see these folder names per inbox (case may vary by client):
 
 - **INBOX**
 - **Sent** (flagged `\Sent`): only the messages you sent. The messages you replied to stay in their own folder.
@@ -89,12 +89,12 @@ In every IMAP client you'll see these folder names per mailbox (case may vary by
 - **Spam** (flagged `\Junk`)
 - **Archive** (flagged `\Archive`)
 
-When you have multiple mailboxes, IMAP namespaces them — typically as separate sub-folders or as separate accounts (depending on your client). Each mailbox's folders are independent.
+When you have multiple inboxes, IMAP namespaces them — typically as separate sub-folders or as separate accounts (depending on your client). Each inbox's folders are independent.
 
 ## Troubleshooting
 
 - **Connects, then immediately disconnects ("service unavailable" / BYE)** — the server name in your client is wrong. It must be `{{server-host}}` exactly (your TinyCld web address); a `mail.` name, your mail domain, or an IP address all reach the server but don't identify your workspace, so it hangs up.
-- **Auth failed** — use your TinyCld username, your sign-in email, or any address of your own mailbox. A shared mailbox address does not work. Use your TinyCld password.
+- **Auth failed** — use your TinyCld username, your sign-in email, or any address of your own inbox. A shared inbox address does not work. Use your TinyCld password.
 - **Connection refused / timeout** — verify your TinyCld instance is reachable on port 993. Try `openssl s_client -connect {{server-host}}:993 -servername {{server-host}}` from a terminal to test.
 - **TLS certificate error** — Mail's IMAP server uses the same TLS certificate as your web UI. If your web UI works, IMAP should too. If not, check the cert hostname matches what you put in the client.
 - **Flagging, moving, or deleting fails with `Your mail access is read-only`** — your account has read-only access to Mail on this server. Reading and syncing still work, but any change your client tries to make (mark read, star, move, delete, save a draft) is refused. Ask an administrator to grant full access if you need to make changes.
@@ -103,4 +103,5 @@ When you have multiple mailboxes, IMAP namespaces them — typically as separate
 ## See also
 
 - [SMTP](help://mail:smtp)
-- [Mailboxes and addresses](help://mail:mailboxes)
+- [Your email addresses](help://mail:addresses)
+- [Shared inboxes](help://mail:mailboxes)

@@ -1,5 +1,4 @@
 export type MailboxType = 'shared' | 'personal'
-export type TypeFilter = 'all' | MailboxType
 
 export interface MailboxListItem {
     id: string
@@ -16,13 +15,11 @@ export interface MailboxListItem {
 
 export interface FilterInput {
     query: string
-    type: TypeFilter
 }
 
 export interface GroupedMailboxes {
     shared: MailboxListItem[]
-    personal: MailboxListItem[]
-    totals: { all: number; shared: number; personal: number }
+    totals: { shared: number }
 }
 
 function matchesQuery(item: MailboxListItem, q: string): boolean {
@@ -51,21 +48,8 @@ export function filterAndGroupMailboxes(
     items: MailboxListItem[],
     input: FilterInput
 ): GroupedMailboxes {
-    const totals = {
-        all: items.length,
-        shared: items.filter(i => i.type === 'shared').length,
-        personal: items.filter(i => i.type === 'personal').length,
-    }
+    const sharedItems = items.filter(i => i.type === 'shared')
+    const shared = sharedItems.filter(i => matchesQuery(i, input.query)).sort(byAddress)
 
-    const typeFiltered = items.filter(i => {
-        if (input.type === 'all') return true
-        return i.type === input.type
-    })
-
-    const queryFiltered = typeFiltered.filter(i => matchesQuery(i, input.query))
-
-    const shared = queryFiltered.filter(i => i.type === 'shared').sort(byAddress)
-    const personal = queryFiltered.filter(i => i.type === 'personal').sort(byAddress)
-
-    return { shared, personal, totals }
+    return { shared, totals: { shared: sharedItems.length } }
 }

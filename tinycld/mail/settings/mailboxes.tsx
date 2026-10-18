@@ -10,11 +10,7 @@ import { Link } from 'expo-router'
 import { Plus } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import {
-    filterAndGroupMailboxes,
-    type MailboxListItem,
-    type TypeFilter,
-} from '../hooks/filterMailboxes'
+import { filterAndGroupMailboxes, type MailboxListItem } from '../hooks/filterMailboxes'
 import { type DrawerMode, MailboxDrawer } from './MailboxDrawer'
 import { MailboxListRow } from './MailboxListRow'
 import { MailboxSearchBar } from './MailboxSearchBar'
@@ -170,6 +166,11 @@ function useMailboxData(currentUserId: string) {
     }
 }
 
+function sharedInboxesFooter(count: number, mainDomain: string | undefined) {
+    const label = count === 1 ? '1 shared inbox' : `${count} shared inboxes`
+    return mainDomain ? `${label} · ${mainDomain}` : label
+}
+
 export default function MailboxesSettings() {
     const primaryColor = useThemeColor('primary')
     const primaryFgColor = useThemeColor('primary-foreground')
@@ -180,12 +181,11 @@ export default function MailboxesSettings() {
     const orgHref = useOrgHref()
 
     const [query, setQuery] = useState('')
-    const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
     const [drawerMode, setDrawerMode] = useState<DrawerMode>({ kind: 'closed' })
 
     const grouped = useMemo(
-        () => filterAndGroupMailboxes(data.items, { query, type: typeFilter }),
-        [data.items, query, typeFilter]
+        () => filterAndGroupMailboxes(data.items, { query }),
+        [data.items, query]
     )
 
     const selectedMailboxId =
@@ -221,6 +221,7 @@ export default function MailboxesSettings() {
 
     const domainOptions = data.domains.map(d => ({ label: d.domain, value: d.id }))
     const hasDomains = data.domains.length > 0
+    const sharedFooter = sharedInboxesFooter(grouped.totals.shared, data.domains[0]?.domain)
 
     return (
         <>
@@ -236,13 +237,13 @@ export default function MailboxesSettings() {
                                     className="text-foreground"
                                     style={{ fontSize: 22, fontWeight: '700' }}
                                 >
-                                    Mailboxes
+                                    Shared inboxes
                                 </Text>
                                 <HelpIcon topic="mail:mailboxes" size={18} />
                             </View>
                             <Text className="text-muted-foreground" style={{ fontSize: 13 }}>
-                                Manage shared mailboxes, members, and addresses for your
-                                organization.
+                                Inboxes that a team uses together. To manage one person's addresses,
+                                open the person in Members.
                             </Text>
                         </View>
                         <Pressable
@@ -260,7 +261,7 @@ export default function MailboxesSettings() {
                             <Text
                                 style={{ color: primaryFgColor, fontSize: 13, fontWeight: '600' }}
                             >
-                                New mailbox
+                                New shared inbox
                             </Text>
                         </Pressable>
                     </View>
@@ -286,17 +287,13 @@ export default function MailboxesSettings() {
 
                     {hasDomains && (
                         <>
-                            <MailboxSearchBar
-                                query={query}
-                                onQueryChange={setQuery}
-                                type={typeFilter}
-                                onTypeChange={setTypeFilter}
-                                counts={grouped.totals}
-                            />
+                            <MailboxSearchBar query={query} onQueryChange={setQuery} />
 
-                            {data.items.length === 0 && (
+                            {grouped.totals.shared === 0 && (
                                 <View className="items-center gap-2 p-6">
-                                    <Text className="text-muted-foreground">No mailboxes yet.</Text>
+                                    <Text className="text-muted-foreground">
+                                        No shared inboxes yet
+                                    </Text>
                                     <Pressable
                                         onPress={() => setDrawerMode({ kind: 'create' })}
                                         className="rounded-lg"
@@ -313,29 +310,27 @@ export default function MailboxesSettings() {
                                                 fontWeight: '600',
                                             }}
                                         >
-                                            Create your first mailbox
+                                            Create your first shared inbox
                                         </Text>
                                     </Pressable>
                                 </View>
                             )}
 
-                            {data.items.length > 0 &&
-                                grouped.shared.length === 0 &&
-                                grouped.personal.length === 0 && (
-                                    <View className="items-center gap-2 p-6">
-                                        <Text className="text-muted-foreground">
-                                            No mailboxes match "{query}".
+                            {grouped.totals.shared > 0 && grouped.shared.length === 0 && (
+                                <View className="items-center gap-2 p-6">
+                                    <Text className="text-muted-foreground">
+                                        No shared inboxes match "{query}".
+                                    </Text>
+                                    <Pressable onPress={() => setQuery('')}>
+                                        <Text
+                                            className="text-primary"
+                                            style={{ fontSize: 13, fontWeight: '600' }}
+                                        >
+                                            Clear search
                                         </Text>
-                                        <Pressable onPress={() => setQuery('')}>
-                                            <Text
-                                                className="text-primary"
-                                                style={{ fontSize: 13, fontWeight: '600' }}
-                                            >
-                                                Clear search
-                                            </Text>
-                                        </Pressable>
-                                    </View>
-                                )}
+                                    </Pressable>
+                                </View>
+                            )}
 
                             {grouped.shared.length > 0 && (
                                 <View className="gap-1">
@@ -353,33 +348,13 @@ export default function MailboxesSettings() {
                                 </View>
                             )}
 
-                            {grouped.personal.length > 0 && (
-                                <View className="gap-1">
-                                    <GroupLabel label="Personal" count={grouped.personal.length} />
-                                    {grouped.personal.map(item => (
-                                        <MailboxListRow
-                                            key={item.id}
-                                            item={item}
-                                            isActive={selectedMailboxId === item.id}
-                                            onPress={() =>
-                                                setDrawerMode({ kind: 'view', mailboxId: item.id })
-                                            }
-                                        />
-                                    ))}
-                                </View>
-                            )}
-
-                            {data.items.length > 0 && (
+                            {grouped.totals.shared > 0 && (
                                 <View className="flex-row items-center justify-between pt-3 border-t border-border">
                                     <Text
                                         className="text-muted-foreground"
                                         style={{ fontSize: 12 }}
                                     >
-                                        {data.items.length} mailbox
-                                        {data.items.length !== 1 ? 'es' : ''}
-                                        {data.domains[0]?.domain
-                                            ? ` · ${data.domains[0].domain}`
-                                            : ''}
+                                        {sharedFooter}
                                     </Text>
                                     <Link
                                         href={orgHref('settings/[...section]', {

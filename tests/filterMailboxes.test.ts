@@ -18,29 +18,19 @@ function item(overrides: Partial<MailboxListItem> = {}): MailboxListItem {
 }
 
 describe('filterAndGroupMailboxes', () => {
-    it('returns all items when query is empty and filter is all', () => {
+    it('returns only shared inboxes', () => {
         const a = item({ id: 'a', type: 'shared' })
         const b = item({ id: 'b', type: 'personal', address: 'nathan' })
-        const got = filterAndGroupMailboxes([a, b], { query: '', type: 'all' })
+        const got = filterAndGroupMailboxes([a, b], { query: '' })
         expect(got.shared.map(m => m.id)).toEqual(['a'])
-        expect(got.personal.map(m => m.id)).toEqual(['b'])
-        expect(got.totals).toEqual({ all: 2, shared: 1, personal: 1 })
+        expect(got.totals).toEqual({ shared: 1 })
     })
 
-    it('filters by type=shared', () => {
-        const a = item({ id: 'a', type: 'shared' })
+    it('gives an empty shared list when every inbox is personal', () => {
         const b = item({ id: 'b', type: 'personal' })
-        const got = filterAndGroupMailboxes([a, b], { query: '', type: 'shared' })
-        expect(got.shared.map(m => m.id)).toEqual(['a'])
-        expect(got.personal).toEqual([])
-    })
-
-    it('filters by type=personal', () => {
-        const a = item({ id: 'a', type: 'shared' })
-        const b = item({ id: 'b', type: 'personal' })
-        const got = filterAndGroupMailboxes([a, b], { query: '', type: 'personal' })
+        const got = filterAndGroupMailboxes([b], { query: '' })
         expect(got.shared).toEqual([])
-        expect(got.personal.map(m => m.id)).toEqual(['b'])
+        expect(got.totals).toEqual({ shared: 0 })
     })
 
     it('matches query against primary address', () => {
@@ -58,57 +48,51 @@ describe('filterAndGroupMailboxes', () => {
             memberNames: [],
             memberEmails: [],
         })
-        const got = filterAndGroupMailboxes([a, b], { query: 'sup', type: 'all' })
+        const got = filterAndGroupMailboxes([a, b], { query: 'sup' })
         expect(got.shared.map(m => m.id)).toEqual(['a'])
     })
 
     it('matches query against display name (case-insensitive)', () => {
         const a = item({ id: 'a', displayName: 'Support Team' })
         const b = item({ id: 'b', displayName: 'Billing' })
-        const got = filterAndGroupMailboxes([a, b], { query: 'TEAM', type: 'all' })
+        const got = filterAndGroupMailboxes([a, b], { query: 'TEAM' })
         expect(got.shared.map(m => m.id)).toEqual(['a'])
     })
 
     it('matches query against member name', () => {
         const a = item({ id: 'a', memberNames: ['Rachel Tan'] })
         const b = item({ id: 'b', memberNames: ['Jamie'] })
-        const got = filterAndGroupMailboxes([a, b], { query: 'rachel', type: 'all' })
+        const got = filterAndGroupMailboxes([a, b], { query: 'rachel' })
         expect(got.shared.map(m => m.id)).toEqual(['a'])
     })
 
     it('matches query against member email', () => {
         const a = item({ id: 'a', memberEmails: ['rachel@tinycld.org'] })
         const b = item({ id: 'b', memberEmails: ['jamie@tinycld.org'] })
-        const got = filterAndGroupMailboxes([a, b], { query: 'rachel@', type: 'all' })
+        const got = filterAndGroupMailboxes([a, b], { query: 'rachel@' })
         expect(got.shared.map(m => m.id)).toEqual(['a'])
     })
 
-    it('matches query against another address of the mailbox', () => {
+    it('matches query against another address of the inbox', () => {
         const a = item({ id: 'a', otherAddresses: ['help'] })
         const b = item({ id: 'b' })
-        const got = filterAndGroupMailboxes([a, b], { query: 'help', type: 'all' })
+        const got = filterAndGroupMailboxes([a, b], { query: 'help' })
         expect(got.shared.map(m => m.id)).toEqual(['a'])
     })
 
-    it('sorts shared before personal regardless of input order (personal first case)', () => {
-        const p = item({ id: 'p', type: 'personal', address: 'zeta' })
-        const s = item({ id: 's', type: 'shared', address: 'alpha' })
-        const got = filterAndGroupMailboxes([p, s], { query: '', type: 'all' })
-        expect(got.shared.map(m => m.id)).toEqual(['s'])
-        expect(got.personal.map(m => m.id)).toEqual(['p'])
-    })
-
-    it('sorts within each group alphabetically by address', () => {
+    it('sorts alphabetically by address', () => {
         const a = item({ id: 'a', address: 'zeta', type: 'shared' })
         const b = item({ id: 'b', address: 'alpha', type: 'shared' })
-        const got = filterAndGroupMailboxes([a, b], { query: '', type: 'all' })
+        const got = filterAndGroupMailboxes([a, b], { query: '' })
         expect(got.shared.map(m => m.id)).toEqual(['b', 'a'])
     })
 
     it('totals always reflect the full dataset, not the filtered slice', () => {
         const a = item({ id: 'a', type: 'shared' })
-        const b = item({ id: 'b', type: 'personal' })
-        const got = filterAndGroupMailboxes([a, b], { query: 'support', type: 'all' })
-        expect(got.totals).toEqual({ all: 2, shared: 1, personal: 1 })
+        const b = item({ id: 'b', type: 'shared', address: 'billing', displayName: 'Billing' })
+        const c = item({ id: 'c', type: 'personal' })
+        const got = filterAndGroupMailboxes([a, b, c], { query: 'billing' })
+        expect(got.shared.map(m => m.id)).toEqual(['b'])
+        expect(got.totals).toEqual({ shared: 2 })
     })
 })

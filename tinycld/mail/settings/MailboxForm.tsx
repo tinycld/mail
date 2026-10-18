@@ -111,7 +111,7 @@ function CreateForm({ domainOptions, userId, onDone, type = 'shared', defaults }
                 domainName,
                 displayName: values.display_name,
             }}
-            submitLabel={createMutation.isPending ? 'Creating…' : 'Create mailbox'}
+            submitLabel={createMutation.isPending ? 'Creating…' : 'Create inbox'}
             canSubmit={canSubmit}
             onSubmit={onSubmit}
         />
