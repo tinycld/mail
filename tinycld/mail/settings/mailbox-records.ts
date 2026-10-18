@@ -27,7 +27,13 @@ export function newMailboxRecords({
             name: data.display_name,
             type,
         },
-        member: { id: memberId, mailbox: mailboxId, user: userId, role: 'owner' as const },
+        member: {
+            id: memberId,
+            mailbox: mailboxId,
+            user: userId,
+            group: '',
+            role: 'owner' as const,
+        },
     }
 }
 

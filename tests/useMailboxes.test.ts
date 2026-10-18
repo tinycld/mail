@@ -3,7 +3,7 @@ import { splitMailboxes } from '~/tinycld/mail/hooks/splitMailboxes'
 import { getMailboxLabel } from '~/tinycld/mail/hooks/useMailboxes'
 import type { MailMailboxes } from '~/tinycld/mail/types'
 
-// Membership filtering happens in useMailboxes' joined query, not here —
+// Membership filtering happens in useMailboxes' query, not here —
 // tests/useMailboxHooks.mount.test.tsx covers it against real collections.
 
 function makeMailbox(overrides: Partial<MailMailboxes>): MailMailboxes {
@@ -41,6 +41,12 @@ describe('splitMailboxes', () => {
         const late = makeMailbox({ id: 'mb_b', type: 'shared', created: '2024-06-01T00:00:00Z' })
         const got = splitMailboxes([late, early])
         expect(got.shared.map(m => m.id)).toEqual(['mb_a', 'mb_b'])
+    })
+
+    it('returns a shared mailbox once when the user has two member rows for it', () => {
+        const shared = makeMailbox({ id: 'mb2', type: 'shared' })
+        const got = splitMailboxes([shared, { ...shared }])
+        expect(got.shared.map(m => m.id)).toEqual(['mb2'])
     })
 
     it('returns null personal when user has no personal mailbox', () => {

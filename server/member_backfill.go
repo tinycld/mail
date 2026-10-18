@@ -4,10 +4,7 @@ import (
 	"fmt"
 
 	"github.com/pocketbase/pocketbase/core"
-	"tinycld.org/core/logging"
 )
-
-var memberBackfillLog = logging.ForPackage("mail")
 
 const memberBackfillBatch = 500
 
@@ -16,27 +13,18 @@ const memberBackfillBatch = 500
 // mail_thread_state, so without these rows a new member of a shared mailbox
 // sees nothing until new mail arrives.
 //
-// The backfill runs in a goroutine: a mailbox can hold many thousands of
-// threads, and the member insert (an admin action in the UI) must not wait for
-// one save per thread. The root app is captured at registration because the
-// goroutine outlives the request, and the event's app can be a finished
+// The backfill runs as a member job (member_jobs.go): a mailbox can hold many
+// thousands of threads, and the member insert (an admin action in the UI) must
+// not wait for one save per thread. The root app is captured at registration
+// because the job outlives the request, and the event's app can be a finished
 // transaction.
 func registerMemberBackfillHooks(app core.App) {
 	app.OnRecordAfterCreateSuccess("mail_mailbox_members").BindFunc(func(e *core.RecordEvent) error {
 		mailboxID := e.Record.GetString("mailbox")
 		userID := e.Record.GetString("user")
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					memberBackfillLog.Error("member backfill panicked",
-						"mailbox", mailboxID, "user", userID, "panic", r)
-				}
-			}()
-			if err := backfillMemberThreadState(app, mailboxID, userID); err != nil {
-				memberBackfillLog.Error("member backfill failed",
-					"mailbox", mailboxID, "user", userID, "error", err)
-			}
-		}()
+		runMemberJob(memberJobs, "backfill", mailboxID, userID, func() error {
+			return backfillMemberThreadState(app, mailboxID, userID)
+		})
 		return e.Next()
 	})
 }
@@ -50,11 +38,26 @@ func registerMemberBackfillHooks(app core.App) {
 // A failed row is logged and skipped so one bad thread does not stop the
 // rest; the first error is returned for the caller to log.
 func backfillMemberThreadState(app core.App, mailboxID, userID string) error {
+	// A group grant row has no user: its people get their own derived rows,
+	// and each of those starts its own backfill.
+	if userID == "" {
+		return nil
+	}
 	var firstErr error
 	for offset := 0; ; offset += memberBackfillBatch {
 		// The app can be torn down while a backfill is still running (test
 		// teardown, dev DB reset); a query on a closed DB panics.
 		if !appIsLive(app) {
+			return firstErr
+		}
+		// The job can run after the person lost access again, and the
+		// cleanup for that loss can have run already. Rows written now would
+		// stay with nobody to remove them.
+		has, err := userHasMailboxRow(app, mailboxID, userID)
+		if err != nil {
+			return fmt.Errorf("member rows of user %s on mailbox %s: %w", userID, mailboxID, err)
+		}
+		if !has {
 			return firstErr
 		}
 		threads, err := app.FindRecordsByFilter(
@@ -70,7 +73,7 @@ func backfillMemberThreadState(app core.App, mailboxID, userID string) error {
 		}
 		for _, thread := range threads {
 			if err := backfillOneThreadState(app, thread.Id, userID); err != nil {
-				memberBackfillLog.Warn("member backfill skipped a thread",
+				memberJobLog.Warn("member backfill skipped a thread",
 					"thread", thread.Id, "user", userID, "error", err)
 				if firstErr == nil {
 					firstErr = err

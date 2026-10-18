@@ -93,6 +93,7 @@ export type MailSchema = {
         relations: {
             mailbox: MailMailboxes
             user: Users
+            group: Groups
         }
     }
     mail_mailbox_aliases: {

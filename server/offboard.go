@@ -25,8 +25,10 @@ import (
 // the mailbox with.
 
 // soleOwnedMailbox is a shared mailbox where the user is the only owner.
-// OtherMembers counts the members that are not the user: when it is zero,
-// nobody else can reach the mailbox.
+// OtherMembers counts the people other than the user who can reach the
+// mailbox, each once: when it is zero, nobody else can reach it. A group grant
+// row has no user and is no person; the group's people count through their
+// derived rows.
 type soleOwnedMailbox struct {
 	ID           string `db:"id"`
 	Name         string `db:"name"`
@@ -45,13 +47,13 @@ func findSoleOwnedSharedMailboxes(app core.App, userID string) ([]soleOwnedMailb
 	var out []soleOwnedMailbox
 	err := app.DB().NewQuery(`
 		SELECT mb.id AS id, mb.name AS name, mb.address AS address,
-			(SELECT COUNT(*) FROM mail_mailbox_members o
-				WHERE o.mailbox = m.mailbox AND o.user != {:user}) AS other_members
+			(SELECT COUNT(DISTINCT o.user) FROM mail_mailbox_members o
+				WHERE o.mailbox = m.mailbox AND o.user != '' AND o.user != {:user}) AS other_members
 		FROM mail_mailbox_members m
 		JOIN mail_mailboxes mb ON mb.id = m.mailbox
 		WHERE m.user = {:user} AND m.role = 'owner' AND mb.type = 'shared'
 			AND NOT EXISTS (SELECT 1 FROM mail_mailbox_members o
-				WHERE o.mailbox = m.mailbox AND o.role = 'owner' AND o.user != {:user})
+				WHERE o.mailbox = m.mailbox AND o.role = 'owner' AND o.user != '' AND o.user != {:user})
 		ORDER BY mb.name, mb.id`,
 	).Bind(dbx.Params{"user": userID}).All(&out)
 	if err != nil {
@@ -140,11 +142,13 @@ func handOverSoleOwnedMailboxes(txApp core.App, leaver *core.Record, plan offboa
 }
 
 // makeMailboxOwner gives the user an owner membership on the mailbox,
-// upgrading the existing row when there is one: the unique (mailbox, user)
-// index allows only one.
+// upgrading the user's direct row when there is one: the unique (mailbox,
+// user, group) index allows one direct row. A row derived from a group is
+// never upgraded: a group's access is always member, and core's expander owns
+// that row. A user with only group access gets a direct owner row beside it.
 func makeMailboxOwner(txApp core.App, mailboxID, userID string) error {
 	existing, err := txApp.FindFirstRecordByFilter("mail_mailbox_members",
-		"mailbox = {:mailbox} && user = {:user}",
+		"mailbox = {:mailbox} && user = {:user} && group = ''",
 		dbx.Params{"mailbox": mailboxID, "user": userID})
 	if err == nil {
 		if existing.GetString("role") == "owner" {

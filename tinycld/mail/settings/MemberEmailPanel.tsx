@@ -9,15 +9,18 @@ import { DefaultFromPicker } from './DefaultFromPicker'
 import { EmailNameForm } from './EmailNameForm'
 import { MailAppLink } from './MailAppLink'
 import { MailboxAddressesPanel } from './MailboxAddressesPanel'
+import { inboxAccessLines } from './shared-inbox-access'
 import { usePersonEmail } from './usePersonEmail'
 
 type PersonEmail = ReturnType<typeof usePersonEmail>
 type Identity = NonNullable<PersonEmail['identity']>
 
 function useSharedInboxes(userId: string) {
-    const [membersCollection, mailboxesCollection] = useStore(
+    const [membersCollection, mailboxesCollection, domainsCollection, groupsCollection] = useStore(
         'mail_mailbox_members',
-        'mail_mailboxes'
+        'mail_mailboxes',
+        'mail_domains',
+        'groups'
     )
     const { data } = useLiveQuery({
         queryKey: ['mail_person_shared_inboxes', userId],
@@ -27,18 +30,37 @@ function useSharedInboxes(userId: string) {
                 .innerJoin({ mailbox: mailboxesCollection }, ({ member, mailbox }) =>
                     eq(member.mailbox, mailbox.id)
                 )
+                .join({ domain: domainsCollection }, ({ mailbox, domain }) =>
+                    eq(mailbox.domain, domain.id)
+                )
+                .join({ group: groupsCollection }, ({ member, group }) =>
+                    eq(member.group, group.id)
+                )
                 .where(({ member, mailbox }) =>
                     and(eq(member.user, userId), eq(mailbox.type, 'shared'))
                 )
-                .select(({ mailbox }) => ({
+                .select(({ member, mailbox, domain, group }) => ({
                     id: mailbox.id,
                     displayName: mailbox.display_name,
                     name: mailbox.name,
                     address: mailbox.address,
+                    domainName: domain?.domain,
+                    groupId: member.group,
+                    groupName: group?.name,
                 })),
     })
     // Labels are picked in JS: inside select() the fields are refs, always truthy.
-    return (data ?? []).map(m => ({ id: m.id, name: m.displayName || m.name || m.address }))
+    const rows = (data ?? []).map(m => ({
+        mailboxId: m.id,
+        label: m.displayName || m.name || inboxEmail(m.address, m.domainName),
+        groupId: m.groupId ?? '',
+        groupName: m.groupName ?? '',
+    }))
+    return inboxAccessLines(rows)
+}
+
+function inboxEmail(address: string, domainName: string | undefined) {
+    return domainName ? `${address}@${domainName}` : address
 }
 
 function Heading() {
@@ -102,7 +124,7 @@ function SharedInboxName({ name }: { name: string }) {
 function SharedInboxList({ userId }: { userId: string }) {
     const inboxes = useSharedInboxes(userId)
     if (inboxes.length === 0) return null
-    const names = inboxes.map(inbox => <SharedInboxName key={inbox.id} name={inbox.name} />)
+    const names = inboxes.map(inbox => <SharedInboxName key={inbox.id} name={inbox.text} />)
     return (
         <View className="gap-1">
             <Text className="text-muted-foreground text-xs">Shared inboxes</Text>

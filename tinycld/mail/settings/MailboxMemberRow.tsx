@@ -2,6 +2,7 @@ import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useServerActionState } from '@tinycld/core/lib/use-writes-available'
 import { X } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
+import { viaGroupLabel } from './member-rows'
 
 export type Role = 'owner' | 'member'
 
@@ -14,6 +15,10 @@ interface Props {
     canToggleRole: boolean
     /** False for a viewer who cannot change members: the remove control is not shown. */
     canEdit?: boolean
+    /** True when a group gives this access: it can only change by changing the group grant. */
+    isDerived?: boolean
+    /** Names of the groups that give this access, for the note under the name. */
+    groupNames?: string[]
     onToggleRole: () => void
     onRemove: () => void
 }
@@ -26,6 +31,8 @@ export function MailboxMemberRow({
     canRemove,
     canToggleRole,
     canEdit = true,
+    isDerived = false,
+    groupNames = [],
     onToggleRole,
     onRemove,
 }: Props) {
@@ -41,7 +48,10 @@ export function MailboxMemberRow({
     const pillFg = isOwner ? primaryColor : mutedColor
 
     return (
-        <View className="flex-row items-center gap-3 py-2">
+        <View
+            testID={`mailbox-member-row-${email || name}`}
+            className="flex-row items-center gap-3 py-2"
+        >
             <View className="flex-1" style={{ minWidth: 0 }}>
                 <Text className="text-foreground" style={{ fontSize: 13, fontWeight: '600' }}>
                     {name}
@@ -60,16 +70,17 @@ export function MailboxMemberRow({
                         {email}
                     </Text>
                 ) : null}
+                <ViaGroupNote isVisible={isDerived} groupNames={groupNames} />
             </View>
             <Pressable
                 onPress={onToggleRole}
-                disabled={!canToggleRole}
+                disabled={!canToggleRole || isDerived}
                 className="rounded-md"
                 style={{
                     paddingVertical: 3,
                     paddingHorizontal: 8,
                     backgroundColor: pillBg,
-                    opacity: canToggleRole ? 1 : 0.5,
+                    opacity: canToggleRole && !isDerived ? 1 : 0.5,
                 }}
             >
                 <Text style={{ fontSize: 11, fontWeight: '600', color: pillFg }}>
@@ -77,13 +88,22 @@ export function MailboxMemberRow({
                 </Text>
             </Pressable>
             <RemoveButton
-                isVisible={canEdit}
+                isVisible={canEdit && !isDerived}
                 name={name}
                 state={removeState}
                 color={dangerColor}
                 onRemove={onRemove}
             />
         </View>
+    )
+}
+
+function ViaGroupNote({ isVisible, groupNames }: { isVisible: boolean; groupNames: string[] }) {
+    if (!isVisible) return null
+    return (
+        <Text className="text-muted-foreground" style={{ fontSize: 11.5, marginTop: 1 }}>
+            {viaGroupLabel(groupNames)}
+        </Text>
     )
 }
 

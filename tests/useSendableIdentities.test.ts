@@ -52,6 +52,18 @@ const org = dn('org', 'tinycld.org', 1)
 const com = dn('com', 'tinycld.com', 2)
 
 describe('groupSendableIdentities', () => {
+    it('gives one identity per shared mailbox when a person has two member rows', () => {
+        const mailbox = mb({ id: 'mb2', type: 'shared' })
+        const row: SendableIdentityRow = {
+            mailbox,
+            domain: org,
+            address: ad('a1', 'mb2', 'org', 'support'),
+        }
+        const got = groupSendableIdentities([row, { ...row }])
+        expect(got).toHaveLength(1)
+        expect(got[0].addresses).toHaveLength(1)
+    })
+
     it('lists every address of a mailbox, default first', () => {
         const mailbox = mb({})
         const rows: SendableIdentityRow[] = [

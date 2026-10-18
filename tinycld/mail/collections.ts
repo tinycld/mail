@@ -44,7 +44,11 @@ export function registerCollections(
     const mail_mailbox_members = newCollection('mail_mailbox_members', {
         ...onDemand,
         omitOnInsert: ['created', 'updated'] as const,
-        relations: { mailbox: mail_mailboxes, user: coreStores.users },
+        relations: {
+            mailbox: mail_mailboxes,
+            user: coreStores.users,
+            group: coreStores.groups,
+        },
         collectionOptions: indexing,
     })
 

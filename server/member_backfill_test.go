@@ -29,6 +29,7 @@ func TestMemberBackfill_CreatesReadInboxRows(t *testing.T) {
 	env := setupScopeEnv(t)
 	thread := firstThreadOf(t, env, env.mbA.Id)
 	joiner := newUser(t, env.app, "joiner@example.org")
+	seedMember(t, env.app, env.mbA.Id, joiner.Id)
 
 	if err := backfillMemberThreadState(env.app, env.mbA.Id, joiner.Id); err != nil {
 		t.Fatal(err)
@@ -66,6 +67,7 @@ func TestMemberBackfill_CreatesReadInboxRows(t *testing.T) {
 func TestMemberBackfill_IsIdempotent(t *testing.T) {
 	env := setupScopeEnv(t)
 	joiner := newUser(t, env.app, "twice@example.org")
+	seedMember(t, env.app, env.mbA.Id, joiner.Id)
 
 	for range 2 {
 		if err := backfillMemberThreadState(env.app, env.mbA.Id, joiner.Id); err != nil {
@@ -93,6 +95,21 @@ func TestMemberBackfill_HookRunsOnMemberCreate(t *testing.T) {
 	}
 	if findThreadState(env.app, thread.Id, other.Id) == nil {
 		t.Fatal("no state row 2s after the member was added; the backfill hook did not run")
+	}
+}
+
+// A backfill job waits in the member job queue. When the person lost access
+// before it ran, it must write nothing: a cleanup for that loss can have run
+// already, and rows written now would stay with nobody to remove them.
+func TestMemberBackfill_SkipsPersonWhoLostAccess(t *testing.T) {
+	env := setupScopeEnv(t)
+	gone := newUser(t, env.app, "gone@example.org")
+
+	if err := backfillMemberThreadState(env.app, env.mbA.Id, gone.Id); err != nil {
+		t.Fatal(err)
+	}
+	if got := stateRowCount(t, env.app, gone.Id); got != 0 {
+		t.Errorf("person with no member row has %d state rows after a backfill, want 0", got)
 	}
 }
 

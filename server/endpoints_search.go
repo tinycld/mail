@@ -450,21 +450,9 @@ func structuredSearch(
 // is provided, it filters to just that mailbox (after verifying access).
 // Single-org: membership rows point at the user directly, so this is one query.
 func getUserMailboxIDs(app core.App, userID, mailboxID string) ([]string, error) {
-	members, err := app.FindRecordsByFilter(
-		"mail_mailbox_members",
-		"user = {:user}",
-		"",
-		100,
-		0,
-		map[string]any{"user": userID},
-	)
+	allMailboxIDs, err := userMailboxIDs(app, userID)
 	if err != nil {
 		return nil, err
-	}
-
-	allMailboxIDs := make([]string, 0, len(members))
-	for _, m := range members {
-		allMailboxIDs = append(allMailboxIDs, m.GetString("mailbox"))
 	}
 
 	if mailboxID != "" {

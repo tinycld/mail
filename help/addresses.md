@@ -55,7 +55,7 @@ To manage the addresses of one person, open **Settings → Members** and click t
 - **Addresses** — all of the person's addresses. To add an address, click **Add address**, type the part before the `@`, choose the domain, and click **Add address**. To remove an address that an admin added, click the **×** on its row. You cannot remove an address that comes from a domain rule or a group there. Change the domain setting or the group instead.
 - **Email name** — to change it, click **Edit**, type the new name, set the **Keep the old addresses as extra addresses** switch, and click **Rename**.
 - **Send new mail from** — the person's Default From.
-- **Shared inboxes** — the shared inboxes that the person is a member of. This part shows only when the person is a member of one.
+- **Shared inboxes** — the shared inboxes that the person is a member of. If a group gives the access, the row shows the name of that group. This part shows only when the person is a member of one.
 
 A guest does not get email addresses. When a person leaves, TinyCld removes their addresses.
 

@@ -7,9 +7,10 @@ import { afterEach, expect, test, vi } from 'vitest'
 afterEach(cleanup)
 
 // useMailboxes and useSendableIdentities resolve membership, mailbox, address
-// and domain in ONE joined live query each (no client-side Map stitching).
+// and domain in ONE live query each, with materialize() (no client-side Map
+// stitching).
 // These tests mount the real hooks against real TanStack DB collections so
-// the join conditions and the user predicate actually execute — a fixture
+// the related-row lookups and the user predicate actually execute — a fixture
 // that never runs the query would certify a filter matching zero rows
 // (the §3.2 bug class).
 
@@ -51,7 +52,7 @@ const h = vi.hoisted(() => ({
             updated: '',
         },
         // A mailbox whose only address points at a domain row that is gone:
-        // the domain inner join must drop it from sendable identities even
+        // the hook must drop it from sendable identities even
         // though alice is a member.
         {
             id: 'mb_orphan',
@@ -63,12 +64,28 @@ const h = vi.hoisted(() => ({
             created: '2024-03-01T00:00:00Z',
             updated: '',
         },
+        // A mailbox with no address row: alice can read it, but it has
+        // nothing to send as.
+        {
+            id: 'mb_silent',
+            address: 'quiet',
+            domain: 'd1',
+            display_name: '',
+            name: '',
+            type: 'shared',
+            created: '2024-04-01T00:00:00Z',
+            updated: '',
+        },
     ],
     members: [
         { id: 'm1', mailbox: 'mb_me', user: 'u1', role: 'owner', created: '', updated: '' },
         { id: 'm2', mailbox: 'mb_support', user: 'u1', role: 'member', created: '', updated: '' },
         { id: 'm3', mailbox: 'mb_bob', user: 'u2', role: 'owner', created: '', updated: '' },
         { id: 'm4', mailbox: 'mb_orphan', user: 'u1', role: 'member', created: '', updated: '' },
+        // A membership whose mailbox row is gone: both hooks read the
+        // mailbox with materialize(), so each must drop this row itself.
+        { id: 'm5', mailbox: 'mb_gone', user: 'u1', role: 'member', created: '', updated: '' },
+        { id: 'm6', mailbox: 'mb_silent', user: 'u1', role: 'member', created: '', updated: '' },
     ],
     addresses: [
         {
@@ -116,6 +133,18 @@ const h = vi.hoisted(() => ({
             mailbox: 'mb_bob',
             domain: 'd1',
             local_part: 'ops',
+            source: 'manual',
+            is_primary: true,
+            created: '',
+            updated: '',
+        },
+        // An address of mb_gone, whose mailbox row is not in the store: the
+        // address alone must not make it sendable.
+        {
+            id: 'ad_gone',
+            mailbox: 'mb_gone',
+            domain: 'd1',
+            local_part: 'gone',
             source: 'manual',
             is_primary: true,
             created: '',
@@ -176,15 +205,16 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
 import { useMailboxes } from '~/tinycld/mail/hooks/useMailboxes'
 import { useSendableIdentities } from '~/tinycld/mail/hooks/useSendableIdentities'
 
-test('useMailboxes joins memberships to mailboxes for the signed-in user only', async () => {
+test('useMailboxes reads the mailbox of each membership of the signed-in user only', async () => {
     const { result } = renderHook(() => useMailboxes())
 
     await waitFor(() => expect(result.current.personal).not.toBeNull())
 
     expect(result.current.personal?.id).toBe('mb_me')
-    // mb_bob is excluded by the membership predicate; mb_orphan is still a
-    // membership (domains are not this hook's concern).
-    expect(result.current.shared.map(m => m.id)).toEqual(['mb_support', 'mb_orphan'])
+    // mb_bob is excluded by the membership predicate; mb_orphan and mb_silent
+    // are still memberships (addresses and domains are not this hook's
+    // concern); mb_gone has no mailbox row.
+    expect(result.current.shared.map(m => m.id)).toEqual(['mb_support', 'mb_orphan', 'mb_silent'])
 })
 
 test('useSendableIdentities: one identity per reachable mailbox, addresses grouped, personal first', async () => {
@@ -192,7 +222,8 @@ test('useSendableIdentities: one identity per reachable mailbox, addresses group
 
     await waitFor(() => expect(result.current.length).toBeGreaterThan(0))
 
-    // mb_orphan (dead domain) and mb_bob (not a member) must both be absent.
+    // mb_orphan (dead domain), mb_silent (no address), mb_gone (no mailbox
+    // row) and mb_bob (not a member) must all be absent.
     expect(result.current.map(i => i.mailboxId)).toEqual(['mb_me', 'mb_support'])
 
     const personal = result.current[0]

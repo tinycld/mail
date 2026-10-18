@@ -20,7 +20,7 @@ describe('newMailboxRecords', () => {
             name: 'Alice',
             type: 'personal',
         })
-        expect(member).toEqual({ id: 'm1', mailbox: 'mb1', user: 'u1', role: 'owner' })
+        expect(member).toEqual({ id: 'm1', mailbox: 'mb1', user: 'u1', group: '', role: 'owner' })
     })
 
     it('writes a shared mailbox when asked', () => {

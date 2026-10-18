@@ -33,10 +33,8 @@ type imapSession struct {
 	// refuse. Cached per session — a changed level applies at next login,
 	// same as a role change.
 	pkgReadonly bool
-	// Resolved during Login: the user's mailbox memberships
-	mailboxMemberships []*core.Record // mail_mailbox_members records
-
-	// Mailbox index built at login — one entry per mailbox membership
+	// Mailbox index built at login — one entry per mailbox the user can
+	// reach, however many member rows give that access
 	mailboxIndex []mailboxContext
 	multiMailbox bool // true when the user has more than one mailbox
 
@@ -59,7 +57,6 @@ func newIMAPSession(app core.App) *imapSession {
 // Close cleans up the session.
 func (s *imapSession) Close() error {
 	s.user = nil
-	s.mailboxMemberships = nil
 	s.mailboxIndex = nil
 	s.multiMailbox = false
 	s.selectedMailboxID = ""
@@ -82,30 +79,16 @@ func (s *imapSession) Login(username, password string) error {
 	s.user = record
 	s.pkgReadonly = !pkgaccess.CanWrite(s.app, record, "mail")
 
-	// Load the user's mailbox memberships. Single-org: membership rows point at
-	// the user directly, so this is one query (the former user_org fan-out is gone).
-	members, err := s.app.FindRecordsByFilter(
-		"mail_mailbox_members",
-		"user = {:user}",
-		"",
-		100,
-		0,
-		map[string]any{"user": record.Id},
-	)
+	mailboxIDs, err := userMailboxIDs(s.app, record.Id)
 	if err != nil {
 		return fmt.Errorf("failed to load mailbox memberships: %w", err)
 	}
-	s.mailboxMemberships = members
 
 	// Build the mailbox index for IMAP folder namespacing. A user can still
 	// hold several mailboxes (their personal one plus any shared ones), so
 	// batch the lookups: one query for the mailboxes, one for their domains —
-	// not two per membership. A membership whose mailbox or domain row is
-	// gone is skipped, as before.
-	mailboxIDs := make([]string, 0, len(s.mailboxMemberships))
-	for _, mb := range s.mailboxMemberships {
-		mailboxIDs = append(mailboxIDs, mb.GetString("mailbox"))
-	}
+	// not two per mailbox. A mailbox whose row or domain row is gone is
+	// skipped, as before.
 	mailboxes, err := s.app.FindRecordsByIds("mail_mailboxes", mailboxIDs)
 	if err != nil {
 		return fmt.Errorf("failed to load mailboxes: %w", err)
@@ -125,8 +108,8 @@ func (s *imapSession) Login(username, password string) error {
 		domainByID[domain.Id] = domain
 	}
 
-	for _, mb := range s.mailboxMemberships {
-		mailbox := mailboxByID[mb.GetString("mailbox")]
+	for _, mailboxID := range mailboxIDs {
+		mailbox := mailboxByID[mailboxID]
 		if mailbox == nil {
 			continue
 		}
