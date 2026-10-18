@@ -23,11 +23,14 @@ const h = vi.hoisted(() => ({
         { id: 'cat', name: '', email: 'cat@tinycld.org' },
         { id: 'dan', name: 'Dan', email: 'dan@tinycld.org' },
         { id: 'eve', name: 'Eve', email: 'eve@tinycld.org' },
+        { id: 'gus', name: 'Gus', email: 'gus@tinycld.org', role: 'guest' },
+        { id: 'rob', name: 'Rob', email: 'rob@tinycld.org' },
     ],
     identities: [
-        { id: 'i_ann', user: 'ann', inbox: 'mb_ann', email_name: 'ann', retired: false },
         { id: 'i_bob', user: 'bob', inbox: 'mb_bob', email_name: 'bob', retired: false },
         { id: 'i_cat', user: 'cat', inbox: 'mb_cat', email_name: 'cat', retired: false },
+        { id: 'i_ann', user: 'ann', inbox: 'mb_ann', email_name: 'ann', retired: false },
+        { id: 'i_rob', user: 'rob', inbox: '', email_name: 'rob', retired: true },
     ],
     groups: [
         { id: 'g_sales', name: 'Sales' },
@@ -90,6 +93,16 @@ const h = vi.hoisted(() => ({
             source: 'rule',
             is_primary: false,
             via_group: 'g_sales',
+        },
+        {
+            id: 'a_group',
+            local_part: 'team',
+            domain: 'd_q',
+            mailbox: '',
+            group: 'g_ops',
+            source: 'manual',
+            is_primary: false,
+            via_group: '',
         },
     ],
 }))
@@ -173,5 +186,38 @@ test('an inbox the person also has directly is not listed', async () => {
 
 test('deleting the group names the inboxes its members lose', async () => {
     const { findByText } = render(<GroupRemovalNotice groupId="g_ops" userId={null} />)
-    expect(await findByText('Members lose access to ops@q.example.')).toBeTruthy()
+    expect(
+        await findByText(
+            'Members lose access to ops@q.example. The address team@q.example is deleted.'
+        )
+    ).toBeTruthy()
+})
+
+test('removing a person names the group address they stop getting', async () => {
+    const { findByText } = render(<GroupRemovalNotice groupId="g_ops" userId="ann" />)
+    expect(await findByText('Ann stops getting mail sent to team@q.example.')).toBeTruthy()
+})
+
+test('removing a guest names no group address: guests get no group mail', async () => {
+    const { container, findByText } = render(
+        <>
+            <GroupRemovalNotice groupId="g_ops" userId="gus" />
+            <GroupRemovalNotice groupId="g_ops" userId="ann" />
+        </>
+    )
+    const ann = await findByText('Ann stops getting mail sent to team@q.example.')
+    expect(container.childElementCount).toBe(1)
+    expect(container.firstElementChild).toBe(ann)
+})
+
+test('removing a person with a retired identity names no group address', async () => {
+    const { container, findByText } = render(
+        <>
+            <GroupRemovalNotice groupId="g_ops" userId="rob" />
+            <GroupRemovalNotice groupId="g_ops" userId="ann" />
+        </>
+    )
+    const ann = await findByText('Ann stops getting mail sent to team@q.example.')
+    expect(container.childElementCount).toBe(1)
+    expect(container.firstElementChild).toBe(ann)
 })

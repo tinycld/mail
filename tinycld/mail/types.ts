@@ -112,6 +112,7 @@ export type MailSchema = {
             domain: MailDomains
             mailbox: MailMailboxes
             via_group: Groups
+            group: Groups
         }
     }
     mail_identities: {

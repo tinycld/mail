@@ -131,6 +131,7 @@ func (p *SMTPProvider) ParseInbound(body []byte) (*InboundMessage, error) {
 		MessageID:   stored.MessageID,
 		InReplyTo:   stored.InReplyTo,
 		References:  stored.References,
+		Headers:     stored.Headers,
 		Attachments: stored.Attachments,
 	}
 	return msg, nil

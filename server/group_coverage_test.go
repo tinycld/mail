@@ -16,7 +16,7 @@ import (
 )
 
 // seedGroup makes a group with the given members.
-func seedGroup(t *testing.T, app core.App, name string, members ...*core.Record) *core.Record {
+func seedGroup(t testing.TB, app core.App, name string, members ...*core.Record) *core.Record {
 	t.Helper()
 	group := saveRealRecord(t, app, "groups", map[string]any{"name": name})
 	for _, member := range members {
@@ -25,7 +25,7 @@ func seedGroup(t *testing.T, app core.App, name string, members ...*core.Record)
 	return group
 }
 
-func seedGroupUser(t *testing.T, app core.App, username string) *core.Record {
+func seedGroupUser(t testing.TB, app core.App, username string) *core.Record {
 	t.Helper()
 	return saveRealRecord(t, app, "users", map[string]any{
 		"email": username + "@ext.example", "username": username, "name": username, "role": "member",
@@ -45,7 +45,7 @@ func ruleRow(t *testing.T, app core.App, local, domainID string) *core.Record {
 	return row
 }
 
-func saveGroupsDomain(t *testing.T, app core.App, name string, groups ...*core.Record) *core.Record {
+func saveGroupsDomain(t testing.TB, app core.App, name string, groups ...*core.Record) *core.Record {
 	t.Helper()
 	ids := make([]string, len(groups))
 	for i, g := range groups {

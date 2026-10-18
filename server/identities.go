@@ -34,10 +34,34 @@ func ensureIdentity(app core.App, user *core.Record) (*core.Record, error) {
 	return ensureIdentityWith(app, user, adoptOrCreateInbox)
 }
 
+// ensureIdentityWith runs in one transaction. Two callers can run it at the
+// same time: a new user's create hook and a domain-verified hook
+// (ensureIdentities over every user) run on two requests. Each reads what
+// exists and then creates what is missing; PocketBase has a single database
+// writer, so in a transaction the read and the writes of one caller run
+// before the next caller reads. The second caller for the same user finds the
+// identity, and a second user finds the email name taken. A caller that holds
+// a transaction already joins it. After-success hooks of the saves (the
+// mailbox's primary address, the identity's rule addresses) run after commit.
 func ensureIdentityWith(app core.App, user *core.Record, policy inboxPolicy) (*core.Record, error) {
 	if user.GetString("role") == "guest" {
 		return nil, nil
 	}
+	var identity *core.Record
+	err := app.RunInTransaction(func(txApp core.App) error {
+		var err error
+		identity, err = ensureIdentityIn(txApp, user, policy)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return identity, nil
+}
+
+// ensureIdentityIn is ensureIdentityWith inside its transaction: app is the
+// transaction, and every read and write goes through it.
+func ensureIdentityIn(app core.App, user *core.Record, policy inboxPolicy) (*core.Record, error) {
 	existing, err := app.FindFirstRecordByFilter("mail_identities", "user = {:user}", dbx.Params{"user": user.Id})
 	if err == nil {
 		if existing.GetBool("retired") {

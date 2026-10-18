@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, getDefaultNormalizer, render } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 afterEach(cleanup)
@@ -35,6 +35,36 @@ const h = vi.hoisted(() => ({
             local_part: 'nathan',
             domain: 'd2',
             mailbox: 'mb1',
+            source: 'manual',
+            is_primary: false,
+            via_group: '',
+        },
+        {
+            id: 'a3',
+            local_part: 'team',
+            domain: 'd2',
+            mailbox: '',
+            group: 'g_sales',
+            source: 'manual',
+            is_primary: false,
+            via_group: '',
+        },
+        {
+            id: 'a5',
+            local_part: 'lost',
+            domain: 'd2',
+            mailbox: '',
+            group: 'g_gone',
+            source: 'manual',
+            is_primary: false,
+            via_group: '',
+        },
+        {
+            id: 'a4',
+            local_part: 'ops',
+            domain: 'd2',
+            mailbox: '',
+            group: 'g_ops',
             source: 'manual',
             is_primary: false,
             via_group: '',
@@ -100,7 +130,14 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
         mail_identities: mk('mail_identities', h.identities),
         mail_addresses: mk('mail_addresses', h.addresses),
         mail_domains: mk('mail_domains', h.domains),
-        groups: mk('groups', [{ id: 'g_sales', name: 'Sales' }]),
+        groups: mk('groups', [
+            { id: 'g_sales', name: 'Sales' },
+            { id: 'g_ops', name: 'Ops' },
+        ]),
+        group_members: mk('group_members', [
+            { id: 'gm1', group: 'g_sales', user: 'u2' },
+            { id: 'gm2', group: 'g_gone', user: 'u4' },
+        ]),
         users: mk('users', h.users),
         mail_mailboxes: mk('mail_mailboxes', h.mailboxes),
         mail_mailbox_members: mk('mail_mailbox_members', h.members),
@@ -109,6 +146,14 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
 })
 
 import MemberEmailPanel from '~/tinycld/mail/settings/MemberEmailPanel'
+
+// Default matching trims and collapses whitespace, which hides a doubled or trailing space.
+const exactText = { normalizer: getDefaultNormalizer({ trim: false, collapseWhitespace: false }) }
+
+// react-native-web under happy-dom renders testID as a plain `testid` attribute.
+function byTestId(container: HTMLElement, testId: string) {
+    return container.querySelector(`[testid="${testId}"]`)
+}
 
 function renderPanel(userId: string) {
     return render(
@@ -171,6 +216,19 @@ test('an inbox with a direct row and a group row shows once, without the group',
     expect(queryByText(/Sales inbox ·/)).toBeNull()
 })
 
+test('shows the group addresses of the groups the person is in', async () => {
+    const { findByText, queryByText } = renderPanel('u2')
+    expect(
+        await findByText('Gets mail sent to team@q.example (group Sales)', exactText)
+    ).toBeTruthy()
+    expect(queryByText(/ops@q\.example/)).toBeNull()
+})
+
+test('a group row that is missing leaves the group name out', async () => {
+    const { findByText } = renderPanel('u4')
+    expect(await findByText('Gets mail sent to lost@q.example', exactText)).toBeTruthy()
+})
+
 test('a person with an inbox and no address says so', async () => {
     const { findByText } = renderPanel('u2')
     expect(await findByText('No address yet.')).toBeTruthy()
@@ -201,4 +259,22 @@ test('the mail app link opens the IMAP help topic', async () => {
         fireEvent.click(await findByText('Set up a mail app'))
     })
     expect(h.openHelp).toHaveBeenCalledWith('mail:imap')
+})
+
+test('a person in no group gets no group address line', async () => {
+    const { findByText, queryByText } = renderPanel('u1')
+    await findByText('Send new mail from')
+    expect(queryByText(/Gets mail sent to/)).toBeNull()
+})
+
+test('a person with a group address gets the group address list', async () => {
+    const { container, findByText } = renderPanel('u2')
+    await findByText(/Gets mail sent to team@q\.example/)
+    expect(byTestId(container, 'group-address-list')).toBeTruthy()
+})
+
+test('a person in no group with an address renders no group address list', async () => {
+    const { container, findByText } = renderPanel('u1')
+    await findByText('Send new mail from')
+    expect(byTestId(container, 'group-address-list')).toBeNull()
 })

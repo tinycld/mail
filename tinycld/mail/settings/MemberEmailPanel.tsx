@@ -3,6 +3,7 @@ import { useLiveQuery } from '@tanstack/react-db'
 import type { MemberDrawerPanelProps } from '@tinycld/core/lib/members/member-panel'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useRecord } from '@tinycld/core/lib/use-record'
+import { materialize } from 'pbtsdb'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { DefaultFromPicker } from './DefaultFromPicker'
@@ -57,6 +58,71 @@ function useSharedInboxes(userId: string) {
         groupName: m.groupName ?? '',
     }))
     return inboxAccessLines(rows)
+}
+
+function useGroupAddressLines(userId: string) {
+    const [membersCollection, groupsCollection, addressesCollection, domainsCollection] = useStore(
+        'group_members',
+        'groups',
+        'mail_addresses',
+        'mail_domains'
+    )
+    const { data } = useLiveQuery({
+        queryKey: ['mail_person_group_addresses', userId],
+        query: query =>
+            query
+                .from({ member: membersCollection })
+                .where(({ member }) => eq(member.user, userId))
+                .select(({ member }) => ({
+                    id: member.id,
+                    group: materialize(
+                        query
+                            .from({ group: groupsCollection })
+                            .where(({ group }) => eq(group.id, member.group))
+                            .findOne()
+                    ),
+                    addresses: materialize(
+                        query
+                            .from({ address: addressesCollection })
+                            .where(({ address }) => eq(address.group, member.group))
+                            .select(({ address }) => ({
+                                id: address.id,
+                                localPart: address.local_part,
+                                domain: materialize(
+                                    query
+                                        .from({ domain: domainsCollection })
+                                        .where(({ domain }) => eq(domain.id, address.domain))
+                                        .findOne()
+                                ),
+                            }))
+                    ),
+                })),
+    })
+    const lines = (data ?? []).flatMap(({ group, addresses }) => {
+        const groupSuffix = group?.name ? ` (group ${group.name})` : ''
+        return addresses
+            .filter(a => a.domain)
+            .map(a => ({
+                id: a.id,
+                text: `Gets mail sent to ${a.localPart}@${a.domain?.domain}${groupSuffix}`,
+            }))
+    })
+    return lines.sort((a, b) => a.text.localeCompare(b.text))
+}
+
+function GroupAddressList({ userId }: { userId: string }) {
+    const lines = useGroupAddressLines(userId)
+    if (lines.length === 0) return null
+    const rows = lines.map(line => (
+        <Text key={line.id} className="text-foreground text-sm">
+            {line.text}
+        </Text>
+    ))
+    return (
+        <View testID="group-address-list" className="gap-1">
+            {rows}
+        </View>
+    )
 }
 
 function inboxEmail(address: string, domainName: string | undefined) {
@@ -153,6 +219,7 @@ function IdentitySection({
                 value={identity.defaultFrom}
             />
             <SharedInboxList userId={userId} />
+            <GroupAddressList userId={userId} />
             <MailAppLink />
         </View>
     )

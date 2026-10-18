@@ -44,6 +44,7 @@ function useRename(
                 source: 'manual',
                 is_primary: false,
                 via_group: '',
+                group: '',
                 created: '',
                 updated: '',
             })

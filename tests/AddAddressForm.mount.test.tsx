@@ -18,7 +18,10 @@ const h = vi.hoisted(() => ({
         { id: 'd_grp', domain: 'q.example', coverage: 'groups', rank: 3 },
     ],
     addresses: [{ id: 'a1', local_part: 'help', domain: 'd_org', mailbox: 'mb_other' }],
-    identities: [{ id: 'i1', email_name: 'holly', inbox: 'mb_other', user: 'u_holly' }],
+    identities: [
+        { id: 'i1', email_name: 'holly', inbox: 'mb_other', user: 'u_holly', retired: false },
+        { id: 'i2', email_name: 'nina', inbox: 'mb1', user: 'u_nina', retired: false },
+    ],
     inserted: [] as Record<string, unknown>[],
 }))
 
@@ -72,7 +75,19 @@ async function chooseDomain(findByText: (t: string) => Promise<HTMLElement>, nam
 }
 
 function renderForm() {
-    return render(withQueryClient(<AddAddressForm mailboxId="mb1" onDone={vi.fn()} />))
+    return render(
+        withQueryClient(
+            <AddAddressForm target={{ kind: 'inbox', mailboxId: 'mb1' }} onDone={vi.fn()} />
+        )
+    )
+}
+
+function renderGroupForm() {
+    return render(
+        withQueryClient(
+            <AddAddressForm target={{ kind: 'group', groupId: 'g1' }} onDone={vi.fn()} />
+        )
+    )
 }
 
 const RESERVED = "This is a person's email name, and this domain's rule keeps that name for them"
@@ -117,4 +132,42 @@ test('a free address on a manual domain is added as a hand-made, non-main addres
         source: 'manual',
         is_primary: false,
     })
+})
+
+test('a group address is added with no inbox and the group as its target', async () => {
+    h.inserted.length = 0
+    const { container, findByText } = renderGroupForm()
+    await chooseDomain(findByText, 'tinycld.org')
+    await typeAddress(container, 'billing')
+    const button = await findByText('Add address')
+    await waitFor(() => expect(container.querySelector('[aria-disabled="true"]')).toBeNull())
+    await act(async () => {
+        fireEvent.click(button)
+    })
+    await waitFor(() => expect(h.inserted).toHaveLength(1))
+    expect(h.inserted[0]).toMatchObject({
+        local_part: 'billing',
+        domain: 'd_org',
+        mailbox: '',
+        group: 'g1',
+        source: 'manual',
+        is_primary: false,
+    })
+})
+
+// No inbox owns a group address, so every person's name is kept, the name of
+// the inbox mb1 too.
+test("a group address refuses any person's email name on a rule domain", async () => {
+    const { container, findByText } = renderGroupForm()
+    await chooseDomain(findByText, 'q.example')
+    await typeAddress(container, 'nina')
+    expect(await findByText(RESERVED)).toBeTruthy()
+})
+
+test('an inbox address keeps the name of its own owner', async () => {
+    const { container, findByText, queryByText } = renderForm()
+    await chooseDomain(findByText, 'q.example')
+    await typeAddress(container, 'nina')
+    await waitFor(() => expect(container.querySelector('[aria-disabled="true"]')).toBeNull())
+    expect(queryByText(RESERVED)).toBeNull()
 })

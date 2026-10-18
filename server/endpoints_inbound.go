@@ -2,6 +2,7 @@ package mail
 
 import (
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -69,13 +70,22 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 
 	result := routeInbound(app, msg)
 
-	// Any storage failure fails the whole batch so Postmark retries.
-	if len(result.storageFailures) > 0 {
+	// A storage failure fails the whole batch so Postmark retries; the retry
+	// stores only the missing copies (see retryIsSafe). Without a Message-ID
+	// a retry would duplicate the copies already stored, so once anything is
+	// stored the delivery is accepted and the failure logged.
+	if len(result.storageFailures) > 0 && (result.storedCount == 0 || retryIsSafe(msg)) {
 		return router.NewApiError(
 			http.StatusInternalServerError,
 			fmt.Sprintf("Storage failed for %d recipient(s): %v", len(result.storageFailures), result.storageFailures[0]),
 			result.storageFailures[0],
 		)
+	}
+
+	if len(result.storageFailures) > 0 {
+		addressLog.Error("inbound: accepted a partial delivery; with no Message-ID a retry would store duplicates",
+			"failures", len(result.storageFailures), "stored", result.storedCount,
+			"error", errors.Join(result.storageFailures...))
 	}
 
 	// Nothing stored, but we had at least one syntactically-valid recipient
@@ -134,17 +144,6 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMessage, deliveredTo string) error {
 	mailboxID := mailbox.Id
 
-	// Idempotency: skip if message with this message_id already exists in a thread for this mailbox
-	if existing, existingThread, _ := findMessageInMailbox(app, mailboxID, msg.MessageID); existing != nil {
-		if existing.GetString("sent_by") == "" {
-			return nil // already processed
-		}
-		// Mail this mailbox sent to itself: the send path stored it under the
-		// same Message-ID, so this delivery is that message arriving, and it
-		// belongs in the Inbox as well as Sent.
-		return fileIntoInbox(app, mailboxID, existingThread.Id)
-	}
-
 	stored := &storedMessage{
 		DeliveredTo:   deliveredTo,
 		MessageID:     msg.MessageID,
@@ -159,6 +158,7 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 		TextBody:      msg.TextBody,
 		StrippedReply: msg.StrippedReply,
 		Attachments:   msg.Attachments,
+		Headers:       msg.Headers,
 	}
 
 	// One transaction around the whole delivery.
@@ -179,6 +179,26 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 	// Rollback also removes a thread this call created, which is why there is
 	// no manual thread cleanup on the storeMessage error path any more.
 	return app.RunInTransaction(func(txApp core.App) error {
+		// Idempotency: skip a message whose Message-ID this mailbox already
+		// holds. The check runs inside the transaction: SQLite allows one
+		// writer, so a provider retry that arrives while this delivery is
+		// still storing waits for it to commit and then finds its copy.
+		// A failed check is a storage failure: storing anyway could duplicate
+		// a copy that a retry after a partial fan-out finds already stored.
+		existing, existingThread, err := findMessageInMailbox(txApp, mailboxID, msg.MessageID)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			if existing.GetString("sent_by") == "" {
+				return nil // already processed
+			}
+			// Mail this mailbox sent to itself: the send path stored it under
+			// the same Message-ID, so this delivery is that message arriving,
+			// and it belongs in the Inbox as well as Sent.
+			return fileIntoInbox(txApp, mailboxID, existingThread.Id)
+		}
+
 		thread, err := findOrCreateThread(txApp, mailboxID, msg.Subject, msg.InReplyTo, msg.References)
 		if err != nil {
 			return fmt.Errorf("findOrCreateThread: %w", err)

@@ -44,7 +44,7 @@ func seedIdentityEdit(t *testing.T, app *tests.TestApp) *identityEditSeed {
 	return s
 }
 
-func mustRecord(t *testing.T, app core.App, collection, id string) *core.Record {
+func mustRecord(t testing.TB, app core.App, collection, id string) *core.Record {
 	t.Helper()
 	r, err := app.FindRecordById(collection, id)
 	if err != nil {

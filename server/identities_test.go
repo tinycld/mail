@@ -16,7 +16,7 @@ func newIdentityTestApp(t *testing.T) *tests.TestApp {
 	return app
 }
 
-func identityOf(t *testing.T, app core.App, userID string) *core.Record {
+func identityOf(t testing.TB, app core.App, userID string) *core.Record {
 	t.Helper()
 	rows, err := app.FindRecordsByFilter("mail_identities", "user = {:user}", "", 0, 0, map[string]any{"user": userID})
 	if err != nil {

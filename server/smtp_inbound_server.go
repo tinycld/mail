@@ -97,6 +97,9 @@ func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func()
 	}, nil
 }
 
+// maxInboundRecipients is the RCPT limit of one inbound transaction.
+const maxInboundRecipients = 100
+
 // newInboundSMTPServer builds the inbound-MX server around the shared inbound
 // backend; both the own-ports TCP bind and the injected-listener path
 // serve exactly this instance.
@@ -106,6 +109,10 @@ func newInboundSMTPServer(app core.App, hostname string, tlsConfig *tls.Config) 
 	server.Domain = hostname
 	server.AllowInsecureAuth = false
 	server.MaxMessageBytes = 25 << 20
+	// Each RCPT runs an address lookup and holds the inboxes it reaches (one
+	// per member for a group address), so the count is capped. 100 is the
+	// least RFC 5321 (4.5.3.1.8) lets a server accept.
+	server.MaxRecipients = maxInboundRecipients
 	server.EnableSMTPUTF8 = true
 	server.ReadTimeout = 60 * time.Second
 	server.WriteTimeout = 60 * time.Second
@@ -173,7 +180,8 @@ func (b *smtpInboundBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 // smtpInboundSession implements smtp.Session for one incoming connection.
 // Recipients are accepted only when they resolve to a local mailbox (no open
 // relay); DATA is parsed via the SMTP provider's ParseInbound and dispatched
-// through processInboundForMailbox once per accepted recipient.
+// through processInboundForMailbox once per inbox the accepted recipients
+// reach.
 //
 // The app field is typed as core.App (the minimal interface this code needs)
 // so production core.App and the test *tests.TestApp both
@@ -183,13 +191,12 @@ type smtpInboundSession struct {
 	hostname string
 
 	from      string
-	mailboxes []recipientBinding // accepted recipients + resolved mailbox
+	mailboxes []recipientBinding // accepted recipients + the inboxes they reach
 }
 
 type recipientBinding struct {
-	address   string
-	mailbox   *core.Record
-	addressID string
+	address string
+	targets []deliveryTarget
 }
 
 // AuthMechanisms returns no mechanisms — AUTH is disabled on the inbound
@@ -240,10 +247,12 @@ var errMXRelayDenied = &smtp.SMTPError{
 	Message:      "Relaying denied. To send mail, log in on port 465.",
 }
 
-// Rcpt resolves each recipient to a local mailbox. Unknown recipients get
-// 550 5.1.1 so the sending MTA generates a clean bounce instead of
-// silently accepting and discarding. Plus-tags are stripped (support+tag@
-// → support@) to mirror the webhook path's resolveAddress.
+// Rcpt resolves each recipient to the local inboxes it delivers to: one for
+// an inbox address, one per member for a group address. Unknown recipients,
+// and a group with no member who can receive mail, get 550 5.1.1 so the
+// sending MTA generates a clean bounce instead of silently accepting and
+// discarding. Plus-tags are stripped (support+tag@ → support@) to mirror the
+// webhook path.
 func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 	localPart, domain := splitAddress(to)
 	if localPart == "" || domain == "" {
@@ -257,7 +266,7 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 	if !mailDomainHosted(s.app, domain) {
 		return errMXRelayDenied
 	}
-	target, err := resolveAddress(s.app, localPart, domain)
+	targets, err := deliveryTargets(s.app, localPart, domain)
 	if errors.Is(err, errAddressNotFound) {
 		return &smtp.SMTPError{
 			Code:         550,
@@ -269,14 +278,19 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 		addressLog.Error("inbound SMTP: recipient lookup failed", "rcpt", to, "error", err)
 		return errRecipientLookupFailed
 	}
-	s.mailboxes = append(s.mailboxes, recipientBinding{address: to, mailbox: target.Mailbox, addressID: target.Address.Id})
+	s.mailboxes = append(s.mailboxes, recipientBinding{address: to, targets: targets})
 	return nil
 }
 
-// Data reads the RFC 5322 message and dispatches it to every accepted mailbox.
-// Storage failures on individual mailboxes are logged but don't fail the SMTP
-// transaction — the sender would retry the whole batch and we'd risk infinite
-// loops; better to surface partial delivery in logs than to bounce the rest.
+// Data reads the RFC 5322 message and dispatches it to every inbox the
+// accepted recipients reach, once per inbox, in RCPT order.
+//
+// A storage failure in any inbox answers 451 when the message has a
+// Message-ID: the sending MTA retries the whole message, and the retry skips
+// the inboxes that already hold that Message-ID, so only the missing copies
+// are stored. Without a Message-ID a retry would store a second copy in every
+// inbox that succeeded, so a partial failure is accepted (250) and logged as
+// an error instead. When nothing is stored the answer is always 451.
 func (s *smtpInboundSession) Data(r io.Reader) error {
 	// Read-only can begin after MAIL FROM was accepted, so DATA checks again
 	// before it stores anything.
@@ -313,22 +327,33 @@ func (s *smtpInboundSession) Data(r io.Reader) error {
 		}
 	}
 
-	storedAny := false
+	stored, failed := 0, 0
+	var delivered targetSet
 	for _, binding := range s.mailboxes {
-		if err := processInboundForMailbox(s.app, binding.mailbox, msg, binding.addressID); err != nil {
-			s.app.Logger().Error("inbound SMTP: storage failed",
-				"mailboxID", binding.mailbox.Id, "address", binding.address, "error", err)
-			continue
+		for _, target := range binding.targets {
+			if !delivered.add(target) {
+				continue
+			}
+			if err := processInboundForMailbox(s.app, target.Mailbox, msg, target.AddressID); err != nil {
+				addressLog.Error("inbound SMTP: storage failed",
+					"mailboxID", target.Mailbox.Id, "address", binding.address, "messageID", msg.MessageID, "error", err)
+				failed++
+				continue
+			}
+			stored++
 		}
-		storedAny = true
 	}
 
-	if !storedAny {
+	if stored == 0 || (failed > 0 && retryIsSafe(msg)) {
 		return &smtp.SMTPError{
 			Code:         451,
 			EnhancedCode: smtp.EnhancedCode{4, 3, 0},
 			Message:      "Temporary storage failure",
 		}
+	}
+	if failed > 0 {
+		addressLog.Error("inbound SMTP: accepted a partial delivery; with no Message-ID a retry would store duplicates",
+			"from", s.from, "stored", stored, "failed", failed)
 	}
 	return nil
 }

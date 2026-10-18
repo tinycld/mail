@@ -212,3 +212,58 @@ describe('addressesLost', () => {
         expect(addressesLost(rows, new Map(), 'g_sales')).toEqual(['ann@q.example'])
     })
 })
+
+describe('removalNoticeText with group addresses', () => {
+    it('names the one group address a person stops getting', () => {
+        expect(
+            removalNoticeText({
+                personName: 'Ann',
+                addresses: [],
+                groupAddresses: ['sales@q.example'],
+            })
+        ).toBe('Ann stops getting mail sent to sales@q.example.')
+    })
+
+    it('lists several group addresses a person stops getting', () => {
+        expect(
+            removalNoticeText({
+                personName: 'Ann',
+                addresses: [],
+                groupAddresses: ['sales@q.example', 'team@q.example'],
+            })
+        ).toBe('Ann stops getting mail sent to these addresses: sales@q.example, team@q.example.')
+    })
+
+    it('names the one group address deleted with the group', () => {
+        expect(
+            removalNoticeText({
+                personName: null,
+                addresses: [],
+                groupAddresses: ['sales@q.example'],
+            })
+        ).toBe('The address sales@q.example is deleted.')
+    })
+
+    it('lists several group addresses deleted with the group', () => {
+        expect(
+            removalNoticeText({
+                personName: null,
+                addresses: [],
+                groupAddresses: ['a@q.example', 'b@q.example'],
+            })
+        ).toBe('These addresses are deleted: a@q.example, b@q.example.')
+    })
+
+    it('adds the group address sentence after the lost addresses and inboxes', () => {
+        expect(
+            removalNoticeText({
+                personName: 'Ann',
+                addresses: ['ann@q.example'],
+                inboxes: ['support@q.example'],
+                groupAddresses: ['sales@q.example'],
+            })
+        ).toBe(
+            'Ann loses the address ann@q.example. Ann also loses access to support@q.example. Ann stops getting mail sent to sales@q.example.'
+        )
+    })
+})

@@ -1,7 +1,7 @@
 ---
 title: Your email addresses
-summary: Where your addresses come from, your email name, your Default From, a folder for each address, and the address a reply uses
-tags: [addresses, email name, default from, address folders, reply]
+summary: Where your addresses come from, your email name, your Default From, a folder for each address, the address a reply uses, and group addresses
+tags: [addresses, email name, default from, address folders, reply, group address]
 order: 15
 ---
 
@@ -75,3 +75,24 @@ To manage the addresses of one person, open **Settings → Members** and click t
 A guest does not get email addresses. When a person leaves, TinyCld removes their addresses.
 
 To manage inboxes that a team uses together, see [Shared inboxes](help://mail:mailboxes).
+
+## Give a group its own address
+
+An admin can give a group its own address, for example `team@example.com`. Mail sent to this address goes to each member of the group.
+
+1. Open **Settings → Groups** and click the group.
+2. In the **Email** section, under **Group addresses**, click **Add address**.
+3. Type the part before the `@` and choose the domain.
+4. Click **Add address**.
+
+To remove a group address, click the **×** on its row.
+
+Each member gets a copy of the message in their own inbox. When you add a person to the group, the person gets the mail that arrives after that time. When you remove a person, the person stops getting the mail.
+
+A reply to the message goes to the person who sent it. It does not go to the group.
+
+Nobody can send mail from a group address. The group address is not in the **From** list.
+
+When you delete the group, TinyCld deletes its addresses too.
+
+To let a team read and answer the same mail together, use a shared inbox. See [Shared inboxes](help://mail:mailboxes).

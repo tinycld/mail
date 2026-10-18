@@ -187,6 +187,7 @@ func parseRFC5322(raw []byte) (*storedMessage, error) {
 		MessageID: normalizeMessageID(messageID),
 		Subject:   subject,
 		Date:      date.UTC().Format(time.RFC3339),
+		Headers:   rfc5322Headers(h),
 	}
 
 	if inReplyTo, err := h.MsgIDList("In-Reply-To"); err == nil && len(inReplyTo) > 0 {

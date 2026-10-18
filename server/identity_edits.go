@@ -140,6 +140,13 @@ func isAdminAuth(auth *core.Record) bool {
 	return role == "admin" || role == "owner"
 }
 
+// deliversToInbox reports whether an address delivers to the inbox. An
+// identity with no inbox (a retired one) owns no address, and a group
+// address, whose mailbox is empty, must not match it.
+func deliversToInbox(address *core.Record, inboxID string) bool {
+	return inboxID != "" && address.GetString("mailbox") == inboxID
+}
+
 // checkDefaultFrom accepts an empty value (mail goes out from the inbox's
 // address on the highest-ranked verified domain, see defaultSendAddress) or an
 // address that delivers to the identity's inbox.
@@ -149,7 +156,7 @@ func checkDefaultFrom(app core.App, identity *core.Record) error {
 		return nil
 	}
 	address, err := app.FindRecordById("mail_addresses", id)
-	if err != nil || address.GetString("mailbox") != identity.GetString("inbox") {
+	if err != nil || !deliversToInbox(address, identity.GetString("inbox")) {
 		return onField("default_from", validation.NewError("default_from_foreign",
 			"Choose an address of this person's own inbox."))
 	}
@@ -167,7 +174,7 @@ func checkHiddenAddressViews(app core.App, identity *core.Record) error {
 			continue
 		}
 		address, err := app.FindRecordById("mail_addresses", id)
-		if err != nil || address.GetString("mailbox") != identity.GetString("inbox") {
+		if err != nil || !deliversToInbox(address, identity.GetString("inbox")) {
 			return onField("hidden_address_views", validation.NewError("hidden_address_view_foreign",
 				"Choose only addresses of this person's own inbox."))
 		}

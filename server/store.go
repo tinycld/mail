@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -112,33 +113,34 @@ func bareMessageID(messageID string) string {
 // empty (an empty Message-ID would falsely collapse unrelated messages).
 // Used to dedup the SMTP-submission + IMAP-APPEND-to-Sent collision: most
 // IMAP clients append a copy of a sent message to the Sent folder after
-// SMTP submission, and without this check we'd store both copies.
+// SMTP submission, and without this check we'd store both copies. Inbound
+// delivery uses it too, so a retry after a partial fan-out skips the inboxes
+// that already stored.
+//
+// The lookup is scoped to the mailbox: one message delivered to many inboxes
+// has a row with the same Message-ID in each, and a capped search over all of
+// them could miss this mailbox's row. Any error but "no row" is returned.
 func findMessageInMailbox(app core.App, mailboxID, messageID string) (*core.Record, *core.Record, error) {
 	messageID = normalizeMessageID(messageID)
 	if messageID == "" || mailboxID == "" {
 		return nil, nil, nil
 	}
-	candidates, err := app.FindRecordsByFilter(
+	msg, err := app.FindFirstRecordByFilter(
 		"mail_messages",
-		"message_id = {:messageID}",
-		"",
-		10,
-		0,
-		map[string]any{"messageID": messageID},
+		"message_id = {:messageID} && thread.mailbox = {:mailbox}",
+		map[string]any{"messageID": messageID, "mailbox": mailboxID},
 	)
-	if err != nil || len(candidates) == 0 {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, nil
 	}
-	for _, msg := range candidates {
-		thread, err := app.FindRecordById("mail_threads", msg.GetString("thread"))
-		if err != nil {
-			continue
-		}
-		if thread.GetString("mailbox") == mailboxID {
-			return msg, thread, nil
-		}
+	if err != nil {
+		return nil, nil, fmt.Errorf("find message %s in mailbox %s: %w", messageID, mailboxID, err)
 	}
-	return nil, nil, nil
+	thread, err := app.FindRecordById("mail_threads", msg.GetString("thread"))
+	if err != nil {
+		return nil, nil, fmt.Errorf("thread of message %s: %w", msg.Id, err)
+	}
+	return msg, thread, nil
 }
 
 func findThreadByMessageID(app core.App, mailboxID, messageID string) (*core.Record, error) {
@@ -208,6 +210,7 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 	}
 	record.Set("snippet", truncateSnippet(snippetSource, 200))
 	record.Set("has_attachments", len(msg.Attachments) > 0)
+	record.Set("is_auto_submitted", isAutoSubmitted(msg.Headers))
 
 	totalSize := int64(len(msg.HTMLBody))
 	for _, att := range msg.Attachments {
@@ -353,6 +356,11 @@ type storedMessage struct {
 	Attachments    []InboundAttachment
 	DeliveryStatus string // "sending", "sent", "delivered", "bounced", "spam_complaint", "draft"
 	BounceReason   string // only populated when DeliveryStatus == "bounced"
+	// Headers are the message's top-level header fields as received or sent.
+	// They are not stored as such; storeMessage reads the flags it derives
+	// from them (is_auto_submitted), so every path that stores a message
+	// derives them the same way.
+	Headers []Header
 }
 
 // updateThreadMetadata updates the thread's snippet, latest_date, message_count, and participants.

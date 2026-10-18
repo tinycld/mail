@@ -175,7 +175,7 @@ func (m *imapFetcherManager) tick(ctx context.Context, cfg SMTPConfig) error {
 			continue
 		}
 		if err := dispatchInbound(m.app, msg); err != nil {
-			m.app.Logger().Warn("imap fetcher: dispatch failed",
+			addressLog.Warn("imap fetcher: dispatch failed; the next tick retries",
 				"messageID", msg.MessageID, "error", err)
 			// Do not mark this UID seen — next tick retries.
 			continue
@@ -242,47 +242,67 @@ func realIMAPDial(ctx context.Context, addr string, useTLS bool) (*imapclient.Cl
 
 // dispatchInbound routes a parsed message to each recipient's mailbox. The
 // system IMAP account receives mail for every served domain, so routing is
-// purely by recipient address: resolveAddress finds the mailbox via its
-// own domain (and thus the owning org), which keeps org isolation intact without
-// a separate org filter. Reuses processInboundForMailbox (same path the webhook +
+// purely by recipient address: deliveryTargets finds the inboxes via the
+// address's own domain (and thus the owning org), which keeps org isolation
+// intact without a separate org filter. A group address reaches each member's
+// own inbox, and one targetSet stores one copy per inbox. Reuses processInboundForMailbox (same path the webhook +
 // inbound SMTP listener use), so threading, FTS, notifications and dedup behave
 // identically.
 func dispatchInbound(app core.App, msg *InboundMessage) error {
 	var dispatched int
-	var firstErr, lookupErr error
+	var storeErr, lookupErr error
+
+	var delivered targetSet
 
 	for _, email := range routingRecipients(msg) {
 		localPart, domain := splitAddress(email)
 		if localPart == "" || domain == "" {
+			addressLog.Info("imap fetcher: skipped recipient",
+				"address", email, "reason", "malformed address", "messageID", msg.MessageID)
 			continue
 		}
 		localPart = stripPlusTag(localPart)
 
-		target, err := resolveAddress(app, localPart, domain)
+		targets, err := deliveryTargets(app, localPart, domain)
 		if errors.Is(err, errAddressNotFound) {
+			addressLog.Info("imap fetcher: skipped recipient",
+				"address", localPart+"@"+domain, "reason", err.Error(), "messageID", msg.MessageID)
 			continue
 		}
 		// A failed lookup leaves the message unseen even when another
-		// recipient was stored: the retry dedups by Message-ID per inbox.
+		// recipient was stored (see the retry rule below).
 		if err != nil {
 			lookupErr = errors.Join(lookupErr, fmt.Errorf("look up %s: %w", email, err))
 			continue
 		}
-		if err := processInboundForMailbox(app, target.Mailbox, msg, target.Address.Id); err != nil {
-			if firstErr == nil {
-				firstErr = err
+		for _, target := range targets {
+			if !delivered.add(target) {
+				continue
 			}
-			continue
+			if err := processInboundForMailbox(app, target.Mailbox, msg, target.AddressID); err != nil {
+				addressLog.Error("imap fetcher: storage failed",
+					"mailboxID", target.Mailbox.Id, "address", email, "messageID", msg.MessageID, "error", err)
+				storeErr = errors.Join(storeErr, fmt.Errorf("store for %s in inbox %s: %w", email, target.Mailbox.Id, err))
+				continue
+			}
+			dispatched++
 		}
-		dispatched++
 	}
 
-	if lookupErr != nil {
-		return lookupErr
+	// A failed lookup or store leaves the UID unseen so the next tick
+	// retries, which stores only the missing copies (see retryIsSafe).
+	// Without a Message-ID the retry would duplicate the copies already
+	// stored, so once anything is stored the message is kept as seen and the
+	// lost copies are logged.
+	failed := errors.Join(lookupErr, storeErr)
+	if failed == nil {
+		return nil
 	}
-	if dispatched == 0 && firstErr != nil {
-		return firstErr
+	if dispatched == 0 || retryIsSafe(msg) {
+		return failed
 	}
+	addressLog.Error("imap fetcher: kept a partial delivery; with no Message-ID a retry would store duplicates",
+		"stored", dispatched, "error", failed)
 	return nil
 }
 
