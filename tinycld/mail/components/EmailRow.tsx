@@ -25,6 +25,17 @@ import type { ReactNode } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import type { ThreadListItem } from './thread-list-item'
 
+// Named, so a screen reader says what the paperclip means.
+function AttachmentMarker({ isVisible }: { isVisible: boolean }) {
+    const mutedColor = useThemeColor('muted-foreground')
+    if (!isVisible) return null
+    return (
+        <View accessibilityRole="image" accessibilityLabel="Has attachments">
+            <Paperclip size={14} color={mutedColor} />
+        </View>
+    )
+}
+
 function MailboxChip({ label }: { label: string }) {
     const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
@@ -254,9 +265,7 @@ function MobileEmailRow({
                                 numberOfLines={1}
                             />
                             {email.mailboxLabel ? <MailboxChip label={email.mailboxLabel} /> : null}
-                            {email.hasAttachments ? (
-                                <Paperclip size={14} color={mutedColor} />
-                            ) : null}
+                            <AttachmentMarker isVisible={email.hasAttachments} />
                             <Text style={[mobileStyles.date, { color: mutedColor }]}>
                                 {dateDisplay}
                             </Text>
@@ -481,9 +490,7 @@ function DesktopEmailRow({
                             {email.labels.length > 0 ? (
                                 <LabelDots labels={email.labels} max={3} />
                             ) : null}
-                            {email.hasAttachments ? (
-                                <Paperclip size={14} color={mutedColor} />
-                            ) : null}
+                            <AttachmentMarker isVisible={email.hasAttachments} />
                             <Text style={[styles.date, { color: mutedColor }]}>{dateDisplay}</Text>
                         </View>
                     }

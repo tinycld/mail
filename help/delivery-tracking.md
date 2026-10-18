@@ -13,7 +13,7 @@ When you send email through a third-party provider like Postmark, the provider s
 
 Every outgoing message has a `delivery_status`. As callbacks come in, the status moves through:
 
-- **draft** — you're still composing. Auto-saved but never sent.
+- **draft** — you are still writing the message. It is saved but not sent.
 - **sending** — the **Send** button has been clicked and we've submitted to the provider, but haven't gotten a `sent` confirmation back yet.
 - **sent** — the provider has accepted the message for delivery. Most messages spend less than a second in `sending` before flipping to `sent`. `delivery_status` stays "sent" even after the message is delivered. See the next paragraph.
 - **bounced** — the recipient's mail server rejected the message. Could be a hard bounce (address doesn't exist), a soft bounce (mailbox full, temporary failure), or any other delivery error.

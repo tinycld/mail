@@ -200,6 +200,7 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 		MaxSelect:    1,
 	})
 	threadState.Fields.Add(&core.TextField{Name: "latest_date"})
+	threadState.Fields.Add(&core.TextField{Name: "address_keys"})
 	threadState.Fields.Add(&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true})
 	if err := app.Save(threadState); err != nil {
 		t.Fatalf("failed to save mail_thread_state: %v", err)
@@ -225,6 +226,7 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 	for _, name := range folderCountColumns {
 		counts.Fields.Add(&core.NumberField{Name: name, OnlyInt: true})
 	}
+	counts.Fields.Add(&core.JSONField{Name: "inbox_by_address", MaxSize: 200000})
 	if err := app.Save(counts); err != nil {
 		t.Fatalf("failed to save mail_folder_counts: %v", err)
 	}

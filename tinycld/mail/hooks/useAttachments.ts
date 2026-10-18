@@ -20,13 +20,20 @@ export interface AttachmentFile {
 const MAX_TOTAL_SIZE = 10 * 1024 * 1024 // 10MB (Postmark limit)
 const MAX_FILES = 20
 
-export function useAttachments() {
+/**
+ * `reservedCount` is the files the message already carries outside this
+ * hook (a resumed draft's saved files). They count toward MAX_FILES: the
+ * Sent copy holds at most that many, whatever their source.
+ */
+export function useAttachments(reservedCount = 0) {
     const [attachments, setAttachments] = useState<AttachmentFile[]>([])
     // React batches state updates and runs the updater asynchronously, so a throw inside
     // setAttachments(prev => ...) escapes any try/catch around addFiles. Validate first
     // against a ref-mirrored current value so addFiles can throw synchronously.
     const attachmentsRef = useRef<AttachmentFile[]>([])
     attachmentsRef.current = attachments
+    const reservedRef = useRef(reservedCount)
+    reservedRef.current = reservedCount
 
     const totalSize = attachments.reduce((sum, a) => sum + a.size, 0)
 
@@ -40,7 +47,7 @@ export function useAttachments() {
         }))
 
         const combined = [...attachmentsRef.current, ...incoming]
-        if (combined.length > MAX_FILES) {
+        if (combined.length + reservedRef.current > MAX_FILES) {
             throw new AttachmentValidationError(`Maximum ${MAX_FILES} attachments allowed`)
         }
         const newTotal = combined.reduce((sum, a) => sum + a.size, 0)

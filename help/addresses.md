@@ -1,7 +1,7 @@
 ---
 title: Your email addresses
-summary: Where your addresses come from, your email name, your Default From, and the address a reply uses
-tags: [addresses, email name, default from, reply]
+summary: Where your addresses come from, your email name, your Default From, a folder for each address, and the address a reply uses
+tags: [addresses, email name, default from, address folders, reply]
 order: 15
 ---
 
@@ -37,6 +37,21 @@ Your Default From is the address that a new message starts from.
 TinyCld saves the change immediately. If you click **The main domain's address**, new mail starts from your address on the main domain. The main domain is the first verified domain in **Settings → Mail → Domains**.
 
 To send one message from a different address, click **Change** next to **From** in the compose window. See [Composing](help://mail:composing).
+
+## Show a folder for each address
+
+When you have two or more addresses, you can show a folder for each address in the sidebar.
+
+1. Open **Settings → Account → Email**.
+2. Turn on **Show a folder for each address**.
+
+The sidebar then shows one folder for each address, under **Inbox** in your personal inbox. The number on a folder is the number of unread conversations in it.
+
+A folder shows the conversations in your **Inbox** that use its address: mail sent to that address, and mail that you sent from it. A folder is not a second inbox. Each conversation stays in your **Inbox**. If you archive or delete a conversation, it goes out of the folder too. A conversation that uses two of your addresses shows in the two folders.
+
+To remove one address from the sidebar, set its switch in the **Show in sidebar** column to off. The folders of the other addresses stay. Mail to that address continues to arrive in your **Inbox**.
+
+To remove all of the folders, turn off **Show a folder for each address**. Your mail app shows the same folders. See [Connecting an IMAP client](help://mail:imap).
 
 ## Which address a reply uses
 

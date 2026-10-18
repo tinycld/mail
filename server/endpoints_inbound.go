@@ -219,7 +219,7 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 		if snippet == "" {
 			snippet = msg.Subject
 		}
-		if err := updateThreadMetadata(txApp, thread, msg.From.Name, msg.From.Email, snippet, msg.Date); err != nil {
+		if err := updateThreadMetadata(txApp, thread.Id, msg.From.Name, msg.From.Email, snippet, msg.Date); err != nil {
 			return fmt.Errorf("updateThreadMetadata: %w", err)
 		}
 

@@ -3,7 +3,7 @@ import { useLiveQuery } from '@tanstack/react-db'
 import { useQuery } from '@tanstack/react-query'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import { serverFetch } from '@tinycld/core/lib/server-fetch'
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import type { MailMessages } from '../types'
 import type { DraftContext } from './useComposeState'
 
@@ -48,9 +48,22 @@ export function useDraftMessage(
         },
     })
 
-    return useMemo(() => {
+    const live = useMemo(() => {
         if (!message) return null
         if (message.body_html && bodyLoading) return null
         return { message, htmlBody: htmlBody ?? '' }
     }, [message, htmlBody, bodyLoading])
+
+    // Another member can delete the draft while it is open; its row then
+    // leaves the store. Holding the last result for the same thread keeps
+    // what the person wrote and the saved files compose showed, so the send
+    // can go out (or say the files are gone) instead of the form going blank.
+    // A closed compose (no context) forgets it.
+    const lastRef = useRef<{ threadId: string; value: NonNullable<typeof live> } | null>(null)
+    if (!threadId) lastRef.current = null
+    if (live) lastRef.current = { threadId, value: live }
+    if (!live && threadId && lastRef.current?.threadId === threadId) {
+        return lastRef.current.value
+    }
+    return live
 }

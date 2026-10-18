@@ -48,6 +48,8 @@ export function personEmailQuery(
             inbox: identity.inbox,
             defaultFrom: identity.default_from,
             retired: identity.retired,
+            addressViews: identity.address_views,
+            hiddenAddressViews: identity.hidden_address_views,
             // Left joins: a person with no covered domain has an inbox and no address.
             addressId: address?.id,
             localPart: address?.local_part,
@@ -105,6 +107,8 @@ export function toPersonEmail(rows: PersonEmailRow[]) {
               inbox: first.inbox,
               defaultFrom: first.defaultFrom,
               retired: first.retired,
+              addressViews: first.addressViews,
+              hiddenAddressViews: first.hiddenAddressViews,
           }
         : null
     return { identity, addresses: rows.map(toAddressRow).filter(a => a !== null) }

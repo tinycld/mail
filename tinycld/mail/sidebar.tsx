@@ -130,6 +130,7 @@ export default function MailSidebar(_props: MailSidebarProps) {
                 <MailboxSidebarSection
                     mailboxId={personal.id}
                     mailboxLabel="Personal"
+                    isPersonal
                     defaultExpanded
                     counts={counts.get(personal.id) ?? EMPTY_COUNTS}
                     activeMailboxId={activeMailboxId}

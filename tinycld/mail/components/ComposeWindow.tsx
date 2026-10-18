@@ -1,19 +1,19 @@
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { usePickFiles } from '@tinycld/core/file-viewer/use-pick-files'
 import { useFileDrop } from '@tinycld/core/lib/file-drop/use-file-drop'
-import { performMutations } from '@tinycld/core/lib/mutations'
 import { notify } from '@tinycld/core/lib/notify'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { captureMessageToSentry } from '@tinycld/core/lib/sentry'
+import { evictRows } from '@tinycld/core/lib/server-rows'
 import { type Shortcut, useRegisterShortcut, useShortcutScope } from '@tinycld/core/lib/shortcuts'
 import { useSafeAreaInsets } from '@tinycld/core/lib/use-safe-area'
 import { FormErrorSummary, useForm, zodResolver } from '@tinycld/core/ui/form'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, View } from 'react-native'
 import { closeWithDraft } from '../hooks/closeWithDraft'
-import { composeSendBlocker, draftSaveRequest } from '../hooks/composeFrom'
+import { composeSendBlocker, composeSendRequest, draftSaveRequest } from '../hooks/composeFrom'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
-import { useAttachments } from '../hooks/useAttachments'
+import { useComposeAttachments } from '../hooks/useComposeAttachments'
 import { useComposeFrom } from '../hooks/useComposeFrom'
 import { useCompose } from '../hooks/useComposeState'
 import { useDraftMessage } from '../hooks/useDraftMessage'
@@ -70,7 +70,15 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
     const draftIdRef = useRef<string | null>(null)
     const toastedBlockerRef = useRef<string | null>(null)
     const [headerTitle, setHeaderTitle] = useState('')
-    const { attachments, addFilesSafely, removeFile, clearAll: clearAttachments } = useAttachments()
+    const {
+        items: attachmentItems,
+        files: attachmentFiles,
+        removedSaved,
+        keptSaved,
+        addFilesSafely,
+        removeItem,
+        clearAll: clearAttachments,
+    } = useComposeAttachments(resolvedDraft?.message ?? null)
     useEffect(() => {
         if (!isVisible) {
             toastedBlockerRef.current = null
@@ -183,18 +191,19 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
     const [messagesCollection] = useStore('mail_messages')
 
-    const deleteDraftMessage = async () => {
+    // The send names the draft, so the server sends its saved files and
+    // deletes it. Here the row only leaves the store; a client delete would
+    // race the server's and fail on a row that is already gone.
+    const dropSentDraft = () => {
         const id = draftIdRef.current
         if (!id) return
         draftIdRef.current = null
-        await performMutations(function* () {
-            yield messagesCollection.delete(id)
-        })
+        evictRows(messagesCollection, [id], 'mail.send.draft')
     }
 
     const { send, isPending, uploadProgress } = useSendEmail({
-        onSuccess: async () => {
-            await deleteDraftMessage()
+        onSuccess: () => {
+            dropSentDraft()
             editor.clear()
             clearAttachments()
             reset({ to: '', cc: '', bcc: '', subject: '' })
@@ -221,6 +230,13 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         if (picked.length > 0) addFilesSafely(picked.map(p => p.file))
     }, [pickFiles, addFilesSafely])
 
+    // The window stays mounted while closed, so a discard must drop the
+    // attachments and the removals too, or the next open shows them.
+    const discard = () => {
+        clearAttachments()
+        close()
+    }
+
     const finishClose = () => {
         draftIdRef.current = null
         editor.clear()
@@ -234,7 +250,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         if (isSavingDraft) return
         const text = await editor.getText()
         if (!text?.trim()) {
-            close()
+            discard()
             return
         }
         if (!from) {
@@ -244,16 +260,21 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
         const data = getValues()
         const htmlBody = await editor.getHTML()
-        const request = draftSaveRequest(from, draftIdRef.current, {
-            to: data.to ? parseRecipients(data.to) : undefined,
-            cc: data.cc ? parseRecipients(data.cc) : undefined,
-            bcc: data.bcc ? parseRecipients(data.bcc) : undefined,
-            subject: data.subject,
-            html_body: htmlBody,
-            text_body: text,
-        })
+        const request = draftSaveRequest(
+            from,
+            draftIdRef.current,
+            {
+                to: data.to ? parseRecipients(data.to) : undefined,
+                cc: data.cc ? parseRecipients(data.cc) : undefined,
+                bcc: data.bcc ? parseRecipients(data.bcc) : undefined,
+                subject: data.subject,
+                html_body: htmlBody,
+                text_body: text,
+            },
+            removedSaved
+        )
         await closeWithDraft({
-            save: () => saveDraftAsync({ ...request, attachments: attachments.map(a => a.file) }),
+            save: () => saveDraftAsync({ ...request, attachments: attachmentFiles }),
             finish: finishClose,
         })
     }
@@ -301,9 +322,7 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         const cc = data.cc ? parseRecipients(data.cc) : undefined
         const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
 
-        send({
-            mailbox_id: from.identity.mailboxId,
-            from_address_id: from.address.id,
+        const request = composeSendRequest(from, draftIdRef.current, keptSaved, {
             to: parseRecipients(data.to),
             cc,
             bcc,
@@ -311,8 +330,8 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             html_body: htmlBody,
             text_body: textBody,
             in_reply_to_message_id: replyContext?.messageId,
-            attachments: attachments.map(a => a.file),
         })
+        send({ ...request, attachments: attachmentFiles })
     })
 
     const composeWindow = (
@@ -348,15 +367,15 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                     <EditorComponent />
                 </View>
                 <AttachmentRibbon
-                    isVisible={attachments.length > 0}
-                    attachments={attachments}
-                    onRemove={removeFile}
+                    isVisible={attachmentItems.length > 0}
+                    items={attachmentItems}
+                    onRemove={removeItem}
                     uploadProgress={uploadProgress}
                 />
                 <ComposeToolbar
                     commands={commands}
                     toolbarState={toolbarState}
-                    onDiscard={close}
+                    onDiscard={discard}
                     onSend={onSend}
                     onAttach={handleAttach}
                     isPending={isPending}

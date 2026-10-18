@@ -1,9 +1,13 @@
 package mail
 
 import (
+	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tests"
 )
 
 func countsRow(t *testing.T, env *scopeEnv, mailboxID string) *core.Record {
@@ -178,4 +182,211 @@ func TestFolderCounts_LosingTheCreateRaceUpdatesTheRow(t *testing.T) {
 	if row.GetInt("inbox") != 1 || row.GetInt("total") != 1 {
 		t.Fatalf("after the race: inbox=%d total=%d, want 1 1", row.GetInt("inbox"), row.GetInt("total"))
 	}
+}
+
+type addressCountsEnv struct {
+	app           *tests.TestApp
+	user          *core.Record
+	inbox, shared *core.Record
+	addrA, addrB  *core.Record
+	sharedAddr    *core.Record
+}
+
+func setupAddressCountsEnv(t *testing.T) *addressCountsEnv {
+	t.Helper()
+	app := newRealSchemaApp(t)
+	registerThreadStateSyncHooks(app)
+	registerFolderCountHooks(app)
+	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "c.example", "verified": true})
+	user := saveRealRecord(t, app, "users", map[string]any{"email": "cy@ext.example", "username": "cy", "name": "Cy", "role": "member"})
+	inbox := saveRealRecord(t, app, "mail_mailboxes", map[string]any{
+		"address": "cy", "domain": domain.Id, "type": "personal", "display_name": "Cy", "name": "Cy",
+	})
+	saveRealRecord(t, app, "mail_identities", map[string]any{"user": user.Id, "inbox": inbox.Id, "email_name": "cy"})
+	shared := saveRealRecord(t, app, "mail_mailboxes", map[string]any{
+		"address": "desk", "domain": domain.Id, "type": "shared", "display_name": "Desk", "name": "Desk",
+	})
+	newAddr := func(mailbox *core.Record, local string) *core.Record {
+		return saveRealRecord(t, app, "mail_addresses", map[string]any{
+			"local_part": local, "domain": domain.Id, "mailbox": mailbox.Id, "source": addressSourceManual,
+		})
+	}
+	return &addressCountsEnv{
+		app: app, user: user, inbox: inbox, shared: shared,
+		addrA: newAddr(inbox, "a"), addrB: newAddr(inbox, "b"), sharedAddr: newAddr(shared, "sales"),
+	}
+}
+
+// seedThread stores a thread with the given address ids and the user's state row.
+func (env *addressCountsEnv) seedThread(t *testing.T, mailbox *core.Record, read bool, addrs ...*core.Record) *core.Record {
+	t.Helper()
+	ids := make([]string, len(addrs))
+	for i, a := range addrs {
+		ids[i] = a.Id
+	}
+	thread := saveRealRecord(t, env.app, "mail_threads", map[string]any{
+		"mailbox": mailbox.Id, "subject": "s", "latest_date": "2026-10-01 09:00:00.000Z",
+		"address_keys": strings.Join(ids, " "),
+	})
+	if state := findThreadState(env.app, thread.Id, env.user.Id); state != nil {
+		state.Set("is_read", read)
+		if err := env.app.Save(state); err != nil {
+			t.Fatal(err)
+		}
+		return thread
+	}
+	saveRealRecord(t, env.app, "mail_thread_state", map[string]any{
+		"thread": thread.Id, "user": env.user.Id, "folder": "inbox", "is_read": read,
+	})
+	return thread
+}
+
+func (env *addressCountsEnv) byAddress(t *testing.T, mailbox *core.Record) map[string]addressCount {
+	t.Helper()
+	row, err := env.app.FindRecordById("mail_folder_counts", folderCountsID(env.user.Id, mailbox.Id))
+	if err != nil {
+		t.Fatalf("no counts row: %v", err)
+	}
+	out := map[string]addressCount{}
+	raw := row.GetString("inbox_by_address")
+	if raw == "" {
+		return out
+	}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		t.Fatalf("inbox_by_address %q: %v", raw, err)
+	}
+	return out
+}
+
+func TestFolderCounts_CountsEachAddressOfThePersonalInbox(t *testing.T) {
+	env := setupAddressCountsEnv(t)
+	env.seedThread(t, env.inbox, false, env.addrA)
+	env.seedThread(t, env.inbox, true, env.addrA, env.addrB)
+
+	got := env.byAddress(t, env.inbox)
+	want := map[string]addressCount{
+		env.addrA.Id: {Unread: 1, Total: 2},
+		env.addrB.Id: {Unread: 0, Total: 1},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("inbox_by_address = %v, want %v", got, want)
+	}
+}
+
+func TestFolderCounts_ArchiveDropsThreadFromAddressNumbers(t *testing.T) {
+	env := setupAddressCountsEnv(t)
+	only := env.seedThread(t, env.inbox, false, env.addrA)
+	env.seedThread(t, env.inbox, true, env.addrA, env.addrB)
+
+	if err := setThreadFolder(env.app, only.Id, env.user.Id, "archive"); err != nil {
+		t.Fatal(err)
+	}
+	got := env.byAddress(t, env.inbox)
+	want := map[string]addressCount{
+		env.addrA.Id: {Unread: 0, Total: 1},
+		env.addrB.Id: {Unread: 0, Total: 1},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("after archive inbox_by_address = %v, want %v", got, want)
+	}
+}
+
+func TestFolderCounts_SharedInboxHasNoAddressNumbers(t *testing.T) {
+	env := setupAddressCountsEnv(t)
+	env.seedThread(t, env.shared, false, env.sharedAddr)
+
+	if got := env.byAddress(t, env.shared); len(got) != 0 {
+		t.Fatalf("shared inbox inbox_by_address = %v, want empty", got)
+	}
+	row, _ := env.app.FindRecordById("mail_folder_counts", folderCountsID(env.user.Id, env.shared.Id))
+	if row.GetString("inbox_by_address") != "{}" {
+		t.Errorf("shared inbox stores %q, want {}", row.GetString("inbox_by_address"))
+	}
+}
+
+func TestFolderCounts_UnchangedAddressMapDoesNotSave(t *testing.T) {
+	env := setupAddressCountsEnv(t)
+	env.seedThread(t, env.inbox, false, env.addrA)
+
+	saves := 0
+	env.app.OnRecordUpdate("mail_folder_counts").BindFunc(func(e *core.RecordEvent) error {
+		saves++
+		return e.Next()
+	})
+	if err := recomputeFolderCounts(env.app, env.user.Id, env.inbox.Id); err != nil {
+		t.Fatal(err)
+	}
+	if saves != 0 {
+		t.Errorf("an unchanged recompute saved %d times, want 0", saves)
+	}
+}
+
+// clearAddressNumbers puts the counts row back where the address views
+// migration leaves it: the column added, with no value.
+func (env *addressCountsEnv) clearAddressNumbers(t *testing.T) {
+	t.Helper()
+	if _, err := env.app.DB().NewQuery("UPDATE mail_folder_counts SET inbox_by_address = NULL").Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if got := env.byAddress(t, env.inbox); len(got) != 0 {
+		t.Fatalf("precondition: inbox_by_address = %v, want empty", got)
+	}
+}
+
+func (env *addressCountsEnv) identity(t *testing.T) *core.Record {
+	t.Helper()
+	identity, err := env.app.FindFirstRecordByFilter("mail_identities", "user = {:user}", map[string]any{"user": env.user.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return identity
+}
+
+func (env *addressCountsEnv) wantAddressNumbers(t *testing.T, when string) {
+	t.Helper()
+	want := map[string]addressCount{
+		env.addrA.Id: {Unread: 1, Total: 2},
+		env.addrB.Id: {Unread: 0, Total: 1},
+	}
+	if got := env.byAddress(t, env.inbox); !reflect.DeepEqual(got, want) {
+		t.Fatalf("%s: inbox_by_address = %v, want %v", when, got, want)
+	}
+}
+
+func TestFolderCounts_SwitchOnFillsAddressNumbers(t *testing.T) {
+	env := setupAddressCountsEnv(t)
+	env.seedThread(t, env.inbox, false, env.addrA)
+	env.seedThread(t, env.inbox, true, env.addrA, env.addrB)
+	env.clearAddressNumbers(t)
+
+	identity := env.identity(t)
+	identity.Set("address_views", true)
+	if err := env.app.Save(identity); err != nil {
+		t.Fatal(err)
+	}
+	env.wantAddressNumbers(t, "after the switch went on")
+
+	env.clearAddressNumbers(t)
+	identity.Set("hidden_address_views", []string{env.addrB.Id})
+	if err := env.app.Save(identity); err != nil {
+		t.Fatal(err)
+	}
+	env.wantAddressNumbers(t, "after an address was hidden")
+}
+
+func TestFolderCounts_BootFillsAddressNumbersOfViewsThatAreOn(t *testing.T) {
+	env := setupAddressCountsEnv(t)
+	env.seedThread(t, env.inbox, false, env.addrA)
+	env.seedThread(t, env.inbox, true, env.addrA, env.addrB)
+	identity := env.identity(t)
+	identity.Set("address_views", true)
+	if err := env.app.Save(identity); err != nil {
+		t.Fatal(err)
+	}
+	env.clearAddressNumbers(t)
+
+	if err := backfillAddressViewCounts(env.app); err != nil {
+		t.Fatal(err)
+	}
+	env.wantAddressNumbers(t, "after the boot backfill")
 }

@@ -2,12 +2,12 @@ import { formatBytes } from '@tinycld/core/lib/format-utils'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { X } from 'lucide-react-native'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import type { AttachmentFile } from '../hooks/useAttachments'
+import type { RibbonItem } from '../hooks/useComposeAttachments'
 
 interface AttachmentRibbonProps {
     isVisible: boolean
-    attachments: AttachmentFile[]
-    onRemove: (id: string) => void
+    items: RibbonItem[]
+    onRemove: (item: RibbonItem) => void
     /**
      * [0,1] while the attachments are being uploaded, null otherwise. Sending
      * a few MB used to leave the compose window silent until the request
@@ -18,7 +18,7 @@ interface AttachmentRibbonProps {
 
 export function AttachmentRibbon({
     isVisible,
-    attachments,
+    items,
     onRemove,
     uploadProgress = null,
 }: AttachmentRibbonProps) {
@@ -37,12 +37,8 @@ export function AttachmentRibbon({
         >
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
                 <View className="flex-row" style={{ gap: 6 }}>
-                    {attachments.map(att => (
-                        <AttachmentChip
-                            key={att.id}
-                            attachment={att}
-                            onRemove={() => onRemove(att.id)}
-                        />
+                    {items.map(item => (
+                        <AttachmentChip key={item.id} item={item} onRemove={onRemove} />
                     ))}
                 </View>
             </ScrollView>
@@ -69,19 +65,18 @@ export function AttachmentRibbon({
 }
 
 function AttachmentChip({
-    attachment,
+    item,
     onRemove,
 }: {
-    attachment: AttachmentFile
-    onRemove: () => void
+    item: RibbonItem
+    onRemove: (item: RibbonItem) => void
 }) {
     const foregroundColor = useThemeColor('foreground')
     const mutedColor = useThemeColor('muted-foreground')
     const surfaceColor = useThemeColor('surface-secondary')
     const borderColor = useThemeColor('border')
 
-    const truncatedName =
-        attachment.name.length > 24 ? `${attachment.name.slice(0, 21)}...` : attachment.name
+    const truncatedName = item.name.length > 24 ? `${item.name.slice(0, 21)}...` : item.name
 
     return (
         <View
@@ -102,10 +97,23 @@ function AttachmentChip({
             >
                 {truncatedName}
             </Text>
-            <Text style={{ fontSize: 11, color: mutedColor }}>{formatBytes(attachment.size)}</Text>
-            <Pressable onPress={onRemove} className="p-0.5" hitSlop={4}>
+            <ChipSize size={item.size} />
+            <Pressable
+                onPress={() => onRemove(item)}
+                className="p-0.5"
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${item.name}`}
+            >
                 <X size={12} color={mutedColor} />
             </Pressable>
         </View>
     )
+}
+
+// A draft's saved file has no size on the row, so it shows none rather than 0.
+function ChipSize({ size }: { size: number | null }) {
+    const mutedColor = useThemeColor('muted-foreground')
+    if (size === null) return null
+    return <Text style={{ fontSize: 11, color: mutedColor }}>{formatBytes(size)}</Text>
 }

@@ -48,6 +48,8 @@ test.describe('Mail — Domain rule', () => {
         await page.getByText('Compose', { exact: true }).click()
         await expect(page.getByText('To', { exact: true })).toBeVisible()
         await page.getByText('Change', { exact: true }).click()
-        await expect(page.getByText(address, { exact: true })).toBeVisible()
+        // The From choices, not the bare text: while another spec has this
+        // user's address folders on, the sidebar lists each address too.
+        await expect(page.getByRole('dialog').getByText(address, { exact: true })).toBeVisible()
     })
 })

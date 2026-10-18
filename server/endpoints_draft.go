@@ -100,11 +100,21 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 		if err := updateDraftRecord(app, record, req, subject, senderEmail, from.Address.Id, now, uploadedFiles); err != nil {
 			return re.InternalServerError("Failed to update draft", err)
 		}
-		thread.Set("snippet", truncateSnippet(req.TextBody, 200))
-		thread.Set("subject", subject)
-		thread.Set("latest_date", now)
-		if err := app.Save(thread); err != nil {
+		// The draft save above runs the message hooks, which can save the
+		// thread (has_draft, has_attachments). Change a fresh copy so this save
+		// neither writes nor broadcasts the values from before them.
+		fresh, err := app.FindRecordById("mail_threads", thread.Id)
+		if err != nil {
+			return re.InternalServerError("Failed to reload thread", err)
+		}
+		fresh.Set("snippet", truncateSnippet(req.TextBody, 200))
+		fresh.Set("subject", subject)
+		fresh.Set("latest_date", now)
+		if err := app.Save(fresh); err != nil {
 			return re.InternalServerError("Failed to update thread", err)
+		}
+		if err := addAddressKeys(app, thread.Id, from.Address.Id); err != nil {
+			return re.InternalServerError("Failed to record the thread's addresses", err)
 		}
 
 		return re.JSON(http.StatusOK, api.SendEmailResponse{
@@ -144,7 +154,7 @@ func handleDraft(app core.App, re *core.RequestEvent) error {
 		return re.InternalServerError("Failed to store attachments", err)
 	}
 
-	if err := updateThreadMetadata(app, thread, displayName, senderEmail, msg.TextBody, now); err != nil {
+	if err := updateThreadMetadata(app, thread.Id, displayName, senderEmail, msg.TextBody, now); err != nil {
 		return re.InternalServerError("Failed to update thread", err)
 	}
 
@@ -193,6 +203,10 @@ func updateDraftRecord(app core.App, record *core.Record, req api.SaveDraftReque
 			return fmt.Errorf("failed to create body_html file: %w", err)
 		}
 		record.Set("body_html", htmlFile)
+	}
+
+	if len(req.RemoveAttachments) > 0 {
+		record.Set("attachments-", req.RemoveAttachments)
 	}
 
 	if err := appendFileAttachments(record, uploadedFiles); err != nil {

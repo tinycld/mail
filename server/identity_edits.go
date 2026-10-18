@@ -3,6 +3,7 @@ package mail
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -13,8 +14,8 @@ import (
 
 const maxEmailNameLength = 64
 
-// registerIdentityEditHooks lets a person choose their Default From and an
-// admin rename a person's email name. The update rule only says who may
+// registerIdentityEditHooks lets a person choose their Default From and their
+// address views, and an admin rename a person's email name. The update rule only says who may
 // write the row; these hooks say which fields, and which values, are allowed.
 func registerIdentityEditHooks(app core.App) {
 	app.OnRecordUpdateRequest("mail_identities").BindFunc(func(e *core.RecordRequestEvent) error {
@@ -35,6 +36,9 @@ func registerIdentityEditHooks(app core.App) {
 			return e.ForbiddenError("Only an admin can change an email name.", nil)
 		}
 		if err := checkDefaultFrom(e.App, e.Record); err != nil {
+			return err
+		}
+		if err := checkHiddenAddressViews(e.App, e.Record); err != nil {
 			return err
 		}
 		return e.Next()
@@ -148,6 +152,25 @@ func checkDefaultFrom(app core.App, identity *core.Record) error {
 	if err != nil || address.GetString("mailbox") != identity.GetString("inbox") {
 		return onField("default_from", validation.NewError("default_from_foreign",
 			"Choose an address of this person's own inbox."))
+	}
+	return nil
+}
+
+// checkHiddenAddressViews accepts only addresses of the identity's inbox as
+// hidden views. Only the ids this save adds are checked: an id saved before
+// stays valid if its address later moves, so a client that sends the whole
+// list back is not refused for it.
+func checkHiddenAddressViews(app core.App, identity *core.Record) error {
+	before := identity.Original().GetStringSlice("hidden_address_views")
+	for _, id := range identity.GetStringSlice("hidden_address_views") {
+		if slices.Contains(before, id) {
+			continue
+		}
+		address, err := app.FindRecordById("mail_addresses", id)
+		if err != nil || address.GetString("mailbox") != identity.GetString("inbox") {
+			return onField("hidden_address_views", validation.NewError("hidden_address_view_foreign",
+				"Choose only addresses of this person's own inbox."))
+		}
 	}
 	return nil
 }

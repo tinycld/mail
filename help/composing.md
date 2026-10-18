@@ -28,7 +28,7 @@ The compose window opens in the bottom-right corner. You can move it, minimize i
 Drag files onto the compose window or click the paperclip icon (on a narrow compose window it may sit under **More** in the toolbar). Attachments:
 
 - Are uploaded as part of the message — no separate upload step.
-- Are limited to 25 MB total per message (SMTP submission limit).
+- Are limited to 20 files and 10 MB in total for each message. This includes the files that you saved with a draft.
 - Show as a ribbon at the bottom of the compose window; click the **×** on any attachment to remove it.
 
 ## Inline images
@@ -37,7 +37,7 @@ Drag an image into the body to embed it inline (vs as a separate attachment). Th
 
 ## Drafts
 
-Drafts auto-save every few seconds while you type. They live in the **Drafts** folder of the inbox you're sending from. If you close the compose window, the draft stays — reopen it from Drafts to keep working. To discard, open the draft and click **Delete draft** (or **Move to trash** from the list).
+A draft is saved when you close the compose window. Drafts are in the **Drafts** folder of the inbox that you send from. To continue a draft, open it from Drafts. A reopened draft shows the files that you attached to it. When you send the draft, these files go with the message. If you remove a file, the file is removed from the draft when you close the compose window. If a saved file cannot be read, the message is not sent and the draft stays. If another person deletes the draft while you have it open, its saved files are deleted too. To send the message, remove those files from the message, attach them again, and then click **Send**. To close the compose window without saving your changes, click **Discard**. A draft that you saved before stays in Drafts. To delete a draft, select it in Drafts and click **Delete**. The draft moves to Trash.
 
 ## Sending
 
@@ -63,7 +63,6 @@ In the compose window:
 | Shortcut | Action |
 |---|---|
 | ⌘⏎ | Send |
-| **Esc** | Close (drafts stay saved) |
 | ⌘B / ⌘I / ⌘U | Bold / italic / underline |
 | ⌘K | Add a link |
 

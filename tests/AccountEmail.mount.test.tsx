@@ -1,13 +1,17 @@
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
-afterEach(cleanup)
+afterEach(() => {
+    cleanup()
+    h.updated.length = 0
+})
 
 const h = vi.hoisted(() => ({
     openHelp: vi.fn(),
     userId: 'u1',
+    updated: [] as Record<string, unknown>[],
     identities: [
         {
             id: 'i1',
@@ -16,9 +20,49 @@ const h = vi.hoisted(() => ({
             inbox: 'mb1',
             default_from: '',
             retired: false,
+            address_views: false,
+            hidden_address_views: [] as string[],
         },
-        { id: 'i2', user: 'u2', email_name: 'ann', inbox: 'mb2', default_from: '', retired: false },
-        { id: 'i3', user: 'u3', email_name: 'old', inbox: '', default_from: '', retired: true },
+        {
+            id: 'i2',
+            user: 'u2',
+            email_name: 'ann',
+            inbox: 'mb2',
+            default_from: '',
+            retired: false,
+            address_views: false,
+            hidden_address_views: [] as string[],
+        },
+        {
+            id: 'i3',
+            user: 'u3',
+            email_name: 'old',
+            inbox: '',
+            default_from: '',
+            retired: true,
+            address_views: false,
+            hidden_address_views: [] as string[],
+        },
+        {
+            id: 'i4',
+            user: 'u4',
+            email_name: 'carl',
+            inbox: 'mb4',
+            default_from: '',
+            retired: false,
+            address_views: true,
+            hidden_address_views: [] as string[],
+        },
+        {
+            id: 'i5',
+            user: 'u5',
+            email_name: 'dana',
+            inbox: 'mb5',
+            default_from: '',
+            retired: false,
+            address_views: true,
+            hidden_address_views: [] as string[],
+        },
     ],
     addresses: [
         {
@@ -39,6 +83,33 @@ const h = vi.hoisted(() => ({
             is_primary: false,
             via_group: '',
         },
+        {
+            id: 'a4',
+            local_part: 'carl',
+            domain: 'd1',
+            mailbox: 'mb4',
+            source: 'rule',
+            is_primary: true,
+            via_group: '',
+        },
+        {
+            id: 'a5',
+            local_part: 'carl',
+            domain: 'd2',
+            mailbox: 'mb4',
+            source: 'manual',
+            is_primary: false,
+            via_group: '',
+        },
+        {
+            id: 'a6',
+            local_part: 'dana',
+            domain: 'd1',
+            mailbox: 'mb5',
+            source: 'rule',
+            is_primary: true,
+            via_group: '',
+        },
     ],
     domains: [
         { id: 'd1', domain: 'tinycld.com', rank: 1 },
@@ -54,6 +125,8 @@ const h = vi.hoisted(() => ({
         { id: 'u1', role: 'admin' },
         { id: 'u2', role: 'member' },
         { id: 'u3', role: 'member' },
+        { id: 'u4', role: 'member' },
+        { id: 'u5', role: 'member' },
         { id: 'u8', role: 'member' },
         { id: 'u9', role: 'guest' },
     ],
@@ -81,6 +154,9 @@ vi.mock('@tinycld/core/lib/pocketbase', async () => {
                 id,
                 getKey: (r: { id: string }) => r.id,
                 initialData,
+                onUpdate: async ({ transaction }) => {
+                    for (const m of transaction.mutations) h.updated.push(m.modified)
+                },
             }),
             autoIndex: 'eager',
             defaultIndexType: BasicIndex,
@@ -141,4 +217,56 @@ test('the mail app link opens the IMAP help topic', async () => {
         fireEvent.click(await findByText('Set up a mail app'))
     })
     expect(h.openHelp).toHaveBeenCalledWith('mail:imap')
+})
+
+function switchFor(container: HTMLElement, label: string) {
+    return container.querySelector<HTMLElement>(`[accessibilitylabel="${label}"]`)
+}
+
+async function press(el: HTMLElement | null) {
+    if (!el) throw new Error('no element to press')
+    await act(async () => {
+        fireEvent.click(el)
+    })
+}
+
+test('the address view switch writes address_views and shows a switch for each address', async () => {
+    const { container, findAllByText, queryByText } = renderPage('u1')
+    await findAllByText('nathan@tinycld.com')
+    expect(switchFor(container, 'Show nathan@tinycld.com in sidebar')).toBeNull()
+    expect(queryByText('Show in sidebar')).toBeNull()
+
+    await press(switchFor(container, 'Show a folder for each address'))
+    await waitFor(() => expect(h.updated).toHaveLength(1))
+    expect(h.updated[0]).toMatchObject({ id: 'i1', address_views: true })
+
+    await waitFor(() =>
+        expect(switchFor(container, 'Show nathan@tinycld.com in sidebar')).toBeTruthy()
+    )
+    expect(switchFor(container, 'Show nathan@q.example in sidebar')).toBeTruthy()
+    // The row switches share one visible column heading.
+    expect(queryByText('Show in sidebar')).toBeTruthy()
+})
+
+test('turning off an address hides its folder', async () => {
+    const { container, findAllByText } = renderPage('u4')
+    await findAllByText('carl@q.example')
+    await press(switchFor(container, 'Show carl@q.example in sidebar'))
+    await waitFor(() => expect(h.updated).toHaveLength(1))
+    expect(h.updated[0]).toMatchObject({ id: 'i4', hidden_address_views: ['a5'] })
+})
+
+test('with views on and one address left, the main switch is offered and turns views off', async () => {
+    const { container, findAllByText, queryByText } = renderPage('u5')
+    await findAllByText('dana@tinycld.com')
+    const main = switchFor(container, 'Show a folder for each address')
+    expect(main).toBeTruthy()
+    expect(switchFor(container, 'Show dana@tinycld.com in sidebar')).toBeTruthy()
+    await press(main)
+    await waitFor(() => expect(h.updated).toHaveLength(1))
+    expect(h.updated[0]).toMatchObject({ id: 'i5', address_views: false })
+    // Off with one address: nothing more to turn on or off here.
+    await waitFor(() => expect(switchFor(container, 'Show a folder for each address')).toBeNull())
+    expect(switchFor(container, 'Show dana@tinycld.com in sidebar')).toBeNull()
+    expect(queryByText('Show in sidebar')).toBeNull()
 })

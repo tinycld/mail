@@ -5,7 +5,7 @@ import { useForm, zodResolver } from '@tinycld/core/ui/form'
 import { useCallback, useEffect } from 'react'
 import { View } from 'react-native'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
-import { useAttachments } from '../hooks/useAttachments'
+import { useComposeAttachments } from '../hooks/useComposeAttachments'
 import { useComposeFrom } from '../hooks/useComposeFrom'
 import type { useCompose } from '../hooks/useComposeState'
 import { useMailEditor } from '../hooks/useMailEditor'
@@ -30,7 +30,14 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
     const { editor, EditorComponent, commands, toolbarState } = useMailEditor({
         placeholder: 'Compose reply',
     })
-    const { attachments, addFilesSafely, removeFile, clearAll: clearAttachments } = useAttachments()
+    // An inline reply never resumes a draft, so it has no saved files.
+    const {
+        items: attachmentItems,
+        files: attachmentFiles,
+        addFilesSafely,
+        removeItem,
+        clearAll: clearAttachments,
+    } = useComposeAttachments(null)
 
     // Forward starts with an empty To, so focus the recipient field; reply /
     // reply-all pre-fill To, so focus the body instead — the user wants to type
@@ -89,7 +96,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
             html_body: htmlBody,
             text_body: textBody,
             in_reply_to_message_id: replyContext.messageId,
-            attachments: attachments.map(a => a.file),
+            attachments: attachmentFiles,
         })
     })
 
@@ -123,9 +130,9 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
                     <EditorComponent />
                 </View>
                 <AttachmentRibbon
-                    isVisible={attachments.length > 0}
-                    attachments={attachments}
-                    onRemove={removeFile}
+                    isVisible={attachmentItems.length > 0}
+                    items={attachmentItems}
+                    onRemove={removeItem}
                     uploadProgress={uploadProgress}
                 />
                 <ComposeToolbar

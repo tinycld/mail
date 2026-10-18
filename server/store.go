@@ -281,6 +281,12 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 		return nil, fmt.Errorf("failed to store message: %w", err)
 	}
 
+	// Not fatal: the message is stored, and a missing key only leaves the
+	// thread out of one address view.
+	if err := addAddressKeys(app, threadID, msg.DeliveredTo, msg.SentFrom); err != nil {
+		storeLog.Warn("recording the thread's addresses failed", "thread", threadID, "message", record.Id, "error", err)
+	}
+
 	// Build cid → stored-filename map for inline images. Stored as JSON on
 	// the message so the client can resolve <img src="cid:foo"> against
 	// pb.files.getURL at render time. Doing the resolution client-side
@@ -350,7 +356,17 @@ type storedMessage struct {
 }
 
 // updateThreadMetadata updates the thread's snippet, latest_date, message_count, and participants.
-func updateThreadMetadata(app core.App, thread *core.Record, senderName, senderEmail, snippet, date string) error {
+//
+// It loads its own copy of the thread. Callers load the thread before
+// storeMessage, and storeMessage and the message hooks save it after that
+// (address_keys, has_draft, has_attachments). A save of the caller's copy
+// would write those stale values back, and realtime broadcasts the saved
+// record as it is, so clients would get them even where the database did not.
+func updateThreadMetadata(app core.App, threadID, senderName, senderEmail, snippet, date string) error {
+	thread, err := app.FindRecordById("mail_threads", threadID)
+	if err != nil {
+		return fmt.Errorf("thread for metadata: %w", err)
+	}
 	count := thread.GetInt("message_count") + 1
 	thread.Set("message_count", count)
 	thread.Set("snippet", truncateSnippet(snippet, 200))
@@ -456,6 +472,57 @@ func setThreadFolder(app core.App, threadID, userID, folder string) error {
 		return err
 	}
 	record.Set("folder", folder)
+	return app.Save(record)
+}
+
+// threadStateOrNew returns the user's state row for the thread, or a new
+// unsaved one in the Inbox when the user has none yet.
+func threadStateOrNew(app core.App, threadID, userID string) (*core.Record, error) {
+	if record := findThreadState(app, threadID, userID); record != nil {
+		return record, nil
+	}
+	return newThreadState(app, threadID, userID)
+}
+
+// addThreadLabel gives one user's state row of a thread the label, the way
+// the web UI writes labels (a label_assignments row on mail_thread_state), so
+// the label shows there at once. The thread stays in its folder. A second
+// call with the same label changes nothing.
+func addThreadLabel(app core.App, threadID, userID, labelID string) error {
+	state, err := threadStateOrNew(app, threadID, userID)
+	if err != nil {
+		return err
+	}
+	if state.IsNew() {
+		if err := app.Save(state); err != nil {
+			return err
+		}
+	}
+
+	existing, err := app.FindRecordsByFilter(
+		"label_assignments",
+		`label = {:label} && record_id = {:recordId} && collection = "mail_thread_state" && user = {:user}`,
+		"",
+		1,
+		0,
+		map[string]any{"label": labelID, "recordId": state.Id, "user": userID},
+	)
+	if err != nil {
+		return fmt.Errorf("label assignment lookup: %w", err)
+	}
+	if len(existing) > 0 {
+		return nil
+	}
+
+	collection, err := app.FindCollectionByNameOrId("label_assignments")
+	if err != nil {
+		return fmt.Errorf("label_assignments collection not found: %w", err)
+	}
+	record := core.NewRecord(collection)
+	record.Set("label", labelID)
+	record.Set("record_id", state.Id)
+	record.Set("collection", "mail_thread_state")
+	record.Set("user", userID)
 	return app.Save(record)
 }
 

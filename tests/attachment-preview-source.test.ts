@@ -25,6 +25,11 @@ describe('cleanFilename', () => {
     it('handles names with multiple underscores', () => {
         expect(cleanFilename('my_file_aBc1234567.docx')).toBe('my_file.docx')
     })
+
+    it('strips the suffix from a name with no extension', () => {
+        expect(cleanFilename('README_ab12cd34ef')).toBe('README')
+        expect(cleanFilename('README')).toBe('README')
+    })
 })
 
 describe('mimeFromFilename', () => {

@@ -45,10 +45,12 @@ export function mimeFromFilename(filename: string): string {
     return EXTENSION_TO_MIME[ext] ?? 'application/octet-stream'
 }
 
-// PocketBase stores files as {name}_{random10}.{ext} — strip the random suffix for display.
+// PocketBase stores files as {name}_{random10}.{ext}, or {name}_{random10} with
+// no extension — strip the random suffix for display. The server strips it the
+// same way (originalAttachmentName in server/send_draft.go).
 export function cleanFilename(filename: string): string {
-    const match = filename.match(/^(.+)_[a-zA-Z0-9]{10}(\.\w+)$/)
-    return match ? match[1] + match[2] : filename
+    const match = filename.match(/^(.+)_[a-zA-Z0-9]{10}(\.\w+)?$/)
+    return match ? match[1] + (match[2] ?? '') : filename
 }
 
 export function attachmentToSource(args: {

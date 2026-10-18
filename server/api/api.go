@@ -43,6 +43,14 @@ type SendEmailRequest struct {
 	// InReplyToMessageID is the PocketBase record ID of the message being
 	// replied to — not an RFC 822 Message-ID header value.
 	InReplyToMessageID string `json:"in_reply_to_message_id,omitempty"`
+	// DraftID is the PocketBase record ID of the draft this send resumes. The
+	// draft must be in MailboxID, and it is deleted once the send succeeds. A
+	// draft that no longer exists is skipped when DraftAttachments is empty.
+	DraftID string `json:"draft_id,omitempty"`
+	// DraftAttachments names the draft's saved attachments (stored filenames)
+	// that compose showed and the sender kept. Exactly these are sent with
+	// the uploaded ones.
+	DraftAttachments []string `json:"draft_attachments,omitempty"`
 }
 
 // SaveDraftRequest is the body of POST /api/mail/draft.
@@ -61,6 +69,9 @@ type SaveDraftRequest struct {
 	Subject   string      `json:"subject,omitempty"`
 	HTMLBody  string      `json:"html_body"`
 	TextBody  string      `json:"text_body"`
+	// RemoveAttachments names saved attachments (stored filenames) to delete
+	// from the existing draft. Ignored when MessageID is empty.
+	RemoveAttachments []string `json:"remove_attachments,omitempty"`
 }
 
 // SendEmailResponse is returned by both POST /api/mail/send and

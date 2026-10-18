@@ -1,8 +1,10 @@
 package mail
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/logging"
@@ -34,6 +36,48 @@ const folderCountsQuery = `
 	FROM mail_thread_state
 	WHERE user = {:user} AND mailbox = {:mailbox}`
 
+// Only the user's personal inbox (the one their identity points at) gets
+// per-address numbers, so the identity test sits in this query: one round trip
+// per recompute, and a shared inbox matches no rows. instr over the space-padded
+// list matches whole ids only.
+const addressCountsQuery = `
+	SELECT
+		a.id AS address,
+		COALESCE(SUM(CASE WHEN s.is_read = 0 THEN 1 ELSE 0 END), 0) AS unread,
+		COUNT(s.id) AS total
+	FROM mail_addresses a
+	JOIN mail_thread_state s ON s.user = {:user} AND s.mailbox = {:mailbox} AND s.folder = 'inbox'
+		AND instr(' ' || s.address_keys || ' ', ' ' || a.id || ' ') > 0
+	WHERE a.mailbox = {:mailbox}
+		AND EXISTS (SELECT 1 FROM mail_identities i WHERE i.user = {:user} AND i.inbox = {:mailbox})
+	GROUP BY a.id`
+
+type addressCountsRow struct {
+	Address string `db:"address"`
+	Unread  int    `db:"unread"`
+	Total   int    `db:"total"`
+}
+
+func inboxByAddress(app core.App, userID, mailboxID string) (string, error) {
+	var rows []addressCountsRow
+	if err := app.DB().NewQuery(addressCountsQuery).
+		Bind(map[string]any{"user": userID, "mailbox": mailboxID}).
+		All(&rows); err != nil {
+		return "", fmt.Errorf("aggregate address counts: %w", err)
+	}
+	byAddress := make(map[string]addressCount, len(rows))
+	for _, r := range rows {
+		byAddress[r.Address] = addressCount{Unread: r.Unread, Total: r.Total}
+	}
+	// Marshal sorts map keys, so equal maps give equal text and the compare
+	// against the stored value is a string compare.
+	encoded, err := json.Marshal(byAddress)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
 type folderCountsRow struct {
 	Inbox      int `db:"inbox"`
 	InboxTotal int `db:"inbox_total"`
@@ -44,6 +88,12 @@ type folderCountsRow struct {
 	Trash      int `db:"trash"`
 	Spam       int `db:"spam"`
 	Total      int `db:"total"`
+}
+
+// addressCount is one address's numbers inside inbox_by_address.
+type addressCount struct {
+	Unread int `json:"unread"`
+	Total  int `json:"total"`
 }
 
 func (r folderCountsRow) byColumn() map[string]int {
@@ -75,6 +125,20 @@ func registerFolderCountHooks(app core.App) {
 	// from its thread and never changes.
 	app.OnRecordAfterUpdateSuccess("mail_thread_state").BindFunc(recompute)
 	app.OnRecordAfterDeleteSuccess("mail_thread_state").BindFunc(recompute)
+
+	// The sidebar shows the per-address numbers once the views are on, so
+	// they must be current then, even when no state row has changed since
+	// the migration added them.
+	app.OnRecordAfterUpdateSuccess("mail_identities").BindFunc(func(e *core.RecordEvent) error {
+		if !addressViewsChanged(e.Record) {
+			return e.Next()
+		}
+		if err := recomputeFolderCounts(e.App, e.Record.GetString("user"), e.Record.GetString("inbox")); err != nil {
+			folderCountsLog.Warn("recomputeFolderCounts after an address views change failed",
+				"identity", e.Record.Id, "error", err)
+		}
+		return e.Next()
+	})
 }
 
 // errFolderCountsRowTaken means another change of the same mailbox created
@@ -108,6 +172,11 @@ func writeFolderCounts(app core.App, userID, mailboxID string) error {
 		return fmt.Errorf("aggregate folder counts: %w", err)
 	}
 
+	byAddress, err := inboxByAddress(app, userID, mailboxID)
+	if err != nil {
+		return err
+	}
+
 	id := folderCountsID(userID, mailboxID)
 	record, err := app.FindRecordById("mail_folder_counts", id)
 	if err != nil {
@@ -134,6 +203,10 @@ func writeFolderCounts(app core.App, userID, mailboxID string) error {
 			changed = true
 		}
 	}
+	if record.GetString("inbox_by_address") != byAddress {
+		record.Set("inbox_by_address", json.RawMessage(byAddress))
+		changed = true
+	}
 	if !changed {
 		return nil
 	}
@@ -145,4 +218,45 @@ func writeFolderCounts(app core.App, userID, mailboxID string) error {
 		}
 	}
 	return err
+}
+
+// addressViewsChanged reports an identity save that turned the address views
+// on or changed which ones are hidden.
+func addressViewsChanged(identity *core.Record) bool {
+	original := identity.Original()
+	if identity.GetBool("address_views") && !original.GetBool("address_views") {
+		return true
+	}
+	return !slices.Equal(identity.GetStringSlice("hidden_address_views"), original.GetStringSlice("hidden_address_views"))
+}
+
+// unfilledAddressCountsQuery finds the personal inboxes with the views on
+// whose counts row has no per-address numbers yet. The address views
+// migration added the column without values, and the numbers are otherwise
+// written only when a state row changes.
+const unfilledAddressCountsQuery = `
+	SELECT i.user AS user, i.inbox AS inbox
+	FROM mail_identities i
+	JOIN mail_folder_counts c ON c.user = i.user AND c.mailbox = i.inbox
+	WHERE i.address_views = 1 AND i.inbox != ''
+		AND (c.inbox_by_address IS NULL OR c.inbox_by_address IN ('', 'null'))`
+
+// backfillAddressViewCounts fills the per-address numbers of every counts
+// row the migration left without them. A filled row holds at least "{}", so
+// a later run finds nothing to do.
+func backfillAddressViewCounts(app core.App) error {
+	var rows []struct {
+		User  string `db:"user"`
+		Inbox string `db:"inbox"`
+	}
+	if err := app.DB().NewQuery(unfilledAddressCountsQuery).All(&rows); err != nil {
+		return fmt.Errorf("find counts rows without address numbers: %w", err)
+	}
+	var errs []error
+	for _, row := range rows {
+		if err := recomputeFolderCounts(app, row.User, row.Inbox); err != nil {
+			errs = append(errs, fmt.Errorf("user %s: %w", row.User, err))
+		}
+	}
+	return errors.Join(errs...)
 }

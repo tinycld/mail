@@ -1,4 +1,4 @@
-import type { SaveDraftRequest } from '@tinycld/app-generated/mail-api'
+import type { SaveDraftRequest, SendEmailRequest } from '@tinycld/app-generated/mail-api'
 import type { SendableAddress, SendableIdentity } from './groupSendableIdentities'
 import type { MailSendBlocker, MailSendReadiness } from './useMailSendReadiness'
 
@@ -141,19 +141,56 @@ export function composeFromRowView(choices: SendableIdentity[], from: ResolvedFr
 
 type DraftFields = Omit<
     SaveDraftRequest,
-    'mailbox_id' | 'from_address_id' | 'message_id' | 'alias_id'
+    'mailbox_id' | 'from_address_id' | 'message_id' | 'alias_id' | 'remove_attachments'
 >
 
-/** Pure: the draft save request for the resolved From. */
+/**
+ * Pure: the draft save request for the resolved From. `removedAttachments`
+ * are saved files the sender removed from the open draft; a new draft has
+ * none to remove.
+ */
 export function draftSaveRequest(
     from: ResolvedFrom,
     draftId: string | null,
-    fields: DraftFields
+    fields: DraftFields,
+    removedAttachments: string[] = []
 ): SaveDraftRequest {
     return {
         ...fields,
         mailbox_id: from.identity.mailboxId,
         from_address_id: from.address.id,
         message_id: draftId ?? undefined,
+        remove_attachments: draftId ? nonEmpty(removedAttachments) : undefined,
     }
+}
+
+type SendFields = Omit<
+    SendEmailRequest,
+    'mailbox_id' | 'from_address_id' | 'alias_id' | 'draft_id' | 'draft_attachments'
+>
+
+/**
+ * Pure: the send request for the resolved From. A resumed draft is named so
+ * the server sends the saved files compose showed and deletes the draft;
+ * without the id those files were lost with the draft. Naming exactly the
+ * shown files lets the server tell a draft deleted meanwhile with no files
+ * (send it as a new message) from one whose files are gone (refuse).
+ */
+export function composeSendRequest(
+    from: ResolvedFrom,
+    draftId: string | null,
+    keptSavedAttachments: string[],
+    fields: SendFields
+): SendEmailRequest {
+    return {
+        ...fields,
+        mailbox_id: from.identity.mailboxId,
+        from_address_id: from.address.id,
+        draft_id: draftId ?? undefined,
+        draft_attachments: draftId ? nonEmpty(keptSavedAttachments) : undefined,
+    }
+}
+
+function nonEmpty(names: string[]) {
+    return names.length > 0 ? names : undefined
 }

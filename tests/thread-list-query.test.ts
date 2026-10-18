@@ -40,6 +40,11 @@ describe('folderTerms', () => {
     it('all-inboxes filters to the inbox folder', () => {
         expect(compile(folderTerms(s, 'all-inboxes'))).toBe('folder = "inbox"')
     })
+    it('an address view is the inbox rows whose thread used the address', () => {
+        const terms = folderTerms(s, 'address:abc123')
+        expect(terms).toHaveLength(2)
+        expect(compile(terms)).toBe('(folder = "inbox" && address_keys ~ "%abc123%")')
+    })
     it('other folders filter by name', () => {
         expect(compile(folderTerms(s, 'archive'))).toBe('folder = "archive"')
     })
@@ -80,6 +85,9 @@ describe('countsKeyForFolder', () => {
         expect(countsKeyForFolder('all')).toBe('total')
         expect(countsKeyForFolder('sent')).toBe('sent')
         expect(countsKeyForFolder('archive')).toBe('archive')
+    })
+    it('an address view reads the per-address inbox numbers', () => {
+        expect(countsKeyForFolder('address:x')).toBe('inboxByAddress')
     })
 })
 
