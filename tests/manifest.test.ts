@@ -35,9 +35,10 @@ describe('mail manifest', () => {
         expect(manifest.settings?.length).toBeGreaterThan(0)
     })
 
-    it('declares the Account email page', () => {
+    it('declares the Account pages', () => {
         expect(manifest.accountSettings).toEqual([
             { slug: 'email', label: 'Email', component: 'settings/AccountEmail' },
+            { slug: 'mail-apps', label: 'Mail apps', component: 'settings/MailAppSetup' },
         ])
     })
 

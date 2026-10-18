@@ -1,6 +1,7 @@
 import { coalesce, eq, type InitialQueryBuilder, not } from '@tanstack/db'
 import { useLiveQuery } from '@tanstack/react-db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
+import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 import type { AddressRowData } from './address-items'
 
 type Stores = ReturnType<
@@ -57,6 +58,7 @@ export function personEmailQuery(
             domainName: domain?.domain,
             source: address?.source,
             isPrimary: address?.is_primary,
+            created: address?.created,
             rank: domain?.rank,
             verified: domain?.verified,
             groupName: coalesce(group?.name, null),
@@ -78,11 +80,22 @@ function usePersonEmailRows(userId: string) {
     })
 }
 
-/** An address of the person's inbox; `verified` says whether mail can go out from it. */
-export type PersonAddress = AddressRowData & { verified: boolean }
+/** An address of the person's inbox; `verified` says whether mail can go out from it;
+ * `created` breaks Default From ties. */
+export type PersonAddress = AddressRowData & { verified: boolean; created: string }
 
 function toAddressRow(row: PersonEmailRow): PersonAddress | null {
-    const { addressId, localPart, domainId, domainName, source, isPrimary, rank, verified } = row
+    const {
+        addressId,
+        localPart,
+        domainId,
+        domainName,
+        source,
+        isPrimary,
+        rank,
+        verified,
+        created,
+    } = row
     if (!addressId || !localPart || !domainId || !domainName) return null
     return {
         id: addressId,
@@ -93,6 +106,7 @@ function toAddressRow(row: PersonEmailRow): PersonAddress | null {
         isPrimary: isPrimary ?? false,
         rank: rank ?? 0,
         verified: verified ?? false,
+        created: created ?? '',
         groupName: row.groupName,
     }
 }
@@ -117,5 +131,21 @@ export function toPersonEmail(rows: PersonEmailRow[]) {
 /** A person's identity and every address of its inbox, from one live query. */
 export function usePersonEmail(userId: string) {
     const { data, isReady } = usePersonEmailRows(userId)
+    return { ...toPersonEmail(data ?? []), isReady }
+}
+
+/** The signed-in person's identity and addresses (Account → Email, Account → Mail apps). */
+export function useMyPersonEmail() {
+    const [identities, addresses, domains, groups] = useStore(
+        'mail_identities',
+        'mail_addresses',
+        'mail_domains',
+        'groups'
+    )
+    const { data, isReady } = useMyLiveQuery(
+        (query, { userId }) =>
+            personEmailQuery(query, { identities, addresses, domains, groups }, userId),
+        { queryKey: ['mail_account_email'] }
+    )
     return { ...toPersonEmail(data ?? []), isReady }
 }

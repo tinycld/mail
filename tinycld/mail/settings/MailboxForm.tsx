@@ -258,7 +258,12 @@ function FormLayout({
                     Preview
                 </Text>
             </View>
-            <ServerActionButton className="h-11" onPress={onSubmit} isDisabled={!canSubmit}>
+            <ServerActionButton
+                testID="mailbox-form-submit"
+                className="h-11"
+                onPress={onSubmit}
+                isDisabled={!canSubmit}
+            >
                 <ButtonIcon as={Plus} />
                 <ButtonText>{submitLabel}</ButtonText>
             </ServerActionButton>

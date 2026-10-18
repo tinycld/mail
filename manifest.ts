@@ -40,7 +40,10 @@ const manifest = {
         { slug: 'provider', label: 'Domains', component: 'settings/provider' },
         { slug: 'mailboxes', label: 'Shared inboxes', component: 'settings/mailboxes' },
     ],
-    accountSettings: [{ slug: 'email', label: 'Email', component: 'settings/AccountEmail' }],
+    accountSettings: [
+        { slug: 'email', label: 'Email', component: 'settings/AccountEmail' },
+        { slug: 'mail-apps', label: 'Mail apps', component: 'settings/MailAppSetup' },
+    ],
     // keyPrefix: these are deployment-wide credentials. Where a service provider
     // owns them, this panel is hidden — it could not save there, because the
     // values live in the provider's memory and never reach this deployment's
@@ -107,7 +110,8 @@ const manifest = {
     repository: { url: 'https://github.com/tinycld/mail' },
     // 0.7.2 is the first core with the group-member-removal slot,
     // MultiSelectInput, useMyLiveQuery's queryKey and the app on group
-    // membership events, which this version uses.
+    // membership events, which this version uses. It is also the first core
+    // with `mailhost` and `useMailHost` (Settings → Account → Mail apps).
     peerVersions: { '@tinycld/core': '>=0.7.2 <0.8.0' },
 }
 

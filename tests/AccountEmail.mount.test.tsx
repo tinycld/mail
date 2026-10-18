@@ -10,6 +10,7 @@ afterEach(() => {
 
 const h = vi.hoisted(() => ({
     openHelp: vi.fn(),
+    push: vi.fn(),
     userId: 'u1',
     updated: [] as Record<string, unknown>[],
     identities: [
@@ -142,6 +143,7 @@ vi.mock('@tinycld/core/lib/auth', () => ({
     useAuth: () => ({ user: { id: h.userId }, isLoggedIn: true }),
 }))
 
+vi.mock('expo-router', () => ({ useRouter: () => ({ push: h.push }) }))
 vi.mock('@tinycld/core/lib/help/open-help', () => ({ openHelp: h.openHelp }))
 
 vi.mock('@tinycld/core/lib/pocketbase', async () => {
@@ -211,12 +213,12 @@ test('a member with no identity has no email yet', async () => {
     expect(queryByText('Guests do not get email addresses.')).toBeNull()
 })
 
-test('the mail app link opens the IMAP help topic', async () => {
+test('the mail app link opens Settings → Account → Mail apps', async () => {
     const { findByText } = renderPage('u1')
     await act(async () => {
         fireEvent.click(await findByText('Set up a mail app'))
     })
-    expect(h.openHelp).toHaveBeenCalledWith('mail:imap')
+    expect(h.push).toHaveBeenCalledWith('/a/settings/account/mail/mail-apps')
 })
 
 function switchFor(container: HTMLElement, label: string) {
