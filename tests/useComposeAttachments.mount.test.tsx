@@ -1,12 +1,36 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import type { NotifyChannel } from '@tinycld/core/lib/notify/channels/types'
+import { composeNotifyRegistry } from '@tinycld/core/lib/notify/composed'
+import { __setChannelsForTests, __setRegistryForTests } from '@tinycld/core/lib/notify/dispatcher'
+import { coreEvents } from '@tinycld/core/lib/notify/registry'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AttachmentRibbon } from '~/tinycld/mail/components/AttachmentRibbon'
 import { useComposeAttachments } from '~/tinycld/mail/hooks/useComposeAttachments'
+import mailNotifyEvents from '~/tinycld/mail/notify-events'
 
 // No vitest globals in this workspace, so testing-library's automatic
 // afterEach cleanup never registers.
 afterEach(cleanup)
+afterEach(() => {
+    __setChannelsForTests(null)
+    __setRegistryForTests(null)
+})
+
+// Unit tests run with an empty package config, so the dispatcher knows only
+// core's events. Compose mail's in, as the app does at boot, and catch the
+// toasts instead of showing them.
+function captureMailToasts() {
+    __setRegistryForTests(
+        composeNotifyRegistry(coreEvents, [
+            { manifest: { slug: 'mail' }, notifyEvents: mailNotifyEvents },
+        ])
+    )
+    const channel = (name: NotifyChannel['name']): NotifyChannel => ({ name, dispatch: vi.fn() })
+    const toast = channel('toast')
+    __setChannelsForTests({ toast, bell: channel('bell'), os: channel('os') })
+    return toast
+}
 
 const draft = (attachments: string[], id = 'd1') => ({ id, attachments })
 
@@ -80,6 +104,7 @@ describe('useComposeAttachments', () => {
     })
 
     it('counts the saved files toward the 20-file limit', () => {
+        const toast = captureMailToasts()
         const saved = Array.from({ length: 18 }, (_, i) => `saved${i}_ab12cd34ef.txt`)
         const { result } = renderHook(() => useComposeAttachments(draft(saved)))
         act(() => result.current.addFilesSafely([localFile('a.txt'), localFile('b.txt')]))
@@ -87,6 +112,9 @@ describe('useComposeAttachments', () => {
         act(() => result.current.addFilesSafely([localFile('c.txt')]))
         expect(result.current.items).toHaveLength(20)
         expect(result.current.files.map(f => f.name)).toEqual(['a.txt', 'b.txt'])
+        expect(toast.dispatch).toHaveBeenCalledWith(
+            expect.objectContaining({ event: 'mail.attachments_rejected', variant: 'error' })
+        )
     })
 
     it('has no saved files without a draft', () => {
