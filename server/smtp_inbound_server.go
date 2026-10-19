@@ -75,7 +75,7 @@ func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func()
 		hostname = "localhost"
 	}
 
-	server := newInboundSMTPServer(app, hostname, tlsConfig)
+	server, gate := newInboundSMTPServer(app, hostname, tlsConfig)
 	server.Addr = addr
 
 	ln, err := listenInbound(addr)
@@ -84,17 +84,7 @@ func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func()
 	}
 	app.Logger().Info("inbound SMTP server listening", "addr", addr, "hostname", hostname, "starttls", tlsConfig != nil)
 
-	go func() {
-		if err := server.Serve(ln); err != nil {
-			app.Logger().Error("inbound SMTP server error", "addr", addr, "error", err)
-		}
-	}()
-
-	return func() {
-		app.Logger().Info("shutting down inbound SMTP server")
-		ln.Close()
-		server.Close()
-	}, nil
+	return serveInbound(server, ln, gate, addr, inboundDrainBound), nil
 }
 
 // maxInboundRecipients is the RCPT limit of one inbound transaction.
@@ -102,9 +92,11 @@ const maxInboundRecipients = 100
 
 // newInboundSMTPServer builds the inbound-MX server around the shared inbound
 // backend; both the own-ports TCP bind and the injected-listener path
-// serve exactly this instance.
-func newInboundSMTPServer(app core.App, hostname string, tlsConfig *tls.Config) *smtp.Server {
-	backend := &smtpInboundBackend{app: app, hostname: hostname}
+// serve exactly this instance. The gate it returns is the one the shutdown
+// closes (see shutdownInbound).
+func newInboundSMTPServer(app core.App, hostname string, tlsConfig *tls.Config) (*smtp.Server, *sessionGate) {
+	gate := newSessionGate()
+	backend := &smtpInboundBackend{app: app, hostname: hostname, gate: gate}
 	server := smtp.NewServer(backend)
 	server.Domain = hostname
 	server.AllowInsecureAuth = false
@@ -119,7 +111,7 @@ func newInboundSMTPServer(app core.App, hostname string, tlsConfig *tls.Config) 
 	if tlsConfig != nil {
 		server.TLSConfig = tlsConfig
 	}
-	return server
+	return server, gate
 }
 
 // startSMTPInboundOnListener serves the inbound-MX session on an injected
@@ -132,7 +124,7 @@ func newInboundSMTPServer(app core.App, hostname string, tlsConfig *tls.Config) 
 // nothing.
 func startSMTPInboundOnListener(app core.App, listen mailproto.ListenFunc) (func(), error) {
 	hostname := inboundHostname(app)
-	server := newInboundSMTPServer(app, hostname, nil)
+	server, gate := newInboundSMTPServer(app, hostname, nil)
 
 	ln, err := listen(":25")
 	if err != nil {
@@ -140,17 +132,7 @@ func startSMTPInboundOnListener(app core.App, listen mailproto.ListenFunc) (func
 	}
 	app.Logger().Info("inbound SMTP server listening (external TLS termination)", "hostname", hostname)
 
-	go func() {
-		if err := server.Serve(ln); err != nil {
-			app.Logger().Error("inbound SMTP server error", "error", err)
-		}
-	}()
-
-	return func() {
-		app.Logger().Info("shutting down inbound SMTP server")
-		ln.Close()
-		server.Close()
-	}, nil
+	return serveInbound(server, ln, gate, ln.Addr().String(), inboundDrainBound), nil
 }
 
 // inboundHostname resolves the identity the MX greeting announces:
@@ -171,10 +153,13 @@ func inboundHostname(app core.App) string {
 type smtpInboundBackend struct {
 	app      core.App
 	hostname string
+	gate     *sessionGate
 }
 
 func (b *smtpInboundBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
-	return &smtpInboundSession{app: b.app, hostname: b.hostname}, nil
+	conn := c.Conn()
+	b.gate.track(conn)
+	return &smtpInboundSession{app: b.app, hostname: b.hostname, gate: b.gate, conn: conn}, nil
 }
 
 // smtpInboundSession implements smtp.Session for one incoming connection.
@@ -189,6 +174,11 @@ func (b *smtpInboundBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 type smtpInboundSession struct {
 	app      core.App
 	hostname string
+	// gate admits the calls that use the database, so the shutdown can wait
+	// for them; conn is what the gate cuts. Both are nil in tests that build
+	// a session directly.
+	gate *sessionGate
+	conn net.Conn
 
 	from      string
 	mailboxes []recipientBinding // accepted recipients + the inboxes they reach
@@ -221,6 +211,11 @@ var errReadOnly = &smtp.SMTPError{
 }
 
 func (s *smtpInboundSession) Mail(from string, _ *smtp.MailOptions) error {
+	leave, err := s.gate.enter(true)
+	if err != nil {
+		return err
+	}
+	defer leave()
 	if readonly.Active() {
 		return errReadOnly
 	}
@@ -254,6 +249,11 @@ var errMXRelayDenied = &smtp.SMTPError{
 // discarding. Plus-tags are stripped (support+tag@ → support@) to mirror the
 // webhook path.
 func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
+	leave, err := s.gate.enter(false)
+	if err != nil {
+		return err
+	}
+	defer leave()
 	localPart, domain := splitAddress(to)
 	if localPart == "" || domain == "" {
 		return &smtp.SMTPError{
@@ -292,6 +292,11 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 // inbox that succeeded, so a partial failure is accepted (250) and logged as
 // an error instead. When nothing is stored the answer is always 451.
 func (s *smtpInboundSession) Data(r io.Reader) error {
+	leave, err := s.gate.enter(false)
+	if err != nil {
+		return err
+	}
+	defer leave()
 	// Read-only can begin after MAIL FROM was accepted, so DATA checks again
 	// before it stores anything.
 	if readonly.Active() {
@@ -313,6 +318,8 @@ func (s *smtpInboundSession) Data(r io.Reader) error {
 			Message:      "Failed to read message",
 		}
 	}
+	s.gate.setStoring(s.conn, true)
+	defer s.gate.setStoring(s.conn, false)
 
 	// Use the SMTP provider's ParseInbound — it just wraps parseRFC5322 in
 	// the InboundMessage shape that processInboundForMailbox expects.
@@ -365,6 +372,7 @@ func (s *smtpInboundSession) Reset() {
 
 func (s *smtpInboundSession) Logout() error {
 	s.Reset()
+	s.gate.untrack(s.conn)
 	return nil
 }
 

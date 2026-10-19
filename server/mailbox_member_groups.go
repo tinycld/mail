@@ -139,10 +139,14 @@ func registerMemberAccessCleanup(app core.App) {
 // before each batch: a person can be added back while a cleanup runs, and
 // their new state must stay. Each row is a record delete, so realtime and the
 // folder-count hook fire. It stops between batches once ctx ends (the app's
-// terminate).
+// terminate), and waits for read-only mode to end before each batch
+// (waitMemberJobWritable).
 func cleanupLostMailboxAccess(ctx context.Context, app core.App, mailboxID, userID string) error {
 	for {
 		if ctx.Err() != nil {
+			return nil
+		}
+		if !waitMemberJobWritable(ctx, "access cleanup", mailboxID, userID) {
 			return nil
 		}
 		has, err := userHasMailboxRow(app, mailboxID, userID)

@@ -8,6 +8,7 @@ import (
 
 	"tinycld.org/core/background"
 	"tinycld.org/core/logging"
+	"tinycld.org/core/readonly"
 )
 
 var memberJobLog = logging.ForPackage("mail")
@@ -145,4 +146,22 @@ func runMemberJob(l *jobLimiter, kind, mailboxID, userID string, job func(ctx co
 				"mailbox", mailboxID, "user", userID, "error", err)
 		}
 	})
+}
+
+const memberJobDroppedMsg = "member job dropped: the server stayed read-only past the wait"
+
+// waitMemberJobWritable waits for the server to leave read-only mode before a
+// member job writes its next batch. A job can start just before the mode
+// begins, or run into it, and a row it writes while the mode is on is lost if
+// the next build rolls back. The wait is bounded by readonly.TailWait and by
+// ctx, which ends when the app terminates. When the wait ends first, the job
+// is dropped and logged, and this returns false.
+func waitMemberJobWritable(ctx context.Context, kind, mailboxID, userID string) bool {
+	waitCtx, cancel := context.WithTimeout(ctx, readonly.TailWait)
+	defer cancel()
+	if err := readonly.WaitInactive(waitCtx); err != nil {
+		memberJobLog.Warn(memberJobDroppedMsg, "job", kind, "mailbox", mailboxID, "user", userID, "err", err)
+		return false
+	}
+	return true
 }

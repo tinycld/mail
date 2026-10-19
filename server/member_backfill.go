@@ -39,7 +39,8 @@ func registerMemberBackfillHooks(app core.App) {
 //
 // A failed row is logged and skipped so one bad thread does not stop the
 // rest; the first error is returned for the caller to log. It stops between
-// batches once ctx ends (the app's terminate).
+// batches once ctx ends (the app's terminate), and waits for read-only mode
+// to end before each batch (waitMemberJobWritable).
 func backfillMemberThreadState(ctx context.Context, app core.App, mailboxID, userID string) error {
 	// A group grant row has no user: its people get their own derived rows,
 	// and each of those starts its own backfill.
@@ -49,6 +50,9 @@ func backfillMemberThreadState(ctx context.Context, app core.App, mailboxID, use
 	var firstErr error
 	for offset := 0; ; offset += memberBackfillBatch {
 		if ctx.Err() != nil {
+			return firstErr
+		}
+		if !waitMemberJobWritable(ctx, "backfill", mailboxID, userID) {
 			return firstErr
 		}
 		// The job can run after the person lost access again, and the

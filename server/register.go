@@ -13,6 +13,7 @@ import (
 	"github.com/mrz1836/postmark"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/hook"
 	"tinycld.org/core/audit"
 	"tinycld.org/core/background"
 	"tinycld.org/core/coreserver"
@@ -457,10 +458,7 @@ func registerMailListeners(app *pocketbase.PocketBase) {
 				return fmt.Errorf("aborting startup: IMAP server failed to start: %w", err)
 			}
 		} else {
-			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
-				imapShutdown()
-				return te.Next()
-			})
+			bindListenerShutdown(app, imapShutdown)
 		}
 
 		// Start SMTP submission server
@@ -471,10 +469,7 @@ func registerMailListeners(app *pocketbase.PocketBase) {
 				return fmt.Errorf("aborting startup: SMTP server failed to start: %w", smtpErr)
 			}
 		} else {
-			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
-				smtpShutdown()
-				return te.Next()
-			})
+			bindListenerShutdown(app, smtpShutdown)
 		}
 
 		// Start inbound SMTP listener (no-op unless MAIL_INBOUND_SMTP_ENABLED=true).
@@ -487,13 +482,29 @@ func registerMailListeners(app *pocketbase.PocketBase) {
 				return fmt.Errorf("aborting startup: inbound SMTP server failed to start: %w", inboundErr)
 			}
 		} else {
-			app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
-				inboundShutdown()
-				return te.Next()
-			})
+			bindListenerShutdown(app, inboundShutdown)
 		}
 
 		return e.Next()
+	})
+}
+
+// listenerShutdownPriority runs the mail servers' shutdown before the
+// terminate handlers bound at the default priority, the background runner's
+// among them. A message a session stores while the servers drain then still
+// starts its follow-up jobs (the notification buffer, thumbnails), which a
+// stopped runner would drop.
+const listenerShutdownPriority = -1
+
+// bindListenerShutdown runs stop at the app's terminate, before the database
+// closes: stop returns only when its server's sessions no longer use it.
+func bindListenerShutdown(app core.App, stop func()) {
+	app.OnTerminate().Bind(&hook.Handler[*core.TerminateEvent]{
+		Priority: listenerShutdownPriority,
+		Func: func(te *core.TerminateEvent) error {
+			stop()
+			return te.Next()
+		},
 	})
 }
 
