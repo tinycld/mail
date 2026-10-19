@@ -68,6 +68,14 @@ const manifest = {
     // filters the palette does not offer.
     search: { adapter: 'search-adapter' },
     automation: { definitions: 'automation' },
+    // An address row holds only its local part and a domain id, so without
+    // this the rule builder's "Received at address" picker lists record ids.
+    recordLabels: {
+        mail_addresses: {
+            format: '{local_part}@{domain.domain}',
+            relations: { domain: 'mail_domains' },
+        },
+    },
     server: { package: 'server', module: 'tinycld.org/packages/mail' },
     // The supervisor that holds the public ports binds these once and hands
     // each one to whichever server child is current, by name; mail's own-ports path

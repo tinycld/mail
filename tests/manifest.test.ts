@@ -1,3 +1,8 @@
+import {
+    parseRecordLabel,
+    renderRecordLabel,
+    searchTokens,
+} from '@tinycld/core/lib/record-labels/label'
 import { describe, expect, it } from 'vitest'
 import manifest from '../manifest'
 
@@ -84,5 +89,15 @@ describe('mail manifest', () => {
                 label: 'Email',
             },
         ])
+    })
+
+    // The rule builder's "Received at address" picker names an address row,
+    // which holds only a local part and a domain id, by its full address.
+    it('labels an address row by its full address', () => {
+        const label = parseRecordLabel(manifest.recordLabels.mail_addresses)
+        const address = { id: 'a1', local_part: 'sales', domain: 'd1' }
+        const domain = { id: 'd1', domain: 'q.example' }
+        expect(renderRecordLabel(label, address, domain)).toBe('sales@q.example')
+        expect(searchTokens(label, 'sales@q.example')).toEqual(['sales', 'q.example'])
     })
 })
