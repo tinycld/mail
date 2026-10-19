@@ -84,12 +84,14 @@ set realname = "Your Name"
 
 ## Which address you can send from
 
-When your SMTP client submits a message, TinyCld validates the `From:` header is one you actually have access to. Specifically, the address must be:
+When your SMTP client submits a message, TinyCld checks the sender address your mail app gives (the envelope sender, usually the same as the account's email address). The address must be:
 
 - The primary address of an inbox you're a member of, OR
 - One of the other [addresses](help://mail:addresses) of an inbox you're a member of.
 
-If you try to send from an address you don't own, the SMTP server rejects with `550 You don't own this address`.
+A group address cannot be a sender. If the address is not known, the server rejects with `550 Sender address not recognized`. If it belongs to an inbox you are not a member of, the server rejects with `550 Not authorized to send from this address`.
+
+TinyCld then writes the message's `From:` header from that address and the inbox's display name, so the header always matches the address you sent from.
 
 ## Size limits
 
@@ -101,7 +103,7 @@ Outbound messages are capped at **25 MB total** (including attachments). Larger 
 - **"Relaying denied. To send mail, log in on port 465."** — your mail app is sending through port 25, which only receives mail. Set the outgoing server port to **465**, turn on **SSL/TLS**, and turn on password authentication. In Apple Mail, clear **Automatically manage connection settings** first.
 - **Auth failed** — wrong email address or password. Same as IMAP: use your full email address. With two-step verification on, the password must be an [app password](help://core:security-app-passwords).
 - **Auth fails with `Your mail access is read-only; sending is not permitted`** — your account has read-only access to Mail on this server. You can still read over [IMAP](help://mail:imap); sending needs an administrator to grant full access.
-- **From address not owned** — see above; the From header has to be one of the addresses of an inbox you belong to.
+- **Sender address not recognized / Not authorized to send from this address** — see above; the sender address has to be one of the addresses of an inbox you belong to.
 - **Domain not verified** — the sending domain has to be fully verified (MX, SPF, DKIM, Return-Path). See [Custom domains](help://mail:custom-domains).
 - **Provider not configured** — the deployment has no mail provider yet. Configuring one is an administrator task; where a service provider runs this deployment, it is theirs to fix.
 - **Message size too large** — 25 MB max.
