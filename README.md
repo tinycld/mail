@@ -10,8 +10,8 @@ Sits on top of a pluggable mail provider (`server/provider.go`). Two implementat
 
 User-facing features:
 
-- **Personal and shared mailboxes** — every user gets a personal mailbox auto-created when their `users` record is created; shared mailboxes can have additional members with `owner` or `member` roles. Personal mailboxes are cleaned up when the `users` record is deleted.
-- **Mailbox aliases** — multiple addresses per mailbox (`support@`, `help@`, `contact@` all landing in the same mailbox). The compose window's **From** picker exposes the primary plus every alias; replies use whichever address the inbound message was sent *to*.
+- **Personal and shared mailboxes** — every non-guest user gets a personal mailbox and a `mail_identities` row (their email name) when their `users` record is created or a guest is promoted (`registerIdentityHooks` in `server/identities.go`). If no domain is verified yet, this happens when a domain is verified. Shared mailboxes can have additional members with `owner` or `member` roles; a group can also be a member (role `member` only). Personal mailboxes are cleaned up when the `users` record is deleted.
+- **Addresses** — each address is a `mail_addresses` row (`local_part` on a domain) that points at one mailbox or at one group. A mailbox can have many addresses on any domain (`support@`, `help@`, `contact@` all landing in the same mailbox). A domain's `coverage` (`everyone`, `groups`, or `manual`) controls which people get `<email name>@domain` automatically. Mail to a group address goes to the own inbox of each group member. The compose window's **From** picker lists every address of every mailbox the user is a member of (`useSendableIdentities`); replies use the address the inbound message was delivered to (`mail_messages.delivered_to`). The legacy `mail_mailbox_aliases` table is still accepted from released clients; the server copies each alias into `mail_addresses`.
 - **Threaded conversations** — server-side grouping using RFC 5322 `In-Reply-To` and `References` headers, with a normalized-subject fallback. Per-thread read / starred / folder state is **per user**, so shared-mailbox members don't step on each other's read state.
 - **Folders** — Inbox, Starred, Sent, Drafts, All Mail, Spam, Trash, Archive. Starred and Sent are flags (`is_starred`, `is_sent`) on `mail_thread_state`, orthogonal to folder; Inbox, Drafts, Trash, Spam and Archive are mutually-exclusive `folder` enum values. A reply keeps its thread's folder and sets `is_sent`; a thread the user starts is filed under `sent`. The Sent views (web list, search, IMAP, folder counts) read `is_sent` and exclude trash and spam. All Mail is a view that ignores folder placement.
 - **Unified All Inboxes** — when a user has 2+ mailboxes, a synthetic "All Inboxes" entry tops the sidebar with the union of new unread threads across every mailbox.
@@ -23,11 +23,11 @@ User-facing features:
 - **Custom domains** — verify your own domain end-to-end (MX → your provider's inbound host, plus SPF / DKIM / Return-Path for outbound) from the Domains settings screen (Settings → Mail → Domains). A background ticker reverifies pending domains every hour so DNS propagation eventually flips them green automatically.
 - **Providers** — **Postmark**: outbound via the REST API, inbound via a per-domain webhook-secret URL, bounce / spam-complaint callbacks via a parallel webhook. **Self-hosted SMTP**: direct-to-MX delivery, inbound via the built-in SMTP listener (gated by `MAIL_INBOUND_SMTP_ENABLED=true`) or an IMAP polling fetcher; bounces come from synchronous 5xx replies. Both implement the `Provider` interface in `server/provider.go`; the choice and its credentials live in the deployment-wide `system_settings` store.
 - **IMAP server** (port **993** implicit TLS in prod, `:1143` plain in dev) — full read / state-sync support via `github.com/emersion/go-imap/v2`. IDLE for push, UID validity for offline-safe sync, RFC 5322 message fetch, namespacing across mailboxes. Apple Mail, Thunderbird, mutt, mobile clients all work.
-- **SMTP submission** (port **465** implicit TLS in prod, `:1587` plain in dev) — send via any mail client using TinyCld credentials. Validates the envelope `MAIL FROM` address against actual mailbox / alias ownership before submitting to the provider. 25 MB total message size cap.
+- **SMTP submission** (port **465** implicit TLS in prod, `:1587` plain in dev) — send via any mail client using TinyCld credentials. Validates the envelope `MAIL FROM` address against its `mail_addresses` row and the user's mailbox membership before submitting to the provider. 25 MB total message size cap.
 - **Labels** — colored tags attached to `mail_thread_state` (per user), backed by core's unified `labels` / `label_assignments` collections shared with [Contacts](help://contacts:labels) and other packages.
 - **Search** — SQLite FTS5 across subject, snippet, sender name / email, message body (HTML-stripped), and text extracted from text-based attachments. Prefix matching (`joh*`). Recipients are not in the FTS index; the Advanced "to" filter matches them with a substring search on `recipients_to` / `recipients_cc`. Advanced filters (set via the Advanced panel): from / to / subject substrings, body words, date within a range of an anchor date, folder, and has-attachment. Search terms are treated as literal text. The server also accepts a `not` parameter that excludes terms with FTS `NOT`; only federated search sends it. Mail also registers a source with core's federated `GET /api/search` (`server/search_source.go`, plus `search: { adapter: 'search-adapter' }` in the manifest → `tinycld/mail/search-adapter.ts`), so mail rows appear in the cross-app search palette (`/`, `mail:` chip) and in the CLI; both paths call the same `searchMailResultRows` (`SearchMail` wraps it for the REST response).
 - **Realtime updates** — message arrivals, read-state changes, and folder moves propagate via PocketBase's built-in collection-realtime subscriptions (`pbtsdb` `useLiveQuery`). IMAP IDLE notifications are dispatched through an internal mailbox-keyed notifier so IMAP clients see new messages within a second.
-- **Audit logging** — `mail_domains`, `mail_mailboxes`, `mail_mailbox_members`, `mail_mailbox_aliases`, `mail_messages`, and `mail_thread_state` all register with `core/audit` from `registerShared` in `server/register.go`.
+- **Audit logging** — `mail_domains`, `mail_mailboxes`, `mail_mailbox_members`, `mail_addresses`, `mail_mailbox_aliases`, `mail_messages`, and `mail_thread_state` all register with `core/audit` from `registerShared` in `server/register.go`.
 - **Notifications** — new-message arrivals are buffered per-user and dispatched in batched core-notify pings every two minutes, so users get one summary notification per cycle instead of one per message.
 - **Storage quota** — `registerShared` (`server/register.go`) registers `mail_messages` / `total_size` as a source with `core/quota`. There is no `quota` block in `manifest.ts`. A mailbox is shared, so there is no `ownerField`: message bytes count toward the deployment-wide ceiling only. A create or growth that would cross it is refused with HTTP 413 `storage limit exceeded`.
 - **Read-only package access** — a user whose mail access level is below full (`pkgaccess.CanWrite`) is enforced over the protocol servers as well as REST: SMTP submission refuses at AUTH with `535 Your mail access is read-only; sending is not permitted` (`smtp_session.go`), and IMAP answers STORE / APPEND / EXPUNGE / COPY / MOVE with `NO Your mail access is read-only` (`requireWritable` in `imap_session.go`).
@@ -54,7 +54,7 @@ Mail contributes triggers and actions to the workflow-rules engine, so users can
 
 All five are native rather than record-ops because folder / read / star state lives per-user on `mail_thread_state`, not on the `mail_messages` row — there is no single field on the triggering record for a generic record-op to set.
 
-A shared mailbox has no direct user FK, so `mail/server/automation.go` registers `messageOwnerResolver` to fan a match out to the mailbox's members: a personal rule acts only on the owner's own view of the thread, while an organization rule acts for every mailbox member. A rule may not send to its own mailbox's address or aliases — `ruleRecipient` rejects that as a self-feeding loop.
+A shared mailbox has no direct user FK, so `mail/server/automation.go` registers `messageOwnerResolver` to fan a match out to the mailbox's members: a personal rule acts only on the owner's own view of the thread, while an organization rule acts for every mailbox member. A rule may not send to any address of its own mailbox, or to a group address that delivers to that mailbox — `ruleRecipient` rejects both as self-feeding loops.
 
 The user-facing help topic is `help/rules.md`; see [Automation rules](https://tinycld.org/docs/automation-rules) for the end-user guide, and [package automation](https://tinycld.org/docs/anatomy/automation) for the package-author contract.
 
@@ -67,7 +67,13 @@ For users connecting Apple Mail, Thunderbird, DAVx5, mutt, or any other standard
 | **IMAP** | **993**     | implicit TLS | TinyCld email + password |
 | **SMTP** | **465**     | implicit TLS | TinyCld email + password |
 
-The package does not implement any client autodiscovery; an operator may optionally publish a standard `_imaps._tcp` SRV record in DNS, but most clients prompt for the hostname and port directly.
+Mail apps can set themselves up from what the server publishes (`registerClientSetupRoutes` in `server/client_discovery.go`, called from `register.go`):
+
+- **Mozilla autoconfig** (Thunderbird) — `GET /mail/config-v1.1.xml` and `GET /.well-known/autoconfig/mail/config-v1.1.xml`.
+- **Outlook Autodiscover** — `POST /autodiscover/autodiscover.xml` and `POST /Autodiscover/Autodiscover.xml`.
+- **Apple configuration profile** — `GET /api/mail/mobileconfig` (`server/client_profile.go`). It holds the IMAP and SMTP settings of the user's Default From address, and no password. `POST /api/mail/mobileconfig/token` gives a signed-in user a 10-minute token. The profile link carries this token in its query, because a link that the device opens sends no auth header.
+
+Autoconfig and Autodiscover answer only for a verified domain, and the answer depends on the domain only, so it never tells a caller whether an address exists. The account setting **Settings → Account → Mail apps** (`settings/MailAppSetup.tsx`) shows each user their exact settings and the profile download, plus a QR code that opens the same page on a phone.
 
 Per-client connection walkthroughs (Apple Mail macOS / iOS, Thunderbird, mutt) live in the in-app help topics `mail:imap` and `mail:smtp` — they live there rather than in this README so they stay in sync with what users actually see in those clients.
 
@@ -75,7 +81,7 @@ In dev mode, plain listeners run on `:1143` (IMAP) and `:1587` (SMTP) with optio
 
 ## Theory of operations
 
-The short version: every message is a `mail_messages` row owned by a `mail_threads` row owned by a `mail_mailboxes` row owned by a `mail_domains` row — the process is one deployment, so nothing sits above the domain. Per-user state (read, starred, folder, labels) is a separate `mail_thread_state` row per `(thread, user)` (unique index). The mail provider is either Postmark (an HTTP API for outbound and a pair of webhooks for inbound + bounces) or self-hosted SMTP (direct delivery; the built-in listener or the IMAP fetcher for inbound). IMAP and SMTP are network servers wrapping the same collections.
+The short version: every message is a `mail_messages` row owned by a `mail_threads` row owned by a `mail_mailboxes` row owned by a `mail_domains` row — the process is one deployment, so nothing sits above the domain. Every address is a `mail_addresses` row that maps `(local_part, domain)` to a mailbox or a group; the server reads this one table to route, send, and log in. Per-user state (read, starred, folder, labels) is a separate `mail_thread_state` row per `(thread, user)` (unique index). The mail provider is either Postmark (an HTTP API for outbound and a pair of webhooks for inbound + bounces) or self-hosted SMTP (direct delivery; the built-in listener or the IMAP fetcher for inbound). IMAP and SMTP are network servers wrapping the same collections.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -95,19 +101,24 @@ The short version: every message is a `mail_messages` row owned by a `mail_threa
 │                                                  ▼                   │
 │   Collections                                                        │
 │     mail_domains, mail_mailboxes, mail_mailbox_members,              │
-│     mail_mailbox_aliases, mail_threads, mail_messages,               │
-│     mail_thread_state, mail_imap_mailbox_state, fts_mail_threads     │
+│     mail_addresses, mail_identities, mail_mailbox_aliases,           │
+│     mail_threads, mail_messages, mail_thread_state,                  │
+│     mail_imap_mailbox_state, mail_folder_counts, fts_mail_threads,   │
+│     fts_mail_messages                                                │
 │                                                                      │
-│   Hooks (register.go)                                                │
-│     OnRecordAfterCreate(users):          auto-create personal mbox   │
-│     OnRecordAfterDelete(users):          reap orphan personal mboxes │
-│     OnRecordCreate(mail_domains):        auto-generate webhook secret│
-│     OnRecordAfter*(mail_threads):        sync fts_mail_threads       │
-│     OnRecordAfter*(mail_messages):       sync FTS + thumbnails +     │
-│                                          IDLE notifier + notify batch│
+│   Hooks (register.go + the files it calls)                           │
+│     OnRecordAfter*(users):        ensureIdentity on create and on    │
+│                                   guest promotion (identities.go)    │
+│     OnRecordDelete(users):        delete personal mboxes (lifecycle) │
+│     OnRecordAfterDelete(users):   reap orphan personal mboxes        │
+│     OnRecordCreate(mail_domains): auto-generate webhook secret       │
+│     OnRecordAfter*(mail_mailbox_aliases): mirror to mail_addresses   │
+│     OnRecordAfter*(mail_threads):  sync fts_mail_threads             │
+│     OnRecordAfter*(mail_messages): sync FTS + thumbnails +           │
+│                                    IDLE notifier + notify batch      │
 │     OnRecordAfterUpdate(mail_thread_state): IDLE notifier            │
 │                                                                      │
-│   API endpoints (register.go)                                        │
+│   API endpoints (register.go + client_discovery.go)                  │
 │     POST  /api/mail/send                          (auth)             │
 │     POST  /api/mail/draft                         (auth)             │
 │     GET   /api/mail/search                        (auth, FTS)        │
@@ -117,15 +128,21 @@ The short version: every message is a `mail_messages` row owned by a `mail_threa
 │     POST  /api/mail/inbound/{token}               (webhook secret)   │
 │     POST  /api/mail/bounces/{token}               (webhook secret)   │
 │     GET   /api/mail/image-proxy?token=...&url=... (auth via token)   │
+│     GET   /api/mail/mobileconfig          (auth or profile token)    │
+│     POST  /api/mail/mobileconfig/token    (auth)                     │
+│     GET   /mail/config-v1.1.xml           (public, autoconfig)       │
+│     GET   /.well-known/autoconfig/mail/config-v1.1.xml   (public)    │
+│     POST  /autodiscover/autodiscover.xml  (public, Outlook; also     │
+│           /Autodiscover/Autodiscover.xml)                            │
 │                                                                      │
 │   IMAP server                                                        │
 │     :993  implicit TLS (prod) / :1143 plain (dev)                    │
-│     Login → davauth.VerifyCredentials                                │
+│     Login → davauth.VerifyCredentials (loginIdentifier)              │
 │     IDLE supported; UID validity per mailbox                         │
 │                                                                      │
 │   SMTP submission server                                             │
 │     :465  implicit TLS (prod) / :1587 plain (dev)                    │
-│     Login → same; From-header ownership check                        │
+│     Login → same; MAIL FROM address check                            │
 │     25 MB max message; SMTPUTF8                                      │
 │                                                                      │
 │   Background loops                                                   │
@@ -140,25 +157,39 @@ The short version: every message is a `mail_messages` row owned by a `mail_threa
 ```
 mail_domains
   domain, webhook_secret, verified + per-check *_verified flags,
-  verification_details (json)
+  verification_details (json), coverage ('everyone'|'groups'|'manual'),
+  coverage_groups (relation list), rank
 mail_mailboxes
   domain, address (local part), display_name, type ('personal'|'shared'), name
+  (domain + address are also stored as the mailbox's primary mail_addresses row)
 mail_mailbox_members
-  mailbox, user, role ('owner'|'member')
-  UNIQUE(mailbox, user)
+  mailbox, user, group, role ('owner'|'member')
+  UNIQUE(mailbox, user, group)
+  (a person row has user only; a group grant has group only; a derived row,
+   one per group member, has both)
+mail_addresses
+  local_part, domain, mailbox | group (exactly one), source ('manual'|'rule'),
+  is_primary, via_group
+  UNIQUE(local_part, domain)
+mail_identities
+  user, inbox (personal mailbox), email_name, default_from (address),
+  retired, address_views, hidden_address_views
+  UNIQUE(user), UNIQUE(inbox), UNIQUE(email_name)
 mail_mailbox_aliases
-  mailbox, address (local part)
+  mailbox, address (local part)   (legacy; mirrored into mail_addresses)
 mail_threads
   mailbox, subject, snippet, latest_date, message_count, participants,
-  has_attachments, has_draft
+  has_attachments, has_draft, address_keys
 mail_messages
   thread, sender_*, recipients_*, subject, body_html (file),
   attachments (file list), attachment_thumbnails (file list),
   cid_map (json), delivery_status, message_id, in_reply_to,
-  total_size, alias (relation, nullable)
+  total_size, alias (legacy relation, nullable),
+  delivered_to (address an inbound copy arrived through, nullable),
+  sent_from (address a sent message went out as, nullable)
 mail_thread_state
   thread, user, folder ('inbox'|'sent'|'drafts'|'trash'|'spam'|'archive'),
-  is_read, is_starred, is_sent
+  is_read, is_starred, is_sent, address_keys
   UNIQUE(thread, user)
   (labels live in core's unified label_assignments, not a field here)
 mail_imap_mailbox_state
@@ -193,7 +224,7 @@ A message arrives at `support@example.com` (Postmark path shown; the self-hosted
 2. **Postmark webhook** — Postmark POSTs the parsed JSON to `/api/mail/inbound/{webhook_secret}` on your TinyCld instance, where the secret is the 32-character hex `webhook_secret` stamped onto `mail_domains` at creation time.
 3. **Auth** — TinyCld's handler validates the secret via `isValidDomainWebhookSecret` (looks up the domain whose secret matches). Note: the URL itself is the credential — there's no signature, because Postmark uses URL-based auth for inbound webhooks.
 4. **Parse** — `provider.ParseInbound(body)` produces a normalized `InboundMessage` with sender, recipients, subject, headers, HTML / plain bodies, and attachments.
-5. **Resolve recipients** — for each `To` recipient, find a `mail_mailboxes` row with matching `(domain, address)` or a `mail_mailbox_aliases` row with matching `(mailbox.domain, address)`. Unmatched recipients are logged and dropped (no bounce sent back).
+5. **Resolve recipients** — `routeInbound` (`server/inbound_routing.go`) takes the envelope recipient first, then each `To`, then each `Cc` (`routingRecipients`, each address once). It removes a plus tag, then resolves each address through its `mail_addresses` row (`deliveryTargets`). An inbox address gives that inbox. A group address gives the own inbox of each group member. An inbox that two recipients reach stores one copy, and that copy records the first matching address in `delivered_to`. Unmatched recipients are logged and dropped (no bounce sent back). A failed lookup is a storage failure, so the webhook answers 500 and the provider retries.
 6. **Store** — `storeMessage` finds-or-creates the thread, inserts the `mail_messages` row, persists attachments (one PB file per attachment plus generated thumbnails), and creates `mail_thread_state` rows for every member of the mailbox with `folder='inbox'`, `read=false`.
 7. **Sanitize** — the HTML body is run through `sanitizeEmailHTML` (bluemonday UGC + tables + cid scheme) before persistence. Plain-text version is kept verbatim.
 8. **CID rewriting** — `buildCIDMap` zips each attachment's `Content-ID` header (normalized to strip angle brackets and `cid:` prefix) with its stored filename, persisted on `mail_messages.cid_map` as JSON. The client uses this map to rewrite `<img src="cid:...">` to actual file URLs at render time.
@@ -204,7 +235,7 @@ A message arrives at `support@example.com` (Postmark path shown; the self-hosted
 Composing a message in the web UI:
 
 1. Closing the compose window with a non-empty body POSTs to `/api/mail/draft` (`handleClose` in `ComposeWindow.tsx`). The handler upserts a `mail_messages` row with `delivery_status='draft'`, threaded into a draft thread if one exists (matched on the in-progress message's `In-Reply-To` for replies, or a fresh thread for new compositions).
-2. Hit Send → `POST /api/mail/send`. The handler validates: the user owns the From mailbox / alias, the To list is non-empty, the message size is under 25 MB.
+2. Hit Send → `POST /api/mail/send`. The handler validates: the To list is non-empty, the user is a member of the From mailbox, the From address belongs to that mailbox (`resolveSendAddress`: the `from_address_id` row, else a legacy `alias_id` from a released client, else the mailbox's default address), and the message size is under 25 MB.
 3. The send handler calls `provider.Send(message)` first — for Postmark, this is `POST /email` with subject, body, recipients, attachments base64-encoded. No `mail_messages` row is written before this call.
 4. On success, the provider returns a `MessageID`. The handler then finds-or-creates the thread and stores the `mail_messages` row with that `message_id` and a `delivery_status` from `deliveryStatusForResult`: `sent`, or `bounced` when the provider rejected every recipient synchronously (per-recipient rejections are recorded in `bounce_reason` either way).
 5. Postmark eventually POSTs delivery, bounce, or spam-complaint callbacks to `/api/mail/bounces/{webhook_secret}`. The handler (`applyDeliveryEvent` in `server/delivery_events.go`) looks up the message by `provider_message_id` or `message_id`. A delivery sets `delivered_at` and leaves `delivery_status` unchanged; a bounce or spam complaint sets `delivery_status` to `bounced` or `spam_complaint`, plus `bounce_class` and `bounce_reason`.
@@ -214,10 +245,10 @@ Composing a message in the web UI:
 
 `server/smtp_server.go` drives core's `tinycld.org/core/mailproto` transport (`mailproto.StartSMTP` owns the TLS policy, bind, and `go-smtp` server); mail supplies only the backend. The session backend (`smtp_session.go`):
 
-- **AUTH** validates username / email + password via core's `davauth.VerifyCredentials`, then refuses a user whose mail access is read-only with `535 Your mail access is read-only; sending is not permitted`.
-- **MAIL FROM** validates the envelope sender: the address must resolve to a `mail_mailboxes` primary or a `mail_mailbox_aliases` row (else `550 Sender address not recognized`), and the authenticated user must be a member of that mailbox (else `550 Not authorized to send from this address`).
+- **AUTH** validates username / email + password via core's `davauth.VerifyCredentials`. An address of the user's personal inbox is accepted as the user name too (`loginIdentifier` in `login_identifier.go`). AUTH then refuses a user whose mail access is read-only with `535 Your mail access is read-only; sending is not permitted`.
+- **MAIL FROM** validates the envelope sender: the address must resolve to an inbox's `mail_addresses` row through `resolveAddress` (`addresses.go`), else `550 Sender address not recognized`. A group address never resolves, because a group cannot send. The authenticated user must also be a member of that mailbox, else `550 Not authorized to send from this address`.
 - **RCPT TO** requires a prior AUTH (`530`) and MAIL FROM (`503`), rejects an address without `@` (`553 Invalid recipient address`), and caps the envelope at 100 recipients (`452 Too many recipients`). Recipient validity beyond that is the provider's job, not ours.
-- **DATA** parses the incoming RFC 5322 message. It does not validate the message's `From:` header — it **replaces** it, building the outgoing From from the mailbox record (`buildOutgoingFrom`: the mailbox's `display_name` plus the primary or alias address MAIL FROM resolved) so sender identity is consistent across channels. `To` / `Cc` come from the headers; any envelope recipient not in those headers becomes `Bcc`.
+- **DATA** parses the incoming RFC 5322 message. It does not validate the message's `From:` header — it **replaces** it, building the outgoing From with `formatFromAddress` (`send_address.go`) from the mailbox's `display_name` plus the `local_part` and domain of the address MAIL FROM resolved, so sender identity is consistent across channels. The stored copy records that address in `sent_from`. `To` / `Cc` come from the headers; any envelope recipient not in those headers becomes `Bcc`.
 - Hands the message off to the same `provider.Send` path as the web UI.
 
 The 25 MB limit on submission is `mailproto.StartSMTP`'s default `MaxMessageBytes` (mail passes no override); `smtp_inbound_server.go` sets the same `smtp.Server.MaxMessageBytes = 25 << 20` on the port-25 inbound listener, and the REST paths bound it via `ParseMultipartForm(25 << 20)` in `endpoints_send.go` and `endpoints_draft.go`. UTF-8 (`SMTPUTF8`) and 60-second read / write timeouts are set by `mailproto`.
@@ -227,7 +258,7 @@ The 25 MB limit on submission is `mailproto.StartSMTP`'s default `MaxMessageByte
 `server/imap_server.go` drives core's `tinycld.org/core/mailproto` transport (`mailproto.StartIMAP` owns TLS, bind, serve, and shutdown); mail supplies only the session factory, touching `imapserver` just for the session type. Per-session state lives in `imapSession` (`imap_session.go`):
 
 - **LOGIN** — same auth as SMTP. Loads the user's `mail_mailbox_members` rows (membership points at `users` directly, so this is one query), resolves the user's read-only verdict once per session, then materializes a per-mailbox namespace prefixed with the mailbox's friendly name (its `name`, falling back to `display_name`, then `address@domain`) — e.g. `Acme Corp/INBOX`.
-- **LIST** — returns the standard set: `INBOX`, `Sent`, `Drafts`, `Trash`, `Spam`, `Archive`, `Starred`, `All Mail`, with the appropriate `\Sent` / `\Drafts` / `\Trash` / `\Junk` / `\Archive` / `\Flagged` / `\All` special-use flags.
+- **LIST** — returns the standard set: `INBOX`, `Sent`, `Drafts`, `Trash`, `Spam`, `Archive`, `Starred`, `All Mail`, with the appropriate `\Sent` / `\Drafts` / `\Trash` / `\Junk` / `\Archive` / `\Flagged` / `\All` special-use flags. When the user has address views on (`mail_identities.address_views`), the personal inbox also lists one `Addresses/<address>` folder per visible address, if it has two or more. A message cannot be copied, moved or appended into these folders.
 - **SELECT** — opens a mailbox/folder, returning UID validity and UID next. UID validity and the next-UID counter live on `mail_imap_mailbox_state`, keyed per-mailbox (one row per `mail_mailboxes` record, regardless of how many members it has). UID assignment is serialized through an in-process per-mailbox mutex (`mailboxUIDMutex`) so monotonicity is guaranteed under concurrent inbound writes.
 - **STORE / APPEND / EXPUNGE / COPY / MOVE** — gated by `requireWritable`: a read-only user gets a `NO Your mail access is read-only` instead of a silent no-op.
 - **FETCH** — converts `mail_messages` rows to RFC 5322 bytes on the fly via `imap_rfc5322.go`. This is the only place TinyCld emits raw RFC 5322 — internally everything is structured fields.
@@ -297,7 +328,9 @@ iPhone (small phone screens) isn't supported yet.
 server/
     register.go                Register(app) — registries, hooks, endpoints, listener selection
     injected_listeners.go      hosted mode: serve the supervisor-injected IMAP / submission / MX sockets (external TLS)
-    lifecycle.go               auto-create / reap personal mailboxes
+    identities.go              mail_identities: personal inbox + email name for each non-guest user
+    identity_edits.go          Default From, address views, and email-name edits on mail_identities
+    lifecycle.go               delete / reap personal mailboxes when a user is deleted
     mailbox_owner_guard.go     a shared mailbox never loses its last owner
     oauth_scopes.go            mail:read / mail:send via oauth.RegisterPackage
     provider.go                Provider interface
@@ -306,7 +339,16 @@ server/
     smtp_inbound_server.go     port-25 inbound listener (MAIL_INBOUND_SMTP_ENABLED)
     imap_fetcher.go            IMAP polling fetcher for inbound (self-hosted provider)
     noop.go                    no-op provider for tests / unconfigured deployments
-    aliases.go                 alias resolution + From-header building
+    addresses.go               mail_addresses hooks, resolveAddress, legacy alias mirroring
+    aliases.go                 verifyAliasBelongsToMailbox (legacy alias_id on send)
+    rule_addresses.go          reconciler for the addresses a domain's coverage gives (source = 'rule')
+    group_addresses.go         group addresses + deliveryTargets (group fan-out)
+    mailbox_member_groups.go   groups as shared-inbox members (core groups grant table)
+    send_address.go            resolveSendAddress, default From address, formatFromAddress
+    inbound_routing.go         routingRecipients, routeInbound
+    login_identifier.go        a personal-inbox address as an IMAP / SMTP user name
+    client_discovery.go        Mozilla autoconfig, Outlook Autodiscover, profile routes
+    client_profile.go          Apple configuration profile + profile token
     store.go                   findOrCreateThread, storeMessage
     sanitize.go                bluemonday HTML sanitization, plain-text extraction
     cid_rewrite.go             Content-ID normalization, cid_map builder
@@ -331,7 +373,7 @@ server/
     imap_uid.go                UID validity / UID next per mailbox
     imap_rfc5322.go            on-the-fly RFC 5322 emission for FETCH
     smtp_server.go             :465 / :1587 startup
-    smtp_session.go            AUTH (incl. read-only refusal), From-header ownership check, DATA → Send
+    smtp_session.go            AUTH (incl. read-only refusal), MAIL FROM address check, DATA → Send
     notify_batcher.go          buffered new-mail notification batcher (2 min tick)
     auth.go                    mailbox-membership and admin-role checks
     thread_markers.go          has_draft / has_attachments thread markers
@@ -344,12 +386,13 @@ The listing above is a guide; `ls server/` is the source of truth. Go module: `t
 
 ```
 manifest.ts                package manifest (repo root — routes, nav, sidebar, slots,
-                           setupSteps, settings, systemSettings, migrations, collections,
-                           help, seed, search, automation, server, ports, payloads, cli,
+                           sidebarContributions, setupSteps, settings, accountSettings,
+                           systemSettings, migrations, collections, help, notifications,
+                           seed, search, automation, server, ports, payloads, cli,
                            repository, peerVersions)
 tinycld/mail/
     sidebar.tsx            All Inboxes + per-mailbox sections + labels
-    collections.ts         pbtsdb registration for the nine mail_* collections (labels come from core's useLabels)
+    collections.ts         pbtsdb registration for the eleven mail_* collections (labels come from core's useLabels)
     types.ts               MailSchema (merged into MergedSchema)
     seed.ts                sample data
     search-adapter.ts      federated-search adapter (manifest `search.adapter`)
@@ -361,13 +404,16 @@ tinycld/mail/
         rules.tsx          automation rules
     settings/
         provider.tsx       domain list + verification (in-app Settings → Mail → Domains)
-        mailboxes.tsx      mailbox CRUD + member CRUD + alias CRUD (+ Mailbox* parts)
+        mailboxes.tsx      shared-inbox CRUD + member CRUD, people and groups (+ Mailbox* parts)
+        MailboxAddressesPanel + AddAddressForm   address CRUD (mail_addresses)
+        AccountEmail.tsx   account setting Settings → Account → Email
+        MailAppSetup.tsx   account setting Settings → Account → Mail apps
     system-settings/
         provider.tsx       deployment-wide provider credentials (setup console)
     components/
         ComposeWindow + ComposeFields + ComposeToolbar + ComposeHeader
         InlineComposeForm + InlineReply
-        FromIdentityPicker (mailboxes + aliases) + RecipientField + RecipientSuggestionList
+        FromIdentityPicker (mailboxes + addresses) + RecipientField + RecipientSuggestionList
         AttachmentRibbon + AttachmentStrip + AttachmentThumbnail + DropOverlay
         EmailHeader + EmailBody + EmailRow + EmailListToolbar + EmailDetailToolbar
         SearchBar + AdvancedSearchDropdown
@@ -376,7 +422,8 @@ tinycld/mail/
         RichTextEditor (type re-export; the editor is core's shared Tiptap editor)
         ContactSuggestionsList (when Contacts is installed)
     hooks/
-        useMailboxes + useMailboxFolderCounts + useDefaultMailbox
+        useMailboxes + useMailboxFolderCounts + useAddressViews
+        useSendableIdentities + groupSendableIdentities + defaultFromIdentity (From choice)
         useThreadListItems + useMailSelection + useMailListShortcuts + useThreadNavigation
         useComposeState + useAttachments + useSaveDraft + useSendEmail + useMailSendReadiness
         useMailEditor (.web / .native) + useOpenReply (file drop comes from core's useFileDrop)
@@ -443,7 +490,7 @@ cd server && go test ./...        # Go server tests
 
 ## Package anatomy
 
-- `manifest.ts` — declares the package's client-side capabilities (routes, nav, sidebar, `slots`, `setupSteps`, settings + system-settings panels, collections, migrations, server module, `ports`, help, seed, `search` adapter, `automation` definitions, `payloads` contract, `cli` module). Server-side registrations such as quota sources (`server/register.go`) and OAuth scopes (`server/oauth_scopes.go`) live in Go.
+- `manifest.ts` — declares the package's client-side capabilities (routes, nav, sidebar, `slots`, `setupSteps`, settings + account-settings + system-settings panels, collections, migrations, server module, `ports`, help, seed, `search` adapter, `automation` definitions, `payloads` contract, `cli` module). Server-side registrations such as quota sources (`server/register.go`) and OAuth scopes (`server/oauth_scopes.go`) live in Go.
 
 ### Sidebar slot
 
