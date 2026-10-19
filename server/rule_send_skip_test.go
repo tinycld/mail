@@ -45,7 +45,7 @@ func startRuleEngine(t *testing.T, e *loopEnv) {
 		{
 			Slug: "mail",
 			Triggers: []automation.TriggerDef{
-				{ID: "message-received", Label: "A message arrives", Collection: "mail_messages", On: "create"},
+				{ID: "message-received", Label: "A message arrives", Collection: "mail_messages", On: "create", Fields: messageReceivedFields},
 			},
 			Actions: []automation.ActionDef{
 				{ID: "forward-message", Label: "Forward", Kind: "native", Params: text("to")},

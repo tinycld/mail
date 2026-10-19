@@ -16,7 +16,10 @@ const automation = {
                 { key: 'sender_email', label: 'Sender' },
                 { key: 'sender_name', label: 'Sender name' },
                 'has_attachments',
-                { key: 'alias', label: 'Received at address' },
+                // delivered_to, not alias: every inbound path stores the
+                // receiving address there, while alias is only the legacy
+                // sending alias of outbound mail and stays empty on arrival.
+                { key: 'delivered_to', label: 'Received at address' },
             ],
         },
         {
