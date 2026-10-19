@@ -14,6 +14,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/audit"
+	"tinycld.org/core/background"
 	"tinycld.org/core/coreserver"
 	"tinycld.org/core/deliveryevents"
 	"tinycld.org/core/maildomains"
@@ -25,16 +26,6 @@ import (
 	"tinycld.org/core/syscfg"
 	"tinycld.org/packages/mail/api"
 )
-
-// appIsLive reports whether the app still has an open database connection.
-// The mail thumbnail + notification workers run in background goroutines that
-// can outlive the app instance — e.g. the test harness resets the dev DB while
-// a job is in flight. Once the app is torn down, ConcurrentDB() is nil and any
-// record query (PocketBase v0.38 RecordQuery) panics on the nil DB instead of
-// returning an error. Bail out instead of touching the DB in that window.
-func appIsLive(app core.App) bool {
-	return app != nil && app.ConcurrentDB() != nil
-}
 
 // Register composes the mail server — the package's single entry point,
 // called by the generator's package_extensions.go in EVERY composition. Mail
@@ -64,6 +55,10 @@ func Register(app *pocketbase.PocketBase) {
 
 // registerShared is the single source of truth for what BOTH compositions run.
 func registerShared(app *pocketbase.PocketBase) {
+	// Work the hooks, the tickers and the IMAP fetcher move off the request
+	// goroutine; the app's terminate waits for it.
+	jobs := background.For(app, "mail")
+
 	// What an OAuth token may reach in this package. Core knows nothing about
 	// it until this runs; see oauth.Package for the shape.
 	oauth.RegisterPackage(oauthPackage())
@@ -280,7 +275,10 @@ func registerShared(app *pocketbase.PocketBase) {
 
 	// Buffer inbound messages for batched notification delivery
 	app.OnRecordAfterCreateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
-		go bufferMailNotification(app, e.Record)
+		msg := e.Record
+		jobs.Run("mail notification buffer", func(context.Context) {
+			bufferMailNotification(app, msg)
+		})
 		return e.Next()
 	})
 
@@ -288,14 +286,14 @@ func registerShared(app *pocketbase.PocketBase) {
 	// AfterUpdate fires from our own Save below, so the hook short-circuits when
 	// the attachments list hasn't changed since the last time we ran.
 	app.OnRecordAfterCreateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
-		go generateAttachmentThumbnails(app, e.Record)
+		startAttachmentThumbnails(jobs, app, e.Record)
 		return e.Next()
 	})
 	app.OnRecordAfterUpdateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
 		if !attachmentsChanged(e.Record) {
 			return e.Next()
 		}
-		go generateAttachmentThumbnails(app, e.Record)
+		startAttachmentThumbnails(jobs, app, e.Record)
 		return e.Next()
 	})
 
@@ -335,17 +333,14 @@ func registerShared(app *pocketbase.PocketBase) {
 			return handleVerifyDomain(app, re)
 		}).BindFunc(requireAuth)
 
-		reverifyCtx, cancelReverify := context.WithCancel(context.Background())
-		app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
-			cancelReverify()
-			return te.Next()
+		jobs.Run("mail domain reverify", func(ctx context.Context) {
+			startDomainReverifyLoop(ctx, app)
 		})
-		go startDomainReverifyLoop(reverifyCtx, app)
 
 		// IMAP fetcher manager — runs one polling worker per org with the
 		// self-hosted SMTP provider in "imap" inbound mode. Reconciles on
 		// every mail settings record change via globalIMAPManager.
-		imapFetcherShutdown := startIMAPFetchers(app)
+		imapFetcherShutdown := startIMAPFetchers(app, jobs)
 		app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
 			imapFetcherShutdown()
 			return te.Next()
@@ -425,7 +420,9 @@ func registerShared(app *pocketbase.PocketBase) {
 
 		// Mail notification batcher: drains the per-user buffer every 2min
 		// and dispatches one batched notification per user.
-		go startMailBatcher(app)
+		jobs.Run("mail notification batcher", func(ctx context.Context) {
+			startMailBatcher(ctx, app)
+		})
 
 		return e.Next()
 	})
@@ -714,10 +711,6 @@ func mailboxMembersForMessage(app core.App, msgRecord *core.Record) []*core.Reco
 
 // bufferMailNotification queues a mail notification for batched delivery.
 func bufferMailNotification(app core.App, msgRecord *core.Record) {
-	if !appIsLive(app) {
-		return
-	}
-
 	// Skip outbound messages (sent by the user themselves)
 	direction := msgRecord.GetString("direction")
 	if direction == "outbound" || direction == "sent" {

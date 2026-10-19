@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -19,11 +20,12 @@ const memberBackfillBatch = 500
 // because the job outlives the request, and the event's app can be a finished
 // transaction.
 func registerMemberBackfillHooks(app core.App) {
+	memberJobs := memberJobsFor(app)
 	app.OnRecordAfterCreateSuccess("mail_mailbox_members").BindFunc(func(e *core.RecordEvent) error {
 		mailboxID := e.Record.GetString("mailbox")
 		userID := e.Record.GetString("user")
-		runMemberJob(memberJobs, "backfill", mailboxID, userID, func() error {
-			return backfillMemberThreadState(app, mailboxID, userID)
+		runMemberJob(memberJobs, "backfill", mailboxID, userID, func(ctx context.Context) error {
+			return backfillMemberThreadState(ctx, app, mailboxID, userID)
 		})
 		return e.Next()
 	})
@@ -36,8 +38,9 @@ func registerMemberBackfillHooks(app core.App) {
 // hook fire, and the create hook fills mailbox and latest_date.
 //
 // A failed row is logged and skipped so one bad thread does not stop the
-// rest; the first error is returned for the caller to log.
-func backfillMemberThreadState(app core.App, mailboxID, userID string) error {
+// rest; the first error is returned for the caller to log. It stops between
+// batches once ctx ends (the app's terminate).
+func backfillMemberThreadState(ctx context.Context, app core.App, mailboxID, userID string) error {
 	// A group grant row has no user: its people get their own derived rows,
 	// and each of those starts its own backfill.
 	if userID == "" {
@@ -45,9 +48,7 @@ func backfillMemberThreadState(app core.App, mailboxID, userID string) error {
 	}
 	var firstErr error
 	for offset := 0; ; offset += memberBackfillBatch {
-		// The app can be torn down while a backfill is still running (test
-		// teardown, dev DB reset); a query on a closed DB panics.
-		if !appIsLive(app) {
+		if ctx.Err() != nil {
 			return firstErr
 		}
 		// The job can run after the person lost access again, and the

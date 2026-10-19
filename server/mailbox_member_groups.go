@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -118,14 +119,15 @@ func userHasMailboxRow(app core.App, mailboxID, userID string) (bool, error) {
 // and the event's app can be a finished transaction. For the same reason the
 // access check runs in the job with the root app, not in the hook.
 func registerMemberAccessCleanup(app core.App) {
+	memberJobs := memberJobsFor(app)
 	app.OnRecordAfterDeleteSuccess("mail_mailbox_members").BindFunc(func(e *core.RecordEvent) error {
 		mailboxID := e.Record.GetString("mailbox")
 		userID := e.Record.GetString("user")
 		if userID == "" {
 			return e.Next()
 		}
-		runMemberJob(memberJobs, "access cleanup", mailboxID, userID, func() error {
-			return cleanupLostMailboxAccess(app, mailboxID, userID)
+		runMemberJob(memberJobs, "access cleanup", mailboxID, userID, func(ctx context.Context) error {
+			return cleanupLostMailboxAccess(ctx, app, mailboxID, userID)
 		})
 		return e.Next()
 	})
@@ -136,12 +138,11 @@ func registerMemberAccessCleanup(app core.App) {
 // while the user still has a member row on the mailbox, and checks again
 // before each batch: a person can be added back while a cleanup runs, and
 // their new state must stay. Each row is a record delete, so realtime and the
-// folder-count hook fire.
-func cleanupLostMailboxAccess(app core.App, mailboxID, userID string) error {
+// folder-count hook fire. It stops between batches once ctx ends (the app's
+// terminate).
+func cleanupLostMailboxAccess(ctx context.Context, app core.App, mailboxID, userID string) error {
 	for {
-		// The app can be torn down while a cleanup is still running (test
-		// teardown, dev DB reset); a query on a closed DB panics.
-		if !appIsLive(app) {
+		if ctx.Err() != nil {
 			return nil
 		}
 		has, err := userHasMailboxRow(app, mailboxID, userID)

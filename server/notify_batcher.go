@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -51,12 +52,19 @@ func bufferMailNotificationForUser(userID, sender, subject string) {
 	buf.mu.Unlock()
 }
 
-func startMailBatcher(app core.App) {
+// startMailBatcher flushes the buffer every two minutes until ctx ends (the
+// app's terminate).
+func startMailBatcher(ctx context.Context, app core.App) {
 	ticker := time.NewTicker(2 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		flushMailBuffer(app)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			flushMailBuffer(app)
+		}
 	}
 }
 

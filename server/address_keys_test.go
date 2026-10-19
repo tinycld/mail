@@ -174,7 +174,7 @@ func TestAddressKeys_NewStateCopiesThread(t *testing.T) {
 	})
 	saveRealRecord(t, env.app, "mail_mailbox_members", map[string]any{"mailbox": env.desk.Id, "user": bob.Id, "role": "member"})
 
-	if err := backfillMemberThreadState(env.app, env.desk.Id, bob.Id); err != nil {
+	if err := backfillMemberThreadState(context.Background(), env.app, env.desk.Id, bob.Id); err != nil {
 		t.Fatal(err)
 	}
 
