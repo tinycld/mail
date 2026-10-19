@@ -108,11 +108,11 @@ const manifest = {
         module: 'tinycld.org/packages/mail/cli',
     },
     repository: { url: 'https://github.com/tinycld/mail' },
-    // 0.7.2 is the first core with the group-member-removal slot,
+    // 0.8.0 is the first released core with the group-member-removal slot,
     // MultiSelectInput, useMyLiveQuery's queryKey and the app on group
     // membership events, which this version uses. It is also the first core
     // with `mailhost` and `useMailHost` (Settings → Account → Mail apps).
-    peerVersions: { '@tinycld/core': '>=0.7.2 <0.8.0' },
+    peerVersions: { '@tinycld/core': '>=0.8.0 <0.9.0' },
 }
 
 export default manifest
