@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -31,7 +32,7 @@ func TestMemberBackfill_CreatesReadInboxRows(t *testing.T) {
 	joiner := newUser(t, env.app, "joiner@example.org")
 	seedMember(t, env.app, env.mbA.Id, joiner.Id)
 
-	if err := backfillMemberThreadState(env.app, env.mbA.Id, joiner.Id); err != nil {
+	if err := backfillMemberThreadState(context.Background(), env.app, env.mbA.Id, joiner.Id); err != nil {
 		t.Fatal(err)
 	}
 
@@ -70,7 +71,7 @@ func TestMemberBackfill_IsIdempotent(t *testing.T) {
 	seedMember(t, env.app, env.mbA.Id, joiner.Id)
 
 	for range 2 {
-		if err := backfillMemberThreadState(env.app, env.mbA.Id, joiner.Id); err != nil {
+		if err := backfillMemberThreadState(context.Background(), env.app, env.mbA.Id, joiner.Id); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -105,7 +106,7 @@ func TestMemberBackfill_SkipsPersonWhoLostAccess(t *testing.T) {
 	env := setupScopeEnv(t)
 	gone := newUser(t, env.app, "gone@example.org")
 
-	if err := backfillMemberThreadState(env.app, env.mbA.Id, gone.Id); err != nil {
+	if err := backfillMemberThreadState(context.Background(), env.app, env.mbA.Id, gone.Id); err != nil {
 		t.Fatal(err)
 	}
 	if got := stateRowCount(t, env.app, gone.Id); got != 0 {

@@ -1,14 +1,15 @@
 package mail
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/approutes"
+	"tinycld.org/core/logging"
 	"tinycld.org/core/notify"
 	"tinycld.org/core/readonly"
 )
@@ -25,6 +26,8 @@ import (
 // Single-org: routes carry no [orgSlug] segment, so nothing interpolates into
 // this and it stays a fixed path.
 var mailNotificationURL = approutes.Href("mail")
+
+var notifyLog = logging.ForPackage("mail")
 
 type pendingMail struct {
 	sender  string
@@ -51,19 +54,75 @@ func bufferMailNotificationForUser(userID, sender, subject string) {
 	buf.mu.Unlock()
 }
 
-func startMailBatcher(app core.App) {
-	ticker := time.NewTicker(2 * time.Minute)
+// mailBatchInterval is how often the batcher flushes the buffer.
+const mailBatchInterval = 2 * time.Minute
+
+const mailNotifyDroppedMsg = "mail notifications dropped: the server stayed read-only past the wait"
+
+// startMailBatcher flushes the buffer every two minutes until ctx ends (the
+// app's terminate), and once more then: the buffer lives only in memory, so
+// what it still holds would otherwise be lost without a word.
+func startMailBatcher(ctx context.Context, app core.App) {
+	ticker := time.NewTicker(mailBatchInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		flushMailBuffer(app)
+	for {
+		select {
+		case <-ctx.Done():
+			flushMailBufferWhenWritable(ctx, app)
+			return
+		case <-ticker.C:
+			flushMailBufferWhenWritable(ctx, app)
+		}
 	}
 }
 
-// flushMailBuffer leaves the buffer alone while the server is read-only: the
-// notifications it would write are lost if the next build rolls back, and a
-// held buffer goes out at the first flush after the mode ends.
-func flushMailBuffer(app core.App) {
+// flushMailBufferWhenWritable flushes the buffer of mail that arrived,
+// possibly just before the server went read-only. The notifications are
+// writes, so the flush waits for the mode to end, bounded by
+// readonly.TailWait and by ctx, which ends when the app terminates. When the
+// wait ends first, the buffered notifications are dropped and logged. At the
+// terminate ctx has already ended: a writable server flushes at once, a
+// read-only one drops.
+func flushMailBufferWhenWritable(ctx context.Context, app core.App) {
+	waitCtx, cancel := context.WithTimeout(ctx, readonly.TailWait)
+	defer cancel()
+	err := readonly.WhenWritable(waitCtx, func() error {
+		flushMailBuffer(ctx, app)
+		return nil
+	})
+	if err != nil {
+		users, messages := dropMailBuffer()
+		if messages > 0 {
+			notifyLog.Warn(mailNotifyDroppedMsg, "users", users, "messages", messages, "err", err)
+		}
+	}
+}
+
+// dropMailBuffer empties the buffer and reports what it held.
+func dropMailBuffer() (users, messages int) {
+	mailBuffer.Range(func(key, value any) bool {
+		buf := value.(*mailBucket)
+		buf.mu.Lock()
+		n := len(buf.items)
+		buf.items = nil
+		buf.mu.Unlock()
+		mailBuffer.Delete(key)
+		if n > 0 {
+			users++
+			messages += n
+		}
+		return true
+	})
+	return users, messages
+}
+
+// flushMailBuffer sends one notification per user for the buffered mail. It
+// stops when the server turns read-only in the middle: the users not reached
+// yet keep their buffer for the next flush, which waits for the mode to end.
+// ctx bounds the push dispatches; the notification rows are written
+// regardless.
+func flushMailBuffer(ctx context.Context, app core.App) {
 	mailBuffer.Range(func(key, value any) bool {
 		if readonly.Active() {
 			return false
@@ -90,25 +149,20 @@ func flushMailBuffer(app core.App) {
 			}
 		}
 
-		if len(items) == 1 {
-			notify.NotifyUser(app, notify.NotifyParams{
-				UserID:  userID,
-				Type:    "mail_new_message",
-				Package: "mail",
-				Title:   fmt.Sprintf("New mail from %s", items[0].sender),
-				Body:    items[0].subject,
-				URL:     mailNotificationURL,
-			})
-		} else {
-			notify.NotifyUser(app, notify.NotifyParams{
-				UserID:  userID,
-				Type:    "mail_new_message",
-				Package: "mail",
-				Title:   fmt.Sprintf("You have %d new messages", len(items)),
-				Body:    fmt.Sprintf("From %s and others", items[0].sender),
-				URL:     mailNotificationURL,
-			})
+		params := notify.NotifyParams{
+			UserID:  userID,
+			Type:    "mail_new_message",
+			Package: "mail",
+			Title:   fmt.Sprintf("New mail from %s", items[0].sender),
+			Body:    items[0].subject,
+			URL:     mailNotificationURL,
 		}
+		if len(items) > 1 {
+			params.Title = fmt.Sprintf("You have %d new messages", len(items))
+			params.Body = fmt.Sprintf("From %s and others", items[0].sender)
+		}
+		// DeliverToUserContext logs its own failures.
+		_ = notify.DeliverToUserContext(ctx, app, params)
 
 		return true
 	})
@@ -178,7 +232,7 @@ func filterImportantMail(app core.App, userID string, items []pendingMail) []pen
 		record.Set("read", false)
 		record.Set("dismissed", false)
 		if err := app.Save(record); err != nil {
-			log.Printf("[mail/batcher] failed to save silent notification: %v", err)
+			notifyLog.Error("failed to save a silent mail notification", "userID", userID, "error", err)
 		}
 	}
 	return important

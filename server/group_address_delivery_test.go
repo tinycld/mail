@@ -508,7 +508,7 @@ func requireLog(t *testing.T, logs *bytes.Buffer, level, text string, attrs ...s
 // cannot repeat a group address without limit.
 func TestInboundSMTP_RecipientLimit(t *testing.T) {
 	s := seedGroupDelivery(t)
-	server := newInboundSMTPServer(s.app, "mx.example", nil)
+	server, _ := newInboundSMTPServer(s.app, "mx.example", nil)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

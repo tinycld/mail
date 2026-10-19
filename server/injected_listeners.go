@@ -47,10 +47,7 @@ func registerInjectedListeners(app *pocketbase.PocketBase, listeners InjectedLis
 			// silently absent (the same policy as the host's failLoud path).
 			return fmt.Errorf("aborting startup: %w", err)
 		}
-		app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
-			shutdown()
-			return te.Next()
-		})
+		bindListenerShutdown(app, shutdown)
 		return e.Next()
 	})
 }

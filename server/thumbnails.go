@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 
+	"tinycld.org/core/background"
 	"tinycld.org/core/readonly"
 	"tinycld.org/core/thumbnails"
 )
@@ -45,7 +45,7 @@ func attachmentsChanged(record *core.Record) bool {
 	return false
 }
 
-// thumbInFlight prevents two goroutines from racing on the same record. The hook
+// thumbInFlight prevents two jobs from racing on the same record. The hook
 // fires on every create and update, including the update we ourselves trigger to
 // store the generated thumbnails — without this guard, two parallel runs against
 // the same record could see the same "no thumbs yet" snapshot and double-write.
@@ -56,16 +56,10 @@ var thumbInFlight sync.Map
 // pipeline supports. Generated thumbnails are stored on the message's
 // attachment_thumbnails file field; the attachment_thumbnail_map JSON field
 // records the original→thumbnail filename mapping so clients can look up the
-// thumb by attachment name. Designed to run in a background goroutine.
-func generateAttachmentThumbnails(app core.App, record *core.Record) {
-	defer func() {
-		if r := recover(); r != nil {
-			app.Logger().Error("Mail thumbnail: panic recovered",
-				"id", record.Id, "panic", fmt.Sprintf("%v", r))
-		}
-	}()
-
-	if !appIsLive(app) {
+// thumb by attachment name. It runs as a background job; ctx ends when the
+// app terminates, and the job then stops before its next storage write.
+func generateAttachmentThumbnails(ctx context.Context, app core.App, record *core.Record) {
+	if ctx.Err() != nil {
 		return
 	}
 
@@ -74,7 +68,7 @@ func generateAttachmentThumbnails(app core.App, record *core.Record) {
 		return
 	}
 
-	// Acquire the per-record in-flight lock; bail if another goroutine is already
+	// Acquire the per-record in-flight lock; bail if another job is already
 	// processing this record.
 	if _, busy := thumbInFlight.LoadOrStore(record.Id, struct{}{}); busy {
 		return
@@ -122,7 +116,7 @@ func generateAttachmentThumbnails(app core.App, record *core.Record) {
 		if !thumbnails.CanGenerate(mime) {
 			continue
 		}
-		thumbFile, thumbName, err := renderThumbnail(fsys, record.BaseFilesPath(), fname, mime)
+		thumbFile, thumbName, err := renderThumbnail(ctx, fsys, record.BaseFilesPath(), fname, mime)
 		if err != nil {
 			app.Logger().Warn("Mail thumbnail: generation failed",
 				"id", record.Id, "attachment", fname, "error", err)
@@ -154,10 +148,15 @@ func generateAttachmentThumbnails(app core.App, record *core.Record) {
 	fresh.Set("attachment_thumbnails", mergedThumbnails)
 	fresh.Set("attachment_thumbnail_map", string(thumbMapBytes))
 
-	waitCtx, cancelWait := context.WithTimeout(context.Background(), thumbnailReadOnlyWait)
+	// The renders are slow, so ctx is checked again: a terminating app should
+	// not start a new write.
+	if ctx.Err() != nil {
+		return
+	}
+	waitCtx, cancelWait := context.WithTimeout(ctx, thumbnailReadOnlyWait)
 	defer cancelWait()
 	err = saveWhenWritable(waitCtx, app, fresh)
-	if errors.Is(err, errAppNotLive) {
+	if ctx.Err() != nil {
 		return
 	}
 	if err != nil {
@@ -171,22 +170,23 @@ func generateAttachmentThumbnails(app core.App, record *core.Record) {
 // saveWhenWritable saves record once the server is not read-only. A message
 // can arrive just before the mode begins, and its background work must not
 // write while the mode is on: the write is lost if the next build rolls back.
-//
-// Thumbnail generation is slow and the wait can be long, so the app/DB is
-// re-checked after both: the goroutine can outlive an app/DB reset.
 func saveWhenWritable(ctx context.Context, app core.App, record *core.Record) error {
 	if err := readonly.WaitInactive(ctx); err != nil {
 		return fmt.Errorf("mail: wait for read-only to end: %w", err)
 	}
-	if !appIsLive(app) {
-		return errAppNotLive
-	}
 	return app.Save(record)
 }
 
-var errAppNotLive = errors.New("mail: app is no longer live")
+// startAttachmentThumbnails hands a message's thumbnail generation to a
+// background job, which the app's terminate waits for.
+func startAttachmentThumbnails(jobs *background.Jobs, app core.App, record *core.Record) {
+	jobs.Run("mail attachment thumbnails", func(ctx context.Context) {
+		generateAttachmentThumbnails(ctx, app, record)
+	})
+}
 
 func renderThumbnail(
+	ctx context.Context,
 	fsys *filesystem.System,
 	basePath string,
 	originalName string,
@@ -199,11 +199,11 @@ func renderThumbnail(
 	}
 	defer blob.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), thumbnailTimeout)
+	renderCtx, cancel := context.WithTimeout(ctx, thumbnailTimeout)
 	defer cancel()
 
 	var thumb bytes.Buffer
-	if err := thumbnails.Generate(ctx, &thumb, blob, mimeType, thumbnails.DefaultWidth, thumbnails.DefaultHeight); err != nil {
+	if err := thumbnails.Generate(renderCtx, &thumb, blob, mimeType, thumbnails.DefaultWidth, thumbnails.DefaultHeight); err != nil {
 		return nil, "", err
 	}
 

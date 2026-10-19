@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"sync"
@@ -542,7 +543,7 @@ func TestInboxGroup_BackfillIgnoresGrantRow(t *testing.T) {
 	s := seedInboxGroup(t, app)
 	deliverToInbox(t, app, s.shared, "backfill-1")
 
-	if err := backfillMemberThreadState(app, s.shared.Id, ""); err != nil {
+	if err := backfillMemberThreadState(context.Background(), app, s.shared.Id, ""); err != nil {
 		t.Fatalf("backfill for a grant row = %v, want nil", err)
 	}
 	if n := inboxStateCount(t, app, s.shared, ""); n != 0 {
@@ -569,7 +570,7 @@ func TestInboxGroup_LeaveKeepsDirectAccess(t *testing.T) {
 	}
 	// The cleanup checks again before it deletes, so a cleanup that starts
 	// after access came back leaves the rows alone.
-	if err := cleanupLostMailboxAccess(app, s.shared.Id, s.ann.Id); err != nil {
+	if err := cleanupLostMailboxAccess(context.Background(), app, s.shared.Id, s.ann.Id); err != nil {
 		t.Fatal(err)
 	}
 	if n := inboxStateCount(t, app, s.shared, s.ann.Id); n != 1 {

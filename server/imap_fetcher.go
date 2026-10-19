@@ -12,6 +12,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/background"
 	"tinycld.org/core/readonly"
 )
 
@@ -27,8 +28,8 @@ import (
 // follow-up; polling fails predictably without saturating the network with
 // reconnect loops.
 type imapFetcherManager struct {
-	app    core.App
-	parent context.Context
+	app  core.App
+	jobs *background.Jobs
 
 	mu     sync.Mutex
 	cancel context.CancelFunc // non-nil while the fetcher loop is running
@@ -39,18 +40,23 @@ type imapFetcherManager struct {
 // startup and after shutdown — callers must nil-check.
 var globalIMAPManager *imapFetcherManager
 
-// startIMAPFetchers wires the manager into the app lifecycle. Returns a
-// shutdown function for OnTerminate.
-func startIMAPFetchers(app core.App) func() {
-	ctx, cancel := context.WithCancel(context.Background())
-	m := &imapFetcherManager{app: app, parent: ctx}
+// startIMAPFetchers wires the manager into the app lifecycle. The reconciles
+// and the poll loop run as jobs, which the app's terminate cancels and waits
+// for. Returns a shutdown function for OnTerminate.
+func startIMAPFetchers(app core.App, jobs *background.Jobs) func() {
+	m := &imapFetcherManager{app: app, jobs: jobs}
 	globalIMAPManager = m
-	go m.reconcile()
+	m.startReconcile()
 	return func() {
-		cancel()
 		m.stop()
 		globalIMAPManager = nil
 	}
+}
+
+func (m *imapFetcherManager) startReconcile() {
+	m.jobs.Run("mail imap fetcher reconcile", func(context.Context) {
+		m.reconcile()
+	})
 }
 
 // reconcile starts the fetcher when the system provider is self-hosted SMTP in
@@ -65,9 +71,19 @@ func (m *imapFetcherManager) reconcile() {
 	running := m.cancel != nil
 	switch {
 	case want && !running:
-		ctx, cancel := context.WithCancel(m.parent)
+		ctx, cancel := context.WithCancel(context.Background())
 		m.cancel = cancel
-		go m.run(ctx)
+		started := m.jobs.Run("mail imap fetcher", func(jobCtx context.Context) {
+			// The loop ends on either: a settings change (cancel) or the
+			// app's terminate (jobCtx).
+			stop := context.AfterFunc(jobCtx, cancel)
+			defer stop()
+			m.run(ctx)
+		})
+		if !started {
+			cancel()
+			m.cancel = nil
+		}
 	case !want && running:
 		m.cancel()
 		m.cancel = nil
@@ -77,7 +93,7 @@ func (m *imapFetcherManager) reconcile() {
 // onSettingsChanged is called by the settings/system_settings record hooks.
 // Rerunning reconcile is cheap, so we don't try to diff what changed.
 func (m *imapFetcherManager) onSettingsChanged() {
-	go m.reconcile()
+	m.startReconcile()
 }
 
 func (m *imapFetcherManager) stop() {
