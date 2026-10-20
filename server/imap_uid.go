@@ -15,9 +15,9 @@ func mailboxUIDMutex(mailboxID string) *sync.Mutex {
 	return v.(*sync.Mutex)
 }
 
-// getOrCreateMailboxState returns the mail_imap_mailbox_state record for a
-// mailbox, creating one if it doesn't exist (uid_validity=1, uid_next=1).
-func getOrCreateMailboxState(app core.App, mailboxID string) (*core.Record, error) {
+// findMailboxState returns the mail_imap_mailbox_state record for a mailbox,
+// or nil when it has none yet.
+func findMailboxState(app core.App, mailboxID string) (*core.Record, error) {
 	records, err := app.FindRecordsByFilter(
 		"mail_imap_mailbox_state",
 		"mailbox = {:mailbox}",
@@ -26,8 +26,20 @@ func getOrCreateMailboxState(app core.App, mailboxID string) (*core.Record, erro
 		0,
 		map[string]any{"mailbox": mailboxID},
 	)
-	if err == nil && len(records) > 0 {
-		return records[0], nil
+	if err != nil {
+		return nil, fmt.Errorf("failed to read mailbox state: %w", err)
+	}
+	if len(records) == 0 {
+		return nil, nil
+	}
+	return records[0], nil
+}
+
+// getOrCreateMailboxState returns the mail_imap_mailbox_state record for a
+// mailbox, creating one if it doesn't exist (uid_validity=1, uid_next=1).
+func getOrCreateMailboxState(app core.App, mailboxID string) (*core.Record, error) {
+	if state, err := findMailboxState(app, mailboxID); err == nil && state != nil {
+		return state, nil
 	}
 
 	collection, err := app.FindCollectionByNameOrId("mail_imap_mailbox_state")
@@ -118,20 +130,30 @@ func lookupMessagesByUID(app core.App, mailboxID string, uidLow, uidHigh uint32)
 	return messages, nil
 }
 
+// mailboxUIDState reads a mailbox's UIDVALIDITY and UIDNEXT without creating
+// its state row. SELECT and STATUS only read, so they must not write — the
+// server may be read-only. A mailbox with no row yet has the values the row
+// is created with (see getOrCreateMailboxState) once its first UID is
+// assigned.
+func mailboxUIDState(app core.App, mailboxID string) (validity, next uint32, err error) {
+	state, err := findMailboxState(app, mailboxID)
+	if err != nil {
+		return 0, 0, err
+	}
+	if state == nil {
+		return 1, 1, nil
+	}
+	return uint32(state.GetInt("uid_validity")), uint32(state.GetInt("uid_next")), nil
+}
+
 // getMailboxUIDValidity returns the UIDVALIDITY for a mailbox.
 func getMailboxUIDValidity(app core.App, mailboxID string) (uint32, error) {
-	state, err := getOrCreateMailboxState(app, mailboxID)
-	if err != nil {
-		return 0, err
-	}
-	return uint32(state.GetInt("uid_validity")), nil
+	validity, _, err := mailboxUIDState(app, mailboxID)
+	return validity, err
 }
 
 // getMailboxUIDNext returns the next UID that will be assigned for a mailbox.
 func getMailboxUIDNext(app core.App, mailboxID string) (uint32, error) {
-	state, err := getOrCreateMailboxState(app, mailboxID)
-	if err != nil {
-		return 0, err
-	}
-	return uint32(state.GetInt("uid_next")), nil
+	_, next, err := mailboxUIDState(app, mailboxID)
+	return next, err
 }
