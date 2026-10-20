@@ -10,7 +10,7 @@ order: 10
 A full email client backed by a mail provider like Postmark for actual delivery. You can:
 
 - Read and write email in the web / iPad UI.
-- Connect any standard mail client (Apple Mail, Thunderbird, mutt) via [IMAP](help://mail:imap) and [SMTP](help://mail:smtp).
+- Connect any standard mail client (Outlook, Apple Mail, Gmail, Thunderbird) via [IMAP](help://mail:imap) and [SMTP](help://mail:smtp).
 - Use your own custom domain — set up MX, SPF, DKIM, and inbound routing once and Mail handles the rest.
 
 ## Inboxes vs folders
@@ -43,4 +43,4 @@ Mail groups related messages into **threads** (conversations). Replying to a thr
 - [Labels](help://mail:labels)
 - [Search](help://mail:search)
 - [Setting up a custom domain](help://mail:custom-domains)
-- [Connecting Apple Mail / Thunderbird (IMAP)](help://mail:imap)
+- [Connecting Outlook, Apple Mail, Gmail or Thunderbird (IMAP)](help://mail:imap)

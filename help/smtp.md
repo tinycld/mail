@@ -1,13 +1,13 @@
 ---
 title: Connecting an SMTP client
-summary: Send email from Apple Mail, Thunderbird, or any SMTP-capable client
-tags: [smtp, send, submission, apple-mail, thunderbird]
+summary: Send email from Outlook, Apple Mail, Gmail, Thunderbird, or any SMTP-capable client
+tags: [smtp, send, submission, outlook, apple-mail, gmail, thunderbird]
 order: 130
 ---
 
 ## What SMTP gives you
 
-SMTP submission lets your desktop or phone mail client *send* through TinyCld — the outbound counterpart to [IMAP](help://mail:imap) for reading. Once configured, hitting Send in Apple Mail / Thunderbird / mutt routes through TinyCld → your mail provider → the recipient.
+SMTP submission lets your desktop or phone mail client *send* through TinyCld — the outbound counterpart to [IMAP](help://mail:imap) for reading. Once configured, hitting Send in Outlook, Apple Mail, Gmail or Thunderbird routes through TinyCld → your mail provider → the recipient.
 
 This is **not** the same as the SMTP your mail provider uses to deliver mail across the internet. This is the *submission* endpoint — you authenticate as a TinyCld user, TinyCld validates the sender address is one you have access to, and then forwards the message through your configured provider with all the right SPF / DKIM signing.
 
@@ -70,17 +70,9 @@ This is usually done as part of [IMAP setup](help://mail:imap) — the same acco
 
 Then in your account's Server Settings, set this SMTP server as the outgoing server for the account.
 
-## Connecting mutt
+## Connecting Outlook and the Gmail app
 
-In your `~/.muttrc`:
-
-```muttrc
-set smtp_url = "smtps://you%40yourdomain.com@{{mail-host}}:465"
-set smtp_pass = "your-tinycld-password"
-set ssl_force_tls = yes
-set from = "you@yourdomain.com"
-set realname = "Your Name"
-```
+Outlook (Windows and macOS) and the Gmail app on Android ask for the outgoing server when you add the account. The steps are in [IMAP](help://mail:imap). Use server `{{mail-host}}`, port **465** and **SSL/TLS**, with the same user name and password.
 
 ## Which address you can send from
 

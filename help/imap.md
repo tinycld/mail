@@ -1,7 +1,7 @@
 ---
 title: Connecting an IMAP client
-summary: Read your mail from Apple Mail, Thunderbird, mutt, or any IMAP-compatible client
-tags: [imap, apple-mail, thunderbird, mutt, mobile]
+summary: Read your mail from Outlook, Apple Mail, Gmail, Thunderbird, or any IMAP-compatible client
+tags: [imap, outlook, apple-mail, gmail, thunderbird, android, mobile]
 order: 120
 ---
 
@@ -73,19 +73,45 @@ The mail account appears in the sidebar. Each inbox you have access to shows up 
 5. **Outgoing**: SMTP, same hostname, Port 465, SSL/TLS — see [SMTP](help://mail:smtp).
 6. Click **Done**.
 
-## Connecting mutt
+## Connecting Outlook (Windows)
 
-In your `~/.muttrc`:
+In the new Outlook:
 
-```muttrc
-set imap_user = "you@yourdomain.com"  # your full email address
-set imap_pass = "your-tinycld-password"
-set folder = "imaps://{{mail-host}}:993"
-set spoolfile = "+INBOX"
-set ssl_force_tls = yes
+1. **Settings → Accounts → Email accounts → Add account**.
+2. Enter your email address and click **Continue**.
+3. If Outlook asks for the account type, choose **IMAP**.
+4. Enter your TinyCld password. Then open the advanced settings.
+5. **IMAP incoming server**: `{{mail-host}}`, port **993**, secure connection type **SSL/TLS**.
+6. **SMTP outgoing server**: `{{mail-host}}`, port **465**, secure connection type **SSL/TLS**. Use the same user name and password.
+7. Click **Continue**.
 
-# For sending, see the SMTP help topic
-```
+In classic Outlook:
+
+1. **File → Add Account**.
+2. Enter your email address. Open **Advanced options**, select **Let me set up my account manually**, and click **Connect**.
+3. Choose **IMAP**.
+4. **Incoming mail**: server `{{mail-host}}`, port **993**, encryption method **SSL/TLS**.
+5. **Outgoing mail**: server `{{mail-host}}`, port **465**, encryption method **SSL/TLS**.
+6. Click **Next**, enter your TinyCld password, and click **Connect**.
+
+## Connecting Outlook (macOS)
+
+1. **Outlook → Settings → Accounts → + → New Account**.
+2. Enter your email address and click **Continue**.
+3. If Outlook asks for the provider, choose **IMAP/POP**.
+4. **Type**: IMAP. **User name**: your full email address. **Password**: your TinyCld password.
+5. **Incoming server**: `{{mail-host}}`, port **993**, **Use SSL to connect** on.
+6. **Outgoing server**: `{{mail-host}}`, port **465**, **Use SSL to connect** on.
+7. Click **Add Account**.
+
+## Connecting the Gmail app (Android)
+
+1. In the Gmail app, open the menu, then **Settings → Add account → Other**.
+2. Enter your email address and tap **Manual setup**.
+3. Choose **Personal (IMAP)** and enter your TinyCld password.
+4. **Incoming server settings**: server `{{mail-host}}`, port **993**, security type **SSL/TLS**.
+5. **Outgoing server settings**: keep **Require sign-in** on. Server `{{mail-host}}`, port **465**, security type **SSL/TLS**.
+6. Tap **Next** to finish.
 
 ## Folder names
 

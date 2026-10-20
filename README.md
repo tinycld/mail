@@ -22,7 +22,7 @@ User-facing features:
 - **Attachment thumbnails** — server-side thumbnail generation via `core/thumbnails` for PDFs, Office docs, EPUBs, and HEIC photos. Plain images get on-demand `?thumb=` via PocketBase. Generated asynchronously on the same hook that fires for new messages.
 - **Custom domains** — verify your own domain end-to-end (MX → your provider's inbound host, plus SPF / DKIM / Return-Path for outbound) from the Domains settings screen (Settings → Mail → Domains). A background ticker reverifies pending domains every hour so DNS propagation eventually flips them green automatically.
 - **Providers** — **Postmark**: outbound via the REST API, inbound via a per-domain webhook-secret URL, bounce / spam-complaint callbacks via a parallel webhook. **Self-hosted SMTP**: direct-to-MX delivery, inbound via the built-in SMTP listener (gated by `MAIL_INBOUND_SMTP_ENABLED=true`) or an IMAP polling fetcher; bounces come from synchronous 5xx replies. Both implement the `Provider` interface in `server/provider.go`; the choice and its credentials live in the deployment-wide `system_settings` store.
-- **IMAP server** (port **993** implicit TLS in prod, `:1143` plain in dev) — full read / state-sync support via `github.com/emersion/go-imap/v2`. IDLE for push, UID validity for offline-safe sync, RFC 5322 message fetch, namespacing across mailboxes. Apple Mail, Thunderbird, mutt, mobile clients all work.
+- **IMAP server** (port **993** implicit TLS in prod, `:1143` plain in dev) — full read / state-sync support via `github.com/emersion/go-imap/v2`. IDLE for push, UID validity for offline-safe sync, RFC 5322 message fetch, namespacing across mailboxes. Outlook, Apple Mail, Gmail, Thunderbird and mobile clients all work.
 - **SMTP submission** (port **465** implicit TLS in prod, `:1587` plain in dev) — send via any mail client using TinyCld credentials. Validates the envelope `MAIL FROM` address against its `mail_addresses` row and the user's mailbox membership before submitting to the provider. 25 MB total message size cap.
 - **Labels** — colored tags attached to `mail_thread_state` (per user), backed by core's unified `labels` / `label_assignments` collections shared with [Contacts](help://contacts:labels) and other packages.
 - **Search** — SQLite FTS5 across subject, snippet, sender name / email, message body (HTML-stripped), and text extracted from text-based attachments. Prefix matching (`joh*`). Recipients are not in the FTS index; the Advanced "to" filter matches them with a substring search on `recipients_to` / `recipients_cc`. Advanced filters (set via the Advanced panel): from / to / subject substrings, body words, date within a range of an anchor date, folder, and has-attachment. Search terms are treated as literal text. The server also accepts a `not` parameter that excludes terms with FTS `NOT`; only federated search sends it. Mail also registers a source with core's federated `GET /api/search` (`server/search_source.go`, plus `search: { adapter: 'search-adapter' }` in the manifest → `tinycld/mail/search-adapter.ts`), so mail rows appear in the cross-app search palette (`/`, `mail:` chip) and in the CLI; both paths call the same `searchMailResultRows` (`SearchMail` wraps it for the REST response).
@@ -60,7 +60,7 @@ The user-facing help topic is `help/rules.md`; see [Automation rules](https://ti
 
 ## Mounting with IMAP and SMTP
 
-For users connecting Apple Mail, Thunderbird, DAVx5, mutt, or any other standard mail client:
+For users connecting Outlook, Apple Mail, Gmail, Thunderbird, DAVx5, or any other standard mail client:
 
 | Protocol | Port (prod) | Encryption  | Auth                       |
 |----------|-------------|-------------|----------------------------|
@@ -75,7 +75,7 @@ Mail apps can set themselves up from what the server publishes (`registerClientS
 
 Autoconfig and Autodiscover answer only for a verified domain, and the answer depends on the domain only, so it never tells a caller whether an address exists. The account setting **Settings → Account → Mail apps** (`settings/MailAppSetup.tsx`) shows each user their exact settings and the profile download, plus a QR code that opens the same page on a phone.
 
-Per-client connection walkthroughs (Apple Mail macOS / iOS, Thunderbird, mutt) live in the in-app help topics `mail:imap` and `mail:smtp` — they live there rather than in this README so they stay in sync with what users actually see in those clients.
+Per-client connection walkthroughs (Outlook Windows / macOS, Apple Mail macOS / iOS, the Gmail app on Android, Thunderbird) live in the in-app help topics `mail:imap` and `mail:smtp` — they live there rather than in this README so they stay in sync with what users actually see in those clients.
 
 In dev mode, plain listeners run on `:1143` (IMAP) and `:1587` (SMTP) with optional STARTTLS so curl / openssl-based testing is easy. Set `IMAP_ENABLED=false` or `SMTP_ENABLED=false` to disable either server.
 
@@ -316,7 +316,7 @@ Mail itself doesn't require any other package; it works standalone.
 | FTS search + advanced filters        | ✅  | ✅   |
 | Provider / domain / mailbox settings | ✅  | ✅ (admin/owner) |
 | Realtime / IDLE updates              | ✅  | ✅   |
-| IMAP connection                      | OS-native (Apple Mail, Thunderbird, mutt) | — |
+| IMAP connection                      | OS-native (Outlook, Apple Mail, Gmail, Thunderbird) | — |
 | SMTP submission                      | OS-native | — |
 | Keyboard shortcuts                   | ✅  | external keyboard only |
 
