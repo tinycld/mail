@@ -55,6 +55,7 @@ func TestMigrations_SentModelBackfill(t *testing.T) {
 
 	user := core.NewRecord(users)
 	user.SetEmail("nas@example.org")
+	user.Set("username", testUsername("nas@example.org"))
 	user.SetPassword("Password123!")
 	if err := app.Save(user); err != nil {
 		t.Fatal(err)
@@ -150,6 +151,7 @@ func TestMigrations_SharedMailboxSentBackfill(t *testing.T) {
 		t.Helper()
 		u := core.NewRecord(users)
 		u.SetEmail(email)
+		u.Set("username", testUsername(email))
 		u.SetPassword("Password123!")
 		if err := app.Save(u); err != nil {
 			t.Fatal(err)

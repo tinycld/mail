@@ -99,6 +99,7 @@ func newUser(t *testing.T, app core.App, email string) *core.Record {
 	}
 	user := core.NewRecord(users)
 	user.SetEmail(email)
+	user.Set("username", testUsername(email))
 	user.SetPassword("Password123!")
 	if err := app.Save(user); err != nil {
 		t.Fatal(err)

@@ -1,9 +1,11 @@
 package mail
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -11,18 +13,20 @@ import (
 	"github.com/emersion/go-smtp"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
+	"tinycld.org/core/readonly"
 )
 
-// startTestInbound serves the inbound MX for app on a loopback port and binds
-// its shutdown to app's terminate, as registerMailListeners does.
-func startTestInbound(t *testing.T, app core.App, drainBound time.Duration) string {
+// startTestInbound serves the inbound MX for app on a loopback port through
+// startSMTPInboundOnListener, which drains it at the app's terminate.
+func startTestInbound(t *testing.T, app core.App) string {
 	t.Helper()
-	server, gate := newInboundSMTPServer(app, "mx.example", nil)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	bindListenerShutdown(app, serveInbound(server, ln, gate, ln.Addr().String(), drainBound))
+	if _, err := startSMTPInboundOnListener(app, func(string) (net.Listener, error) { return ln, nil }); err != nil {
+		t.Fatal(err)
+	}
 	return ln.Addr().String()
 }
 
@@ -36,9 +40,9 @@ func testInboundMessage(messageID string) string {
 		"body\r\n", messageID, time.Now().UTC().Format(time.RFC1123Z))
 }
 
-// sendTestMessage delivers one message and returns the server's reply to
-// DATA: nil for 250.
-func sendTestMessage(addr, rcpt, messageID string) error {
+// sendTestMessage delivers one message and returns the server's first
+// refusal, or its reply to DATA: nil for 250.
+func sendTestMessage(addr, rcpt, message string) error {
 	c, err := smtp.Dial(addr)
 	if err != nil {
 		return err
@@ -54,7 +58,7 @@ func sendTestMessage(addr, rcpt, messageID string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, testInboundMessage(messageID)); err != nil {
+	if _, err := io.WriteString(w, message); err != nil {
 		return err
 	}
 	return w.Close()
@@ -72,9 +76,20 @@ func terminateApp(app *tests.TestApp) <-chan struct{} {
 	return done
 }
 
+func storedWithMessageID(t *testing.T, app core.App, messageID string) int {
+	t.Helper()
+	rows, err := app.FindRecordsByFilter("mail_messages", "message_id = {:id}", "", 0, 0,
+		map[string]any{"id": messageID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(rows)
+}
+
 // A message the server is storing when the app terminates is stored in full
-// before the database closes, and its sender gets the 250, even when the
-// store outlasts the drain bound.
+// before the database closes, and its sender gets the 250. Data reads the
+// message to its end, so the drain treats the store as a write and does not
+// cut it.
 func TestInboundShutdown_TerminateWaitsForDataSave(t *testing.T) {
 	s := seedGroupDelivery(t)
 	saving := make(chan struct{})
@@ -85,11 +100,12 @@ func TestInboundShutdown_TerminateWaitsForDataSave(t *testing.T) {
 		<-release
 		return e.Next()
 	})
-	const drainBound = 50 * time.Millisecond
-	addr := startTestInbound(t, s.app, drainBound)
+	addr := startTestInbound(t, s.app)
 
 	replied := make(chan error, 1)
-	go func() { replied <- sendTestMessage(addr, "ann@q.example", "<shutdown-save@sender.example>") }()
+	go func() {
+		replied <- sendTestMessage(addr, "ann@q.example", testInboundMessage("<shutdown-save@sender.example>"))
+	}()
 	select {
 	case <-saving:
 	case err := <-replied:
@@ -99,10 +115,12 @@ func TestInboundShutdown_TerminateWaitsForDataSave(t *testing.T) {
 	}
 
 	terminated := terminateApp(s.app)
+	// The terminate must not end while the save is held; give a wrong
+	// close the chance to happen first.
 	select {
 	case <-terminated:
 		t.Fatal("the terminate closed the database while a DATA save was in progress")
-	case <-time.After(10 * drainBound):
+	case <-time.After(500 * time.Millisecond):
 	}
 
 	close(release)
@@ -118,47 +136,70 @@ func TestInboundShutdown_TerminateWaitsForDataSave(t *testing.T) {
 	}
 }
 
-// A client that stops in the middle of its message, and one that connects
-// and sends nothing, do not hold up the terminate beyond the drain bound.
-func TestInboundShutdown_StuckSessionsDoNotBlockTerminate(t *testing.T) {
+// inboundMessageOfSize is a message of exactly size bytes as go-smtp counts
+// them: the content before the final ".".
+func inboundMessageOfSize(messageID string, size int) string {
+	header := testInboundMessage(messageID)
+	header = strings.TrimSuffix(header, "body\r\n")
+	line := strings.Repeat("x", 76) + "\r\n"
+	var b strings.Builder
+	b.WriteString(header)
+	for b.Len()+len(line) <= size-2 {
+		b.WriteString(line)
+	}
+	b.WriteString(strings.Repeat("y", size-2-b.Len()))
+	b.WriteString("\r\n")
+	return b.String()
+}
+
+// A message at or over the size limit is refused with 552 and nothing is
+// stored. Reading only up to the limit stored such a message cut short, and
+// answered 250.
+func TestInboundSMTP_MessageAtSizeLimitRefused(t *testing.T) {
 	s := seedGroupDelivery(t)
-	const drainBound = 100 * time.Millisecond
-	addr := startTestInbound(t, s.app, drainBound)
+	addr := startTestInbound(t, s.app)
 
-	idle, err := smtp.Dial(addr)
-	if err != nil {
-		t.Fatal(err)
+	for _, size := range []int{maxInboundMessageBytes, maxInboundMessageBytes + 1000} {
+		messageID := fmt.Sprintf("<size-%d@sender.example>", size)
+		message := inboundMessageOfSize(messageID, size)
+		if len(message) != size {
+			t.Fatalf("built a %d-byte message, want %d", len(message), size)
+		}
+		var refusal *smtp.SMTPError
+		err := sendTestMessage(addr, "ann@q.example", message)
+		if !errors.As(err, &refusal) || refusal.Code != 552 {
+			t.Fatalf("%d-byte message: DATA reply = %v, want 552", size, err)
+		}
+		if n := storedWithMessageID(t, s.app, messageID); n != 0 {
+			t.Fatalf("%d-byte message: %d copies stored, want none", size, n)
+		}
 	}
-	t.Cleanup(func() { _ = idle.Close() })
-	if err := idle.Hello("idle.example"); err != nil {
-		t.Fatal(err)
+}
+
+// The read-only refusal reaches the sending MTA through the drained server:
+// 451 4.3.2 at MAIL FROM, nothing stored, and delivery works once the mode is
+// left.
+func TestInboundSMTP_ReadOnlyRefusedThroughServer(t *testing.T) {
+	t.Cleanup(readonly.Leave)
+	s := seedGroupDelivery(t)
+	addr := startTestInbound(t, s.app)
+	const messageID = "<readonly-inbound@sender.example>"
+
+	readonly.Enter()
+	var refusal *smtp.SMTPError
+	err := sendTestMessage(addr, "ann@q.example", testInboundMessage(messageID))
+	if !errors.As(err, &refusal) || refusal.Code != 451 || refusal.EnhancedCode != (smtp.EnhancedCode{4, 3, 2}) {
+		t.Fatalf("MAIL FROM while read-only = %v, want 451 4.3.2", err)
+	}
+	if n := storedWithMessageID(t, s.app, messageID); n != 0 {
+		t.Fatalf("%d copies stored while read-only, want none", n)
 	}
 
-	stalled, err := smtp.Dial(addr)
-	if err != nil {
-		t.Fatal(err)
+	readonly.Leave()
+	if err := sendTestMessage(addr, "ann@q.example", testInboundMessage(messageID)); err != nil {
+		t.Fatalf("delivery after the mode was left: %v", err)
 	}
-	t.Cleanup(func() { _ = stalled.Close() })
-	if err := stalled.Mail("sender@sender.example", nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := stalled.Rcpt("ann@q.example", nil); err != nil {
-		t.Fatal(err)
-	}
-	// After the 354 the server's Data call is reading a body that never
-	// ends: the client sends nothing more.
-	if _, err := stalled.Data(); err != nil {
-		t.Fatal(err)
-	}
-
-	start := time.Now()
-	terminated := terminateApp(s.app)
-	select {
-	case <-terminated:
-	case <-time.After(5 * time.Second):
-		t.Fatal("stuck sessions held up the terminate beyond the drain bound")
-	}
-	if elapsed := time.Since(start); elapsed < drainBound {
-		t.Fatalf("the terminate took %v, less than the drain bound %v: the sessions got no drain", elapsed, drainBound)
+	if n := storedWithMessageID(t, s.app, messageID); n != 1 {
+		t.Fatalf("%d copies stored after the mode was left, want 1", n)
 	}
 }
