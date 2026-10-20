@@ -17,6 +17,7 @@ import (
 	"tinycld.org/core/logging"
 	"tinycld.org/core/mailer"
 	"tinycld.org/core/pkgaccess"
+	"tinycld.org/core/readonly"
 )
 
 type smtpBackend struct {
@@ -160,6 +161,12 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 			EnhancedCode: smtp.EnhancedCode{5, 7, 0},
 			Message:      "Authentication required",
 		}, nil, "from", from)
+	}
+	// A message is sent only when its Sent copy can be stored, so nothing
+	// is accepted while the server is read-only; the 451 makes the client
+	// keep the message in its outbox and retry.
+	if readonly.Active() {
+		return s.refuse("mail", errReadOnly, nil, "from", from)
 	}
 
 	local, domainStr := splitAddress(from)
@@ -350,6 +357,12 @@ func (s *smtpSession) Data(r io.Reader) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Read-only can begin after MAIL FROM was accepted, so the send checks
+	// again before anything goes out.
+	if readonly.Active() {
+		return s.refuse("data", errReadOnly, nil)
+	}
+
 	// Count the true fan-out: header To/Cc plus the envelope-only Bcc derived
 	// above. Not len(s.recipients), which includes addresses already in To/Cc
 	// and would double-count them.
@@ -380,9 +393,46 @@ func (s *smtpSession) Data(r io.Reader) error {
 		}
 	}
 
-	// Store the sent message locally. The provider Send already succeeded, so
-	// storage failures are logged but don't fail the SMTP transaction — the
-	// message was delivered, it just won't appear in the user's Sent folder.
+	// The provider send succeeded, so the message was delivered: the reply
+	// is 250 whatever happens to the Sent copy. Read-only can begin during
+	// the send, and the copy must not be written then. The client waits for
+	// this reply, so the save waits out the mode, bounded by
+	// readonly.TailWait — well inside the 10 minutes RFC 5321 4.5.3.2.6
+	// lets a client wait for the reply to DATA.
+	tailCtx, release := readonly.TailContext(s.app)
+	defer release()
+	sent := sentCopy{
+		msg: msg, result: result, displayName: displayName, senderEmail: senderEmail, fromAddr: fromAddr,
+		inReplyTo: inReplyToHeader, references: referencesHeader, bcc: bcc,
+	}
+	if err := readonly.WhenWritable(tailCtx, func() error {
+		s.storeSentCopy(sent)
+		return nil
+	}); err != nil {
+		smtpLog.Error("SMTP: message sent but the server stayed read-only — it will not appear in the Sent folder",
+			"error", err, "subject", msg.Subject, "from", fromAddr)
+	}
+	return nil
+}
+
+// sentCopy is what storeSentCopy needs of a message the provider has sent.
+type sentCopy struct {
+	msg         *storedMessage
+	result      *SendResult
+	displayName string
+	senderEmail string
+	fromAddr    string
+	inReplyTo   string
+	references  string
+	bcc         []Recipient
+}
+
+// storeSentCopy stores the local copy of a sent message. The provider Send
+// already succeeded, so storage failures are logged but don't fail the SMTP
+// transaction — the message was delivered, it just won't appear in the
+// user's Sent folder.
+func (s *smtpSession) storeSentCopy(c sentCopy) {
+	msg, result := c.msg, c.result
 	now := time.Now().UTC().Format(time.RFC3339)
 	mailboxID := s.mailbox.Id
 
@@ -398,23 +448,23 @@ func (s *smtpSession) Data(r io.Reader) error {
 			existingMsg.Set("provider_message_id", result.ProviderMessageID)
 		}
 		if err := s.app.Save(existingMsg); err != nil {
-			s.app.Logger().Error("SMTP: failed to record the send on the deduped message", "error", err)
+			smtpLog.Error("SMTP: failed to record the send on the deduped message", "error", err)
 		}
 		if err := addAddressKeys(s.app, existingThread.Id, s.address.Id); err != nil {
 			storeLog.Warn("SMTP: recording the deduped thread's addresses failed", "thread", existingThread.Id, "error", err)
 		}
 		if err := markThreadSent(s.app, existingThread.Id, s.user.Id); err != nil {
-			s.app.Logger().Error("SMTP: failed to mark deduped thread sent", "error", err)
+			smtpLog.Error("SMTP: failed to mark deduped thread sent", "error", err)
 		}
 		globalNotifier.Notify(mailboxID)
-		return nil
+		return
 	}
 
-	thread, err := findOrCreateThread(s.app, mailboxID, msg.Subject, inReplyToHeader, referencesHeader)
+	thread, err := findOrCreateThread(s.app, mailboxID, msg.Subject, c.inReplyTo, c.references)
 	if err != nil {
-		s.app.Logger().Error("SMTP: message sent but failed to create thread — will not appear in Sent folder",
-			"error", err, "subject", msg.Subject, "from", fromAddr)
-		return nil
+		smtpLog.Error("SMTP: message sent but failed to create thread — will not appear in Sent folder",
+			"error", err, "subject", msg.Subject, "from", c.fromAddr)
+		return
 	}
 
 	// Same deduped count the gate uses: s.recipients is the full envelope and
@@ -424,15 +474,15 @@ func (s *smtpSession) Data(r io.Reader) error {
 	// total meant a send whose every recipient failed was still recorded
 	// "sent" — one address in both the header and the envelope counted twice,
 	// and 1 >= 2 is false.
-	deliveryStatus, bounceReason := deliveryStatusForResult(result, len(msg.To)+len(msg.Cc)+len(bcc))
+	deliveryStatus, bounceReason := deliveryStatusForResult(result, len(msg.To)+len(msg.Cc)+len(c.bcc))
 
 	storedMsg := &storedMessage{
 		MessageID:         result.MessageID,
 		ProviderMessageID: result.ProviderMessageID,
-		InReplyTo:         inReplyToHeader,
+		InReplyTo:         c.inReplyTo,
 		SentBy:            s.user.Id,
-		SenderName:        displayName,
-		SenderEmail:       senderEmail,
+		SenderName:        c.displayName,
+		SenderEmail:       c.senderEmail,
 		To:                msg.To,
 		Cc:                msg.Cc,
 		Date:              now,
@@ -446,22 +496,20 @@ func (s *smtpSession) Data(r io.Reader) error {
 	}
 
 	if _, err := storeMessage(s.app, thread.Id, storedMsg); err != nil {
-		s.app.Logger().Error("SMTP: message sent but failed to store — will not appear in Sent folder",
-			"error", err, "subject", msg.Subject, "from", fromAddr)
-		return nil
+		smtpLog.Error("SMTP: message sent but failed to store — will not appear in Sent folder",
+			"error", err, "subject", msg.Subject, "from", c.fromAddr)
+		return
 	}
 
-	if err := updateThreadMetadata(s.app, thread.Id, displayName, storedMsg.SenderEmail, storedMsg.TextBody, now); err != nil {
-		s.app.Logger().Error("SMTP: failed to update thread metadata", "error", err)
+	if err := updateThreadMetadata(s.app, thread.Id, c.displayName, storedMsg.SenderEmail, storedMsg.TextBody, now); err != nil {
+		smtpLog.Error("SMTP: failed to update thread metadata", "error", err)
 	}
 
 	if err := markThreadSent(s.app, thread.Id, s.user.Id); err != nil {
-		s.app.Logger().Error("SMTP: failed to mark thread sent", "error", err)
+		smtpLog.Error("SMTP: failed to mark thread sent", "error", err)
 	}
 
 	globalNotifier.Notify(mailboxID)
-
-	return nil
 }
 
 // Reset clears transaction state but preserves authentication.

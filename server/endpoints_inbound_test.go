@@ -447,6 +447,7 @@ func TestHandleInbound_DisabledUserMailboxStillReceives(t *testing.T) {
 	}
 	carol := core.NewRecord(usersCol)
 	carol.SetEmail("carol@local.test")
+	carol.Set("username", testUsername("carol@local.test"))
 	carol.SetVerified(true)
 	carol.SetPassword("Password123!")
 	carol.Set("disabled", true)

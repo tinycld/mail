@@ -17,6 +17,13 @@ import (
 // would have gone out.
 func fakePostmark(t *testing.T) *[]map[string]any {
 	t.Helper()
+	return fakePostmarkWith(t, nil)
+}
+
+// fakePostmarkWith is fakePostmark that also runs onSend, when not nil,
+// inside each send before it answers.
+func fakePostmarkWith(t *testing.T, onSend func()) *[]map[string]any {
+	t.Helper()
 	var sent []map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -25,6 +32,9 @@ func fakePostmark(t *testing.T) *[]map[string]any {
 			t.Errorf("fake Postmark: bad body %s: %v", body, err)
 		}
 		sent = append(sent, email)
+		if onSend != nil {
+			onSend()
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ErrorCode":0,"Message":"OK","MessageID":"pm-1"}`))
 	}))

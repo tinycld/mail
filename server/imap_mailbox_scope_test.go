@@ -51,6 +51,7 @@ func setupScopeEnv(t *testing.T) *scopeEnv {
 	}
 	user := core.NewRecord(users)
 	user.SetEmail("scoped@example.org")
+	user.Set("username", testUsername("scoped@example.org"))
 	user.SetPassword("Password123!")
 	if err := app.Save(user); err != nil {
 		t.Fatal(err)

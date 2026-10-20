@@ -20,6 +20,7 @@ func searchUser(t *testing.T, app core.App, email string) *core.Record {
 	}
 	r := core.NewRecord(col)
 	r.SetEmail(email)
+	r.Set("username", testUsername(email))
 	r.SetVerified(true)
 	r.SetPassword("Password123!")
 	if err := app.Save(r); err != nil {

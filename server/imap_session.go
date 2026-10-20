@@ -14,6 +14,7 @@ import (
 
 	"tinycld.org/core/davauth"
 	"tinycld.org/core/pkgaccess"
+	"tinycld.org/core/readonly"
 )
 
 // mailboxContext holds the resolved info for a single mailbox membership.
@@ -133,18 +134,43 @@ func (s *imapSession) Login(username, password string) error {
 	return nil
 }
 
-// requireWritable refuses a mutating command for a session whose
-// org_pkg_access level is not full. IMAP bypasses the REST layer (where
-// core's request-hook guard lives), so without this a readonly user's client
-// could still flag, move, expunge and append — readonly means read.
-func (s *imapSession) requireWritable() error {
-	if !s.pkgReadonly {
-		return nil
+// errServerReadOnly refuses a mutating command while the server is
+// read-only. The server is then waiting to be replaced, and a write made now
+// is lost if the next build rolls back. [UNAVAILABLE] (RFC 5530) tells the
+// client that the failure is temporary, so it can keep the change and send
+// it again.
+var errServerReadOnly = &imap.Error{
+	Type: imap.StatusResponseTypeNo,
+	Code: imap.ResponseCodeUnavailable,
+	Text: "The server is updating; try again in a moment",
+}
+
+// requireWritable is the gate of every IMAP command that writes; command
+// names it in the log. It refuses a session whose org_pkg_access level is
+// not full, and every session while the server is read-only. IMAP bypasses
+// the REST layer (where core's request-hook guard and the read-only
+// middleware live), so without this a readonly user's client could still
+// flag, move, expunge and append — readonly means read — and any client
+// could write while the server is read-only.
+func (s *imapSession) requireWritable(command string) error {
+	if s.pkgReadonly {
+		return &imap.Error{
+			Type: imap.StatusResponseTypeNo,
+			Text: "Your mail access is read-only",
+		}
 	}
-	return &imap.Error{
-		Type: imap.StatusResponseTypeNo,
-		Text: "Your mail access is read-only",
+	if readonly.Active() {
+		imapLog.Info("imap write refused: the server is read-only", "command", command, "user", s.userID())
+		return errServerReadOnly
 	}
+	return nil
+}
+
+func (s *imapSession) userID() string {
+	if s.user == nil {
+		return ""
+	}
+	return s.user.Id
 }
 
 // Namespace returns the personal namespace descriptor.
@@ -436,7 +462,7 @@ func (s *imapSession) buildFTSMatchSet(criteria *imap.SearchCriteria) map[string
 
 // Store modifies flags on messages.
 func (s *imapSession) Store(w *imapserver.FetchWriter, numSet imap.NumSet, flags *imap.StoreFlags, options *imap.StoreOptions) error {
-	if err := s.requireWritable(); err != nil {
+	if err := s.requireWritable("STORE"); err != nil {
 		return err
 	}
 
@@ -461,7 +487,7 @@ func (s *imapSession) Store(w *imapserver.FetchWriter, numSet imap.NumSet, flags
 
 // Copy copies messages to another mailbox.
 func (s *imapSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, error) {
-	if err := s.requireWritable(); err != nil {
+	if err := s.requireWritable("COPY"); err != nil {
 		return nil, err
 	}
 
@@ -496,7 +522,7 @@ func (s *imapSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, err
 
 // Move moves messages to another mailbox.
 func (s *imapSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest string) error {
-	if err := s.requireWritable(); err != nil {
+	if err := s.requireWritable("MOVE"); err != nil {
 		return err
 	}
 
@@ -531,7 +557,7 @@ func (s *imapSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest st
 
 // Append adds a message to a mailbox (e.g., saving a draft or archiving from a client).
 func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap.AppendOptions) (*imap.AppendData, error) {
-	if err := s.requireWritable(); err != nil {
+	if err := s.requireWritable("APPEND"); err != nil {
 		return nil, err
 	}
 
@@ -655,7 +681,7 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 
 // Expunge permanently removes messages marked with \Deleted.
 func (s *imapSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) error {
-	if err := s.requireWritable(); err != nil {
+	if err := s.requireWritable("EXPUNGE"); err != nil {
 		return err
 	}
 
@@ -714,7 +740,7 @@ func (s *imapSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) er
 
 // Create creates a new mailbox (only label folders supported).
 func (s *imapSession) Create(name string, options *imap.CreateOptions) error {
-	if err := s.requireWritable(); err != nil {
+	if err := s.requireWritable("CREATE"); err != nil {
 		return err
 	}
 
@@ -736,7 +762,7 @@ func (s *imapSession) Create(name string, options *imap.CreateOptions) error {
 
 // Delete deletes a mailbox (only label folders supported).
 func (s *imapSession) Delete(name string) error {
-	if err := s.requireWritable(); err != nil {
+	if err := s.requireWritable("DELETE"); err != nil {
 		return err
 	}
 
@@ -752,7 +778,7 @@ func (s *imapSession) Delete(name string) error {
 
 // Rename renames a mailbox (only label folders supported).
 func (s *imapSession) Rename(oldName, newName string, options *imap.RenameOptions) error {
-	if err := s.requireWritable(); err != nil {
+	if err := s.requireWritable("RENAME"); err != nil {
 		return err
 	}
 
@@ -1368,8 +1394,15 @@ func (s *imapSession) applyAppendFlags(threadID string, flags []imap.Flag) {
 }
 
 // markSeen marks the thread as read when a non-peek BODY fetch occurs.
+// While the server is read-only the body is still served but the thread
+// stays unread: refusing the FETCH would stop all reading for the pause,
+// and an unread mark is the harmless side to err on.
 func (s *imapSession) markSeen(msg *core.Record) {
 	threadID := msg.GetString("thread")
+	if readonly.Active() {
+		imapLog.Debug("imap fetch did not set \\Seen: the server is read-only", "thread", threadID, "user", s.userID())
+		return
+	}
 	states, err := s.app.FindRecordsByFilter(
 		"mail_thread_state",
 		"thread = {:thread} && user = {:user}",

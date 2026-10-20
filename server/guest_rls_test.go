@@ -2,6 +2,7 @@ package mail
 
 import (
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -181,11 +182,22 @@ func setupMailGuestApp(t *testing.T) *mailGuestEnv {
 	}
 }
 
+// testUsername derives a test user's username from its email, which the test
+// keeps unique. Left empty, the PocketBase test fixture generates one from
+// users[0-9]{5}, and the users of one test app collide on it often enough to
+// fail a run.
+func testUsername(email string) string {
+	return nonUsernameTestChar.ReplaceAllString(email, "_")
+}
+
+var nonUsernameTestChar = regexp.MustCompile(`[^\w.-]`)
+
 func mailGuestUser(t *testing.T, app core.App, email, role string) *core.Record {
 	t.Helper()
 	col, _ := app.FindCollectionByNameOrId("users")
 	r := core.NewRecord(col)
 	r.SetEmail(email)
+	r.Set("username", testUsername(email))
 	r.Set("name", "Test")
 	r.Set("role", role)
 	r.SetVerified(true)

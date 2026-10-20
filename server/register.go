@@ -13,7 +13,6 @@ import (
 	"github.com/mrz1836/postmark"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/tools/hook"
 	"tinycld.org/core/audit"
 	"tinycld.org/core/background"
 	"tinycld.org/core/coreserver"
@@ -438,8 +437,11 @@ func registerShared(app *pocketbase.PocketBase) {
 // EmbeddedContext): StartIMAPServer/StartSMTPServer/StartSMTPInboundServer
 // each check for an inherited listener under their port's name before
 // falling back to binding it themselves, so the process never binds a port
-// the supervisor already holds. Their terminate hooks run only after core's
-// HTTP drain, so a drain-begin hook stops them accepting first.
+// the supervisor already holds. Each Start binds its server's drain to the
+// app's terminate (mailproto runs them all in one handler, before the
+// database closes), so the stops they return are not kept here. The
+// terminate runs only after core's HTTP drain, so a drain-begin hook stops
+// them accepting first.
 func registerMailListeners(app *pocketbase.PocketBase) {
 	registerDrainHook()
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
@@ -451,60 +453,32 @@ func registerMailListeners(app *pocketbase.PocketBase) {
 		failLoud := !app.IsDev()
 
 		// Start IMAP server
-		imapShutdown, err := StartIMAPServer(app, e.CertManager)
-		if err != nil {
+		if _, err := StartIMAPServer(app, e.CertManager); err != nil {
 			app.Logger().Error("Failed to start IMAP server", "error", err)
 			if failLoud {
 				return fmt.Errorf("aborting startup: IMAP server failed to start: %w", err)
 			}
-		} else {
-			bindListenerShutdown(app, imapShutdown)
 		}
 
 		// Start SMTP submission server
-		smtpShutdown, smtpErr := StartSMTPServer(app, e.CertManager)
-		if smtpErr != nil {
+		if _, smtpErr := StartSMTPServer(app, e.CertManager); smtpErr != nil {
 			app.Logger().Error("Failed to start SMTP server", "error", smtpErr)
 			if failLoud {
 				return fmt.Errorf("aborting startup: SMTP server failed to start: %w", smtpErr)
 			}
-		} else {
-			bindListenerShutdown(app, smtpShutdown)
 		}
 
 		// Start inbound SMTP listener (no-op unless MAIL_INBOUND_SMTP_ENABLED=true).
 		// This is the public MX target for the self-hosted SMTP provider in
 		// "smtp" inbound mode — distinct from the submission server above.
-		inboundShutdown, inboundErr := StartSMTPInboundServer(app, e.CertManager)
-		if inboundErr != nil {
+		if _, inboundErr := StartSMTPInboundServer(app, e.CertManager); inboundErr != nil {
 			app.Logger().Error("Failed to start inbound SMTP server", "error", inboundErr)
 			if failLoud {
 				return fmt.Errorf("aborting startup: inbound SMTP server failed to start: %w", inboundErr)
 			}
-		} else {
-			bindListenerShutdown(app, inboundShutdown)
 		}
 
 		return e.Next()
-	})
-}
-
-// listenerShutdownPriority runs the mail servers' shutdown before the
-// terminate handlers bound at the default priority, the background runner's
-// among them. A message a session stores while the servers drain then still
-// starts its follow-up jobs (the notification buffer, thumbnails), which a
-// stopped runner would drop.
-const listenerShutdownPriority = -1
-
-// bindListenerShutdown runs stop at the app's terminate, before the database
-// closes: stop returns only when its server's sessions no longer use it.
-func bindListenerShutdown(app core.App, stop func()) {
-	app.OnTerminate().Bind(&hook.Handler[*core.TerminateEvent]{
-		Priority: listenerShutdownPriority,
-		Func: func(te *core.TerminateEvent) error {
-			stop()
-			return te.Next()
-		},
 	})
 }
 

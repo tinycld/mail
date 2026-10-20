@@ -32,6 +32,7 @@ func TestSMTPRefusal_UnknownSenderIsLogged(t *testing.T) {
 	}
 	user := core.NewRecord(users)
 	user.SetEmail("sender@example.org")
+	user.Set("username", testUsername("sender@example.org"))
 	user.SetPassword("Password123!")
 	if err := app.Save(user); err != nil {
 		t.Fatal(err)
@@ -85,6 +86,7 @@ func TestSMTPRefusal_RcptWithoutMailIsLogged(t *testing.T) {
 	}
 	user := core.NewRecord(users)
 	user.SetEmail("rcpt@example.org")
+	user.Set("username", testUsername("rcpt@example.org"))
 	user.SetPassword("Password123!")
 	if err := app.Save(user); err != nil {
 		t.Fatal(err)

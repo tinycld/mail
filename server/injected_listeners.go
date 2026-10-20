@@ -39,22 +39,22 @@ func registerInjectedListeners(app *pocketbase.PocketBase, listeners InjectedLis
 	}
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
-		shutdown, err := startInjectedMailListeners(app, listeners)
-		if err != nil {
+		if _, err := startInjectedMailListeners(app, listeners); err != nil {
 			// A process holding a supervisor-managed mail socket it cannot serve
 			// must fail its boot loudly — the reason travels back through the
 			// readiness pipe — rather than come up healthy on HTTP with mail
 			// silently absent (the same policy as the host's failLoud path).
 			return fmt.Errorf("aborting startup: %w", err)
 		}
-		bindListenerShutdown(app, shutdown)
 		return e.Next()
 	})
 }
 
 // startInjectedMailListeners starts every service with an injected listener and
-// returns one aggregate shutdown. A failure unwinds the listeners already
-// started so a partial mail stack never outlives the error.
+// returns one aggregate shutdown. Each service's drain is already bound to the
+// app's terminate, so the shutdown is only for a caller that stops them
+// early. A failure unwinds the listeners already started so a partial mail
+// stack never outlives the error.
 func startInjectedMailListeners(app core.App, listeners InjectedListeners) (func(), error) {
 	var shutdowns []func()
 	shutdownAll := func() {
