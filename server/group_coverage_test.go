@@ -57,6 +57,7 @@ func saveGroupsDomain(t testing.TB, app core.App, name string, groups ...*core.R
 }
 
 func TestGroupCoverage_OnlyMembersGetAddresses(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	ann := seedGroupUser(t, app, "ann")
@@ -77,6 +78,7 @@ func TestGroupCoverage_OnlyMembersGetAddresses(t *testing.T) {
 }
 
 func TestGroupCoverage_TwoGroupsViaGroupFollowsOrder(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	ann := seedGroupUser(t, app, "ann")
@@ -112,6 +114,7 @@ func TestGroupCoverage_TwoGroupsViaGroupFollowsOrder(t *testing.T) {
 // Switching a groups domain to everyone keeps the members' rows and drops
 // their group; switching it on to manual removes every rule row.
 func TestGroupCoverage_SwitchToEveryoneThenManual(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	ann := seedGroupUser(t, app, "ann")
@@ -146,6 +149,7 @@ func TestGroupCoverage_SwitchToEveryoneThenManual(t *testing.T) {
 }
 
 func TestGroupCoverage_ReservedForEveryone(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	ann := seedGroupUser(t, app, "ann")
@@ -166,12 +170,14 @@ func TestGroupCoverage_ReservedForEveryone(t *testing.T) {
 }
 
 func TestGroupCoverage_RequiresAGroup(t *testing.T) {
+	t.Parallel()
 	runRuleAPIScenario(t, http.MethodPatch, []string{`"coverage_groups":{"code":"coverage_groups_required"`},
 		func(s *ruleAPISeed) string { return "/api/collections/mail_domains/records/" + s.main.Id },
 		func(*ruleAPISeed) string { return `{"coverage":"groups","coverage_groups":[]}` })
 }
 
 func TestGroupCoverage_TooManyGroups(t *testing.T) {
+	t.Parallel()
 	ids := make([]string, maxCoverageGroups+1)
 	for i := range ids {
 		ids[i] = fmt.Sprintf(`"g%014d"`, i)
@@ -184,6 +190,7 @@ func TestGroupCoverage_TooManyGroups(t *testing.T) {
 }
 
 func TestGroupCoverage_ChangingGroupsReconciles(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	ann := seedGroupUser(t, app, "ann")
@@ -208,6 +215,7 @@ func TestGroupCoverage_ChangingGroupsReconciles(t *testing.T) {
 // The name is reserved for every person, so a switch to groups is refused
 // when any person's name is taken, member or not (spec 5.4).
 func TestGroupCoverage_ConflictCheckCoversAllPeople(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	ann := seedGroupUser(t, app, "ann")
@@ -228,6 +236,7 @@ func TestGroupCoverage_ConflictCheckCoversAllPeople(t *testing.T) {
 // Deleting a domain's last group makes PocketBase clear coverage_groups with
 // a plain save. That save must go through, and nobody keeps an address.
 func TestGroupCoverage_DeletingTheLastGroup(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	ann := seedGroupUser(t, app, "ann")
@@ -253,6 +262,7 @@ func TestGroupCoverage_DeletingTheLastGroup(t *testing.T) {
 }
 
 func TestGroupMembers_OrderFollowsGroupIDs(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	ann := seedGroupUser(t, app, "ann")
 	bob := seedGroupUser(t, app, "bob")
@@ -278,6 +288,7 @@ func TestGroupMembers_OrderFollowsGroupIDs(t *testing.T) {
 // An address of a shared inbox on a groups domain blocks that email name for
 // a new person, as it does on an everyone domain.
 func TestGroupCoverage_EmailNameTakenOnGroupsDomain(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	ann := seedGroupUser(t, app, "ann")
@@ -470,6 +481,7 @@ func TestGroupMembership_OffboardCreatesNothing(t *testing.T) {
 // address through the API has it cleared, as source and is_primary are;
 // otherwise the address would later say it came from a group it did not.
 func TestGroupCoverage_APICreateClearsViaGroup(t *testing.T) {
+	t.Parallel()
 	var seed *ruleAPISeed
 	var sales *core.Record
 	scenario := tests.ApiScenario{
@@ -543,10 +555,12 @@ func runGroupsDomainPatch(t *testing.T, body string, dropGroup bool, status int,
 // A groups domain whose last group was deleted must still save when the
 // group list does not change, or reordering the domain list fails for all.
 func TestGroupCoverage_NoGroupLeftStillSavesOtherFields(t *testing.T) {
+	t.Parallel()
 	runGroupsDomainPatch(t, `{"rank":7}`, true, http.StatusOK, []string{`"rank":7`})
 }
 
 func TestGroupCoverage_ClearingTheGroupsIsRefused(t *testing.T) {
+	t.Parallel()
 	runGroupsDomainPatch(t, `{"coverage_groups":[]}`, false, http.StatusBadRequest,
 		[]string{`"coverage_groups":{"code":"coverage_groups_required"`})
 }

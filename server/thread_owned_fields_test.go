@@ -13,6 +13,7 @@ import (
 // server derives from the messages are kept as stored on an API update, so
 // one member cannot change them for the whole inbox. subject stays writable.
 func TestThreadOwnedFields_MemberCannotUpdate(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		field string
 		value string
@@ -75,6 +76,7 @@ func TestThreadOwnedFields_MemberCannotUpdate(t *testing.T) {
 // follow set them. The others are kept, because the seed creates threads
 // through the API with them.
 func TestThreadOwnedFields_Create(t *testing.T) {
+	t.Parallel()
 	scenario := tests.ApiScenario{
 		Name:           "a member creates a thread with server-owned columns",
 		Method:         http.MethodPost,

@@ -143,6 +143,7 @@ func threadStateFor(t *testing.T, app core.App, threadID, userID string) *core.R
 }
 
 func TestActionAudience_OrgRuleCoversEveryMailboxMember(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "audience-org.test", "mb_audience_org1")
 	rule := newTestRule(t, env.app, env.alice, "org")
 
@@ -160,6 +161,7 @@ func TestActionAudience_OrgRuleCoversEveryMailboxMember(t *testing.T) {
 }
 
 func TestActionAudience_PersonalRuleIsOwnerOnly(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "audience-personal.test", "mb_audience_per1")
 	rule := newTestRule(t, env.app, env.alice, "personal")
 
@@ -173,6 +175,7 @@ func TestActionAudience_PersonalRuleIsOwnerOnly(t *testing.T) {
 }
 
 func TestActionAudience_PersonalRuleOfNonMemberIsEmpty(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "audience-outsider.test", "mb_audience_out1")
 	rule := newTestRule(t, env.app, "user_carol_0000", "personal")
 
@@ -189,6 +192,7 @@ func TestActionAudience_PersonalRuleOfNonMemberIsEmpty(t *testing.T) {
 }
 
 func TestActionMoveToFolder_OrgRuleFilesForEveryMember(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "move-org.test", "mb_move_org00001")
 	rule := newTestRule(t, env.app, env.alice, "org")
 
@@ -209,6 +213,7 @@ func TestActionMoveToFolder_OrgRuleFilesForEveryMember(t *testing.T) {
 }
 
 func TestActionMoveToFolder_PersonalRuleLeavesOtherMembersAlone(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "move-personal.test", "mb_move_per00001")
 	rule := newTestRule(t, env.app, env.alice, "personal")
 
@@ -229,6 +234,7 @@ func TestActionMoveToFolder_PersonalRuleLeavesOtherMembersAlone(t *testing.T) {
 }
 
 func TestActionMoveToFolder_RejectsFolderOutsideTheAllowList(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "move-bad.test", "mb_move_bad00001")
 	rule := newTestRule(t, env.app, env.alice, "personal")
 
@@ -247,6 +253,7 @@ func TestActionMoveToFolder_RejectsFolderOutsideTheAllowList(t *testing.T) {
 }
 
 func TestActionMoveToFolder_PreservesReadState(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "move-keeps-read.test", "mb_move_keepread")
 	rule := newTestRule(t, env.app, env.alice, "personal")
 
@@ -272,6 +279,7 @@ func TestActionMoveToFolder_PreservesReadState(t *testing.T) {
 }
 
 func TestActionMarkAsRead_PreservesFolder(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "read-keeps-folder.test", "mb_read_keepfldr")
 	rule := newTestRule(t, env.app, env.alice, "personal")
 
@@ -339,6 +347,7 @@ func seedSentMessage(t *testing.T, app core.App, threadID string, age time.Durat
 }
 
 func TestCheckSendRateLimit(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		sentCount int
@@ -381,6 +390,7 @@ func TestCheckSendRateLimit(t *testing.T) {
 // action, so a run-based count bounded len(actions) × the ceiling instead of
 // the ceiling. Runs alone must not move the limiter at all.
 func TestCheckSendRateLimit_CountsMessagesNotRuns(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "ratelimit-runs.test", "mb_ratelimit_runs")
 	rule := newTestRule(t, env.app, env.alice, "personal")
 
@@ -397,6 +407,7 @@ func TestCheckSendRateLimit_CountsMessagesNotRuns(t *testing.T) {
 // one budget — a per-rule cap let N rules multiply the mailbox's real ceiling
 // by N, which is precisely the loop the cap exists to bound.
 func TestCheckSendRateLimit_IsSharedAcrossRulesOnAMailbox(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "ratelimit-shared.test", "mb_ratelimit_shar")
 	first := newTestRule(t, env.app, env.alice, "personal")
 	second := newTestRule(t, env.app, env.alice, "personal")
@@ -418,6 +429,7 @@ func TestCheckSendRateLimit_IsSharedAcrossRulesOnAMailbox(t *testing.T) {
 // returns as new inbound mail at depth 0. An unreadable count means we cannot
 // know whether we are mid-loop, so the send is refused.
 func TestCheckSendRateLimit_BlocksWhenTheMailboxCannotBeResolved(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "ratelimit-closed.test", "mb_ratelimit_clos")
 	rule := newTestRule(t, env.app, env.alice, "personal")
 
@@ -436,6 +448,7 @@ func TestCheckSendRateLimit_BlocksWhenTheMailboxCannotBeResolved(t *testing.T) {
 }
 
 func TestRuleRecipient_RejectsTheMailboxsOwnAddress(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "selfsend.test", "mb_selfsend_00001")
 
 	// {{sender_email}} is a documented forward target, so an attacker who can
@@ -463,6 +476,7 @@ func TestRuleRecipient_RejectsTheMailboxsOwnAddress(t *testing.T) {
 // reply. Combined with fail-closed, a mailbox receiving 20 messages an hour
 // would have gone silent with no signal beyond its run history.
 func TestCheckSendRateLimit_InboundMailDoesNotConsumeTheBudget(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "ratelimit-inbound.test", "mb_ratelimit_inbd")
 	rule := newTestRule(t, env.app, env.alice, "personal")
 
@@ -490,6 +504,7 @@ func TestCheckSendRateLimit_InboundMailDoesNotConsumeTheBudget(t *testing.T) {
 
 // A bounce still consumed a send, so it counts toward the ceiling.
 func TestCheckSendRateLimit_BouncedSendsCount(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "ratelimit-bounced.test", "mb_ratelimit_bnc")
 	rule := newTestRule(t, env.app, env.alice, "personal")
 
@@ -517,6 +532,7 @@ func TestCheckSendRateLimit_BouncedSendsCount(t *testing.T) {
 // forwarding to one of the mailbox's own aliases is a self-loop — just a
 // less obvious one than using the primary address.
 func TestRuleRecipient_RejectsTheMailboxsAliases(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "alias-loop.test", "mb_alias_loop0001")
 
 	aliasCol, err := env.app.FindCollectionByNameOrId("mail_mailbox_aliases")
@@ -544,6 +560,7 @@ func TestRuleRecipient_RejectsTheMailboxsAliases(t *testing.T) {
 }
 
 func TestHTMLToForwardText_SeparatesTableCells(t *testing.T) {
+	t.Parallel()
 	// Invoices are commonly tables, and "forward invoices to accounting" is
 	// the documented recipe — cells running together corrupts the amounts.
 	got := htmlToForwardText("<table><tr><td>Widget</td><td>12.00</td></tr></table>")
@@ -554,6 +571,7 @@ func TestHTMLToForwardText_SeparatesTableCells(t *testing.T) {
 }
 
 func TestRuleRecipient_RejectsMalformedAddresses(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "recipient.test", "mb_recipient_0001")
 
 	for _, tc := range []struct {
@@ -584,6 +602,7 @@ func TestRuleRecipient_RejectsMalformedAddresses(t *testing.T) {
 }
 
 func TestForwardedBody_SendsTheFullBodyNotTheSnippet(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "forward-body.test", "mb_forward_body01")
 
 	// Longer than the 200-char snippet truncation, so a snippet-based forward
@@ -607,6 +626,7 @@ func TestForwardedBody_SendsTheFullBodyNotTheSnippet(t *testing.T) {
 }
 
 func TestHTMLToForwardText_PreservesLineStructure(t *testing.T) {
+	t.Parallel()
 	got := htmlToForwardText("<p>First line.</p><p>Second line.</p>")
 
 	// stripHTMLToText alone collapses every whitespace run to one space, which
@@ -617,6 +637,7 @@ func TestHTMLToForwardText_PreservesLineStructure(t *testing.T) {
 }
 
 func TestActionStarMessage_StarsForTheAudienceOnly(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "star-personal.test", "mb_star_personal")
 	rule := newTestRule(t, env.app, env.alice, "personal")
 
@@ -639,6 +660,7 @@ func TestActionStarMessage_StarsForTheAudienceOnly(t *testing.T) {
 // Starring must not refile the thread or mark it read — the same
 // independence move-to-folder and mark-as-read hold between them.
 func TestActionStarMessage_PreservesFolderAndReadState(t *testing.T) {
+	t.Parallel()
 	env := setupActionEnv(t, "star-preserves.test", "mb_star_preserve")
 	rule := newTestRule(t, env.app, env.alice, "personal")
 

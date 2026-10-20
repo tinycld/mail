@@ -56,6 +56,7 @@ func newTestMessageWithStatus(t *testing.T, app core.App, threadID, subject, del
 }
 
 func TestMessageOwnerResolution(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 
 	seedDomainAndMailbox(t, app, "owner-resolver.test", "alice", "mb_owner_resolve1")
@@ -72,6 +73,7 @@ func TestMessageOwnerResolution(t *testing.T) {
 }
 
 func TestMessageOwnerResolution_DanglingThreadResolvesNil(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 
 	messages, err := app.FindCollectionByNameOrId("mail_messages")
@@ -94,6 +96,7 @@ func TestMessageOwnerResolution_DanglingThreadResolvesNil(t *testing.T) {
 }
 
 func TestMessageIsInbound_AdmitsReceivedMail(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "inbound-filter.test", "alice", "mb_inbound_filtr1")
 	thread := newTestThread(t, app, padID("mb_inbound_filtr1"), "hello")
@@ -113,6 +116,7 @@ func TestMessageIsInbound_AdmitsReceivedMail(t *testing.T) {
 }
 
 func TestMessageIsInbound_RejectsOutboundAndDrafts(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "outbound-filter.test", "alice", "mb_outbound_fltr1")
 	thread := newTestThread(t, app, padID("mb_outbound_fltr1"), "hello")
@@ -129,6 +133,7 @@ func TestMessageIsInbound_RejectsOutboundAndDrafts(t *testing.T) {
 // delivery_status, so the hook fires on every transition of that column —
 // including the sending → sent path every successful send takes.
 func TestMessageDidBounce_AdmitsOnlyDeliveryFailures(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "bounce-filter.test", "alice", "mb_bounce_filter")
 	thread := newTestThread(t, app, padID("mb_bounce_filter"), "hello")

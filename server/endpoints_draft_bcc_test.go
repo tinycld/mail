@@ -51,6 +51,7 @@ func recipientsBcc(t *testing.T, app core.App, messageID string) []Recipient {
 // migration defined the column, so PocketBase dropped the update path's write
 // too. Both paths must round-trip it now.
 func TestHandleDraft_BccRoundTripsOnCreateAndUpdate(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_draftbcc_01")
 	user := searchUser(t, app, "alice@acme.com")
@@ -106,6 +107,7 @@ func TestHandleDraft_BccRoundTripsOnCreateAndUpdate(t *testing.T) {
 // message's own stored copy must record who was BCC'd (delivered headers are
 // the provider's concern and never include it).
 func TestStoreMessage_PersistsBcc(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_storebcc_01")
 

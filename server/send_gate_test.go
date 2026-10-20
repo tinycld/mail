@@ -33,6 +33,7 @@ func TestCheckSendAllowed_AllowsExactlyTheCap(t *testing.T) {
 }
 
 func TestCheckSendAllowed_RefusesOverTheCap(t *testing.T) {
+	t.Parallel()
 	// nil app and nil domain on purpose: the recipient cap is the first check
 	// in the gate, so it must refuse without reaching either.
 	refusal := checkSendAllowed(nil, "u1", "mb1", nil, maxRecipientsPerMessage+1)
@@ -53,6 +54,7 @@ func TestCheckSendAllowed_RefusesOverTheCap(t *testing.T) {
 // client hard-bounce a message the user can send once the list is split,
 // generating a bounce to their own correspondent.
 func TestSMTPErrorForRefusal_IsTransient(t *testing.T) {
+	t.Parallel()
 	err := smtpErrorForRefusal(&sendError{kind: sendErrForbidden, msg: "too many recipients"})
 	if err.Code < 400 || err.Code >= 500 {
 		t.Fatalf("Code = %d, want a 4xx transient refusal", err.Code)
@@ -73,6 +75,7 @@ func TestSMTPErrorForRefusal_IsTransient(t *testing.T) {
 // each is under any per-list limit. This pins that the call site sums all
 // three, which a test needing a live provider could not reach.
 func TestSendMessage_CountsToCcAndBcc(t *testing.T) {
+	t.Parallel()
 	args := gateCallArgs(t, "endpoints_send.go", "sendMessage")
 	for _, field := range []string{"p.To", "p.Cc", "p.Bcc"} {
 		if !strings.Contains(args, field) {
@@ -85,6 +88,7 @@ func TestSendMessage_CountsToCcAndBcc(t *testing.T) {
 // envelope includes addresses that also appear in To/Cc, so using it would
 // double-count them and refuse sends well under the real fan-out.
 func TestSMTPData_CountsDedupedBccNotTheRawEnvelope(t *testing.T) {
+	t.Parallel()
 	args := gateCallArgs(t, "smtp_session.go", "Data")
 	if strings.Contains(args, "s.recipients") {
 		t.Errorf("the SMTP path must not count s.recipients (double-counts To/Cc); got %q", args)
@@ -163,6 +167,7 @@ func gateCallArgs(t *testing.T, filename, funcName string) string {
 // to a scratch file in this package and check that it goes red. A structural
 // test that has never failed may be looking at nothing.
 func TestEveryProviderSendIsGated(t *testing.T) {
+	t.Parallel()
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatalf("read package dir: %v", err)

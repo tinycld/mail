@@ -93,6 +93,7 @@ func TestCheckDomainAuthenticated_NamesEveryMissingRecord(t *testing.T) {
 // A caller that could not resolve a domain is exactly the state this gate
 // exists to refuse — it must not be read as "nothing to check, carry on".
 func TestCheckDomainAuthenticated_RefusesANilDomain(t *testing.T) {
+	t.Parallel()
 	refusal := checkDomainAuthenticated(nil)
 	if refusal == nil {
 		t.Fatal("a nil domain must refuse the send, not pass it")

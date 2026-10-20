@@ -14,6 +14,7 @@ import (
 // two requests. Each one read "no identity yet" and then saved one, so the
 // second save failed on the unique user index and logged an error.
 func TestEnsureIdentity_ConcurrentCallsShareOneIdentity(t *testing.T) {
+	t.Parallel()
 	app := newIdentityTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	for round := range 10 {

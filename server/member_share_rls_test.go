@@ -32,29 +32,7 @@ type mailShareEnv struct {
 
 func setupMailShareApp(t *testing.T) *mailShareEnv {
 	t.Helper()
-	app, err := tests.NewTestApp()
-	if err != nil {
-		t.Fatalf("NewTestApp: %v", err)
-	}
-	t.Cleanup(func() { app.Cleanup() })
-
-	// `role` and `disabled` belong to core's users schema, which this module
-	// does not carry; the shipped rules read both.
-	users, err := app.FindCollectionByNameOrId("users")
-	if err != nil {
-		t.Fatal(err)
-	}
-	users.Fields.Add(&core.SelectField{
-		Name: "role", MaxSelect: 1,
-		Values: []string{"owner", "admin", "member", "guest"},
-	})
-	users.Fields.Add(&core.BoolField{Name: "disabled"})
-	if err := app.Save(users); err != nil {
-		t.Fatalf("add users fields: %v", err)
-	}
-
-	seedGroupsCollection(t, app)
-	rlstest.Apply(t, app, rlstest.MigrationsDir(t, "../pb-migrations"))
+	app := newMailRulesApp(t)
 
 	owner := mailGuestUser(t, app, "roster-owner@test.local", "member")
 	teammate := mailGuestUser(t, app, "roster-teammate@test.local", "member")
@@ -161,6 +139,7 @@ func deleteMailboxMember(t *testing.T, env *mailShareEnv, token, rowID string, w
 // both rows, or the drawer shows "1 member" forever and there is no row to
 // remove the teammate from.
 func TestMailShareRLS_OwnerListsTheMemberTheyAdded(t *testing.T) {
+	t.Parallel()
 	env := setupMailShareApp(t)
 	addMailboxMember(t, env.app, env.mailbox, env.teammate, "member")
 	listMailboxMembers(t, env, env.ownerToken,
@@ -172,6 +151,7 @@ func TestMailShareRLS_OwnerListsTheMemberTheyAdded(t *testing.T) {
 // A non-owner member sees who else shares the mailbox — same product shape
 // as calendar; a row reveals only (mailbox, user, role).
 func TestMailShareRLS_MemberListsCoMembers(t *testing.T) {
+	t.Parallel()
 	env := setupMailShareApp(t)
 	addMailboxMember(t, env.app, env.mailbox, env.teammate, "member")
 	listMailboxMembers(t, env, env.teammateToken,
@@ -181,6 +161,7 @@ func TestMailShareRLS_MemberListsCoMembers(t *testing.T) {
 
 // Control: widening to co-members must not leak rows across mailboxes.
 func TestMailShareRLS_OutsiderListsNothing(t *testing.T) {
+	t.Parallel()
 	env := setupMailShareApp(t)
 	addMailboxMember(t, env.app, env.mailbox, env.teammate, "member")
 	listMailboxMembers(t, env, env.outsiderToken, `"totalItems":0`)
@@ -189,6 +170,7 @@ func TestMailShareRLS_OutsiderListsNothing(t *testing.T) {
 // THE REMOVE HALF. A mailbox owner removes a teammate's row — the action the
 // drawer's remove button performs, which 404'd under the self-only rule.
 func TestMailShareRLS_OwnerRemovesAMember(t *testing.T) {
+	t.Parallel()
 	env := setupMailShareApp(t)
 	row := addMailboxMember(t, env.app, env.mailbox, env.teammate, "member")
 	deleteMailboxMember(t, env, env.ownerToken, row.Id, http.StatusNoContent)
@@ -196,6 +178,7 @@ func TestMailShareRLS_OwnerRemovesAMember(t *testing.T) {
 
 // Self-leave keeps working: a member can delete their own row.
 func TestMailShareRLS_MemberCanLeave(t *testing.T) {
+	t.Parallel()
 	env := setupMailShareApp(t)
 	row := addMailboxMember(t, env.app, env.mailbox, env.teammate, "member")
 	deleteMailboxMember(t, env, env.teammateToken, row.Id, http.StatusNoContent)
@@ -203,6 +186,7 @@ func TestMailShareRLS_MemberCanLeave(t *testing.T) {
 
 // A non-owner member must not remove OTHER members' rows.
 func TestMailShareRLS_MemberCannotRemoveCoMember(t *testing.T) {
+	t.Parallel()
 	env := setupMailShareApp(t)
 	addMailboxMember(t, env.app, env.mailbox, env.teammate, "member")
 	ownerRow, err := env.app.FindFirstRecordByFilter(
@@ -216,6 +200,7 @@ func TestMailShareRLS_MemberCannotRemoveCoMember(t *testing.T) {
 // Drift guards: the shipped list/view rules must admit mailbox co-members,
 // and delete must carry the owner clause alongside self-leave.
 func TestMailShareRLS_ShippedRulesAdmitCoMembers(t *testing.T) {
+	t.Parallel()
 	env := setupMailShareApp(t)
 	for _, verb := range []string{"list", "view"} {
 		rlstest.RequireRuleContains(t, env.app, "mail_mailbox_members", verb,

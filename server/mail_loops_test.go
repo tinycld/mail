@@ -18,6 +18,7 @@ import (
 )
 
 func TestIsAutoSubmitted(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		headers []Header

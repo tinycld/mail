@@ -27,6 +27,7 @@ func stateRowCount(t *testing.T, app core.App, userID string) int {
 }
 
 func TestMemberBackfill_CreatesReadInboxRows(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	thread := firstThreadOf(t, env, env.mbA.Id)
 	joiner := newUser(t, env.app, "joiner@example.org")
@@ -66,6 +67,7 @@ func TestMemberBackfill_CreatesReadInboxRows(t *testing.T) {
 }
 
 func TestMemberBackfill_IsIdempotent(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	joiner := newUser(t, env.app, "twice@example.org")
 	seedMember(t, env.app, env.mbA.Id, joiner.Id)
@@ -103,6 +105,7 @@ func TestMemberBackfill_HookRunsOnMemberCreate(t *testing.T) {
 // before it ran, it must write nothing: a cleanup for that loss can have run
 // already, and rows written now would stay with nobody to remove them.
 func TestMemberBackfill_SkipsPersonWhoLostAccess(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	gone := newUser(t, env.app, "gone@example.org")
 
@@ -118,6 +121,7 @@ func TestMemberBackfill_SkipsPersonWhoLostAccess(t *testing.T) {
 // wrote one before the backfill saved. The shipped schema's unique index
 // rejects the save; the backfill must treat that as success.
 func TestMemberBackfill_LostRaceIsSuccess(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	states, err := env.app.FindCollectionByNameOrId("mail_thread_state")
 	if err != nil {

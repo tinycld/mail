@@ -8,6 +8,7 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
+	"tinycld.org/core/rlstest"
 )
 
 // guest_rls_test.go proves the mail-infra access rules tightened by the
@@ -201,7 +202,7 @@ func mailGuestUser(t *testing.T, app core.App, email, role string) *core.Record 
 	r.Set("name", "Test")
 	r.Set("role", role)
 	r.SetVerified(true)
-	r.SetPassword("Password123!")
+	rlstest.SetPassword(r, "Password123!")
 	if err := app.Save(r); err != nil {
 		t.Fatal(err)
 	}
@@ -251,6 +252,7 @@ func mailRunList(t *testing.T, app *tests.TestApp, name, token string, want, not
 // ----- mail_domains read -----
 
 func TestMailGuestRLS_Domains_GuestCannotRead(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 	mailSetListView(t, env.app, "mail_domains", mailDomainsGuestReadRule)
 	mailRunList(t, env.app, "mail_domains", env.guestToken,
@@ -258,6 +260,7 @@ func TestMailGuestRLS_Domains_GuestCannotRead(t *testing.T) {
 }
 
 func TestMailGuestRLS_Domains_MemberCanRead(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 	mailSetListView(t, env.app, "mail_domains", mailDomainsGuestReadRule)
 	mailRunList(t, env.app, "mail_domains", env.memberToken,
@@ -267,6 +270,7 @@ func TestMailGuestRLS_Domains_MemberCanRead(t *testing.T) {
 // ----- mail_mailboxes create -----
 
 func TestMailGuestRLS_Mailboxes_GuestCannotCreate(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 	mailSetCreate(t, env.app, "mail_mailboxes", mailMailboxesGuestCreateRule)
 
@@ -284,6 +288,7 @@ func TestMailGuestRLS_Mailboxes_GuestCannotCreate(t *testing.T) {
 }
 
 func TestMailGuestRLS_Mailboxes_MemberCanCreate(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 	mailSetCreate(t, env.app, "mail_mailboxes", mailMailboxesGuestCreateRule)
 
@@ -303,6 +308,7 @@ func TestMailGuestRLS_Mailboxes_MemberCanCreate(t *testing.T) {
 // ----- mail_mailbox_aliases read -----
 
 func TestMailGuestRLS_Aliases_GuestCannotRead(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 	mailSetListView(t, env.app, "mail_mailbox_aliases", mailAliasesGuestReadRule)
 	aliasesCol, _ := env.app.FindCollectionByNameOrId("mail_mailbox_aliases")
@@ -317,6 +323,7 @@ func TestMailGuestRLS_Aliases_GuestCannotRead(t *testing.T) {
 }
 
 func TestMailGuestRLS_Aliases_MemberCanRead(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 	mailSetListView(t, env.app, "mail_mailbox_aliases", mailAliasesGuestReadRule)
 	aliasesCol, _ := env.app.FindCollectionByNameOrId("mail_mailbox_aliases")
@@ -340,6 +347,7 @@ func TestMailGuestRLS_Aliases_MemberCanRead(t *testing.T) {
 // defensive pin closes the gap if a mailbox ever becomes memberless.
 
 func TestMailGuestRLS_MailboxMembers_GuestCannotBootstrapOwner(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 	mailSetCreate(t, env.app, "mail_mailbox_members", mailMembersGuestCreateRule)
 
@@ -365,6 +373,7 @@ func TestMailGuestRLS_MailboxMembers_GuestCannotBootstrapOwner(t *testing.T) {
 }
 
 func TestMailGuestRLS_MailboxMembers_MemberCanBootstrapOwner(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 	mailSetCreate(t, env.app, "mail_mailbox_members", mailMembersGuestCreateRule)
 

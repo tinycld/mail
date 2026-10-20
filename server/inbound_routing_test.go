@@ -55,6 +55,7 @@ func deliveredMessages(t *testing.T, app core.App, mailboxID, messageID string) 
 }
 
 func TestRoutingRecipients_EnvelopeFirstAndUnique(t *testing.T) {
+	t.Parallel()
 	msg := &InboundMessage{
 		OriginalRecipient: "Nathan@Example.com",
 		To:                []Recipient{{Email: "someone@else.example"}, {Email: "nathan@example.com"}},
@@ -74,6 +75,7 @@ func TestRoutingRecipients_EnvelopeFirstAndUnique(t *testing.T) {
 
 // A BCC to a hosted address is only in the envelope; it must be delivered.
 func TestRouteInbound_DeliversEnvelopeOnlyRecipient(t *testing.T) {
+	t.Parallel()
 	env := setupRoutingEnv(t)
 	msg := &InboundMessage{
 		MessageID:         "<bcc-1@sender.example>",
@@ -100,6 +102,7 @@ func TestRouteInbound_DeliversEnvelopeOnlyRecipient(t *testing.T) {
 // Two of the same inbox's addresses in one message: one copy, delivered_to
 // the first address that matched.
 func TestRouteInbound_TwoAddressesOfOneInboxStoreOnce(t *testing.T) {
+	t.Parallel()
 	env := setupRoutingEnv(t)
 	msg := &InboundMessage{
 		MessageID: "<two-1@sender.example>",
@@ -121,6 +124,7 @@ func TestRouteInbound_TwoAddressesOfOneInboxStoreOnce(t *testing.T) {
 }
 
 func TestSMTPInbound_SetsDeliveredTo(t *testing.T) {
+	t.Parallel()
 	env := setupRoutingEnv(t)
 	s := &smtpInboundSession{app: env.app, hostname: "mx.example"}
 	if err := s.Mail("sender@sender.example", nil); err != nil {

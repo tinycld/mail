@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -470,17 +471,20 @@ func ensureThreadState(app core.App, threadID, userID, folder string, isRead boo
 // ensureThreadState would reset is_read as a side effect, which is wrong for
 // a move: filing a message somewhere says nothing about whether it was read.
 func setThreadFolder(app core.App, threadID, userID, folder string) error {
-	if record := findThreadState(app, threadID, userID); record != nil {
-		record.Set("folder", folder)
-		return app.Save(record)
-	}
+	return setThreadStateField(context.Background(), app, threadID, userID, "folder", folder)
+}
 
-	record, err := newThreadState(app, threadID, userID)
+// setThreadStateField sets one field of a user's state row for a thread,
+// creating the row in the Inbox when the user has none yet, and leaves the
+// row's other fields alone. The save is bound to ctx, so a rule action that
+// timed out or was cancelled at terminate does not write.
+func setThreadStateField(ctx context.Context, app core.App, threadID, userID, field string, value any) error {
+	record, err := threadStateOrNew(app, threadID, userID)
 	if err != nil {
 		return err
 	}
-	record.Set("folder", folder)
-	return app.Save(record)
+	record.Set(field, value)
+	return app.SaveWithContext(ctx, record)
 }
 
 // threadStateOrNew returns the user's state row for the thread, or a new
@@ -659,33 +663,13 @@ func markThreadSentForMembers(app core.App, thread *core.Record, senderID string
 // setThreadRead sets a thread's read state for one user, preserving the
 // folder that user has it filed under (see setThreadFolder for the converse).
 func setThreadRead(app core.App, threadID, userID string, isRead bool) error {
-	if record := findThreadState(app, threadID, userID); record != nil {
-		record.Set("is_read", isRead)
-		return app.Save(record)
-	}
-
-	record, err := newThreadState(app, threadID, userID)
-	if err != nil {
-		return err
-	}
-	record.Set("is_read", isRead)
-	return app.Save(record)
+	return setThreadStateField(context.Background(), app, threadID, userID, "is_read", isRead)
 }
 
 // setThreadStarred sets a thread's starred state for one user, preserving the
 // folder and read state (see setThreadFolder for the same reasoning).
 func setThreadStarred(app core.App, threadID, userID string, isStarred bool) error {
-	if record := findThreadState(app, threadID, userID); record != nil {
-		record.Set("is_starred", isStarred)
-		return app.Save(record)
-	}
-
-	record, err := newThreadState(app, threadID, userID)
-	if err != nil {
-		return err
-	}
-	record.Set("is_starred", isStarred)
-	return app.Save(record)
+	return setThreadStateField(context.Background(), app, threadID, userID, "is_starred", isStarred)
 }
 
 // findMailDomains looks a domain up with the normalization every address

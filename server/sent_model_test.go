@@ -18,6 +18,7 @@ import (
 // the stored one and was stored — and shown — twice.
 
 func TestNormalizeMessageID(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		"":                   "",
 		"  ":                 "",
@@ -74,6 +75,7 @@ func seedSentEnv(t *testing.T) (*scopeEnv, *core.Record, *imapSession) {
 }
 
 func TestMarkThreadSent_KeepsExistingFolder(t *testing.T) {
+	t.Parallel()
 	env, thread, _ := seedSentEnv(t)
 
 	if err := markThreadSent(env.app, thread.Id, env.user.Id); err != nil {
@@ -90,6 +92,7 @@ func TestMarkThreadSent_KeepsExistingFolder(t *testing.T) {
 }
 
 func TestMarkThreadSent_NewThreadIsFiledUnderSent(t *testing.T) {
+	t.Parallel()
 	env, _, _ := seedSentEnv(t)
 	thread, err := findOrCreateThread(env.app, env.mbA.Id, "brand new", "", "")
 	if err != nil {
@@ -123,6 +126,7 @@ const appendedReply = "Message-ID: <reply-1@example.org>\r\n" +
 // copy to Sent. SMTP submission stored the message under the client's
 // Message-ID, so the APPEND must find it rather than store a second copy.
 func TestIMAPAppendToSent_DedupesAgainstStoredSend(t *testing.T) {
+	t.Parallel()
 	env, thread, s := seedSentEnv(t)
 
 	stored, err := storeMessage(env.app, thread.Id, &storedMessage{
@@ -160,6 +164,7 @@ func TestIMAPAppendToSent_DedupesAgainstStoredSend(t *testing.T) {
 // A reply APPENDed to Sent with no prior copy joins its thread by In-Reply-To
 // and leaves the thread in the Inbox.
 func TestIMAPAppendToSent_ReplyKeepsThreadInInbox(t *testing.T) {
+	t.Parallel()
 	env, thread, s := seedSentEnv(t)
 	inbound, err := env.app.FindFirstRecordByFilter("mail_messages", "thread = {:t}", map[string]any{"t": thread.Id})
 	if err != nil {
@@ -194,6 +199,7 @@ func TestIMAPAppendToSent_ReplyKeepsThreadInInbox(t *testing.T) {
 // lists the whole thread. Listing the received message in Sent put it in two
 // folders at once, and clients showed it twice.
 func TestIMAPSent_ListsOnlyOutgoingMessages(t *testing.T) {
+	t.Parallel()
 	env, thread, s := seedSentEnv(t)
 	if _, err := storeMessage(env.app, thread.Id, &storedMessage{
 		MessageID:      "<reply-2@example.org>",
@@ -225,6 +231,7 @@ func TestIMAPSent_ListsOnlyOutgoingMessages(t *testing.T) {
 }
 
 func TestIMAPSent_ExcludesTrashedThreads(t *testing.T) {
+	t.Parallel()
 	env, thread, s := seedSentEnv(t)
 	if err := markThreadSent(env.app, thread.Id, env.user.Id); err != nil {
 		t.Fatal(err)
@@ -245,6 +252,7 @@ func TestIMAPSent_ExcludesTrashedThreads(t *testing.T) {
 // Stored ids carry their angle brackets; the header and envelope writers add
 // their own, so FETCH must hand them the bare id.
 func TestIMAPFetch_MessageIDHasSingleBrackets(t *testing.T) {
+	t.Parallel()
 	env, thread, s := seedSentEnv(t)
 	msg, err := storeMessage(env.app, thread.Id, &storedMessage{
 		MessageID: "<etPan.1@argosity.test>",
@@ -279,6 +287,7 @@ func TestIMAPFetch_MessageIDHasSingleBrackets(t *testing.T) {
 // Message-ID the send path stored. It must not be stored twice, and it must
 // reach the Inbox — the send filed its thread under Sent.
 func TestHandleInbound_SelfSentMessageLandsInInboxOnce(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_selfsend_01")
 	seedMember(t, app, "mb_selfsend_01", "user_alice")
@@ -316,6 +325,7 @@ func TestHandleInbound_SelfSentMessageLandsInInboxOnce(t *testing.T) {
 // A redelivery of a received message is found even when the stored id and
 // the incoming one differ only by angle brackets.
 func TestHandleInbound_DedupeIgnoresBracketForm(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_brackets_01")
 	seedMember(t, app, "mb_brackets_01", "user_alice")
@@ -340,6 +350,7 @@ func TestHandleInbound_DedupeIgnoresBracketForm(t *testing.T) {
 
 // Search's Sent filter must match the Sent view: the flag, not the folder.
 func TestBuildStateJoin_SentReadsFlag(t *testing.T) {
+	t.Parallel()
 	params := map[string]any{}
 	join := buildStateJoin(&api.SearchRequest{Folder: "sent"}, "u1", params)
 	if !strings.Contains(join, "ts.is_sent = 1") || strings.Contains(join, "ts.folder = {:folder}") {
@@ -353,6 +364,7 @@ func TestBuildStateJoin_SentReadsFlag(t *testing.T) {
 // Saving a reply draft moves its thread to Drafts; sending it must bring the
 // conversation back to the Inbox rather than leave it in Drafts with no draft.
 func TestMarkThreadSent_DraftedReplyReturnsToInbox(t *testing.T) {
+	t.Parallel()
 	env, thread, _ := seedSentEnv(t)
 	if err := setThreadFolder(env.app, thread.Id, env.user.Id, "drafts"); err != nil {
 		t.Fatal(err)
@@ -368,6 +380,7 @@ func TestMarkThreadSent_DraftedReplyReturnsToInbox(t *testing.T) {
 }
 
 func TestMarkThreadSent_DraftedNewMessageIsFiledUnderSent(t *testing.T) {
+	t.Parallel()
 	env, _, _ := seedSentEnv(t)
 	thread, err := findOrCreateThread(env.app, env.mbA.Id, "drafted first", "", "")
 	if err != nil {
@@ -392,6 +405,7 @@ func TestMarkThreadSent_DraftedNewMessageIsFiledUnderSent(t *testing.T) {
 // Clients autosave drafts and expunge the older copies. Expunging one must
 // delete that draft, not move its whole conversation to Trash.
 func TestIMAPExpunge_DraftDeletesOnlyTheDraft(t *testing.T) {
+	t.Parallel()
 	env, thread, s := seedSentEnv(t)
 	draft, err := storeMessage(env.app, thread.Id, &storedMessage{
 		MessageID: "<draft-1@example.org>", Subject: "Re: in personal", DeliveryStatus: "draft",
@@ -422,6 +436,7 @@ func TestIMAPExpunge_DraftDeletesOnlyTheDraft(t *testing.T) {
 // client's copy saved to Sent is a new outgoing message; it must not be
 // merged into the received one.
 func TestIMAPAppendToSent_DoesNotMergeIntoReceivedMessage(t *testing.T) {
+	t.Parallel()
 	env, thread, s := seedSentEnv(t)
 	inbound, err := env.app.FindFirstRecordByFilter("mail_messages", "thread = {:t}", map[string]any{"t": thread.Id})
 	if err != nil {
@@ -454,6 +469,7 @@ func TestIMAPAppendToSent_DoesNotMergeIntoReceivedMessage(t *testing.T) {
 // reads only the caller's own state rows, so a send marks every member's row,
 // not only the sender's. Each member keeps their own folder.
 func TestMarkThreadSent_MarksCoMembersInSharedMailbox(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
 	if err != nil {
@@ -489,6 +505,7 @@ func TestMarkThreadSent_MarksCoMembersInSharedMailbox(t *testing.T) {
 }
 
 func TestMarkThreadSent_CoMemberWithoutRowGetsOne(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
 	if err != nil {
@@ -520,6 +537,7 @@ func TestMarkThreadSent_CoMemberWithoutRowGetsOne(t *testing.T) {
 // broken member row has an empty user (written past validation), so the
 // state row's required user rejects their new row.
 func TestMarkThreadSent_CoMemberFailureDoesNotFailTheSender(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
 	if err != nil {

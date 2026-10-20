@@ -36,7 +36,7 @@ func searchMailRows(app core.App, userID string, q search.Query) (search.Result,
 	// the display columns — subject, participants, date, counts, attachments —
 	// that api.SearchResultItem no longer carries now that the web client
 	// resolves display from its own live rows.
-	results, total, err := searchMailResultRows(app, userID, api.SearchRequest{
+	results, total, err := searchMailResultRows(q.Context(), app, userID, api.SearchRequest{
 		Query: strings.Join(q.Include, " "),
 		// Mail's own search honors exclusions across both its FTS arms, so a
 		// `-term` from the palette reaches SQL rather than being approximated

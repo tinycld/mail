@@ -57,6 +57,7 @@ func decodeAck(t *testing.T, rec *httptest.ResponseRecorder) api.WebhookAckRespo
 // "ignored" and must not touch the message row — matching the hosted
 // router, which does not forward these either.
 func TestHandleBounce_RecognisedNonFailureRepliesIgnored(t *testing.T) {
+	t.Parallel()
 	app := setupDeliveryEventsTestApp(t)
 	seedDomainAndMailbox(t, app, "delivery-events.test", "alice", "mb_bounce00001")
 	thread := newTestThread(t, app, padID("mb_bounce00001"), "hello")
@@ -87,6 +88,7 @@ func TestHandleBounce_RecognisedNonFailureRepliesIgnored(t *testing.T) {
 // An UNRECOGNISED type keeps today's behaviour: applied as Bounced with an
 // empty class, and the endpoint still answers "processed".
 func TestHandleBounce_UnrecognisedTypeStillAppliesAndProcesses(t *testing.T) {
+	t.Parallel()
 	app := setupDeliveryEventsTestApp(t)
 	seedDomainAndMailbox(t, app, "delivery-events.test", "alice", "mb_bounce00002")
 	thread := newTestThread(t, app, padID("mb_bounce00002"), "hello")

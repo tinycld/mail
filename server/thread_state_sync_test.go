@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/rlstest"
 )
 
 // The thread list is one live query on mail_thread_state ordered by
@@ -21,6 +22,7 @@ func stateFor(t *testing.T, env *scopeEnv, threadID string) *core.Record {
 }
 
 func TestThreadStateCreate_FillsMailboxAndLatestDate(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
 	if err != nil {
@@ -44,6 +46,7 @@ func TestThreadStateCreate_FillsMailboxAndLatestDate(t *testing.T) {
 }
 
 func TestThreadLatestDateChange_PropagatesToEveryStateRow(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
 	if err != nil {
@@ -73,6 +76,7 @@ func TestThreadLatestDateChange_PropagatesToEveryStateRow(t *testing.T) {
 }
 
 func TestThreadSaveWithoutLatestDateChange_DoesNotTouchStateRows(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
 	if err != nil {
@@ -100,7 +104,7 @@ func newUser(t *testing.T, app core.App, email string) *core.Record {
 	user := core.NewRecord(users)
 	user.SetEmail(email)
 	user.Set("username", testUsername(email))
-	user.SetPassword("Password123!")
+	rlstest.SetPassword(user, "Password123!")
 	if err := app.Save(user); err != nil {
 		t.Fatal(err)
 	}
@@ -111,6 +115,7 @@ func newUser(t *testing.T, app core.App, email string) *core.Record {
 // mailbox would create a counts row for a mailbox the user is not in, and a
 // pinned latest_date would float the thread.
 func TestThreadStateCreate_IgnoresSuppliedMailboxAndLatestDate(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
 	if err != nil {
@@ -143,6 +148,7 @@ func TestThreadStateCreate_IgnoresSuppliedMailboxAndLatestDate(t *testing.T) {
 
 // An API update cannot change either column; the stored values stay.
 func TestThreadStateUpdateRequest_KeepsMailboxAndLatestDate(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
 	if err != nil {

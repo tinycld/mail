@@ -1,7 +1,6 @@
 package mail
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -13,8 +12,11 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/types"
 	"tinycld.org/core/automation"
+	"tinycld.org/core/logging"
 	"tinycld.org/packages/mail/api"
 )
+
+var actionsLog = logging.ForPackage("mail")
 
 // registerAutomationActions installs the Go handlers behind mail's four
 // native actions (declared in tinycld/mail/automation.ts). Called from
@@ -112,7 +114,7 @@ func actionMoveToFolder(app core.App, req automation.ActionRequest) error {
 	}
 
 	return applyToAudience(app, req, "mail:move-to-folder", func(userID string) error {
-		return setThreadFolder(app, threadID, userID, folder)
+		return setThreadStateField(req.Context(), app, threadID, userID, "folder", folder)
 	})
 }
 
@@ -126,11 +128,19 @@ func actionMoveToFolder(app core.App, req automation.ActionRequest) error {
 // non-fatal"): one user's state row failing says nothing about the next
 // user's. The error still surfaces, so the run is recorded as failed and
 // auto-disable can still see a rule that fails for everyone.
+//
+// An ended req.Context() is the exception: the action timed out or the app is
+// terminating, so no further user is tried — the database can close under the
+// next write.
 func applyToAudience(app core.App, req automation.ActionRequest, action string, apply func(userID string) error) error {
+	ctx := req.Context()
 	var failed []string
 	for _, userID := range actionAudience(app, req) {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("%s: stopped before user %s: %w", action, userID, err)
+		}
 		if err := apply(userID); err != nil {
-			app.Logger().Error("mail: automation action failed for one user",
+			actionsLog.ErrorContext(ctx, "automation action failed for one user",
 				"action", action, "user", userID, "error", err)
 			failed = append(failed, userID)
 		}
@@ -150,7 +160,7 @@ func actionMarkAsRead(app core.App, req automation.ActionRequest) error {
 	}
 
 	return applyToAudience(app, req, "mail:mark-as-read", func(userID string) error {
-		return setThreadRead(app, threadID, userID, true)
+		return setThreadStateField(req.Context(), app, threadID, userID, "is_read", true)
 	})
 }
 
@@ -163,7 +173,7 @@ func actionStarMessage(app core.App, req automation.ActionRequest) error {
 	}
 
 	return applyToAudience(app, req, "mail:star-message", func(userID string) error {
-		return setThreadStarred(app, threadID, userID, true)
+		return setThreadStateField(req.Context(), app, threadID, userID, "is_starred", true)
 	})
 }
 
@@ -195,7 +205,7 @@ func sendAsRuleOwner(app core.App, req automation.ActionRequest, to, subject, bo
 	}
 
 	_, err = sendMessage(app, sendParams{
-		Ctx:       context.Background(),
+		Ctx:       req.Context(),
 		UserID:    req.OwnerID,
 		MailboxID: mailboxID,
 		Subject:   subject,

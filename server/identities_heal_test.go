@@ -59,6 +59,7 @@ func requireHealed(t *testing.T, f healFixture, oldInbox string) {
 }
 
 func TestHeal_RemovingTheInboxDomainGivesANewInbox(t *testing.T) {
+	t.Parallel()
 	f := healSetup(t)
 	third := saveRealRecord(t, f.app, "mail_domains", map[string]any{"domain": "c.example", "verified": true, "rank": 3, "coverage": coverageEveryone})
 	if err := f.app.Delete(reloaded(t, f.app, f.other)); err != nil {
@@ -72,6 +73,7 @@ func TestHeal_RemovingTheInboxDomainGivesANewInbox(t *testing.T) {
 }
 
 func TestHeal_OwnerDeletingTheirInbox(t *testing.T) {
+	t.Parallel()
 	for name, policy := range map[string]inboxPolicy{"boot": adoptInboxOnly, "create": adoptOrCreateInbox} {
 		t.Run(name, func(t *testing.T) {
 			f := healSetup(t)
@@ -90,6 +92,7 @@ func TestHeal_OwnerDeletingTheirInbox(t *testing.T) {
 }
 
 func TestHeal_AdoptsAnUnclaimedPersonalInbox(t *testing.T) {
+	t.Parallel()
 	f := healSetup(t)
 	spare := saveRealRecord(t, f.app, "mail_mailboxes", map[string]any{"address": "dana2", "domain": f.other.Id, "type": "personal", "display_name": "Dana", "name": "Dana"})
 	saveRealRecord(t, f.app, "mail_mailbox_members", map[string]any{"mailbox": spare.Id, "user": f.user.Id, "role": "owner"})
@@ -105,6 +108,7 @@ func TestHeal_AdoptsAnUnclaimedPersonalInbox(t *testing.T) {
 }
 
 func TestHeal_TakenEmailNameIsReplaced(t *testing.T) {
+	t.Parallel()
 	f := healSetup(t)
 	if err := f.app.Delete(reloaded(t, f.app, f.inbox)); err != nil {
 		t.Fatal(err)
@@ -120,6 +124,7 @@ func TestHeal_TakenEmailNameIsReplaced(t *testing.T) {
 }
 
 func TestHeal_RetiredIdentityIsNotRepaired(t *testing.T) {
+	t.Parallel()
 	f := healSetup(t)
 	if err := retireIdentity(f.app, f.user.Id); err != nil {
 		t.Fatal(err)
@@ -138,6 +143,7 @@ func TestHeal_RetiredIdentityIsNotRepaired(t *testing.T) {
 }
 
 func TestHeal_DomainDeleteCreatesNoIdentityForUsersWithout(t *testing.T) {
+	t.Parallel()
 	f := healSetup(t)
 	bare := saveRealRecord(t, f.app, "users", map[string]any{"email": "bo@ext.example", "username": "bo", "name": "Bo", "role": "member"})
 	auto := identityOf(t, f.app, bare.Id)

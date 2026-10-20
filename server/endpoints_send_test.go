@@ -60,6 +60,7 @@ func TestSendMessage_FromAddressOnSecondDomain(t *testing.T) {
 }
 
 func TestVerifyAliasBelongsToMailbox_RejectsMismatch(t *testing.T) {
+	t.Parallel()
 	app := setupAliasTestApp(t)
 
 	seedDomainAndMailbox(t, app, "acme.com", "support", "mb_send_test005")

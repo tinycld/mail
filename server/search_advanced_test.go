@@ -12,6 +12,7 @@ import (
 // the sanitized main-query terms — never the body_text-scoped Body (hasWords)
 // terms, which would error the whole UNION.
 func TestBuildThreadFTSQuery(t *testing.T) {
+	t.Parallel()
 	t.Run("plain query is sanitized into prefix terms", func(t *testing.T) {
 		if got := buildThreadFTSQuery("hello world", ""); got != `"hello"* "world"*` {
 			t.Fatalf("got %q", got)
@@ -34,6 +35,7 @@ func TestBuildThreadFTSQuery(t *testing.T) {
 // The message FTS index has a body_text column; the Body (hasWords) terms are
 // scoped to it.
 func TestBuildMessageFTSQuery(t *testing.T) {
+	t.Parallel()
 	t.Run("plain query is sanitized into prefix terms", func(t *testing.T) {
 		if got := buildMessageFTSQuery("hello world", "", ""); got != `"hello"* "world"*` {
 			t.Fatalf("got %q", got)
@@ -108,6 +110,7 @@ func TestBuildMessageFTSQuery(t *testing.T) {
 // keeps snippet()/highlight() legal in the outer aggregate even when only one
 // real arm is present (see ftsNoMatchArm / the snippet-context bug it guards).
 func TestFTSUnion(t *testing.T) {
+	t.Parallel()
 	const thr, msg = "/*THREAD_ARM*/", "/*MESSAGE_ARM*/"
 
 	t.Run("both real arms keep both, plus the placeholder", func(t *testing.T) {
@@ -152,6 +155,7 @@ func TestFTSUnion(t *testing.T) {
 // parseSearchRequest must ignore the removed not_words and size_* params even
 // if a stale client still sends them — they have no struct fields to land in.
 func TestParseSearchRequestIgnoresRemovedParams(t *testing.T) {
+	t.Parallel()
 	req := httptest.NewRequest(
 		"GET",
 		"/api/mail/search?from=alice&has_words=invoice&not_words=spam&size_op=gt&size_bytes=1048576&folder=inbox&has_attachment=true",
@@ -183,6 +187,7 @@ func TestParseSearchRequestIgnoresRemovedParams(t *testing.T) {
 
 // buildMessageWhere must no longer emit a total_size clause.
 func TestBuildMessageWhereHasNoSizeClause(t *testing.T) {
+	t.Parallel()
 	f := api.SearchRequest{From: "alice", Subject: "report", HasAttachment: true}
 	params := map[string]any{}
 	where := buildMessageWhere(&f, params)
@@ -201,6 +206,7 @@ func TestBuildMessageWhereHasNoSizeClause(t *testing.T) {
 
 // An empty filter set produces no WHERE fragment.
 func TestBuildMessageWhereEmpty(t *testing.T) {
+	t.Parallel()
 	f := api.SearchRequest{}
 	if where := buildMessageWhere(&f, map[string]any{}); where != "" {
 		t.Errorf("expected empty WHERE, got %q", where)

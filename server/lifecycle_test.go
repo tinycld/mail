@@ -24,6 +24,7 @@ func seedMailbox(t *testing.T, app core.App, address, domainID string) {
 }
 
 func TestDeriveEmailName_UsesUsernameVerbatim(t *testing.T) {
+	t.Parallel()
 	app := setupAliasTestApp(t)
 	domainID := seedDomainAndMailbox(t, app, "example.com", "taken", "mbox_derive_01")
 
@@ -37,6 +38,7 @@ func TestDeriveEmailName_UsesUsernameVerbatim(t *testing.T) {
 }
 
 func TestDeriveEmailName_SuffixesOnCollision(t *testing.T) {
+	t.Parallel()
 	app := setupAliasTestApp(t)
 	domainID := seedDomainAndMailbox(t, app, "example.com", "bob", "mbox_derive_02")
 
@@ -54,6 +56,7 @@ func TestDeriveEmailName_SuffixesOnCollision(t *testing.T) {
 // Error log — a deliberate trade: account creation must not fail over mailbox
 // provisioning, but the outcome must be loud enough to notice.
 func TestDeriveEmailName_UnsanitizableUsernameYieldsNoAddress(t *testing.T) {
+	t.Parallel()
 	app := setupAliasTestApp(t)
 	domainID := seedDomainAndMailbox(t, app, "example.com", "taken", "mbox_derive_03")
 
@@ -65,6 +68,7 @@ func TestDeriveEmailName_UnsanitizableUsernameYieldsNoAddress(t *testing.T) {
 // The suffix loop caps at 99. The 100th "bob" gets no address at all — same
 // loud-but-non-fatal contract as above.
 func TestDeriveEmailName_SuffixExhaustionYieldsNoAddress(t *testing.T) {
+	t.Parallel()
 	app := setupAliasTestApp(t)
 	domainID := seedDomainAndMailbox(t, app, "example.com", "bob", "mbox_derive_04")
 	for i := 2; i <= 99; i++ {
@@ -80,6 +84,7 @@ func TestDeriveEmailName_SuffixExhaustionYieldsNoAddress(t *testing.T) {
 // still has a member stays (its owner is alive), and a memberless shared
 // mailbox is out of scope (shared mailboxes are administered, not owned).
 func TestHandleUserDeleted_SweepsOnlyMemberlessPersonalMailboxes(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 
 	domainID := seedDomainAndMailbox(t, app, "example.com", "kept", "mbox_sweep_keep")

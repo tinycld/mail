@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/rlstest"
 )
 
 // captureLogs routes the process default logger, which logging.ForPackage
@@ -33,7 +34,7 @@ func TestSMTPRefusal_UnknownSenderIsLogged(t *testing.T) {
 	user := core.NewRecord(users)
 	user.SetEmail("sender@example.org")
 	user.Set("username", testUsername("sender@example.org"))
-	user.SetPassword("Password123!")
+	rlstest.SetPassword(user, "Password123!")
 	if err := app.Save(user); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +88,7 @@ func TestSMTPRefusal_RcptWithoutMailIsLogged(t *testing.T) {
 	user := core.NewRecord(users)
 	user.SetEmail("rcpt@example.org")
 	user.Set("username", testUsername("rcpt@example.org"))
-	user.SetPassword("Password123!")
+	rlstest.SetPassword(user, "Password123!")
 	if err := app.Save(user); err != nil {
 		t.Fatal(err)
 	}

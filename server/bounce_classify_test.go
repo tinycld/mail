@@ -3,6 +3,7 @@ package mail
 import "testing"
 
 func TestClassifyBounce_ComplaintsWinOverEverything(t *testing.T) {
+	t.Parallel()
 	// A complaint arrives as its own record type rather than as a bounce, and
 	// it is the signal that matters most — reading it as an ordinary bounce
 	// would bury it in a bucket with a much looser threshold.
@@ -18,6 +19,7 @@ func TestClassifyBounce_ComplaintsWinOverEverything(t *testing.T) {
 }
 
 func TestClassifyBounce_HardFailures(t *testing.T) {
+	t.Parallel()
 	for _, code := range []int{pmCodeHardBounce, pmCodeBadEmailAddress, pmCodeBlocked, pmCodeUnconfirmed} {
 		got, recognised := classifyBounce(&BounceEvent{RecordType: "Bounce", TypeCode: code})
 		if !recognised {
@@ -33,6 +35,7 @@ func TestClassifyBounce_HardFailures(t *testing.T) {
 // server says nothing about the sender, and counting it would judge them for
 // who they wrote to.
 func TestClassifyBounce_SoftFailuresAreNotTheSendersFault(t *testing.T) {
+	t.Parallel()
 	for _, code := range []int{pmCodeTransient, pmCodeSoftBounce, pmCodeDNSError, pmCodeSMTPApiError} {
 		got, recognised := classifyBounce(&BounceEvent{RecordType: "Bounce", TypeCode: code})
 		if !recognised {
@@ -45,6 +48,7 @@ func TestClassifyBounce_SoftFailuresAreNotTheSendersFault(t *testing.T) {
 }
 
 func TestClassifyBounce_SpamNotificationIsAComplaint(t *testing.T) {
+	t.Parallel()
 	// A receiving server's filter saying "this is spam" means the same thing
 	// as a human pressing the button; only the reporter differs.
 	got, recognised := classifyBounce(&BounceEvent{RecordType: "Bounce", TypeCode: pmCodeSpamNotification})
@@ -55,6 +59,7 @@ func TestClassifyBounce_SpamNotificationIsAComplaint(t *testing.T) {
 
 // These are not delivery failures at all and must never reach a counter.
 func TestClassifyBounce_NonFailuresCountAsNothing(t *testing.T) {
+	t.Parallel()
 	for _, code := range []int{
 		pmCodeUnsubscribe, pmCodeSubscribe, pmCodeAutoResponder,
 		pmCodeAddressChange, pmCodeManuallyDeactivated,
@@ -73,6 +78,7 @@ func TestClassifyBounce_NonFailuresCountAsNothing(t *testing.T) {
 // and whoever publishes its policy. Counting it would penalise a sender for
 // writing to a misconfigured domain.
 func TestClassifyBounce_DMARCIsNotTheSendersFault(t *testing.T) {
+	t.Parallel()
 	got, recognised := classifyBounce(&BounceEvent{RecordType: "Bounce", TypeCode: pmCodeDMARCPolicy})
 	if !recognised {
 		t.Fatal("a DMARC rejection must be recognised")
@@ -85,6 +91,7 @@ func TestClassifyBounce_DMARCIsNotTheSendersFault(t *testing.T) {
 // A provider that sends a name without a code must still classify, since the
 // code is the preferred key but not a guaranteed one.
 func TestClassifyBounce_FallsBackToTheDisplayName(t *testing.T) {
+	t.Parallel()
 	cases := map[string]bounceClass{
 		"HardBounce":       bounceClassHard,
 		"BadEmailAddress":  bounceClassHard,
@@ -109,6 +116,7 @@ func TestClassifyBounce_FallsBackToTheDisplayName(t *testing.T) {
 // unrecognised rather than guessed at: a new failure type landing silently in
 // the hard bucket is a threshold change nobody reviewed.
 func TestClassifyBounce_UnknownTypeIsNotGuessedAt(t *testing.T) {
+	t.Parallel()
 	got, recognised := classifyBounce(&BounceEvent{RecordType: "Bounce", BounceType: "SomethingNew", TypeCode: 999999})
 	if recognised {
 		t.Error("an unmapped type must report as unrecognised")
@@ -119,6 +127,7 @@ func TestClassifyBounce_UnknownTypeIsNotGuessedAt(t *testing.T) {
 }
 
 func TestClassifyBounce_EmptyEventIsNotCounted(t *testing.T) {
+	t.Parallel()
 	if got, recognised := classifyBounce(nil); recognised || got != bounceClassNone {
 		t.Errorf("nil event: class = %v (recognised=%v), want none/false", got, recognised)
 	}
@@ -129,6 +138,7 @@ func TestClassifyBounce_EmptyEventIsNotCounted(t *testing.T) {
 
 // The class names reach logs and, later, an operator's dashboard.
 func TestBounceClass_String(t *testing.T) {
+	t.Parallel()
 	cases := map[bounceClass]string{
 		bounceClassNone:      "none",
 		bounceClassSoft:      "soft",
@@ -146,6 +156,7 @@ func TestBounceClass_String(t *testing.T) {
 // the provider's payload. A parser that silently drops From or ID looks fine
 // until something tries to attribute or deduplicate.
 func TestParseBounce_CarriesTheNewFields(t *testing.T) {
+	t.Parallel()
 	body := []byte(`{
 		"ID": 42,
 		"RecordType": "Bounce",
@@ -186,6 +197,7 @@ func TestParseBounce_CarriesTheNewFields(t *testing.T) {
 // A payload with no ID must not produce a dedupe key of "0", which would
 // collide across every such notification.
 func TestParseBounce_AbsentIDIsEmptyNotZero(t *testing.T) {
+	t.Parallel()
 	event, err := NewPostmarkProvider("tok", "acct").
 		ParseBounce([]byte(`{"RecordType":"Bounce","MessageID":"m","Type":"HardBounce"}`))
 	if err != nil {

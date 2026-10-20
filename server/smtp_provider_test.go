@@ -11,6 +11,7 @@ import (
 // ParseInbound returns an InboundMessage shape compatible with
 // processInboundForMailbox for a minimal text/plain RFC 5322 message.
 func TestSMTPProviderParseInbound_PlainText(t *testing.T) {
+	t.Parallel()
 	raw := []byte(strings.Join([]string{
 		"From: Alice <alice@example.com>",
 		"To: Bob <bob@example.org>",
@@ -47,6 +48,7 @@ func TestSMTPProviderParseInbound_PlainText(t *testing.T) {
 // Threading headers (In-Reply-To, References) must round-trip so
 // findOrCreateThread can stitch the message onto an existing thread.
 func TestSMTPProviderParseInbound_ThreadingHeaders(t *testing.T) {
+	t.Parallel()
 	raw := []byte(strings.Join([]string{
 		"From: a@example.com",
 		"To: b@example.org",
@@ -76,6 +78,7 @@ func TestSMTPProviderParseInbound_ThreadingHeaders(t *testing.T) {
 // Bounce parsing must surface the no-webhook sentinel so the bounce endpoint
 // can return a clear error instead of a generic parse failure.
 func TestSMTPProviderParseBounce_ReturnsSentinel(t *testing.T) {
+	t.Parallel()
 	p := NewSMTPProvider(SMTPConfig{})
 	_, err := p.ParseBounce([]byte("{}"))
 	if !errors.Is(err, errSMTPNoBounceWebhook) {
@@ -86,6 +89,7 @@ func TestSMTPProviderParseBounce_ReturnsSentinel(t *testing.T) {
 // CheckInboundDomain reflects the org's inbound mode so domain_verify can
 // reason about MX expectations correctly.
 func TestSMTPProviderCheckInboundDomain_ReflectsMode(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		cfg         SMTPConfig

@@ -36,6 +36,7 @@ func tagSet(t *testing.T, typ reflect.Type, tagKey string) map[string]int {
 // (wire ⊆ row) — not the other way around — and every value that IS on the
 // wire must survive the copy under its wire key.
 func TestMapResults_CoversEveryAPIField(t *testing.T) {
+	t.Parallel()
 	rowType := reflect.TypeOf(searchResultRow{})
 	itemType := reflect.TypeOf(api.SearchResultItem{})
 

@@ -57,6 +57,7 @@ func newDeliveryTestMessage(t *testing.T, app core.App, threadID, messageID, del
 }
 
 func TestApplyDeliveryEvent_DeliveredSetsTimestampOnly(t *testing.T) {
+	t.Parallel()
 	app := setupDeliveryEventsTestApp(t)
 	seedDomainAndMailbox(t, app, "delivery-events.test", "alice", "mb_delivered0001")
 	thread := newTestThread(t, app, padID("mb_delivered0001"), "hello")
@@ -314,6 +315,7 @@ func TestApplyDeliveryEvent_DeliveredOutboundMessageStillNotInbound(t *testing.T
 }
 
 func TestEventFromBounce_DeliveryMapsToDelivered(t *testing.T) {
+	t.Parallel()
 	b := &BounceEvent{
 		RecordType:  "Delivery",
 		MessageID:   "pm-1",
@@ -340,6 +342,7 @@ func TestEventFromBounce_DeliveryMapsToDelivered(t *testing.T) {
 }
 
 func TestEventFromBounce_SpamComplaintMapsToComplaint(t *testing.T) {
+	t.Parallel()
 	b := &BounceEvent{RecordType: "SpamComplaint", MessageID: "pm-1", Description: "spam"}
 
 	event, recognised, ok := eventFromBounce(b)
@@ -361,6 +364,7 @@ func TestEventFromBounce_SpamComplaintMapsToComplaint(t *testing.T) {
 }
 
 func TestEventFromBounce_HardBounceMapsToBouncedHard(t *testing.T) {
+	t.Parallel()
 	b := &BounceEvent{RecordType: "Bounce", MessageID: "pm-1", TypeCode: pmCodeHardBounce, Description: "no such user"}
 
 	event, recognised, ok := eventFromBounce(b)
@@ -384,6 +388,7 @@ func TestEventFromBounce_HardBounceMapsToBouncedHard(t *testing.T) {
 // warning still fires — folding the two into one bool silenced that warning
 // for every unmapped provider failure type.
 func TestEventFromBounce_UnrecognisedBounceIsStillAppliedButNotRecognised(t *testing.T) {
+	t.Parallel()
 	b := &BounceEvent{RecordType: "Bounce", MessageID: "pm-1", TypeCode: 999999}
 
 	event, recognised, ok := eventFromBounce(b)
@@ -402,6 +407,7 @@ func TestEventFromBounce_UnrecognisedBounceIsStillAppliedButNotRecognised(t *tes
 }
 
 func TestEventFromBounce_EmptyMessageIDIsNotOk(t *testing.T) {
+	t.Parallel()
 	_, _, ok := eventFromBounce(&BounceEvent{RecordType: "Bounce", TypeCode: pmCodeHardBounce})
 	if ok {
 		t.Fatal("ok = true, want false when the payload carries no message id")
@@ -414,6 +420,7 @@ func TestEventFromBounce_EmptyMessageIDIsNotOk(t *testing.T) {
 // the hosted router, which attributes and logs these but never forwards
 // them because there is no outcome to record.
 func TestEventFromBounce_RecognisedNonFailureIsNotOk(t *testing.T) {
+	t.Parallel()
 	b := &BounceEvent{RecordType: "Bounce", MessageID: "pm-1", TypeCode: pmCodeAutoResponder}
 
 	event, recognised, ok := eventFromBounce(b)
@@ -434,6 +441,7 @@ func TestEventFromBounce_RecognisedNonFailureIsNotOk(t *testing.T) {
 // This test locks in the recognised-vs-unrecognised split at the ok boundary:
 // only the recognised non-failure short-circuits to ok=false.
 func TestEventFromBounce_UnrecognisedTypeIsStillOk(t *testing.T) {
+	t.Parallel()
 	b := &BounceEvent{RecordType: "Bounce", MessageID: "pm-1", TypeCode: 999999}
 
 	event, recognised, ok := eventFromBounce(b)

@@ -146,6 +146,7 @@ func TestAutoconfigGivesTheSameAnswerForEveryLocalPart(t *testing.T) {
 }
 
 func TestAutoconfigDomainFromTheRequest(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ target, want string }{
 		{"http://autoconfig.acme.example/mail/config-v1.1.xml", "acme.example"},
 		{"http://AutoConfig.Acme.Example:443/mail/config-v1.1.xml", "acme.example"},
@@ -160,6 +161,7 @@ func TestAutoconfigDomainFromTheRequest(t *testing.T) {
 }
 
 func TestEmailDomain(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ in, want string }{
 		{"ann@acme.example", "acme.example"},
 		{" Ann@ACME.Example ", "acme.example"},

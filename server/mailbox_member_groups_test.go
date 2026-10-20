@@ -384,6 +384,7 @@ func TestInboxGroup_OnlyOwnerManagesGrants(t *testing.T) {
 }
 
 func TestInboxGroup_RulesGuardGrantUser(t *testing.T) {
+	t.Parallel()
 	app := newRealSchemaApp(t)
 	rlstest.RequireAuthGuardOnGrantRules(t, app, "mail_mailbox_members")
 }

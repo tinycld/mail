@@ -28,6 +28,7 @@ func setupSendAddressEnv(t *testing.T) *sendAddressEnv {
 }
 
 func TestSendAddress_ExplicitAddressOnASecondDomain(t *testing.T) {
+	t.Parallel()
 	env := setupSendAddressEnv(t)
 	com, _ := findAddressRow(env.app, "nathan", env.com.Id)
 
@@ -41,6 +42,7 @@ func TestSendAddress_ExplicitAddressOnASecondDomain(t *testing.T) {
 }
 
 func TestSendAddress_RefusesAnotherInboxsAddress(t *testing.T) {
+	t.Parallel()
 	env := setupSendAddressEnv(t)
 	saveRealRecord(t, env.app, "mail_mailboxes", map[string]any{
 		"address": "support", "domain": env.org.Id, "type": "shared", "display_name": "Support", "name": "Support",
@@ -55,6 +57,7 @@ func TestSendAddress_RefusesAnotherInboxsAddress(t *testing.T) {
 
 // A released client sends alias_id; it must still send from that alias.
 func TestSendAddress_LegacyAliasID(t *testing.T) {
+	t.Parallel()
 	env := setupSendAddressEnv(t)
 	alias := saveRealRecord(t, env.app, "mail_mailbox_aliases", map[string]any{"mailbox": env.inbox.Id, "address": "admin"})
 
@@ -68,6 +71,7 @@ func TestSendAddress_LegacyAliasID(t *testing.T) {
 }
 
 func TestSendAddress_DefaultPrefersVerifiedThenRank(t *testing.T) {
+	t.Parallel()
 	env := setupSendAddressEnv(t)
 	from, err := defaultSendAddress(env.app, env.inbox)
 	if err != nil {
@@ -92,6 +96,7 @@ func TestSendAddress_DefaultPrefersVerifiedThenRank(t *testing.T) {
 }
 
 func TestSendAddress_DefaultFromIdentityWins(t *testing.T) {
+	t.Parallel()
 	env := setupSendAddressEnv(t)
 	user := saveRealRecord(t, env.app, "users", map[string]any{"email": "n@ext.example", "username": "nathan", "name": "Nathan", "role": "owner"})
 	com, _ := findAddressRow(env.app, "nathan", env.com.Id)
@@ -104,6 +109,7 @@ func TestSendAddress_DefaultFromIdentityWins(t *testing.T) {
 }
 
 func TestFormatFromAddress(t *testing.T) {
+	t.Parallel()
 	if got := formatFromAddress("Nathan Stitt", "nathan@tinycld.com"); got != "Nathan Stitt <nathan@tinycld.com>" {
 		t.Fatalf("got %q", got)
 	}
@@ -115,6 +121,7 @@ func TestFormatFromAddress(t *testing.T) {
 // An address on a domain that is not verified yet never wins over a verified
 // one, even with a better rank.
 func TestSendAddress_DefaultSkipsUnverifiedDomainWithBetterRank(t *testing.T) {
+	t.Parallel()
 	env := setupSendAddressEnv(t)
 	env.test.Set("rank", 0)
 	if err := env.app.Save(env.test); err != nil {
@@ -134,6 +141,7 @@ func TestSendAddress_DefaultSkipsUnverifiedDomainWithBetterRank(t *testing.T) {
 // The inbox moving domains leaves the alias's mirrored row on the old domain;
 // a released client's alias_id must still send as that row.
 func TestSendAddress_LegacyAliasSurvivesInboxDomainMove(t *testing.T) {
+	t.Parallel()
 	env := setupSendAddressEnv(t)
 	alias := saveRealRecord(t, env.app, "mail_mailbox_aliases", map[string]any{"mailbox": env.inbox.Id, "address": "admin"})
 	inbox, err := env.app.FindRecordById("mail_mailboxes", env.inbox.Id)
@@ -158,6 +166,7 @@ func TestSendAddress_LegacyAliasSurvivesInboxDomainMove(t *testing.T) {
 // An old client's draft update names no address; it must not overwrite the
 // address a newer client chose.
 func TestHandleDraft_UpdateWithoutAddressKeepsSentFrom(t *testing.T) {
+	t.Parallel()
 	env := setupSendAddressEnv(t)
 	user := saveRealRecord(t, env.app, "users", map[string]any{"email": "n@ext.example", "username": "nathan", "name": "Nathan", "role": "owner"})
 	saveRealRecord(t, env.app, "mail_mailbox_members", map[string]any{"mailbox": env.inbox.Id, "user": user.Id, "role": "owner"})

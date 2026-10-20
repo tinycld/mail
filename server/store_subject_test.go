@@ -6,6 +6,7 @@ import "testing"
 // must still get a thread. mail_threads.subject is required, and Apple Mail
 // saves an untitled draft through IMAP APPEND before the user types a subject.
 func TestFindOrCreateThread_BlankSubjectGetsPlaceholder(t *testing.T) {
+	t.Parallel()
 	app := newRealSchemaApp(t)
 	mailbox := seedRealMailbox(t, app)
 
@@ -21,6 +22,7 @@ func TestFindOrCreateThread_BlankSubjectGetsPlaceholder(t *testing.T) {
 }
 
 func TestFindOrCreateThread_KeepsNormalizedSubject(t *testing.T) {
+	t.Parallel()
 	app := newRealSchemaApp(t)
 	mailbox := seedRealMailbox(t, app)
 

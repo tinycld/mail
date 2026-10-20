@@ -38,6 +38,7 @@ func giveUsername(t *testing.T, app core.App, user *core.Record, username string
 }
 
 func TestIMAPLogin_AcceptsBareUsername(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 	giveUsername(t, env.app, env.member, "member-imap")
 
@@ -51,6 +52,7 @@ func TestIMAPLogin_AcceptsBareUsername(t *testing.T) {
 }
 
 func TestSMTPAuth_AcceptsBareUsername(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 	giveUsername(t, env.app, env.member, "member-smtp")
 
@@ -64,6 +66,7 @@ func TestSMTPAuth_AcceptsBareUsername(t *testing.T) {
 }
 
 func TestIMAPLogin_WrongUsernameStillFails(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 	giveUsername(t, env.app, env.member, "member-real")
 

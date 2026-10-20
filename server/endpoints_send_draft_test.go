@@ -366,6 +366,7 @@ func TestHandleDraft_RemoveAttachmentsDropsThemFromTheDraft(t *testing.T) {
 }
 
 func TestOriginalAttachmentName(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		"hippo_ab12cd34ef.jpg":     "hippo.jpg",
 		"my_report_0123456789.pdf": "my_report.pdf",

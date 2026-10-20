@@ -95,8 +95,7 @@ func (e *sendError) asAPIError(re *core.RequestEvent) error {
 // HTTP endpoint or an automation action handler.
 //
 // Context carries the send's cancellation scope: the request context for
-// handleSend, a background context for rule-driven sends (no request to
-// inherit from).
+// handleSend, the action's context for rule-driven sends.
 type sendParams struct {
 	Ctx                context.Context
 	UserID             string
@@ -162,6 +161,13 @@ func sendMessage(app core.App, p sendParams) (*sendResultRecord, error) {
 	}
 	if len(p.To) == 0 {
 		return nil, &sendError{kind: sendErrBadRequest, msg: "at least one recipient is required"}
+	}
+	// An ended context means nobody waits for this send any more: the request
+	// was dropped, or a rule action timed out or is cancelled at terminate.
+	// Checked here as well as by provider.Send, because a demo send never
+	// reaches the provider and would still store a message.
+	if err := p.Ctx.Err(); err != nil {
+		return nil, &sendError{kind: sendErrUpstream, msg: "The send was cancelled", err: err}
 	}
 
 	mailbox, err := app.FindRecordById("mail_mailboxes", p.MailboxID)

@@ -11,6 +11,7 @@ import (
 // so a nil pointer for any requested item panics the connection. Apple Mail
 // sends STATUS for every folder about once a minute.
 func TestIMAPStatus_FillsEveryRequestedItem(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	s := &imapSession{app: env.app, user: env.user}
 
@@ -60,6 +61,7 @@ func TestIMAPStatus_FillsEveryRequestedItem(t *testing.T) {
 
 // A failed count must reach the client as an IMAP error, not as a nil count.
 func TestIMAPStatus_QueryFailureIsReturned(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	s := &imapSession{app: env.app, user: env.user}
 

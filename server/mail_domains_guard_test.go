@@ -10,6 +10,7 @@ import (
 	"github.com/pocketbase/pocketbase/tests"
 
 	"tinycld.org/core/maildomains"
+	"tinycld.org/core/rlstest"
 )
 
 // setupDomainGuardApp builds the add-domain test app and then opens
@@ -264,7 +265,7 @@ func seedGuardSuperuser(t *testing.T, app core.App) *core.Record {
 	}
 	su := core.NewRecord(col)
 	su.SetEmail("operator@example.com")
-	su.SetPassword("password12345")
+	rlstest.SetPassword(su, "password12345")
 	if err := app.Save(su); err != nil {
 		t.Fatalf("failed to save superuser: %v", err)
 	}

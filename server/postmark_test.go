@@ -11,6 +11,7 @@ import (
 // PocketBase's Date type which expects RFC-3339; storing the raw RFC-2822
 // string causes "date: cannot be blank" validation errors.
 func TestNormalizePostmarkDate_RFC2822(t *testing.T) {
+	t.Parallel()
 	got := normalizePostmarkDate("Sat, 2 May 2026 20:35:46 -0700")
 	want := "2026-05-03T03:35:46Z"
 	if got != want {
@@ -21,6 +22,7 @@ func TestNormalizePostmarkDate_RFC2822(t *testing.T) {
 // TestNormalizePostmarkDate_AlreadyRFC3339 — round-trips RFC-3339 input
 // (the Date header sometimes already comes through in this form).
 func TestNormalizePostmarkDate_AlreadyRFC3339(t *testing.T) {
+	t.Parallel()
 	// mail.ParseDate accepts a relaxed superset that includes RFC-3339-ish
 	// strings; we just need the output to be parseable as RFC-3339.
 	out := normalizePostmarkDate("Mon, 02 Jan 2006 15:04:05 -0700")
@@ -33,6 +35,7 @@ func TestNormalizePostmarkDate_AlreadyRFC3339(t *testing.T) {
 // message over a malformed Date header. Garbage input should fall back to
 // the current UTC time formatted as RFC-3339.
 func TestNormalizePostmarkDate_InvalidFallsBackToNow(t *testing.T) {
+	t.Parallel()
 	out := normalizePostmarkDate("not a date")
 	if _, err := time.Parse(time.RFC3339, out); err != nil {
 		t.Fatalf("fallback output %q is not valid RFC-3339: %v", out, err)
@@ -42,6 +45,7 @@ func TestNormalizePostmarkDate_InvalidFallsBackToNow(t *testing.T) {
 // TestNormalizePostmarkDate_EmptyFallsBackToNow — empty Date header
 // (rare but possible) should also fall back to now.
 func TestNormalizePostmarkDate_EmptyFallsBackToNow(t *testing.T) {
+	t.Parallel()
 	out := normalizePostmarkDate("")
 	if _, err := time.Parse(time.RFC3339, out); err != nil {
 		t.Fatalf("fallback output %q is not valid RFC-3339: %v", out, err)
@@ -52,6 +56,7 @@ func TestNormalizePostmarkDate_EmptyFallsBackToNow(t *testing.T) {
 // regression for the production bug: a real Postmark payload's Date field
 // must come out of ParseInbound as RFC-3339 so PocketBase accepts it.
 func TestParseInbound_NormalizesDateFromRealPostmarkPayload(t *testing.T) {
+	t.Parallel()
 	body := []byte(`{
 		"FromFull": {"Email": "sender@example.org", "Name": "Sender"},
 		"ToFull": [{"Email": "alice@acme.com"}],
@@ -82,6 +87,7 @@ func TestParseInbound_NormalizesDateFromRealPostmarkPayload(t *testing.T) {
 // already empty for HTML-only mail Postmark can't parse, and consumers fall
 // back to TextBody when it's empty.
 func TestParseInbound_RegeneratesTextBodyFromHTML(t *testing.T) {
+	t.Parallel()
 	body := []byte(`{
 		"FromFull": {"Email": "sender@example.org", "Name": "Sender"},
 		"ToFull": [{"Email": "alice@acme.com"}],
@@ -119,6 +125,7 @@ func TestParseInbound_RegeneratesTextBodyFromHTML(t *testing.T) {
 // parse the reply boundary (typical for plain-text mail), StrippedTextReply
 // is non-empty and we trust it. We do not synthesize a value here.
 func TestParseInbound_PassesThroughNonEmptyStrippedReply(t *testing.T) {
+	t.Parallel()
 	body := []byte(`{
 		"FromFull": {"Email": "sender@example.org", "Name": "Sender"},
 		"ToFull": [{"Email": "alice@acme.com"}],
@@ -146,6 +153,7 @@ func TestParseInbound_PassesThroughNonEmptyStrippedReply(t *testing.T) {
 // must still come out with RecordType, MessageID and DeliveredAt set so
 // eventFromBounce can map it to a Delivered event.
 func TestParseBounce_DeliveryPayload(t *testing.T) {
+	t.Parallel()
 	body := []byte(`{
 		"RecordType": "Delivery",
 		"MessageID": "abc-123",
@@ -173,6 +181,7 @@ func TestParseBounce_DeliveryPayload(t *testing.T) {
 // TestParseInbound_PreservesTextBodyWhenNoHTML — when there's no HtmlBody,
 // the sender's text/plain part is trustworthy and we leave it alone.
 func TestParseInbound_PreservesTextBodyWhenNoHTML(t *testing.T) {
+	t.Parallel()
 	body := []byte(`{
 		"FromFull": {"Email": "sender@example.org", "Name": "Sender"},
 		"ToFull": [{"Email": "alice@acme.com"}],

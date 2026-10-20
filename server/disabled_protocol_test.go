@@ -43,6 +43,7 @@ func disableUser(t *testing.T, app core.App, user *core.Record) {
 }
 
 func TestIMAPLogin_DisabledUserRejected(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 
 	// Positive control first: the same credentials succeed while enabled, so a
@@ -63,6 +64,7 @@ func TestIMAPLogin_DisabledUserRejected(t *testing.T) {
 }
 
 func TestSMTPAuth_DisabledUserRejected(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 
 	s := &smtpSession{app: env.app}
