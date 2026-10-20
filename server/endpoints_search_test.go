@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -92,7 +93,7 @@ func TestSearchMail_FTSQueryRunsAgainstLiveShapedIndexes(t *testing.T) {
 		"body only": {HasWords: "alpha", Limit: 25},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := SearchMail(app, user.Id, req); err != nil {
+			if _, err := SearchMail(context.Background(), app, user.Id, req); err != nil {
 				t.Fatalf("search failed: %v", err)
 			}
 		})

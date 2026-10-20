@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"maps"
 	"net/http"
 	"slices"
@@ -10,8 +11,11 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
+	"tinycld.org/core/logging"
 	"tinycld.org/packages/mail/api"
 )
+
+var searchLog = logging.ForPackage("mail")
 
 // searchResultRow is the SQL scan target for the search queries. It is wider
 // than the HTTP wire type: the federated search palette (search_source.go)
@@ -154,7 +158,7 @@ func buildStateJoin(f *api.SearchRequest, userID string, params map[string]any) 
 // structured filters (from, to, subject, has_words, dates, has_attachment,
 // folder) the federated palette does not offer.
 func handleSearch(app core.App, re *core.RequestEvent) error {
-	resp, err := SearchMail(app, re.Auth.Id, parseSearchRequest(re.Request))
+	resp, err := SearchMail(re.Request.Context(), app, re.Auth.Id, parseSearchRequest(re.Request))
 	if err != nil {
 		return err
 	}
@@ -169,8 +173,8 @@ func handleSearch(app core.App, re *core.RequestEvent) error {
 // The federated search palette (search_source.go) does not call this: it
 // calls searchMailResultRows directly, because it needs the display columns
 // the wire type no longer carries.
-func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.SearchResponse, error) {
-	rows, total, err := searchMailResultRows(app, userID, filters)
+func SearchMail(ctx context.Context, app core.App, userID string, filters api.SearchRequest) (api.SearchResponse, error) {
+	rows, total, err := searchMailResultRows(ctx, app, userID, filters)
 	if err != nil {
 		return api.SearchResponse{Items: []api.SearchResultItem{}, Total: 0}, err
 	}
@@ -181,7 +185,13 @@ func SearchMail(app core.App, userID string, filters api.SearchRequest) (api.Sea
 // (display columns included) plus the total match count. Both handleSearch
 // (via SearchMail) and the federated search palette (search_source.go) read
 // from this one query so there is one implementation of mail search, not two.
-func searchMailResultRows(app core.App, userID string, filters api.SearchRequest) ([]searchResultRow, int, error) {
+//
+// The queries are bound to ctx. When it ends — the request was dropped, or the
+// federated search's time is up — the search returns ctx's error, not a 500.
+func searchMailResultRows(ctx context.Context, app core.App, userID string, filters api.SearchRequest) ([]searchResultRow, int, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
 	q := filters.Query
 	mailboxID := filters.MailboxID
 	limit := filters.Limit
@@ -203,7 +213,7 @@ func searchMailResultRows(app core.App, userID string, filters api.SearchRequest
 	// mailboxes, by contrast, is a genuinely empty answer.
 	accessibleMailboxIDs, err := getUserMailboxIDs(app, userID, mailboxID)
 	if err != nil {
-		app.Logger().Error("search: mailbox lookup failed", "error", err, "user", userID)
+		searchLog.ErrorContext(ctx, "search mailbox lookup failed", "error", err, "user", userID)
 		return nil, 0, router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
 	}
 	if len(accessibleMailboxIDs) == 0 {
@@ -230,7 +240,7 @@ func searchMailResultRows(app core.App, userID string, filters api.SearchRequest
 
 	// SQL-only path: no FTS terms, only structured filters
 	if !hasFTSTerms {
-		return structuredSearch(app, inClause, messageWhere, stateJoin, params, limit, offset)
+		return structuredSearch(ctx, app, inClause, messageWhere, stateJoin, params, limit, offset)
 	}
 
 	// FTS path (possibly with additional structured filters). The two FTS
@@ -244,7 +254,7 @@ func searchMailResultRows(app core.App, userID string, filters api.SearchRequest
 		if !hasStructuredFilters(&filters) {
 			return nil, 0, nil
 		}
-		return structuredSearch(app, inClause, messageWhere, stateJoin, params, limit, offset)
+		return structuredSearch(ctx, app, inClause, messageWhere, stateJoin, params, limit, offset)
 	}
 
 	// Only bind a param when its UNION arm is actually present in the SQL — dbx
@@ -322,9 +332,12 @@ func searchMailResultRows(app core.App, userID string, filters api.SearchRequest
 	`
 
 	var results []searchResultRow
-	err = app.DB().NewQuery(combinedQuery).Bind(dbx.Params(params)).All(&results)
+	err = app.DB().NewQuery(combinedQuery).WithContext(ctx).Bind(dbx.Params(params)).All(&results)
 	if err != nil {
-		app.Logger().Error("FTS: search query failed", "error", err, "query", q)
+		if ctx.Err() != nil {
+			return nil, 0, ctx.Err()
+		}
+		searchLog.ErrorContext(ctx, "FTS search query failed", "error", err, "query", q)
 		return nil, 0, router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
 	}
 
@@ -374,7 +387,7 @@ func searchMailResultRows(app core.App, userID string, filters api.SearchRequest
 				countParams[k] = v
 			}
 		}
-		if err := app.DB().NewQuery(countQuery).Bind(dbx.Params(countParams)).One(&countResult); err == nil {
+		if err := app.DB().NewQuery(countQuery).WithContext(ctx).Bind(dbx.Params(countParams)).One(&countResult); err == nil {
 			total = countResult.Total
 		}
 	} else if offset > 0 {
@@ -388,6 +401,7 @@ func searchMailResultRows(app core.App, userID string, filters api.SearchRequest
 // are present. Returns rows and a total rather than writing a response so
 // searchMailResultRows can call it on both the HTTP and in-process paths.
 func structuredSearch(
+	ctx context.Context,
 	app core.App,
 	inClause, messageWhere, stateJoin string,
 	params map[string]any,
@@ -413,9 +427,12 @@ func structuredSearch(
 	`
 
 	var results []searchResultRow
-	err := app.DB().NewQuery(query).Bind(dbx.Params(params)).All(&results)
+	err := app.DB().NewQuery(query).WithContext(ctx).Bind(dbx.Params(params)).All(&results)
 	if err != nil {
-		app.Logger().Error("Structured search failed", "error", err)
+		if ctx.Err() != nil {
+			return nil, 0, ctx.Err()
+		}
+		searchLog.ErrorContext(ctx, "structured search failed", "error", err)
 		return nil, 0, router.NewApiError(http.StatusInternalServerError, "Search failed", nil)
 	}
 
@@ -436,7 +453,7 @@ func structuredSearch(
 		var countResult struct {
 			Total int `db:"total"`
 		}
-		if err := app.DB().NewQuery(countQuery).Bind(dbx.Params(countParams)).One(&countResult); err == nil {
+		if err := app.DB().NewQuery(countQuery).WithContext(ctx).Bind(dbx.Params(countParams)).One(&countResult); err == nil {
 			total = countResult.Total
 		}
 	} else if offset > 0 {
