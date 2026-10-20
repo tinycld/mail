@@ -80,9 +80,13 @@ func TestMigrations_GroupCoverage(t *testing.T) {
 // it does in a real install where core's migrations run first.
 func seedGroupsCollection(t *testing.T, app core.App) {
 	t.Helper()
-	c := core.NewBaseCollection("groups", "pbc_groups_01")
-	c.Fields.Add(&core.TextField{Name: "name", Required: true})
-	if err := app.Save(c); err != nil {
+	if err := addGroupsCollection(app); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func addGroupsCollection(app core.App) error {
+	c := core.NewBaseCollection("groups", "pbc_groups_01")
+	c.Fields.Add(&core.TextField{Name: "name", Required: true})
+	return app.Save(c)
 }

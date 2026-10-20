@@ -4,32 +4,13 @@ import (
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
-	"tinycld.org/core/rlstest"
 )
 
 // TestMailMessagesHasDeliveryTrackingFields proves the shipped migrations add
 // delivered_at and bounce_class to mail_messages with the right types and
 // select values, so later provider-notification code has somewhere to write.
 func TestMailMessagesHasDeliveryTrackingFields(t *testing.T) {
-	app := rlstest.NewApp(t)
-
-	// 1830000007's mail_mailbox_members rules read users.role/disabled, which
-	// belong to core's users schema and aren't carried by the bare test app.
-	users, err := app.FindCollectionByNameOrId("users")
-	if err != nil {
-		t.Fatal(err)
-	}
-	users.Fields.Add(&core.SelectField{
-		Name: "role", MaxSelect: 1,
-		Values: []string{"owner", "admin", "member", "guest"},
-	})
-	users.Fields.Add(&core.BoolField{Name: "disabled"})
-	if err := app.Save(users); err != nil {
-		t.Fatalf("add users fields: %v", err)
-	}
-
-	seedGroupsCollection(t, app)
-	rlstest.Apply(t, app, rlstest.MigrationsDir(t, "../pb-migrations"))
+	app := newMailRulesApp(t)
 
 	collection, err := app.FindCollectionByNameOrId("mail_messages")
 	if err != nil {
