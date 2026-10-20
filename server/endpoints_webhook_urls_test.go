@@ -7,6 +7,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
+	"tinycld.org/core/rlstest"
 )
 
 // The webhook-urls endpoint embeds the domain's webhook_secret in the URLs it
@@ -76,7 +77,7 @@ func seedAuthUser(t *testing.T, app core.App, email, role string) *core.Record {
 	}
 	user := core.NewRecord(authCol)
 	user.Set("email", email)
-	user.Set("password", "password12345")
+	rlstest.SetPassword(user, "password12345")
 	user.Set("role", role)
 	if err := app.Save(user); err != nil {
 		t.Fatalf("failed to save auth user %s: %v", email, err)

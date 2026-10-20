@@ -121,6 +121,7 @@ var (
 // The exact query buildMessageFTSQuery produces for a body-only search must
 // match on the body and only the body.
 func TestMessageFTSBodyOnlySearch(t *testing.T) {
+	t.Parallel()
 	db := newMessageFTS(t)
 	seedMsg(t, db, mInvoice, mWelcome, mReport)
 
@@ -134,6 +135,7 @@ func TestMessageFTSBodyOnlySearch(t *testing.T) {
 
 // body_text scoping must NOT match the same term sitting in another column.
 func TestMessageFTSBodyScopeExcludesOtherColumns(t *testing.T) {
+	t.Parallel()
 	db := newMessageFTS(t)
 	// "Welcome" is in the subject, not the body.
 	seedMsg(t, db, mWelcome)
@@ -146,6 +148,7 @@ func TestMessageFTSBodyScopeExcludesOtherColumns(t *testing.T) {
 
 // Search-as-you-type: a prefix of a body word matches.
 func TestMessageFTSBodyPrefixMatch(t *testing.T) {
+	t.Parallel()
 	db := newMessageFTS(t)
 	seedMsg(t, db, mInvoice, mReport)
 
@@ -155,6 +158,7 @@ func TestMessageFTSBodyPrefixMatch(t *testing.T) {
 
 // Multiple body terms are AND-ed (all must be present in the body).
 func TestMessageFTSMultipleBodyTermsAreAnded(t *testing.T) {
+	t.Parallel()
 	db := newMessageFTS(t)
 	seedMsg(t, db, mInvoice, mReport)
 
@@ -169,6 +173,7 @@ func TestMessageFTSMultipleBodyTermsAreAnded(t *testing.T) {
 // Main query + body filter combine: main term matches any column, body term is
 // body-scoped, both must hold.
 func TestMessageFTSMainQueryPlusBodyFilter(t *testing.T) {
+	t.Parallel()
 	db := newMessageFTS(t)
 	seedMsg(t, db, mInvoice, mReport)
 
@@ -181,6 +186,7 @@ func TestMessageFTSMainQueryPlusBodyFilter(t *testing.T) {
 
 // Matching is case-insensitive (unicode61 folds case).
 func TestMessageFTSCaseInsensitive(t *testing.T) {
+	t.Parallel()
 	db := newMessageFTS(t)
 	seedMsg(t, db, mInvoice)
 
@@ -191,6 +197,7 @@ func TestMessageFTSCaseInsensitive(t *testing.T) {
 // The thread index has no body_text column; buildThreadFTSQuery must produce a
 // query that runs there WITHOUT error (i.e. it never references body_text).
 func TestThreadFTSQueryRunsAgainstThreadIndex(t *testing.T) {
+	t.Parallel()
 	db := newThreadFTS(t)
 	if _, err := db.Exec(`
 		INSERT INTO fts_mail_threads (record_id, subject, snippet, participants)
@@ -219,6 +226,7 @@ func TestThreadFTSQueryRunsAgainstThreadIndex(t *testing.T) {
 // placeholder this errors with "unable to use function snippet in the requested
 // context" — the exact bug that made body-only search return 0 results.
 func TestMessageOnlyUnionAllowsSnippet(t *testing.T) {
+	t.Parallel()
 	db := newMessageFTS(t)
 	seedMsg(t, db, mInvoice)
 
@@ -274,6 +282,7 @@ func TestMessageOnlyUnionAllowsSnippet(t *testing.T) {
 // thread index errors. This is exactly the bug that returned 0 results before
 // the split. If FTS5 ever stopped erroring here, the split could be revisited.
 func TestThreadIndexRejectsBodyTextScope(t *testing.T) {
+	t.Parallel()
 	db := newThreadFTS(t)
 	if _, err := db.Exec(
 		`INSERT INTO fts_mail_threads (record_id, subject, snippet, participants) VALUES ('t1','S','x','y')`,

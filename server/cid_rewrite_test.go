@@ -3,6 +3,7 @@ package mail
 import "testing"
 
 func TestNormalizeCID(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		"cid:foo":     "foo",
 		"CID:Foo":     "foo",
@@ -19,6 +20,7 @@ func TestNormalizeCID(t *testing.T) {
 }
 
 func TestBuildCIDMap(t *testing.T) {
+	t.Parallel()
 	atts := []InboundAttachment{
 		{ContentID: "cid:hippo-inline"},
 		{ContentID: ""},
@@ -42,12 +44,14 @@ func TestBuildCIDMap(t *testing.T) {
 }
 
 func TestBuildCIDMap_NoAttachments(t *testing.T) {
+	t.Parallel()
 	if got := buildCIDMap(nil, nil); len(got) != 0 {
 		t.Errorf("expected empty map, got %v", got)
 	}
 }
 
 func TestBuildCIDMap_LengthMismatch(t *testing.T) {
+	t.Parallel()
 	atts := []InboundAttachment{{ContentID: "cid:a"}, {ContentID: "cid:b"}}
 	stored := []string{"a.jpg"}
 	got := buildCIDMap(atts, stored)

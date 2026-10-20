@@ -10,6 +10,7 @@ import "testing"
 // Pinned as a literal on purpose: rebuilding it from approutes.Href here would
 // assert the helper against itself and pass even if the prefix silently moved.
 func TestMailNotificationURL(t *testing.T) {
+	t.Parallel()
 	if mailNotificationURL != "/a/mail" {
 		t.Errorf("mailNotificationURL = %q, want %q", mailNotificationURL, "/a/mail")
 	}

@@ -10,6 +10,7 @@ import (
 )
 
 func TestDeliveryStatusForResult_SentWhenNothingFailed(t *testing.T) {
+	t.Parallel()
 	status, reason := deliveryStatusForResult(&SendResult{MessageID: "m1"}, 3)
 	if status != "sent" {
 		t.Errorf("status = %q, want sent", status)
@@ -22,6 +23,7 @@ func TestDeliveryStatusForResult_SentWhenNothingFailed(t *testing.T) {
 // A partial failure still reached someone, so the message is "sent" — but the
 // reason is recorded either way so the sender can see which address failed.
 func TestDeliveryStatusForResult_PartialFailureIsStillSent(t *testing.T) {
+	t.Parallel()
 	result := &SendResult{
 		MessageID:        "m1",
 		FailedRecipients: []RecipientFailure{{Email: "a@example.com", Reason: "550 no such user"}},
@@ -36,6 +38,7 @@ func TestDeliveryStatusForResult_PartialFailureIsStillSent(t *testing.T) {
 }
 
 func TestDeliveryStatusForResult_BouncedWhenEveryRecipientFailed(t *testing.T) {
+	t.Parallel()
 	result := &SendResult{
 		MessageID: "m1",
 		FailedRecipients: []RecipientFailure{
@@ -58,6 +61,7 @@ func TestDeliveryStatusForResult_BouncedWhenEveryRecipientFailed(t *testing.T) {
 // Recording a bounce as "sent" is not cosmetic: delivery_status is what the
 // automation loop-breaker counts, and what a user reads in their Sent folder.
 func TestDeliveryStatusForResult_InflatedTotalHidesABounce(t *testing.T) {
+	t.Parallel()
 	result := &SendResult{
 		MessageID:        "m1",
 		FailedRecipients: []RecipientFailure{{Email: "a@example.com", Reason: "550 no such user"}},
@@ -77,6 +81,7 @@ func TestDeliveryStatusForResult_InflatedTotalHidesABounce(t *testing.T) {
 // envelope and repeats addresses that also appear in To/Cc; the deduped bcc
 // slice is the one that makes the total match the real fan-out.
 func TestSMTPData_DeliveryStatusUsesTheDedupedCount(t *testing.T) {
+	t.Parallel()
 	const filename = "smtp_session.go"
 
 	fset := token.NewFileSet()

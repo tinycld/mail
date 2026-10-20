@@ -13,6 +13,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 	"github.com/pocketbase/pocketbase/tools/router"
+	"tinycld.org/core/rlstest"
 )
 
 // makeInboundRequest constructs a *core.RequestEvent suitable for calling
@@ -258,6 +259,7 @@ func seedMember(t *testing.T, app core.App, mailboxID, userID string) {
 // fails (DB issue, missing collection), the message must not be silently
 // stored without thread state. Return 500 so Postmark retries.
 func TestHandleInbound_MembersLookupFailureReturns500(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_memfail_001")
 
@@ -291,6 +293,7 @@ func TestHandleInbound_MembersLookupFailureReturns500(t *testing.T) {
 // stores only one mail_messages row. Validates the idempotency check the
 // 500-retry behavior depends on.
 func TestHandleInbound_IdempotentRetry(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_idem_001")
 	seedMember(t, app, "mb_idem_001", "user_alice")
@@ -320,6 +323,7 @@ func TestHandleInbound_IdempotentRetry(t *testing.T) {
 // recipient resolves and storage succeeds, return 200 even if other
 // recipients are unknown.
 func TestHandleInbound_MixedKnownAndUnknownReturns200(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_mixed_001")
 	seedMember(t, app, "mb_mixed_001", "user_alice")
@@ -343,6 +347,7 @@ func TestHandleInbound_MixedKnownAndUnknownReturns200(t *testing.T) {
 // known mailbox, return 500 so Postmark retries. No thread row should be
 // left behind (orphan cleanup).
 func TestHandleInbound_StorageFailureReturns500(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_storefail_001")
 	seedMember(t, app, "mb_storefail_001", "user_alice")
@@ -394,6 +399,7 @@ func TestHandleInbound_StorageFailureReturns500(t *testing.T) {
 // TestHandleInbound_KnownRecipientStoresMessage — happy path: a To address
 // matches a known mailbox, the message is stored, response is 200.
 func TestHandleInbound_KnownRecipientStoresMessage(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_known_001")
 	seedMember(t, app, "mb_known_001", "user_alice")
@@ -432,6 +438,7 @@ func TestHandleInbound_KnownRecipientStoresMessage(t *testing.T) {
 // rules are all closed by the disabled guards. If delivery ever starts
 // consulting `disabled`, this goes red so the change is made knowingly.
 func TestHandleInbound_DisabledUserMailboxStillReceives(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "carol", "mb_disabled_001")
 
@@ -449,7 +456,7 @@ func TestHandleInbound_DisabledUserMailboxStillReceives(t *testing.T) {
 	carol.SetEmail("carol@local.test")
 	carol.Set("username", testUsername("carol@local.test"))
 	carol.SetVerified(true)
-	carol.SetPassword("Password123!")
+	rlstest.SetPassword(carol, "Password123!")
 	carol.Set("disabled", true)
 	if err := app.Save(carol); err != nil {
 		t.Fatalf("failed to save disabled user: %v", err)
@@ -498,6 +505,7 @@ func assertThreadStateInInbox(t *testing.T, app core.App, threadID, userID strin
 // TestHandleInbound_ParseFailureReturns422 — when ParseInbound returns an
 // error, return 422 (Unprocessable Entity) so Postmark stops retrying.
 func TestHandleInbound_ParseFailureReturns422(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 
 	body := []byte(`{"this":"is","not":"an","inbound":"email"}`)
@@ -530,6 +538,7 @@ func TestHandleInbound_ParseFailureReturns422(t *testing.T) {
 // doesn't resolve to any mailbox, return 403 with the unknown address(es)
 // listed in the message so the bounce is informative.
 func TestHandleInbound_UnknownRecipientReturns403(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "real", "mb_unknown_001")
 

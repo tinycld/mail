@@ -102,6 +102,7 @@ func sortedKeys(ids ...string) string {
 }
 
 func TestAddressKeys_ParseFormatRoundTrip(t *testing.T) {
+	t.Parallel()
 	if got := parseAddressKeys(""); len(got) != 0 {
 		t.Errorf("parseAddressKeys(\"\") = %v, want empty", got)
 	}
@@ -117,6 +118,7 @@ func TestAddressKeys_ParseFormatRoundTrip(t *testing.T) {
 }
 
 func TestAddressKeys_InboundAddsDeliveredTo(t *testing.T) {
+	t.Parallel()
 	env := setupAddressKeysEnv(t)
 	msg := env.deliverTo(t, "ann@q.example", "<in-1@sender.example>", "")
 	threadID := msg.GetString("thread")
@@ -167,6 +169,7 @@ func TestAddressKeys_SendAddsSentFrom(t *testing.T) {
 }
 
 func TestAddressKeys_NewStateCopiesThread(t *testing.T) {
+	t.Parallel()
 	env := setupAddressKeysEnv(t)
 	msg := env.deliverTo(t, "ann@q.example", "<in-3@sender.example>", "")
 	bob := saveRealRecord(t, env.app, "users", map[string]any{
@@ -184,6 +187,7 @@ func TestAddressKeys_NewStateCopiesThread(t *testing.T) {
 }
 
 func TestAddressKeys_ClientCannotWrite(t *testing.T) {
+	t.Parallel()
 	var env *addressKeysEnv
 	var threadID string
 	scenario := tests.ApiScenario{
@@ -216,6 +220,7 @@ func TestAddressKeys_ClientCannotWrite(t *testing.T) {
 // A full set must not fail the thread save: that would fail the delivery.
 // The set is kept as it is, and the message is still stored.
 func TestAddressKeys_FullSetKeepsExistingAndDelivers(t *testing.T) {
+	t.Parallel()
 	env := setupAddressKeysEnv(t)
 	first := env.deliverTo(t, "ann@q.example", "<in-5@sender.example>", "")
 	threadID := first.GetString("thread")
@@ -256,6 +261,7 @@ func TestAddressKeys_FullSetKeepsExistingAndDelivers(t *testing.T) {
 // A draft saved again under another From address adds that address, so a
 // view of either address lists the draft's thread.
 func TestAddressKeys_DraftUpdateAddsNewFrom(t *testing.T) {
+	t.Parallel()
 	env := setupAddressKeysEnv(t)
 	re, rec := draftEvent(t, env.app, env.ann, map[string]any{
 		"mailbox_id": env.desk.Id, "from_address_id": env.annAddr.Id, "subject": "Plan", "text_body": "draft",
@@ -335,6 +341,7 @@ func TestAddressKeys_SMTPDedupAddsSentFrom(t *testing.T) {
 // state row, so the thread column is server-owned too: an update keeps the
 // stored value and a create starts empty.
 func TestAddressKeys_ClientCannotWriteThread(t *testing.T) {
+	t.Parallel()
 	var env *addressKeysEnv
 	var threadID string
 	update := tests.ApiScenario{
@@ -440,6 +447,7 @@ func TestAddressKeys_SendBroadcastCarriesMarkersAndKeys(t *testing.T) {
 }
 
 func TestAddressKeys_NewDraftBroadcastCarriesMarkersAndKeys(t *testing.T) {
+	t.Parallel()
 	env := setupAddressKeysEnv(t)
 	last := captureLastThreadUpdate(env.app)
 	re, rec := draftEvent(t, env.app, env.ann, map[string]any{
@@ -468,6 +476,7 @@ func TestAddressKeys_NewDraftBroadcastCarriesMarkersAndKeys(t *testing.T) {
 // The draft update in place saves the thread too; its last update must carry
 // the marker and the new From address.
 func TestAddressKeys_DraftUpdateBroadcastCarriesMarkersAndKeys(t *testing.T) {
+	t.Parallel()
 	env := setupAddressKeysEnv(t)
 	re, rec := draftEvent(t, env.app, env.ann, map[string]any{
 		"mailbox_id": env.desk.Id, "from_address_id": env.annAddr.Id, "subject": "Plan", "text_body": "draft",

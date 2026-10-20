@@ -9,6 +9,7 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
+	"tinycld.org/core/rlstest"
 	"tinycld.org/packages/mail/api"
 )
 
@@ -23,7 +24,7 @@ func searchUser(t *testing.T, app core.App, email string) *core.Record {
 	r.SetEmail(email)
 	r.Set("username", testUsername(email))
 	r.SetVerified(true)
-	r.SetPassword("Password123!")
+	rlstest.SetPassword(r, "Password123!")
 	if err := app.Save(r); err != nil {
 		t.Fatal(err)
 	}
@@ -35,6 +36,7 @@ func searchUser(t *testing.T, app core.App, email string) *core.Record {
 // `ts.user_org` rename bug present as a silent empty inbox: the whole Go
 // suite stayed green while every live search returned nothing.
 func TestHandleSearch_QueryFailureIsAnError(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_searcherr_01")
 	user := searchUser(t, app, "alice@acme.com")
@@ -60,6 +62,7 @@ func TestHandleSearch_QueryFailureIsAnError(t *testing.T) {
 }
 
 func TestMapResults_PropagatesStateID(t *testing.T) {
+	t.Parallel()
 	rows := []searchResultRow{
 		{ThreadID: "t1", StateID: "state1"},
 		{ThreadID: "t2", StateID: "state2"},
@@ -83,6 +86,7 @@ func TestMapResults_PropagatesStateID(t *testing.T) {
 // of UNION ALL do not have the same number of result columns". The fixture
 // above has no FTS tables, so this runs the query against real ones.
 func TestSearchMail_FTSQueryRunsAgainstLiveShapedIndexes(t *testing.T) {
+	t.Parallel()
 	app := setupFTSMatchApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_searchfts_01")
 	user := searchUser(t, app, "alice@acme.com")

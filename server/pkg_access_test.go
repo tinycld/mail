@@ -45,6 +45,7 @@ func giveMailReadonly(t *testing.T, app core.App, user *core.Record) {
 
 // SMTP submission exists only to send; a readonly grant refuses at AUTH.
 func TestSMTPAuth_ReadonlyGrantRefused(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 	giveMailReadonly(t, env.app, env.member)
 
@@ -56,6 +57,7 @@ func TestSMTPAuth_ReadonlyGrantRefused(t *testing.T) {
 
 // IMAP login (reading) stays available; mutating commands are refused.
 func TestIMAP_ReadonlyGrantBlocksMutationsNotReads(t *testing.T) {
+	t.Parallel()
 	env := setupMailGuestApp(t)
 	giveMailReadonly(t, env.app, env.member)
 

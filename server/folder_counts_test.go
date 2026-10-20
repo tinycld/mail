@@ -20,6 +20,7 @@ func countsRow(t *testing.T, env *scopeEnv, mailboxID string) *core.Record {
 }
 
 func TestFolderCounts_RowFollowsStateChanges(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	// setupScopeEnv seeds one unread inbox thread per mailbox.
 	row := countsRow(t, env, env.mbA.Id)
@@ -76,6 +77,7 @@ func TestFolderCounts_RowFollowsStateChanges(t *testing.T) {
 }
 
 func TestFolderCounts_BulkArchiveLeavesCorrectRow(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	threads, _ := env.app.FindCollectionByNameOrId("mail_threads")
 	for i := 0; i < 25; i++ {
@@ -113,6 +115,7 @@ func TestFolderCounts_BulkArchiveLeavesCorrectRow(t *testing.T) {
 }
 
 func TestFolderCounts_OtherMailboxUntouched(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	thread, err := env.app.FindFirstRecordByFilter("mail_threads", "mailbox = {:mb}", map[string]any{"mb": env.mbA.Id})
 	if err != nil {
@@ -132,6 +135,7 @@ func TestFolderCounts_OtherMailboxUntouched(t *testing.T) {
 // recreate it, since the new row would point at the deleted mailbox and fail
 // relation validation.
 func TestFolderCounts_MailboxDeleteDoesNotRecreateRow(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	countsRow(t, env, env.mbA.Id)
 
@@ -155,6 +159,7 @@ func TestFolderCounts_MailboxDeleteDoesNotRecreateRow(t *testing.T) {
 // Two state changes of one mailbox can both find no counts row and both
 // create it. The one that loses must still leave the row correct, not fail.
 func TestFolderCounts_LosingTheCreateRaceUpdatesTheRow(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	if err := env.app.Delete(countsRow(t, env, env.mbA.Id)); err != nil {
 		t.Fatal(err)
@@ -259,6 +264,7 @@ func (env *addressCountsEnv) byAddress(t *testing.T, mailbox *core.Record) map[s
 }
 
 func TestFolderCounts_CountsEachAddressOfThePersonalInbox(t *testing.T) {
+	t.Parallel()
 	env := setupAddressCountsEnv(t)
 	env.seedThread(t, env.inbox, false, env.addrA)
 	env.seedThread(t, env.inbox, true, env.addrA, env.addrB)
@@ -274,6 +280,7 @@ func TestFolderCounts_CountsEachAddressOfThePersonalInbox(t *testing.T) {
 }
 
 func TestFolderCounts_ArchiveDropsThreadFromAddressNumbers(t *testing.T) {
+	t.Parallel()
 	env := setupAddressCountsEnv(t)
 	only := env.seedThread(t, env.inbox, false, env.addrA)
 	env.seedThread(t, env.inbox, true, env.addrA, env.addrB)
@@ -292,6 +299,7 @@ func TestFolderCounts_ArchiveDropsThreadFromAddressNumbers(t *testing.T) {
 }
 
 func TestFolderCounts_SharedInboxHasNoAddressNumbers(t *testing.T) {
+	t.Parallel()
 	env := setupAddressCountsEnv(t)
 	env.seedThread(t, env.shared, false, env.sharedAddr)
 
@@ -305,6 +313,7 @@ func TestFolderCounts_SharedInboxHasNoAddressNumbers(t *testing.T) {
 }
 
 func TestFolderCounts_UnchangedAddressMapDoesNotSave(t *testing.T) {
+	t.Parallel()
 	env := setupAddressCountsEnv(t)
 	env.seedThread(t, env.inbox, false, env.addrA)
 
@@ -354,6 +363,7 @@ func (env *addressCountsEnv) wantAddressNumbers(t *testing.T, when string) {
 }
 
 func TestFolderCounts_SwitchOnFillsAddressNumbers(t *testing.T) {
+	t.Parallel()
 	env := setupAddressCountsEnv(t)
 	env.seedThread(t, env.inbox, false, env.addrA)
 	env.seedThread(t, env.inbox, true, env.addrA, env.addrB)
@@ -375,6 +385,7 @@ func TestFolderCounts_SwitchOnFillsAddressNumbers(t *testing.T) {
 }
 
 func TestFolderCounts_BootFillsAddressNumbersOfViewsThatAreOn(t *testing.T) {
+	t.Parallel()
 	env := setupAddressCountsEnv(t)
 	env.seedThread(t, env.inbox, false, env.addrA)
 	env.seedThread(t, env.inbox, true, env.addrA, env.addrB)

@@ -128,6 +128,7 @@ func noAddressRow(local string) func(t testing.TB, app *tests.TestApp, s *groupA
 }
 
 func TestGroupAddress_ExactlyOneTarget(t *testing.T) {
+	t.Parallel()
 	t.Run("both", func(t *testing.T) {
 		runGroupAddressPost(t, groupAddressPost{
 			name: "mailbox and group", status: http.StatusBadRequest, content: `"group":{"code"`,
@@ -184,6 +185,7 @@ func assertManualNotPrimary(t testing.TB, row *core.Record) {
 }
 
 func TestGroupAddress_IsManualAndNotPrimary(t *testing.T) {
+	t.Parallel()
 	t.Run("api", func(t *testing.T) {
 		runGroupAddressPost(t, groupAddressPost{
 			name: "rule-shaped group address", status: http.StatusOK, content: `"local_part":"sales"`,
@@ -217,6 +219,7 @@ func TestGroupAddress_IsManualAndNotPrimary(t *testing.T) {
 }
 
 func TestGroupAddress_ReservedNameRefused(t *testing.T) {
+	t.Parallel()
 	t.Run("everyone domain", func(t *testing.T) {
 		runGroupAddressPost(t, groupAddressPost{
 			name: "a person's email name", status: http.StatusBadRequest, content: `"local_part":{"code"`,
@@ -249,6 +252,7 @@ func TestGroupAddress_ReservedNameRefused(t *testing.T) {
 }
 
 func TestGroupAddress_TakenRefused(t *testing.T) {
+	t.Parallel()
 	runGroupAddressPost(t, groupAddressPost{
 		name: "an inbox address", status: http.StatusBadRequest, content: `"address_taken"`,
 		prepare: func(t testing.TB, app *tests.TestApp, s *groupAddressSeed) {
@@ -339,6 +343,7 @@ func TestGroupAddress_GroupDeleteRemovesAddressKeepsMail(t *testing.T) {
 // An identity with no inbox (a retired one) matches a group address's empty
 // mailbox, so the checks must refuse a group address outright.
 func TestIdentityEdit_DefaultFromNotAGroupAddress(t *testing.T) {
+	t.Parallel()
 	t.Run("no inbox", func(t *testing.T) {
 		app := newGroupAddressTestApp(t)
 		s := seedGroupAddress(t, app)
@@ -397,6 +402,7 @@ func TestIdentityEdit_DefaultFromNotAGroupAddress(t *testing.T) {
 // Only an admin adds or removes an address, for an inbox or for a group. A
 // member who could add one could take mail meant for someone else.
 func TestGroupAddress_OnlyAdminCreatesAndDeletes(t *testing.T) {
+	t.Parallel()
 	asAnn := func(s *groupAddressSeed) *core.Record { return s.ann }
 	asAdmin := func(s *groupAddressSeed) *core.Record { return s.admin }
 	inboxBody := func(s *groupAddressSeed) string {

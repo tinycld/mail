@@ -10,6 +10,7 @@ import (
 // delivered_at and bounce_class to mail_messages with the right types and
 // select values, so later provider-notification code has somewhere to write.
 func TestMailMessagesHasDeliveryTrackingFields(t *testing.T) {
+	t.Parallel()
 	app := newMailRulesApp(t)
 
 	collection, err := app.FindCollectionByNameOrId("mail_messages")

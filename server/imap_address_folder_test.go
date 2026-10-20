@@ -184,6 +184,7 @@ func listFolders(t *testing.T, client *imapclient.Client) map[string][]imap.Mail
 }
 
 func TestAddressViewsFor_OrderAndThreshold(t *testing.T) {
+	t.Parallel()
 	env := seedAddressFolder(t)
 
 	views, err := addressViewsFor(env.app, env.user.Id)

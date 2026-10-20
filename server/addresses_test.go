@@ -18,6 +18,7 @@ func newAddressTestApp(t *testing.T) *tests.TestApp {
 }
 
 func TestResolveAddress_FindsPrimaryAndAddedAddresses(t *testing.T) {
+	t.Parallel()
 	app := newAddressTestApp(t)
 	org := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true})
 	com := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.com", "verified": true})
@@ -49,6 +50,7 @@ func TestResolveAddress_FindsPrimaryAndAddedAddresses(t *testing.T) {
 }
 
 func TestMailboxCreate_SavesPrimaryAddress(t *testing.T) {
+	t.Parallel()
 	app := newAddressTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org"})
 	shared := saveRealRecord(t, app, "mail_mailboxes", map[string]any{
@@ -65,6 +67,7 @@ func TestMailboxCreate_SavesPrimaryAddress(t *testing.T) {
 }
 
 func TestMailboxUpdate_MovesPrimaryAddress(t *testing.T) {
+	t.Parallel()
 	app := newAddressTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org"})
 	shared := saveRealRecord(t, app, "mail_mailboxes", map[string]any{
@@ -83,6 +86,7 @@ func TestMailboxUpdate_MovesPrimaryAddress(t *testing.T) {
 }
 
 func TestAddressCreate_RefusesTakenAddress(t *testing.T) {
+	t.Parallel()
 	app := newAddressTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org"})
 	a := saveRealRecord(t, app, "mail_mailboxes", map[string]any{"address": "a", "domain": domain.Id, "type": "shared", "display_name": "A", "name": "A"})
@@ -113,6 +117,7 @@ func TestAddressCreate_RefusesTakenAddress(t *testing.T) {
 // On a domain that gives everyone an address, a person's email name is
 // reserved for that person, even before the rule row exists.
 func TestAddressCreate_RefusesReservedEmailName(t *testing.T) {
+	t.Parallel()
 	app := newAddressTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org", "coverage": coverageEveryone, "verified": true})
 	user := saveRealRecord(t, app, "users", map[string]any{"email": "holly@example.net", "username": "holly", "name": "Holly", "role": "member"})
@@ -134,6 +139,7 @@ func TestAddressCreate_RefusesReservedEmailName(t *testing.T) {
 }
 
 func TestLegacyAlias_IsMirroredIntoAddresses(t *testing.T) {
+	t.Parallel()
 	app := newAddressTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org"})
 	mb := saveRealRecord(t, app, "mail_mailboxes", map[string]any{"address": "nathan", "domain": domain.Id, "type": "personal", "display_name": "N", "name": "N"})
@@ -151,6 +157,7 @@ func TestLegacyAlias_IsMirroredIntoAddresses(t *testing.T) {
 }
 
 func TestDomainCreate_Defaults(t *testing.T) {
+	t.Parallel()
 	app := newAddressTestApp(t)
 	first := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "first.example"})
 	second := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "second.example"})
@@ -238,6 +245,7 @@ func runAddressAPIScenario(
 }
 
 func TestAddressAPI_AdminCannotDeleteRuleRow(t *testing.T) {
+	t.Parallel()
 	runAddressAPIScenario(t, http.MethodDelete, "", http.StatusForbidden, `"message"`,
 		func(s *addressAPISeed) string { return "/" + s.rule.Id },
 		func(t *testing.T, app *tests.TestApp, s *addressAPISeed) {
@@ -248,6 +256,7 @@ func TestAddressAPI_AdminCannotDeleteRuleRow(t *testing.T) {
 }
 
 func TestAddressAPI_AdminCannotDeletePrimaryRow(t *testing.T) {
+	t.Parallel()
 	runAddressAPIScenario(t, http.MethodDelete, "", http.StatusForbidden, `"message"`,
 		func(s *addressAPISeed) string { return "/" + s.primary.Id },
 		func(t *testing.T, app *tests.TestApp, s *addressAPISeed) {
@@ -258,6 +267,7 @@ func TestAddressAPI_AdminCannotDeletePrimaryRow(t *testing.T) {
 }
 
 func TestAddressAPI_AdminCanDeleteManualRow(t *testing.T) {
+	t.Parallel()
 	runAddressAPIScenario(t, http.MethodDelete, "", http.StatusNoContent, "",
 		func(s *addressAPISeed) string { return "/" + s.manual.Id },
 		func(t *testing.T, app *tests.TestApp, s *addressAPISeed) {
@@ -268,6 +278,7 @@ func TestAddressAPI_AdminCanDeleteManualRow(t *testing.T) {
 }
 
 func TestAddressAPI_CreateForcesManualNonPrimary(t *testing.T) {
+	t.Parallel()
 	var seed *addressAPISeed
 	scenario := tests.ApiScenario{
 		Name:            "POST mail_addresses",
@@ -300,6 +311,7 @@ func TestAddressAPI_CreateForcesManualNonPrimary(t *testing.T) {
 }
 
 func TestMailboxCreate_RefusesUnroutableAddress(t *testing.T) {
+	t.Parallel()
 	app := newAddressTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org"})
 	mb := core.NewRecord(mustCollection(t, app, "mail_mailboxes"))
@@ -315,6 +327,7 @@ func TestMailboxCreate_RefusesUnroutableAddress(t *testing.T) {
 }
 
 func TestMailboxUpdate_LegacyInvalidAddressStillAllowsOtherEdits(t *testing.T) {
+	t.Parallel()
 	app := newAddressTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org"})
 	mb := core.NewRecord(mustCollection(t, app, "mail_mailboxes"))
@@ -342,6 +355,7 @@ func TestMailboxUpdate_LegacyInvalidAddressStillAllowsOtherEdits(t *testing.T) {
 }
 
 func TestMailboxUpdate_RenameToOwnAddedAddressSaysRemoveFirst(t *testing.T) {
+	t.Parallel()
 	app := newAddressTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org"})
 	mb := saveRealRecord(t, app, "mail_mailboxes", map[string]any{"address": "main", "domain": domain.Id, "type": "shared", "display_name": "M", "name": "M"})
@@ -354,6 +368,7 @@ func TestMailboxUpdate_RenameToOwnAddedAddressSaysRemoveFirst(t *testing.T) {
 }
 
 func TestLegacyAlias_RefusedWhenAddressTaken(t *testing.T) {
+	t.Parallel()
 	app := newAddressTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org"})
 	a := saveRealRecord(t, app, "mail_mailboxes", map[string]any{"address": "a", "domain": domain.Id, "type": "shared", "display_name": "A", "name": "A"})
@@ -370,6 +385,7 @@ func TestLegacyAlias_RefusedWhenAddressTaken(t *testing.T) {
 }
 
 func TestLegacyAlias_DeleteAfterMailboxDomainChange(t *testing.T) {
+	t.Parallel()
 	app := newAddressTestApp(t)
 	d1 := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "one.example"})
 	d2 := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "two.example"})

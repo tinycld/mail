@@ -6,6 +6,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
+	"tinycld.org/core/rlstest"
 )
 
 // imap_mailbox_scope_test.go pins that IMAP folder contents are scoped to ONE
@@ -52,7 +53,7 @@ func setupScopeEnv(t *testing.T) *scopeEnv {
 	user := core.NewRecord(users)
 	user.SetEmail("scoped@example.org")
 	user.Set("username", testUsername("scoped@example.org"))
-	user.SetPassword("Password123!")
+	rlstest.SetPassword(user, "Password123!")
 	if err := app.Save(user); err != nil {
 		t.Fatal(err)
 	}
@@ -115,6 +116,7 @@ func setupScopeEnv(t *testing.T) *scopeEnv {
 }
 
 func TestIMAPFolder_MessagesScopedToMailbox(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	s := &imapSession{app: env.app, user: env.user}
 
@@ -132,6 +134,7 @@ func TestIMAPFolder_MessagesScopedToMailbox(t *testing.T) {
 }
 
 func TestIMAPStatus_UnseenScopedToMailbox(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	s := &imapSession{app: env.app, user: env.user}
 
@@ -151,6 +154,7 @@ func TestIMAPStatus_UnseenScopedToMailbox(t *testing.T) {
 // Virtual folders (Starred, All Mail) are per-mailbox in the namespaced UI
 // too — the same scoping applies.
 func TestIMAPFolder_AllMailScopedToMailbox(t *testing.T) {
+	t.Parallel()
 	env := setupScopeEnv(t)
 	s := &imapSession{app: env.app, user: env.user}
 

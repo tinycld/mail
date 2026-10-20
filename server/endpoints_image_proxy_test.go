@@ -10,9 +10,11 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 	"github.com/pocketbase/pocketbase/tools/router"
+	"tinycld.org/core/rlstest"
 )
 
 func TestIsPrivateIP(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		host    string
 		private bool
@@ -138,7 +140,7 @@ func TestImageProxyRequestRejectsNonAuthToken(t *testing.T) {
 	}
 	u := core.NewRecord(users)
 	u.Set("email", "proxy@example.com")
-	u.Set("password", "s3cret-password")
+	rlstest.SetPassword(u, "s3cret-password")
 	if err := app.Save(u); err != nil {
 		t.Fatalf("save user: %v", err)
 	}

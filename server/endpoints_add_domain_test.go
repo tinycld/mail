@@ -12,6 +12,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 	"tinycld.org/core/maildomains"
+	"tinycld.org/core/rlstest"
 	"tinycld.org/packages/mail/api"
 )
 
@@ -64,7 +65,7 @@ func seedAddDomainAuthUser(t *testing.T, app core.App, email, role string) *core
 	}
 	user := core.NewRecord(authCol)
 	user.Set("email", email)
-	user.Set("password", "password12345")
+	rlstest.SetPassword(user, "password12345")
 	user.Set("role", role)
 	if err := app.Save(user); err != nil {
 		t.Fatalf("failed to save auth user %s: %v", email, err)

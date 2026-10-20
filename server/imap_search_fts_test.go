@@ -57,6 +57,7 @@ func wantExactSet(t *testing.T, got map[string]bool, want ...string) {
 // RFC 3501: multiple search keys AND. SEARCH BODY "alpha" BODY "beta" must
 // return only messages containing BOTH terms — not either.
 func TestBuildFTSMatchSet_MultiTermBodyIntersects(t *testing.T) {
+	t.Parallel()
 	app := setupFTSMatchApp(t)
 	s := &imapSession{app: app}
 
@@ -66,6 +67,7 @@ func TestBuildFTSMatchSet_MultiTermBodyIntersects(t *testing.T) {
 
 // Body and Text criteria are separate search keys and likewise AND together.
 func TestBuildFTSMatchSet_BodyAndTextIntersect(t *testing.T) {
+	t.Parallel()
 	app := setupFTSMatchApp(t)
 	s := &imapSession{app: app}
 
@@ -78,6 +80,7 @@ func TestBuildFTSMatchSet_BodyAndTextIntersect(t *testing.T) {
 
 // A single term still matches everything containing it.
 func TestBuildFTSMatchSet_SingleTerm(t *testing.T) {
+	t.Parallel()
 	app := setupFTSMatchApp(t)
 	s := &imapSession{app: app}
 
@@ -88,6 +91,7 @@ func TestBuildFTSMatchSet_SingleTerm(t *testing.T) {
 // Criteria that FTS cannot answer (every term sanitizes away) must fail
 // closed — match nothing — rather than silently matching everything.
 func TestBuildFTSMatchSet_UnanswerableTermMatchesNothing(t *testing.T) {
+	t.Parallel()
 	app := setupFTSMatchApp(t)
 	s := &imapSession{app: app}
 

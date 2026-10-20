@@ -149,6 +149,7 @@ func TestGroupAddress_WebhookDeliversToEachMember(t *testing.T) {
 }
 
 func TestGroupAddress_SMTPDeliversToEachMember(t *testing.T) {
+	t.Parallel()
 	s := seedGroupDelivery(t)
 	session := &smtpInboundSession{app: s.app, hostname: "mx.example"}
 	if err := session.Mail("sender@sender.example", nil); err != nil {
@@ -294,6 +295,7 @@ func TestGroupAddress_ReplyGoesToSender(t *testing.T) {
 }
 
 func TestDeliveryTargets(t *testing.T) {
+	t.Parallel()
 	s := seedGroupDelivery(t)
 
 	t.Run("inbox address", func(t *testing.T) {
@@ -434,6 +436,7 @@ func salesRaw(messageIDHeader string) string {
 // A store that fails in one inbox defers the whole message (451). The MTA's
 // retry stores bob's copy, and ann's inbox skips it by Message-ID.
 func TestGroupAddress_SMTPPartialFailureDefers(t *testing.T) {
+	t.Parallel()
 	s := seedGroupDelivery(t)
 	stop := failStoresIn(t, s.app, s.inboxOf(t, s.bob))
 	raw := salesRaw("Message-ID: <smtp-partial-1@sender.example>\r\n")

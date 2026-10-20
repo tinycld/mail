@@ -9,6 +9,7 @@ import (
 )
 
 func TestMimeForAttachment(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		filename string
 		want     string
@@ -44,6 +45,7 @@ func TestMimeForAttachment(t *testing.T) {
 // omnidoc migration: mimeForAttachment must not map them to anything
 // the core pipeline would accept.
 func TestMimeForAttachmentLegacyOfficeRejected(t *testing.T) {
+	t.Parallel()
 	for _, filename := range []string{"old.doc", "old.xls", "old.ppt", "old_abc123XYZ0.doc"} {
 		mime := mimeForAttachment(filename)
 		if mime != "" {
@@ -74,6 +76,7 @@ func newMessageRecord(t *testing.T, previous []string) *core.Record {
 }
 
 func TestAttachmentsChanged(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		previous []string
@@ -105,6 +108,7 @@ func TestAttachmentsChanged(t *testing.T) {
 // record; that update must not read as an attachments change or the hook
 // would retrigger itself.
 func TestAttachmentsChangedIgnoresOtherFields(t *testing.T) {
+	t.Parallel()
 	record := newMessageRecord(t, []string{"a.pdf"})
 	record.Set("attachment_thumbnail_map", `{"a.pdf":"a_thumb.jpg"}`)
 	if attachmentsChanged(record) {

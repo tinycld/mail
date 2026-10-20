@@ -20,6 +20,7 @@ func cancelledContext() context.Context {
 }
 
 func TestThreadStateActions_CancelledContextWritesNothing(t *testing.T) {
+	t.Parallel()
 	actions := map[string]automation.ActionHandler{
 		"move-to-folder": actionMoveToFolder,
 		"mark-as-read":   actionMarkAsRead,
@@ -72,6 +73,7 @@ func TestRuleSends_CancelledContextSendsNothing(t *testing.T) {
 }
 
 func TestSearchMailRows_CancelledContextRunsNoQuery(t *testing.T) {
+	t.Parallel()
 	app := setupFTSMatchApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_searchcancel1")
 	user := searchUser(t, app, "alice@acme.com")

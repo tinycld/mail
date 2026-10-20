@@ -362,6 +362,7 @@ func TestMemberAccessCleanupWaitsWhileReadOnly(t *testing.T) {
 
 // When a member job's wait ends first, the job is dropped and logged at Warn.
 func TestMemberJobDroppedAndLoggedWhenReadOnlyOutlastsTheWait(t *testing.T) {
+	t.Parallel()
 	logs := readonlytest.CaptureLogs(t)
 	readonly.Enter()
 	t.Cleanup(readonly.Leave)

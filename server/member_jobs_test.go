@@ -27,6 +27,7 @@ func newTestJobLimiter(t *testing.T, n int) (*jobLimiter, *tests.TestApp) {
 }
 
 func TestJobLimiter_TryAcquireStopsAtLimit(t *testing.T) {
+	t.Parallel()
 	l, _ := newTestJobLimiter(t, 2)
 	if !l.tryAcquire() || !l.tryAcquire() {
 		t.Fatal("tryAcquire failed below the limit")
@@ -43,6 +44,7 @@ func TestJobLimiter_TryAcquireStopsAtLimit(t *testing.T) {
 // Every job runs, and no more than the limit run at once. The first two jobs
 // hold their slots until the gate opens, so the test sees the limiter full.
 func TestJobLimiter_RunsEveryJobWithinLimit(t *testing.T) {
+	t.Parallel()
 	l, _ := newTestJobLimiter(t, 2)
 	const jobs = 6
 	var active, peak, ran atomic.Int32

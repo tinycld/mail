@@ -3,6 +3,7 @@ package mail
 import "testing"
 
 func TestLoginIdentifier(t *testing.T) {
+	t.Parallel()
 	app := newAddressTestApp(t)
 	org := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true})
 	com := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.com", "verified": true})

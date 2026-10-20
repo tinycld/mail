@@ -16,6 +16,7 @@ import (
 // shared processInboundForMailbox pipeline (same path the Postmark webhook
 // uses). We bypass net.Listen — the session's logic is the load-bearing bit.
 func TestSMTPInboundSession_AcceptsKnownRecipient(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_smtp_in_001")
 	seedMember(t, app, "mb_smtp_in_001", "user_alice")
@@ -48,6 +49,7 @@ func TestSMTPInboundSession_AcceptsKnownRecipient(t *testing.T) {
 // generates a clean bounce instead of silent discard. This is the bit that
 // keeps us from acting as an open relay or a black hole.
 func TestSMTPInboundSession_RejectsUnknownRecipient(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_smtp_in_002")
 	seedMember(t, app, "mb_smtp_in_002", "user_alice")
@@ -75,6 +77,7 @@ func TestSMTPInboundSession_RejectsUnknownRecipient(t *testing.T) {
 // A mail app that reaches the MX by mistake (it tries port 25 first) shows
 // this text, so a domain we do not host says how to send instead.
 func TestSMTPInboundSession_RefusesUnhostedDomainAsRelay(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_smtp_in_003")
 
@@ -97,6 +100,7 @@ func TestSMTPInboundSession_RefusesUnhostedDomainAsRelay(t *testing.T) {
 // MTAs, not a user submission endpoint. Confirms the Auth handler refuses
 // any mechanism a confused client tries to negotiate.
 func TestSMTPInboundSession_AuthRefused(t *testing.T) {
+	t.Parallel()
 	sess := &smtpInboundSession{app: nil, hostname: "mx.tinycld.test"}
 	if mechs := sess.AuthMechanisms(); len(mechs) != 0 {
 		t.Errorf("expected zero AUTH mechanisms, got %v", mechs)
@@ -110,6 +114,7 @@ func TestSMTPInboundSession_AuthRefused(t *testing.T) {
 // Data without any accepted recipient returns 554 — protects against clients
 // that issue DATA after RCPT TO failures.
 func TestSMTPInboundSession_DataWithoutRecipientsFails(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	sess := &smtpInboundSession{app: app, hostname: "mx.tinycld.test"}
 	_ = sess.Mail("sender@external.example", &smtp.MailOptions{})
@@ -140,6 +145,7 @@ func buildPlainRFC5322(t *testing.T, from, to, subject, messageIDLocal, body str
 // now is lost if the next build rolls back. Answering 451 makes the sending
 // MTA queue the message and retry, by then against the next server.
 func TestSMTPInboundSession_ReadOnlyDefersWith451(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_smtp_in_ro1")
 	seedMember(t, app, "mb_smtp_in_ro1", "user_alice")

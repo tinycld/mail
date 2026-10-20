@@ -92,6 +92,7 @@ func ownerRowOf(t *testing.T, env *mailShareEnv, user *core.Record) *core.Record
 }
 
 func TestMailboxOwnerGuard_BlocksSelfDemotionOfLastOwner(t *testing.T) {
+	t.Parallel()
 	env := setupMailboxOwnerGuardApp(t)
 	row := ownerRowOf(t, env, env.owner)
 
@@ -109,6 +110,7 @@ func TestMailboxOwnerGuard_BlocksSelfDemotionOfLastOwner(t *testing.T) {
 }
 
 func TestMailboxOwnerGuard_AllowsDemotionWithSecondOwner(t *testing.T) {
+	t.Parallel()
 	env := setupMailboxOwnerGuardApp(t)
 	addMailboxMember(t, env.app, env.mailbox, env.teammate, "owner")
 	row := ownerRowOf(t, env, env.owner)
@@ -121,6 +123,7 @@ func TestMailboxOwnerGuard_AllowsDemotionWithSecondOwner(t *testing.T) {
 }
 
 func TestMailboxOwnerGuard_BlocksDeletingLastOwnerRow(t *testing.T) {
+	t.Parallel()
 	env := setupMailboxOwnerGuardApp(t)
 	row := ownerRowOf(t, env, env.owner)
 
@@ -133,6 +136,7 @@ func TestMailboxOwnerGuard_BlocksDeletingLastOwnerRow(t *testing.T) {
 }
 
 func TestMailboxOwnerGuard_AllowsRemovingAPlainMember(t *testing.T) {
+	t.Parallel()
 	env := setupMailboxOwnerGuardApp(t)
 	row := addMailboxMember(t, env.app, env.mailbox, env.teammate, "member")
 
@@ -142,6 +146,7 @@ func TestMailboxOwnerGuard_AllowsRemovingAPlainMember(t *testing.T) {
 }
 
 func TestMailboxOwnerGuard_AllowsOwnerLeaveWithSecondOwner(t *testing.T) {
+	t.Parallel()
 	env := setupMailboxOwnerGuardApp(t)
 	addMailboxMember(t, env.app, env.mailbox, env.teammate, "owner")
 	row := ownerRowOf(t, env, env.owner)

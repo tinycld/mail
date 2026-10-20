@@ -229,6 +229,7 @@ func TestOwnerClaim_OwnerCannotRewriteCreatedBy(t *testing.T) {
 }
 
 func TestOwnerClaim_ShippedRulesPinTheCreator(t *testing.T) {
+	t.Parallel()
 	env := setupMailShareApp(t)
 	rlstest.RequireRuleContains(t, env.app, "mail_mailbox_members", "create",
 		`user = @request.auth.id && role = "owner" && mailbox.mail_mailbox_members_via_mailbox.id = "" && mailbox.created_by = @request.auth.id && @request.auth.role != "guest"`)

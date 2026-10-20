@@ -65,7 +65,7 @@ func saveRealRecord(t testing.TB, app core.App, collection string, fields map[st
 		record.Set(k, v)
 	}
 	if col.IsAuth() {
-		record.SetPassword("Password123!")
+		rlstest.SetPassword(record, "Password123!")
 	}
 	if err := app.Save(record); err != nil {
 		t.Fatalf("save %s: %v", collection, err)

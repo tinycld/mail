@@ -136,6 +136,7 @@ func addAnnManual(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
 }
 
 func TestIdentityEdit_SelfSetsDefaultFrom(t *testing.T) {
+	t.Parallel()
 	runIdentityEdit(t, identityEditCase{
 		name: "self default_from", actor: asAnn, status: http.StatusOK, content: `"id"`,
 		prepare: addAnnManual, body: manualAddressBody,
@@ -146,6 +147,7 @@ func TestIdentityEdit_SelfSetsDefaultFrom(t *testing.T) {
 }
 
 func TestIdentityEdit_DefaultFromMustDeliverToInbox(t *testing.T) {
+	t.Parallel()
 	runIdentityEdit(t, identityEditCase{
 		name: "foreign default_from", actor: asAnn, status: http.StatusBadRequest, content: `"default_from"`,
 		body: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) string {
@@ -158,6 +160,7 @@ func TestIdentityEdit_DefaultFromMustDeliverToInbox(t *testing.T) {
 }
 
 func TestIdentityEdit_EmptyDefaultFromClears(t *testing.T) {
+	t.Parallel()
 	runIdentityEdit(t, identityEditCase{
 		name: "clear default_from", actor: asAnn, status: http.StatusOK, content: `"id"`,
 		prepare: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
@@ -175,6 +178,7 @@ func TestIdentityEdit_EmptyDefaultFromClears(t *testing.T) {
 }
 
 func TestIdentityEdit_MemberCannotRename(t *testing.T) {
+	t.Parallel()
 	runIdentityEdit(t, identityEditCase{
 		name: "member rename", actor: asAnn, status: http.StatusForbidden, content: `Only an admin`,
 		body: bodyOf(`{"email_name":"anna"}`),
@@ -185,6 +189,7 @@ func TestIdentityEdit_MemberCannotRename(t *testing.T) {
 }
 
 func TestIdentityEdit_ServerFieldsStayFixed(t *testing.T) {
+	t.Parallel()
 	runIdentityEdit(t, identityEditCase{
 		name: "server fields", actor: asAdmin, status: http.StatusOK, content: `"id"`,
 		prepare: addAnnManual,
@@ -203,6 +208,7 @@ func TestIdentityEdit_ServerFieldsStayFixed(t *testing.T) {
 }
 
 func TestIdentityEdit_AdminRenameMovesRuleAddress(t *testing.T) {
+	t.Parallel()
 	var second *core.Record
 	runIdentityEdit(t, identityEditCase{
 		name: "admin rename", actor: asAdmin, status: http.StatusOK, content: `"anna"`,
@@ -227,6 +233,7 @@ func TestIdentityEdit_AdminRenameMovesRuleAddress(t *testing.T) {
 }
 
 func TestIdentityEdit_RenameRefusedByReservedConflict(t *testing.T) {
+	t.Parallel()
 	runIdentityEdit(t, identityEditCase{
 		name: "reserved conflict", actor: asAdmin, status: http.StatusBadRequest, content: `anna@example.org`,
 		prepare: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
@@ -242,6 +249,7 @@ func TestIdentityEdit_RenameRefusedByReservedConflict(t *testing.T) {
 }
 
 func TestIdentityEdit_RenameRefusedWhenTaken(t *testing.T) {
+	t.Parallel()
 	runIdentityEdit(t, identityEditCase{
 		name: "taken", actor: asAdmin, status: http.StatusBadRequest, content: `"email_name"`,
 		body: bodyOf(`{"email_name":"bob"}`),
@@ -252,6 +260,7 @@ func TestIdentityEdit_RenameRefusedWhenTaken(t *testing.T) {
 }
 
 func TestIdentityEdit_RenameNormalizesAndValidates(t *testing.T) {
+	t.Parallel()
 	runIdentityEdit(t, identityEditCase{
 		name: "normalizes", actor: asAdmin, status: http.StatusOK, content: `"anna"`,
 		body: bodyOf(`{"email_name":" Anna "}`),
@@ -270,6 +279,7 @@ func TestIdentityEdit_RenameNormalizesAndValidates(t *testing.T) {
 }
 
 func TestIdentityEdit_AnonymousRefused(t *testing.T) {
+	t.Parallel()
 	runIdentityEdit(t, identityEditCase{
 		name: "anonymous", status: http.StatusNotFound, content: `"message"`,
 		body: bodyOf(`{"email_name":"anna"}`),
@@ -282,6 +292,7 @@ func TestIdentityEdit_AnonymousRefused(t *testing.T) {
 // The edit hooks check every save of an identity, the server's own included.
 // Offboarding writes a tombstone name that is not a person's choice.
 func TestIdentityEdit_OffboardingStillRetires(t *testing.T) {
+	t.Parallel()
 	app := newIdentityEditApp(t)
 	s := seedIdentityEdit(t, app)
 	if err := retireIdentity(app, s.ann.Id); err != nil {
@@ -295,6 +306,7 @@ func TestIdentityEdit_OffboardingStillRetires(t *testing.T) {
 
 // repairEmailName derives its names, so the checks accept them.
 func TestIdentityEdit_RepairedNameIsAccepted(t *testing.T) {
+	t.Parallel()
 	app := newIdentityEditApp(t)
 	s := seedIdentityEdit(t, app)
 	identity := mustRecord(t, app, "mail_identities", s.annID.Id)
@@ -318,6 +330,7 @@ func TestIdentityEdit_RepairedNameIsAccepted(t *testing.T) {
 }
 
 func TestIdentityEdit_RetiredIdentityCannotChange(t *testing.T) {
+	t.Parallel()
 	var tombstone string
 	runIdentityEdit(t, identityEditCase{
 		name: "retired rename", actor: asAdmin, status: http.StatusForbidden, content: `This person has left`,
@@ -356,6 +369,7 @@ func setDefaultFrom(t *testing.T, app core.App, s *identityEditSeed, addressID s
 // The main address follows the email name: the inbox's primary row moves in
 // place, so a Default From that pointed at it now sends as the new name.
 func TestIdentityEdit_RenameMovesMainAddress(t *testing.T) {
+	t.Parallel()
 	var primaryID string
 	runIdentityEdit(t, identityEditCase{
 		name: "rename moves main address", actor: asAdmin, status: http.StatusOK, content: `"anna"`,
@@ -387,6 +401,7 @@ func TestIdentityEdit_RenameMovesMainAddress(t *testing.T) {
 // Renaming back to a name the inbox kept as an added address takes that row
 // over: the kept row goes, and the main address moves onto the name.
 func TestIdentityEdit_RenameBackTakesOverKeptAddress(t *testing.T) {
+	t.Parallel()
 	var primaryID string
 	runIdentityEdit(t, identityEditCase{
 		name: "rename back", actor: asAdmin, status: http.StatusOK, content: `"ann"`,
@@ -421,6 +436,7 @@ func TestIdentityEdit_RenameBackTakesOverKeptAddress(t *testing.T) {
 // Another inbox's address on the main address's domain blocks the move even
 // when that domain gives no addresses by rule.
 func TestIdentityEdit_RenameRefusedByMainDomainHolder(t *testing.T) {
+	t.Parallel()
 	runIdentityEdit(t, identityEditCase{
 		name: "main domain holder", actor: asAdmin, status: http.StatusBadRequest, content: `anna@example.org`,
 		prepare: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
@@ -446,6 +462,7 @@ func TestIdentityEdit_RenameRefusedByMainDomainHolder(t *testing.T) {
 // Another live identity has the name but no address on a domain with a rule
 // or on the main address's domain: only the identity check refuses it.
 func TestIdentityEdit_RenameRefusedByAnotherIdentityName(t *testing.T) {
+	t.Parallel()
 	runIdentityEdit(t, identityEditCase{
 		name: "identity name taken", actor: asAdmin, status: http.StatusBadRequest, content: `email_name_taken`,
 		prepare: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) {
@@ -471,6 +488,7 @@ func TestIdentityEdit_RenameRefusedByAnotherIdentityName(t *testing.T) {
 }
 
 func TestIdentityEdit_SelfSetsAddressViews(t *testing.T) {
+	t.Parallel()
 	runIdentityEdit(t, identityEditCase{
 		name: "self address views", actor: asAnn, status: http.StatusOK, content: `"address_views":true`,
 		prepare: addAnnManual,
@@ -491,6 +509,7 @@ func TestIdentityEdit_SelfSetsAddressViews(t *testing.T) {
 }
 
 func TestIdentityEdit_HiddenMustBeOwnAddress(t *testing.T) {
+	t.Parallel()
 	runIdentityEdit(t, identityEditCase{
 		name: "foreign hidden address", actor: asAnn, status: http.StatusBadRequest, content: `"hidden_address_views"`,
 		body: func(t *testing.T, app *tests.TestApp, s *identityEditSeed) string {

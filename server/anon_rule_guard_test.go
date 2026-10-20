@@ -351,6 +351,7 @@ func TestAnonGuard_MemberKeepsAccess(t *testing.T) {
 // `@request.auth.disabled != true`) are true for an anonymous caller, so they
 // do not count as a guard.
 func TestAnonGuard_ShippedRulesRequireLogin(t *testing.T) {
+	t.Parallel()
 	env := setupMailShareApp(t)
 	cols, err := env.app.FindAllCollections()
 	if err != nil {
@@ -381,6 +382,7 @@ func TestAnonGuard_ShippedRulesRequireLogin(t *testing.T) {
 // Names the rules this fix guards, so a dropped collection or verb cannot
 // pass the scan above by no longer being scanned.
 func TestAnonGuard_ShippedMembershipRulesCarryGuard(t *testing.T) {
+	t.Parallel()
 	env := setupMailShareApp(t)
 	all := []string{"list", "view", "create", "update", "delete"}
 	guarded := map[string][]string{

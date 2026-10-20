@@ -9,6 +9,7 @@ import (
 // queries: every simulated send writes a message_id starting with "demo-"
 // so it's easy to filter in the database.
 func TestDemoMessageID_HasPrefix(t *testing.T) {
+	t.Parallel()
 	id := demoMessageID()
 	if !strings.HasPrefix(id, "demo-") {
 		t.Errorf("expected demo- prefix, got %q", id)
@@ -23,6 +24,7 @@ func TestDemoMessageID_HasPrefix(t *testing.T) {
 // successive calls must produce different IDs — otherwise concurrent demo
 // sends would collide on message_id and break thread storage.
 func TestDemoMessageID_Unique(t *testing.T) {
+	t.Parallel()
 	seen := make(map[string]bool, 100)
 	for i := 0; i < 100; i++ {
 		id := demoMessageID()
@@ -38,6 +40,7 @@ func TestDemoMessageID_Unique(t *testing.T) {
 // don't behave surprisingly. 8 random bytes hex-encoded = 16 chars; with
 // "demo-" + "@tinycld.local" the total is 35.
 func TestDemoMessageID_Length(t *testing.T) {
+	t.Parallel()
 	id := demoMessageID()
 	const want = len("demo-") + 16 + len("@tinycld.local")
 	if len(id) != want {

@@ -10,6 +10,7 @@ import (
 // coverage 'groups' and the two group relations must exist once every
 // migration has run, and coverage must still reject unknown values.
 func TestMigrations_GroupCoverage(t *testing.T) {
+	t.Parallel()
 	app := rlstest.NewAssembledApp(t, rlstest.MigrationsDir(t, "../pb-migrations"))
 
 	groups, err := app.FindCollectionByNameOrId("groups")

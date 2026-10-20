@@ -6,6 +6,7 @@ import "testing"
 // lets the other arm resurrect exactly the rows the user asked to drop —
 // the most likely way this feature ships subtly broken.
 func TestBothUnionArmsCarryExclusions(t *testing.T) {
+	t.Parallel()
 	thread := buildThreadFTSQuery("budget", "draft")
 	message := buildMessageFTSQuery("budget", "", "draft")
 
@@ -20,6 +21,7 @@ func TestBothUnionArmsCarryExclusions(t *testing.T) {
 }
 
 func TestExclusionsOmittedWhenEmpty(t *testing.T) {
+	t.Parallel()
 	if got := buildThreadFTSQuery("budget", ""); contains(got, "NOT") {
 		t.Errorf("empty exclusion should emit no NOT, got %q", got)
 	}

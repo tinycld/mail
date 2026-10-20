@@ -60,6 +60,7 @@ func seedLabelFolder(t *testing.T) *labelFolderEnv {
 }
 
 func TestIMAPLabelFolder_ListsMoreThanFilterLimit(t *testing.T) {
+	t.Parallel()
 	env := seedLabelFolder(t)
 	s := &imapSession{app: env.app, user: env.user}
 
@@ -73,6 +74,7 @@ func TestIMAPLabelFolder_ListsMoreThanFilterLimit(t *testing.T) {
 }
 
 func TestIMAPLabelFolder_StatusCountsMoreThanFilterLimit(t *testing.T) {
+	t.Parallel()
 	env := seedLabelFolder(t)
 	s := &imapSession{app: env.app, user: env.user}
 
@@ -90,6 +92,7 @@ func TestIMAPLabelFolder_StatusCountsMoreThanFilterLimit(t *testing.T) {
 }
 
 func TestIMAPLabelFolder_MissingLabelIsEmpty(t *testing.T) {
+	t.Parallel()
 	env := seedLabelFolder(t)
 	s := &imapSession{app: env.app, user: env.user}
 

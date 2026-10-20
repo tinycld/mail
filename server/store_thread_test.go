@@ -3,6 +3,7 @@ package mail
 import "testing"
 
 func TestFindOrCreateThread_PlaceholderSubjectNeverMergesBySubject(t *testing.T) {
+	t.Parallel()
 	app := newRealSchemaApp(t)
 	mailbox := seedRealMailbox(t, app)
 

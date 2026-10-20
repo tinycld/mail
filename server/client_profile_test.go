@@ -173,6 +173,7 @@ func TestProfileHostFallsBackToTheRequestHost(t *testing.T) {
 }
 
 func TestIsLoopbackHost(t *testing.T) {
+	t.Parallel()
 	for host, want := range map[string]bool{
 		"localhost": true, "127.0.0.1": true, "127.9.9.9": true, "::1": true,
 		"web.acme.example": false, "10.0.0.1": false, "": false,
@@ -266,6 +267,7 @@ func TestProfileForAPersonWithNoAddress(t *testing.T) {
 
 // A reinstalled profile must replace the old one, so its ids are stable.
 func TestStableUUID(t *testing.T) {
+	t.Parallel()
 	a, b := stableUUID("com.example.mail.u1"), stableUUID("com.example.mail.u1")
 	if a != b {
 		t.Fatalf("stableUUID not deterministic: %s != %s", a, b)
@@ -279,6 +281,7 @@ func TestStableUUID(t *testing.T) {
 }
 
 func TestReverseHost(t *testing.T) {
+	t.Parallel()
 	if got := reverseHost("mail.acme.example"); got != "example.acme.mail" {
 		t.Fatalf("reverseHost = %q", got)
 	}

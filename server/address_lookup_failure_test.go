@@ -34,6 +34,7 @@ func lookupFailureMessage(id string) *InboundMessage {
 }
 
 func TestResolveAddress_DatabaseErrorIsNotUnknownAddress(t *testing.T) {
+	t.Parallel()
 	env := setupRoutingEnv(t)
 	if _, err := resolveAddress(env.app, "nathan", "nowhere.example"); !errors.Is(err, errAddressNotFound) {
 		t.Fatalf("unknown domain: want errAddressNotFound, got %v", err)
@@ -66,6 +67,7 @@ func TestRouteInbound_LookupFailureIsAStorageFailure(t *testing.T) {
 // The webhook answers 500 so the provider retries, instead of 200 "unknown
 // recipient", which drops the message.
 func TestHandleInbound_AddressLookupFailureReturns500(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_lookfail_001")
 	seedMember(t, app, "mb_lookfail_001", "user_alice")
@@ -81,6 +83,7 @@ func TestHandleInbound_AddressLookupFailureReturns500(t *testing.T) {
 }
 
 func TestSMTPInboundRcpt_LookupFailureIsTemporary(t *testing.T) {
+	t.Parallel()
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_lookfail_002")
 	dropAddressTable(t, app)
@@ -107,6 +110,7 @@ func TestDispatchInbound_LookupFailureIsReturned(t *testing.T) {
 }
 
 func TestSendAddress_LookupFailureIsAnInternalError(t *testing.T) {
+	t.Parallel()
 	env := setupSendAddressEnv(t)
 	row, _ := findAddressRow(env.app, "nathan", env.com.Id)
 	alias := saveRealRecord(t, env.app, "mail_mailbox_aliases", map[string]any{"mailbox": env.inbox.Id, "address": "admin"})

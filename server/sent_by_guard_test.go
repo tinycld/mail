@@ -5,6 +5,7 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
+	"tinycld.org/core/rlstest"
 )
 
 // setupSentByGuardApp builds the smallest schema the guard touches: a
@@ -35,7 +36,7 @@ func setupSentByGuardApp(t *testing.T) (*tests.TestApp, *core.Record, *core.Reco
 	mkUser := func(email string) *core.Record {
 		u := core.NewRecord(users)
 		u.Set("email", email)
-		u.SetPassword("Password123!")
+		rlstest.SetPassword(u, "Password123!")
 		if err := app.Save(u); err != nil {
 			t.Fatalf("save user %s: %v", email, err)
 		}
@@ -68,6 +69,7 @@ func newRequestEvent(t *testing.T, app *tests.TestApp, record, auth *core.Record
 // blamed on somebody else. mail_messages' update rule is mailbox membership,
 // so without the guard any member can PATCH sent_by to another user's id.
 func TestSentByGuard_UpdateCannotReassignTheSender(t *testing.T) {
+	t.Parallel()
 	app, spammer, colleague := setupSentByGuardApp(t)
 	registerSentByGuard(app)
 
@@ -107,6 +109,7 @@ func TestSentByGuard_UpdateCannotReassignTheSender(t *testing.T) {
 // A client-created row never went through the send path, so there is no
 // sender to name and an attacker must not be able to invent one.
 func TestSentByGuard_CreateCannotClaimASender(t *testing.T) {
+	t.Parallel()
 	app, spammer, colleague := setupSentByGuardApp(t)
 	registerSentByGuard(app)
 
@@ -134,6 +137,7 @@ func TestSentByGuard_CreateCannotClaimASender(t *testing.T) {
 // sent_by. The guard must restore the field rather than refuse the request,
 // or filing and flagging mail breaks.
 func TestSentByGuard_UnrelatedUpdateStillSucceeds(t *testing.T) {
+	t.Parallel()
 	app, spammer, _ := setupSentByGuardApp(t)
 	registerSentByGuard(app)
 
@@ -176,6 +180,7 @@ func TestSentByGuard_UnrelatedUpdateStillSucceeds(t *testing.T) {
 // ...Request hooks. If that ever changes, the send paths silently stop
 // recording attribution and every test above still passes.
 func TestSentByGuard_ServerSideSaveStillRecordsTheSender(t *testing.T) {
+	t.Parallel()
 	app, spammer, _ := setupSentByGuardApp(t)
 	registerSentByGuard(app)
 

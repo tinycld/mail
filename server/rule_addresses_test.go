@@ -45,6 +45,7 @@ func ruleRows(t *testing.T, app core.App, domainID string) map[string]string {
 // The argosity case: tinycld.org gives everyone an address, tinycld.com was
 // added later. Switching .com to everyone gives each person name@tinycld.com.
 func TestRuleAddresses_SwitchingADomainToEveryone(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	org := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true})
 	nathan := saveRealRecord(t, app, "users", map[string]any{"email": "nathan@argosity.com", "username": "nathan", "name": "Nathan", "role": "owner"})
@@ -87,6 +88,7 @@ func TestRuleAddresses_SwitchingADomainToEveryone(t *testing.T) {
 // Rule rows depend on coverage only. A failed re-verify must not delete the
 // addresses that messages and identities link to.
 func TestRuleAddresses_VerificationDoesNotGateRules(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	saveRealRecord(t, app, "users", map[string]any{"email": "a@ext.example", "username": "ann", "name": "Ann", "role": "member"})
@@ -111,6 +113,7 @@ func TestRuleAddresses_VerificationDoesNotGateRules(t *testing.T) {
 }
 
 func TestRuleAddresses_ManualRowOfSameInboxSurvivesRuleRemoval(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	user := saveRealRecord(t, app, "users", map[string]any{"email": "n@ext.example", "username": "nina", "name": "Nina", "role": "member"})
@@ -137,6 +140,7 @@ func TestRuleAddresses_ManualRowOfSameInboxSurvivesRuleRemoval(t *testing.T) {
 // A manual row that satisfied a rule address is removed: the rule row must
 // replace it at once, so the person keeps the address.
 func TestRuleAddresses_DeletedManualRowIsReplacedByRuleRow(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true})
 	user := saveRealRecord(t, app, "users", map[string]any{"email": "nathan@argosity.com", "username": "nathan", "name": "Nathan", "role": "owner"})
@@ -166,6 +170,7 @@ func TestRuleAddresses_DeletedManualRowIsReplacedByRuleRow(t *testing.T) {
 // Renaming an inbox moves its primary row; the old address, still the
 // person's email name on an everyone domain, must come back as a rule row.
 func TestRuleAddresses_MovedPrimaryRowIsReplacedByRuleRow(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	org := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true})
 	user := saveRealRecord(t, app, "users", map[string]any{"email": "nathan@argosity.com", "username": "nathan", "name": "Nathan", "role": "owner"})
@@ -217,6 +222,7 @@ func TestRuleAddresses_AddressHeldByAnotherInboxIsLeftAlone(t *testing.T) {
 // A user created before any domain was verified gets an identity and
 // addresses when the first domain is verified.
 func TestRuleAddresses_FirstDomainVerifiedLater(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	early := saveRealRecord(t, app, "users", map[string]any{"email": "e@ext.example", "username": "early", "name": "Early", "role": "member"})
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "first.example", "verified": false})
@@ -238,6 +244,7 @@ func TestRuleAddresses_FirstDomainVerifiedLater(t *testing.T) {
 }
 
 func TestRuleAddresses_GuestDemotionRemovesThem(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	extra := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "extra.example", "verified": true, "coverage": coverageEveryone})
@@ -256,6 +263,7 @@ func TestRuleAddresses_GuestDemotionRemovesThem(t *testing.T) {
 }
 
 func TestCoverageConflict_IsRefusedAndNamed(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	saveRealRecord(t, app, "users", map[string]any{"email": "s@ext.example", "username": "sam", "name": "Sam", "role": "member"})
@@ -271,6 +279,7 @@ func TestCoverageConflict_IsRefusedAndNamed(t *testing.T) {
 }
 
 func TestReconcile_BootRepairsDrift(t *testing.T) {
+	t.Parallel()
 	app := newRuleTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true})
 	extra := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "extra.example", "verified": true, "coverage": coverageEveryone})
@@ -341,12 +350,14 @@ func runRuleAPIScenario(t *testing.T, method string, expect []string, url func(*
 }
 
 func TestRuleAPI_CoverageConflictNamesTheAddress(t *testing.T) {
+	t.Parallel()
 	runRuleAPIScenario(t, http.MethodPatch, []string{`"coverage":{"code":"coverage_conflict"`, "sam@other.example"},
 		func(s *ruleAPISeed) string { return "/api/collections/mail_domains/records/" + s.other.Id },
 		func(*ruleAPISeed) string { return `{"coverage":"everyone"}` })
 }
 
 func TestRuleAPI_TakenAddressIsReportedOnLocalPart(t *testing.T) {
+	t.Parallel()
 	runRuleAPIScenario(t, http.MethodPost, []string{`"local_part":{"code":"address_taken"`},
 		func(*ruleAPISeed) string { return "/api/collections/mail_addresses/records" },
 		func(s *ruleAPISeed) string {

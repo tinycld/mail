@@ -29,6 +29,7 @@ func identityOf(t testing.TB, app core.App, userID string) *core.Record {
 }
 
 func TestEnsureIdentity_CreatesInboxOnMainDomain(t *testing.T) {
+	t.Parallel()
 	app := newIdentityTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "second.example", "verified": true, "rank": 2})
 	main := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "main.example", "verified": true, "rank": 1})
@@ -64,6 +65,7 @@ func TestEnsureIdentity_CreatesInboxOnMainDomain(t *testing.T) {
 }
 
 func TestEnsureIdentity_AdoptsExistingPersonalInbox(t *testing.T) {
+	t.Parallel()
 	app := newIdentityTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true})
 	user := saveRealRecord(t, app, "users", map[string]any{"email": "nathan@argosity.com", "username": "nathan", "name": "Nathan", "role": "owner"})
@@ -80,6 +82,7 @@ func TestEnsureIdentity_AdoptsExistingPersonalInbox(t *testing.T) {
 }
 
 func TestEnsureIdentity_GuestGetsNothing(t *testing.T) {
+	t.Parallel()
 	app := newIdentityTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org", "verified": true})
 	guest := saveRealRecord(t, app, "users", map[string]any{"email": "eve@ext.example", "username": "eve", "name": "Eve", "role": "guest"})
@@ -94,6 +97,7 @@ func TestEnsureIdentity_GuestGetsNothing(t *testing.T) {
 }
 
 func TestEnsureIdentity_WaitsForAVerifiedDomain(t *testing.T) {
+	t.Parallel()
 	app := newIdentityTestApp(t)
 	user := saveRealRecord(t, app, "users", map[string]any{"email": "bob@ext.example", "username": "bob", "name": "Bob", "role": "member"})
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "pending.example", "verified": false})
@@ -104,6 +108,7 @@ func TestEnsureIdentity_WaitsForAVerifiedDomain(t *testing.T) {
 }
 
 func TestDeriveEmailName_AvoidsReservedAndTakenNames(t *testing.T) {
+	t.Parallel()
 	app := newIdentityTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org", "verified": true, "coverage": coverageEveryone})
 	saveRealRecord(t, app, "mail_mailboxes", map[string]any{"address": "support", "domain": domain.Id, "type": "shared", "display_name": "S", "name": "S"})
@@ -117,6 +122,7 @@ func TestDeriveEmailName_AvoidsReservedAndTakenNames(t *testing.T) {
 }
 
 func TestIdentityHooks_UserCreateAndGuestPromotion(t *testing.T) {
+	t.Parallel()
 	app := newIdentityTestApp(t)
 	registerIdentityHooks(app)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "example.org", "verified": true})
@@ -161,6 +167,7 @@ func seedOwnedPersonalInbox(t *testing.T, app core.App, user *core.Record, domai
 }
 
 func TestEnsureIdentity_NormalizesLegacyInboxAddress(t *testing.T) {
+	t.Parallel()
 	app := newIdentityTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true})
 
@@ -185,6 +192,7 @@ func TestEnsureIdentity_NormalizesLegacyInboxAddress(t *testing.T) {
 }
 
 func TestEnsureIdentity_AdoptedAddressHeldByAnotherIdentity(t *testing.T) {
+	t.Parallel()
 	app := newIdentityTestApp(t)
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true, "rank": 1})
 	first := saveRealRecord(t, app, "users", map[string]any{"email": "a@ext.example", "username": "dana", "name": "D", "role": "member"})
@@ -203,6 +211,7 @@ func TestEnsureIdentity_AdoptedAddressHeldByAnotherIdentity(t *testing.T) {
 }
 
 func TestEnsureIdentity_AdoptsOldestOfTwoPersonalInboxes(t *testing.T) {
+	t.Parallel()
 	app := newIdentityTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true})
 	user := saveRealRecord(t, app, "users", map[string]any{"email": "a@ext.example", "username": "finn", "name": "F", "role": "member"})
@@ -220,6 +229,7 @@ func TestEnsureIdentity_AdoptsOldestOfTwoPersonalInboxes(t *testing.T) {
 }
 
 func TestDeriveEmailName_AvoidsEveryoneAddressOnOtherDomain(t *testing.T) {
+	t.Parallel()
 	app := newIdentityTestApp(t)
 	own := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "own.example", "verified": true})
 	other := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "other.example", "verified": true, "coverage": coverageEveryone})
@@ -231,6 +241,7 @@ func TestDeriveEmailName_AvoidsEveryoneAddressOnOtherDomain(t *testing.T) {
 }
 
 func TestDeriveEmailName_CapsLength(t *testing.T) {
+	t.Parallel()
 	app := newIdentityTestApp(t)
 	domain := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "own.example", "verified": true})
 	long := strings.Repeat("a", 80)

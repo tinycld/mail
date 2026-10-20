@@ -6,6 +6,7 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
+	"tinycld.org/core/rlstest"
 )
 
 // setupContainmentApp builds the columns ConcentratedSender reads plus the
@@ -59,7 +60,7 @@ func seedSender(t *testing.T, app *tests.TestApp, email, role string) *core.Reco
 	users, _ := app.FindCollectionByNameOrId("users")
 	u := core.NewRecord(users)
 	u.Set("email", email)
-	u.SetPassword("Password123!")
+	rlstest.SetPassword(u, "Password123!")
 	u.Set("role", role)
 	if err := app.Save(u); err != nil {
 		t.Fatalf("seed %s: %v", email, err)

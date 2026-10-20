@@ -13,6 +13,7 @@ import (
 // and SaveError populated. This is the field the UI used to discard, showing
 // success while nothing was written.
 func TestBuildVerifyDomainResponse_SaveFailure(t *testing.T) {
+	t.Parallel()
 	app := setupWebhookURLsTestApp(t)
 	domainID := seedWebhookDomain(t, app, "acme.com", webhookTestSecret)
 	record, err := app.FindRecordById("mail_domains", domainID)
@@ -56,6 +57,7 @@ func TestBuildVerifyDomainResponse_SaveFailure(t *testing.T) {
 // The success shape omits save_error entirely and reports the record's
 // persisted flags.
 func TestBuildVerifyDomainResponse_Success(t *testing.T) {
+	t.Parallel()
 	app := setupWebhookURLsTestApp(t)
 	domainID := seedWebhookDomain(t, app, "acme.com", webhookTestSecret)
 	record, err := app.FindRecordById("mail_domains", domainID)

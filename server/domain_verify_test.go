@@ -192,6 +192,7 @@ func (f *fakeProvider) CheckInboundDomain(context.Context) (*InboundVerification
 }
 
 func TestCheckProviderInboundStrict_CaseInsensitiveMatch(t *testing.T) {
+	t.Parallel()
 	p := &fakeProvider{inboundDomain: "INBOUND.Example.COM", inboundAddress: "hi@inbound.example.com"}
 	got := checkProviderInboundStrict(context.Background(), p, "inbound.example.com", true)
 	if !got.OK {
@@ -203,6 +204,7 @@ func TestCheckProviderInboundStrict_CaseInsensitiveMatch(t *testing.T) {
 }
 
 func TestCheckProviderInboundStrict_EmptyServerDomain(t *testing.T) {
+	t.Parallel()
 	p := &fakeProvider{inboundDomain: ""}
 	got := checkProviderInboundStrict(context.Background(), p, "example.com", true)
 	if got.OK {
@@ -211,6 +213,7 @@ func TestCheckProviderInboundStrict_EmptyServerDomain(t *testing.T) {
 }
 
 func TestCheckProviderInboundStrict_DomainMismatch(t *testing.T) {
+	t.Parallel()
 	p := &fakeProvider{inboundDomain: "other.example.com"}
 	got := checkProviderInboundStrict(context.Background(), p, "example.com", true)
 	if got.OK {
@@ -225,6 +228,7 @@ func TestCheckProviderInboundStrict_DomainMismatch(t *testing.T) {
 // the operator's PublicHostname rarely equals each domain it serves, and the
 // MX check is the actual proof that mail will arrive.
 func TestCheckProviderInboundStrict_NonStrictAcceptsAnyHostname(t *testing.T) {
+	t.Parallel()
 	p := &fakeProvider{inboundDomain: "mx.operator.example", inboundAddress: "mx@operator.example"}
 	got := checkProviderInboundStrict(context.Background(), p, "example.com", false)
 	if !got.OK {
@@ -233,6 +237,7 @@ func TestCheckProviderInboundStrict_NonStrictAcceptsAnyHostname(t *testing.T) {
 }
 
 func TestCheckProviderInboundStrict_NonStrictStillRejectsEmpty(t *testing.T) {
+	t.Parallel()
 	p := &fakeProvider{inboundDomain: ""}
 	got := checkProviderInboundStrict(context.Background(), p, "example.com", false)
 	if got.OK {
@@ -241,6 +246,7 @@ func TestCheckProviderInboundStrict_NonStrictStillRejectsEmpty(t *testing.T) {
 }
 
 func TestCheckProviderInboundStrict_ProviderError(t *testing.T) {
+	t.Parallel()
 	p := &fakeProvider{inboundErr: errors.New("403")}
 	got := checkProviderInboundStrict(context.Background(), p, "example.com", true)
 	if got.OK {
