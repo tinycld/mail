@@ -1,5 +1,6 @@
-import { TEST_USER_EMAIL, TEST_USER_NAME, TEST_USER_PASSWORD } from '@tinycld/core/e2e-helpers'
+import { TEST_USER_NAME, TEST_USER_PASSWORD } from '@tinycld/core/e2e-helpers'
 import { ImapFlow } from 'imapflow'
+import { TEST_USER_MAILBOX } from './helpers'
 
 const IMAP_PORT = 1193
 
@@ -28,7 +29,8 @@ function createImapClient(): ImapFlow {
         doSTARTTLS: false,
         logger: false,
         auth: {
-            user: TEST_USER_EMAIL,
+            // The hosted address, as a mail app sends it.
+            user: TEST_USER_MAILBOX,
             pass: TEST_USER_PASSWORD,
         },
     })

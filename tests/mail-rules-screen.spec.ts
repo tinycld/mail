@@ -154,7 +154,7 @@ test.describe('Mail — Rules screen', () => {
         // provisions (default invite role is "member").
         const { user, inviteePage, close } = await createInvitedUser(page, 'mailrulesmember')
         try {
-            await loginAs(inviteePage, user.email, user.password)
+            await loginAs(inviteePage, user.username, user.password)
             await navigateToMailRules(inviteePage)
 
             const ruleName = `Mail dry-run rule ${Date.now()}`

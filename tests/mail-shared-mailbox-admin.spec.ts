@@ -61,7 +61,7 @@ async function seedUser(role: 'admin' | 'member', label: string): Promise<Seeded
 
 async function loginAs(page: import('@playwright/test').Page, user: SeededUser) {
     await page.goto('/')
-    await page.getByTestId('identifier').fill(user.email)
+    await page.getByTestId('identifier').fill(user.username)
     await page.getByPlaceholder('Password').fill(user.password)
     await page.getByText('Sign in', { exact: true }).last().click()
     await expect(page.getByTestId('nav-home')).toBeVisible({ timeout: 20_000 })

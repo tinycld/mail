@@ -14,6 +14,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/audit"
+	"tinycld.org/core/authidentity"
 	"tinycld.org/core/background"
 	"tinycld.org/core/coreserver"
 	"tinycld.org/core/deliveryevents"
@@ -62,6 +63,10 @@ func registerShared(app *pocketbase.PocketBase) {
 	// What an OAuth token may reach in this package. Core knows nothing about
 	// it until this runs; see oauth.Package for the shape.
 	oauth.RegisterPackage(oauthPackage())
+
+	// A person may sign in with any address of their own inbox: on the
+	// sign-in screen and in a mail app (IMAP, SMTP).
+	authidentity.RegisterResolver("mail", addressOwner)
 
 	// Storage ceilings: message bodies are real disk. No owner field —
 	// a mailbox is shared by its members, so a message is not chargeable to

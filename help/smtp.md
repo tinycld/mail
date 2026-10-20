@@ -26,7 +26,7 @@ Most mail apps also find the settings by themselves when you type your email add
 | **Server** | `{{mail-host}}` |
 | **Port** | **465** |
 | **Encryption** | SSL / TLS (implicit) |
-| **Username** | your full email address |
+| **Username** | your full email address on this server (not your recovery email) |
 | **Password** | your TinyCld password, or an app password |
 | **Authentication** | Normal password |
 
@@ -50,7 +50,7 @@ This is usually done as part of [IMAP setup](help://mail:imap) — the same acco
 2. Click the **Server Settings** tab.
 3. Under **Outgoing Mail Server (SMTP)**:
    - Host Name: `{{mail-host}}`.
-   - User Name: your full email address.
+   - User Name: your full email address on this server.
    - Password: your TinyCld password.
    - Use TLS/SSL: **Yes**.
    - Port: **465**.
@@ -65,7 +65,7 @@ This is usually done as part of [IMAP setup](help://mail:imap) — the same acco
 4. Port: **465**.
 5. Connection security: **SSL/TLS**.
 6. Authentication method: **Normal password**.
-7. User Name: your full email address.
+7. User Name: your full email address on this server.
 8. Click **OK**.
 
 Then in your account's Server Settings, set this SMTP server as the outgoing server for the account.
@@ -93,7 +93,7 @@ Outbound messages are capped at **25 MB total** (including attachments). Larger 
 
 - **Connects, then immediately disconnects ("service unavailable")** — the server name in your client is wrong. It must be `{{mail-host}}`. Another name works only when your admin published the DNS records for mail apps and the server has a certificate for that name.
 - **"Relaying denied. To send mail, log in on port 465."** — your mail app is sending through port 25, which only receives mail. Set the outgoing server port to **465**, turn on **SSL/TLS**, and turn on password authentication. In Apple Mail, clear **Automatically manage connection settings** first.
-- **Auth failed** — wrong email address or password. Same as IMAP: use your full email address. With two-step verification on, the password must be an [app password](help://core:security-app-passwords).
+- **Auth failed** — wrong email address or password. Same as IMAP: use your full email address on this server, not your recovery email. With two-step verification on, the password must be an [app password](help://core:security-app-passwords).
 - **Auth fails with `Your mail access is read-only; sending is not permitted`** — your account has read-only access to Mail on this server. You can still read over [IMAP](help://mail:imap); sending needs an administrator to grant full access.
 - **Sender address not recognized / Not authorized to send from this address** — see above; the sender address has to be one of the addresses of an inbox you belong to.
 - **Domain not verified** — the sending domain has to be fully verified (MX, SPF, DKIM, Return-Path). See [Custom domains](help://mail:custom-domains).

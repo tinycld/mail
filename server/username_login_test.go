@@ -4,14 +4,22 @@ import (
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/authidentity"
 )
 
 // username_login_test.go pins that the mail listeners accept the same
-// identifiers as every other protocol server: a bare username OR a full email
-// (core/davauth's contract, mirroring PocketBase's identityFields). Members
-// are invited by username with the email optional, so an email-only login
-// locks those accounts out of IMAP/SMTP entirely — and the help topics cannot
-// give one true instruction across mail and DAV.
+// identifiers as every other protocol server: a username, or a hosted address
+// (core/davauth's contract). Members are invited by username with the email
+// optional, and the account email is not a sign-in name: it is not an address
+// mail hosts.
+
+// loginName gives user a username and returns it, for a test that logs in.
+func loginName(t *testing.T, app core.App, user *core.Record) string {
+	t.Helper()
+	name := "u-" + user.Id
+	giveUsername(t, app, user, name)
+	return name
+}
 
 // giveUsername adds the username field to the bare test users collection (the
 // real field ships in a core migration) and sets it on the record.
@@ -73,5 +81,45 @@ func TestIMAPLogin_WrongUsernameStillFails(t *testing.T) {
 	s := newIMAPSession(env.app)
 	if err := s.Login("member-ghost", "Password123!"); err == nil {
 		t.Fatal("unknown username must not authenticate")
+	}
+}
+
+func TestIMAPLogin_RefusesTheAccountEmail(t *testing.T) {
+	env := setupMailGuestApp(t)
+	loginName(t, env.app, env.member)
+
+	s := newIMAPSession(env.app)
+	if err := s.Login(env.member.Email(), "Password123!"); err == nil {
+		t.Fatal("the account email logged in to IMAP; it is not a sign-in name")
+	}
+}
+
+func TestMailLogin_AcceptsAHostedAddress(t *testing.T) {
+	t.Cleanup(authidentity.ResetForTest)
+	authidentity.RegisterResolver("mail", addressOwner)
+	app := newAddressTestApp(t)
+	org := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true})
+	user := saveRealRecord(t, app, "users", map[string]any{
+		"email": "nathan@argosity.com", "username": "nathan", "name": "Nathan", "role": "owner",
+		"password": "Password123!",
+	})
+	inbox := saveRealRecord(t, app, "mail_mailboxes", map[string]any{
+		"address": "nathan", "domain": org.Id, "type": "personal", "display_name": "Nathan", "name": "Nathan",
+	})
+	saveRealRecord(t, app, "mail_identities", map[string]any{"user": user.Id, "inbox": inbox.Id, "email_name": "nathan"})
+
+	imap := newIMAPSession(app)
+	if err := imap.Login("nathan@tinycld.org", "Password123!"); err != nil {
+		t.Fatalf("IMAP login with the hosted address = %v, want success", err)
+	}
+	if imap.user == nil || imap.user.Id != user.Id {
+		t.Fatal("IMAP session should hold the address's owner")
+	}
+	smtp := &smtpSession{app: app}
+	if err := smtp.authenticate("nathan@tinycld.org", "Password123!"); err != nil {
+		t.Fatalf("SMTP auth with the hosted address = %v, want success", err)
+	}
+	if err := newIMAPSession(app).Login("nathan@argosity.com", "Password123!"); err == nil {
+		t.Fatal("the account email logged in to IMAP; it is not a sign-in name")
 	}
 }

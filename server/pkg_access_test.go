@@ -48,9 +48,10 @@ func TestSMTPAuth_ReadonlyGrantRefused(t *testing.T) {
 	t.Parallel()
 	env := setupMailGuestApp(t)
 	giveMailReadonly(t, env.app, env.member)
+	name := loginName(t, env.app, env.member)
 
 	s := &smtpSession{app: env.app}
-	if err := s.authenticate(env.member.Email(), "Password123!"); err == nil {
+	if err := s.authenticate(name, "Password123!"); err == nil {
 		t.Fatal("readonly user authenticated for SMTP — they could send as the deployment's domain")
 	}
 }
@@ -60,9 +61,10 @@ func TestIMAP_ReadonlyGrantBlocksMutationsNotReads(t *testing.T) {
 	t.Parallel()
 	env := setupMailGuestApp(t)
 	giveMailReadonly(t, env.app, env.member)
+	name := loginName(t, env.app, env.member)
 
 	s := newIMAPSession(env.app)
-	if err := s.Login(env.member.Email(), "Password123!"); err != nil {
+	if err := s.Login(name, "Password123!"); err != nil {
 		t.Fatalf("readonly user should still log in to READ mail, got %v", err)
 	}
 
