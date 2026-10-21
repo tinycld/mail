@@ -2,7 +2,7 @@ package mail
 
 import "testing"
 
-func TestLoginIdentifier(t *testing.T) {
+func TestAddressOwner(t *testing.T) {
 	t.Parallel()
 	app := newAddressTestApp(t)
 	org := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "tinycld.org", "verified": true})
@@ -19,16 +19,27 @@ func TestLoginIdentifier(t *testing.T) {
 		"address": "support", "domain": org.Id, "type": "shared", "display_name": "Support", "name": "Support",
 	})
 
-	for _, tc := range []struct{ in, want string }{
-		{"nathan", "nathan"},                           // bare username: unchanged
-		{"nathan@argosity.com", "nathan@argosity.com"}, // account email: unchanged
-		{"nathan@tinycld.org", "nathan"},               // primary address
-		{"Nathan@TinyCld.com", "nathan"},               // added address, any case
-		{"support@tinycld.org", "support@tinycld.org"}, // shared inbox: no person to log in as
-		{"nobody@tinycld.org", "nobody@tinycld.org"},   // unknown: unchanged, fails later
+	for _, tc := range []struct {
+		in     string
+		wantID string
+	}{
+		{"nathan@tinycld.org", user.Id},      // primary address
+		{"Nathan@TinyCld.com", user.Id},      // added address, any case
+		{"nathan+news@tinycld.org", user.Id}, // plus tag
+		{"nathan@argosity.com", ""},          // account email: not an address mail hosts
+		{"support@tinycld.org", ""},          // shared inbox: no person to sign in as
+		{"nobody@tinycld.org", ""},           // unknown
 	} {
-		if got := loginIdentifier(app, tc.in); got != tc.want {
-			t.Fatalf("loginIdentifier(%q) = %q, want %q", tc.in, got, tc.want)
+		got, err := addressOwner(app, tc.in)
+		if err != nil {
+			t.Fatalf("addressOwner(%q): %v", tc.in, err)
+		}
+		gotID := ""
+		if got != nil {
+			gotID = got.Id
+		}
+		if gotID != tc.wantID {
+			t.Fatalf("addressOwner(%q) = %q, want %q", tc.in, gotID, tc.wantID)
 		}
 	}
 }

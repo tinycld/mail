@@ -294,8 +294,8 @@ func TestGroupAddress_NotASender(t *testing.T) {
 		}
 	})
 	t.Run("login", func(t *testing.T) {
-		if got := loginIdentifier(env.app, "sales@tinycld.org"); got != "sales@tinycld.org" {
-			t.Fatalf("loginIdentifier = %q, want it unchanged (unknown)", got)
+		if got, err := addressOwner(env.app, "sales@tinycld.org"); got != nil || err != nil {
+			t.Fatalf("addressOwner = %v, %v; a group address signs no one in", got, err)
 		}
 	})
 }

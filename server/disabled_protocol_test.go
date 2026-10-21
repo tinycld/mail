@@ -45,11 +45,12 @@ func disableUser(t *testing.T, app core.App, user *core.Record) {
 func TestIMAPLogin_DisabledUserRejected(t *testing.T) {
 	t.Parallel()
 	env := setupMailGuestApp(t)
+	name := loginName(t, env.app, env.member)
 
 	// Positive control first: the same credentials succeed while enabled, so a
 	// failure below is the disabled check and not a broken fixture.
 	s := newIMAPSession(env.app)
-	if err := s.Login(env.member.Email(), "Password123!"); err != nil {
+	if err := s.Login(name, "Password123!"); err != nil {
 		t.Fatalf("enabled user should log in, got %v", err)
 	}
 	_ = s.Close()
@@ -57,7 +58,7 @@ func TestIMAPLogin_DisabledUserRejected(t *testing.T) {
 	disableUser(t, env.app, env.member)
 
 	s = newIMAPSession(env.app)
-	err := s.Login(env.member.Email(), "Password123!")
+	err := s.Login(name, "Password123!")
 	if !errors.Is(err, imapserver.ErrAuthFailed) {
 		t.Fatalf("disabled user Login = %v, want ErrAuthFailed", err)
 	}
@@ -66,16 +67,17 @@ func TestIMAPLogin_DisabledUserRejected(t *testing.T) {
 func TestSMTPAuth_DisabledUserRejected(t *testing.T) {
 	t.Parallel()
 	env := setupMailGuestApp(t)
+	name := loginName(t, env.app, env.member)
 
 	s := &smtpSession{app: env.app}
-	if err := s.authenticate(env.member.Email(), "Password123!"); err != nil {
+	if err := s.authenticate(name, "Password123!"); err != nil {
 		t.Fatalf("enabled user should authenticate, got %v", err)
 	}
 
 	disableUser(t, env.app, env.member)
 
 	s = &smtpSession{app: env.app}
-	if err := s.authenticate(env.member.Email(), "Password123!"); err == nil {
+	if err := s.authenticate(name, "Password123!"); err == nil {
 		t.Fatal("disabled user authenticate = nil, want 535 rejection")
 	} else if s.user != nil {
 		t.Fatal("disabled user must not be attached to the session")

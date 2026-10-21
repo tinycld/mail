@@ -121,12 +121,13 @@ func (s *loginServer) Next(response []byte) (challenge []byte, done bool, err er
 }
 
 // authenticate validates AUTH credentials. davauth.VerifyCredentials is the
-// shared protocol-server check: username-or-email identifier, and the
-// disabled cutoff (this listener bypasses PocketBase's auth hooks, and unlike
-// REST tokens a protocol login never expires). One opaque failure keeps the
-// account's state invisible to a prober.
+// shared protocol-server check: a username or a hosted address (mail's own,
+// through addressOwner), and the disabled cutoff (this listener bypasses
+// PocketBase's auth hooks, and unlike REST tokens a protocol login never
+// expires). One opaque failure keeps the account's state invisible to a
+// prober.
 func (s *smtpSession) authenticate(username, password string) error {
-	record, err := davauth.VerifyCredentials(s.app, loginIdentifier(s.app, username), password)
+	record, err := davauth.VerifyCredentials(s.app, username, password)
 	if err != nil {
 		return s.refuse("auth", &smtp.SMTPError{
 			Code:         535,

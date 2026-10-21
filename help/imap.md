@@ -29,7 +29,7 @@ Most mail apps also find the settings by themselves when you type your email add
 | **Server** | `{{mail-host}}` |
 | **Port** | **993** |
 | **Encryption** | SSL / TLS (implicit) |
-| **Username** | your full email address |
+| **Username** | your full email address on this server (not your recovery email) |
 | **Password** | your TinyCld password, or an app password |
 | **Authentication** | Normal password |
 
@@ -47,7 +47,7 @@ There is no separate "IMAP password". Use your regular TinyCld login.
 4. Apple Mail will probably fail auto-config — that's expected; the manual page appears.
 5. **Account Type**: IMAP.
 6. **Incoming Mail Server**: `{{mail-host}}`.
-7. **User Name**: your full email address.
+7. **User Name**: your full email address on this server.
 8. **Password**: your TinyCld password.
 9. **Outgoing Mail Server**: `{{mail-host}}`, the same user name and password. Port 465 with SSL/TLS.
 10. Click **Sign In**.
@@ -60,7 +60,7 @@ The mail account appears in the sidebar. Each inbox you have access to shows up 
 2. Fill in your name, email, password.
 3. Tap **Next** — iOS will try to auto-config and fail; the manual screen appears.
 4. Pick **IMAP**.
-5. Incoming Mail Server — Host Name: `{{mail-host}}`, User Name: your full email address, Password: your password.
+5. Incoming Mail Server — Host Name: `{{mail-host}}`, User Name: your full email address on this server, Password: your password.
 6. Outgoing Mail Server — same hostname, port 465. (Set up [SMTP](help://mail:smtp) to send.)
 7. Tap **Save**.
 
@@ -99,7 +99,7 @@ In classic Outlook:
 1. **Outlook → Settings → Accounts → + → New Account**.
 2. Enter your email address and click **Continue**.
 3. If Outlook asks for the provider, choose **IMAP/POP**.
-4. **Type**: IMAP. **User name**: your full email address. **Password**: your TinyCld password.
+4. **Type**: IMAP. **User name**: your full email address on this server. **Password**: your TinyCld password.
 5. **Incoming server**: `{{mail-host}}`, port **993**, **Use SSL to connect** on.
 6. **Outgoing server**: `{{mail-host}}`, port **465**, **Use SSL to connect** on.
 7. Click **Add Account**.
@@ -131,7 +131,7 @@ When you have multiple inboxes, IMAP namespaces them — typically as separate s
 ## Troubleshooting
 
 - **Connects, then immediately disconnects ("service unavailable" / BYE)** — the server name in your client is wrong. It must be `{{mail-host}}`. Another name works only when your admin published the DNS records for mail apps and the server has a certificate for that name.
-- **Auth failed** — use your full email address (an address of your own inbox, not of a shared inbox) and the password you sign in with. With two-step verification on, the password must be an [app password](help://core:security-app-passwords).
+- **Auth failed** — use your full email address on this server (an address of your own inbox, not of a shared inbox, and not your recovery email) and the password you sign in with. With two-step verification on, the password must be an [app password](help://core:security-app-passwords).
 - **Connection refused / timeout** — verify your TinyCld instance is reachable on port 993. Try `openssl s_client -connect {{mail-host}}:993 -servername {{mail-host}}` from a terminal to test.
 - **TLS certificate error** — Mail's IMAP server uses the TLS certificate of `{{mail-host}}`. Check that the server name in your client is exactly `{{mail-host}}`.
 - **Flagging, moving, or deleting fails with `Your mail access is read-only`** — your account has read-only access to Mail on this server. Reading and syncing still work, but any change your client tries to make (mark read, star, move, delete, save a draft) is refused. Ask an administrator to grant full access if you need to make changes.

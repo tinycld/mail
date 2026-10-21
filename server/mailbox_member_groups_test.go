@@ -713,7 +713,7 @@ func TestInboxGroup_SearchAndIMAPListOnce(t *testing.T) {
 	}
 
 	session := newIMAPSession(app)
-	if err := session.Login(s.ann.Email(), "Password123!"); err != nil {
+	if err := session.Login(loginName(t, app, s.ann), "Password123!"); err != nil {
 		t.Fatal(err)
 	}
 	if len(session.mailboxIndex) != 1 || session.mailboxIndex[0].mailboxID != s.shared.Id {

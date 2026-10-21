@@ -67,12 +67,12 @@ func (s *imapSession) Close() error {
 }
 
 // Login authenticates via PocketBase. davauth.VerifyCredentials is the shared
-// protocol-server check: username-or-email identifier, and the disabled
-// cutoff (this listener bypasses PocketBase's auth hooks, and unlike REST
-// tokens a protocol login never expires). One opaque failure keeps the
-// account's state invisible to a prober.
+// protocol-server check: a username or a hosted address (mail's own, through
+// addressOwner), and the disabled cutoff (this listener bypasses PocketBase's
+// auth hooks, and unlike REST tokens a protocol login never expires). One
+// opaque failure keeps the account's state invisible to a prober.
 func (s *imapSession) Login(username, password string) error {
-	record, err := davauth.VerifyCredentials(s.app, loginIdentifier(s.app, username), password)
+	record, err := davauth.VerifyCredentials(s.app, username, password)
 	if err != nil {
 		return imapserver.ErrAuthFailed
 	}
