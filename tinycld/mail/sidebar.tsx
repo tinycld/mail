@@ -10,7 +10,8 @@ import {
 import { openHelpPackage } from '@tinycld/core/lib/help/open-help'
 import { useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
+import { useUrl } from '@tinycld/core/lib/use-url'
+import { useRouter } from 'expo-router'
 import { HelpCircle, Pencil, Settings, Workflow } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { Pressable } from 'react-native'
@@ -26,12 +27,10 @@ interface MailSidebarProps {
 }
 
 function useActiveView() {
-    const pathname = usePathname()
-    const { folder, label, mailbox } = useGlobalSearchParams<{
-        folder?: string
-        label?: string
-        mailbox?: string
-    }>()
+    const {
+        pathname,
+        params: { folder, label, mailbox },
+    } = useUrl<{ folder?: string; label?: string; mailbox?: string }>()
     if (pathname.includes('/mail/')) {
         return {
             folder: null,
@@ -52,7 +51,7 @@ function useActiveView() {
 
 export default function MailSidebar(_props: MailSidebarProps) {
     const router = useRouter()
-    const pathname = usePathname()
+    const { pathname } = useUrl()
     const mutedColor = useThemeColor('muted-foreground')
     const { folder: activeFolder, activeLabels, activeMailbox, isDefaultView } = useActiveView()
     const orgHref = useOrgHref()
