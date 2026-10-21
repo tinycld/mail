@@ -64,8 +64,8 @@ For users connecting Outlook, Apple Mail, Gmail, Thunderbird, DAVx5, or any othe
 
 | Protocol | Port (prod) | Encryption  | Auth                       |
 |----------|-------------|-------------|----------------------------|
-| **IMAP** | **993**     | implicit TLS | TinyCld email + password |
-| **SMTP** | **465**     | implicit TLS | TinyCld email + password |
+| **IMAP** | **993**     | implicit TLS | Username or own inbox address + password |
+| **SMTP** | **465**     | implicit TLS | Username or own inbox address + password |
 
 Mail apps can set themselves up from what the server publishes (`registerClientSetupRoutes` in `server/client_discovery.go`, called from `register.go`):
 
@@ -137,7 +137,7 @@ The short version: every message is a `mail_messages` row owned by a `mail_threa
 │                                                                      │
 │   IMAP server                                                        │
 │     :993  implicit TLS (prod) / :1143 plain (dev)                    │
-│     Login → davauth.VerifyCredentials (loginIdentifier)              │
+│     Login → davauth.VerifyCredentials (authidentity: addressOwner)   │
 │     IDLE supported; UID validity per mailbox                         │
 │                                                                      │
 │   SMTP submission server                                             │
@@ -245,7 +245,7 @@ Composing a message in the web UI:
 
 `server/smtp_server.go` drives core's `tinycld.org/core/mailproto` transport (`mailproto.StartSMTP` owns the TLS policy, bind, and `go-smtp` server); mail supplies only the backend. The session backend (`smtp_session.go`):
 
-- **AUTH** validates username / email + password via core's `davauth.VerifyCredentials`. An address of the user's personal inbox is accepted as the user name too (`loginIdentifier` in `login_identifier.go`). AUTH then refuses a user whose mail access is read-only with `535 Your mail access is read-only; sending is not permitted`.
+- **AUTH** validates username + password via core's `davauth.VerifyCredentials`. The account email is not a sign-in name. An address of the user's own inbox is accepted as the user name too: mail registers `addressOwner` (`address_owner.go`) with core's `authidentity` registry, which the web sign-in screen also asks. AUTH then refuses a user whose mail access is read-only with `535 Your mail access is read-only; sending is not permitted`.
 - **MAIL FROM** validates the envelope sender: the address must resolve to an inbox's `mail_addresses` row through `resolveAddress` (`addresses.go`), else `550 Sender address not recognized`. A group address never resolves, because a group cannot send. The authenticated user must also be a member of that mailbox, else `550 Not authorized to send from this address`.
 - **RCPT TO** requires a prior AUTH (`530`) and MAIL FROM (`503`), rejects an address without `@` (`553 Invalid recipient address`), and caps the envelope at 100 recipients (`452 Too many recipients`). Recipient validity beyond that is the provider's job, not ours.
 - **DATA** parses the incoming RFC 5322 message. It does not validate the message's `From:` header — it **replaces** it, building the outgoing From with `formatFromAddress` (`send_address.go`) from the mailbox's `display_name` plus the `local_part` and domain of the address MAIL FROM resolved, so sender identity is consistent across channels. The stored copy records that address in `sent_from`. `To` / `Cc` come from the headers; any envelope recipient not in those headers becomes `Bcc`.
@@ -346,7 +346,7 @@ server/
     mailbox_member_groups.go   groups as shared-inbox members (core groups grant table)
     send_address.go            resolveSendAddress, default From address, formatFromAddress
     inbound_routing.go         routingRecipients, routeInbound
-    login_identifier.go        a personal-inbox address as an IMAP / SMTP user name
+    address_owner.go           addressOwner: authidentity resolver, own-inbox address → user (sign-in, IMAP, SMTP)
     client_discovery.go        Mozilla autoconfig, Outlook Autodiscover, profile routes
     client_profile.go          Apple configuration profile + profile token
     store.go                   findOrCreateThread, storeMessage
@@ -441,7 +441,7 @@ As with the server list, `ls tinycld/mail/**` is the source of truth.
 
 ## Command line
 
-Mail contributes a `mail` command group to the `tinycld` binary — a Go CLI the server cross-compiles and hands out from **Settings → Personal → About**. The source lives in this repo at `cli/`, declared through a `cli` block in `manifest.ts` naming the Go module. The OAuth scopes the commands need (`mail:read`, `mail:send`) are not declared in the manifest — `server/oauth_scopes.go` defines them and `registerShared` in `server/register.go` registers them with `oauth.RegisterPackage`, and the scope catalog, the consent screen, and the CLI's login request are all derived from that.
+Mail contributes a `mail` command group to the `tinycld` binary — a Go CLI the server cross-compiles and hands out from **Settings → About**. The source lives in this repo at `cli/`, declared through a `cli` block in `manifest.ts` naming the Go module. The OAuth scopes the commands need (`mail:read`, `mail:send`) are not declared in the manifest — `server/oauth_scopes.go` defines them and `registerShared` in `server/register.go` registers them with `oauth.RegisterPackage`, and the scope catalog, the consent screen, and the CLI's login request are all derived from that.
 
 | Group | Commands |
 |-------|----------|
@@ -492,13 +492,14 @@ cd server && go test ./...        # Go server tests
 
 - `manifest.ts` — declares the package's client-side capabilities (routes, nav, sidebar, `slots`, `setupSteps`, settings + account-settings + system-settings panels, collections, migrations, server module, `ports`, help, seed, `search` adapter, `automation` definitions, `payloads` contract, `cli` module). Server-side registrations such as quota sources (`server/register.go`) and OAuth scopes (`server/oauth_scopes.go`) live in Go.
 
-### Sidebar slot
+### Contributable slots
 
-Mail exposes one sidebar slot for other packages to extend:
+Mail exposes two slots for other packages to extend (`slots` in `manifest.ts`):
 
 - `sidebar.after-labels` — rendered below the Labels group, above the Help link.
+- `setup-domain-options` — extra options on the setup wizard's email-domain step (`setup/EmailDomainStep.tsx`).
 
-Other packages can target this slot via `sidebarContributions` in their manifest. See [Sidebar slots](https://tinycld.org/docs/anatomy/sidebar-slots) for the full contract.
+Other packages can target these slots via `sidebarContributions` in their manifest. See [Sidebar slots](https://tinycld.org/docs/anatomy/sidebar-slots) for the full contract.
 - `package.json` — name and exports map; framework deps come from the workspace root, and the `@tinycld/core` pin lives in `manifest.ts` as `peerVersions`
 - `tsconfig.json` — typecheck config (lint config lives in the app shell's `biome.json`)
 - `pb-migrations/` — PocketBase migrations (symlinked into the app shell's server on `packages:generate`)
