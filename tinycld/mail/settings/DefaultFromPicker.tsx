@@ -1,7 +1,7 @@
 import { handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
-import { SelectInput, useForm, z, zodResolver } from '@tinycld/core/ui/form'
+import { ButtonGroup, useForm, z, zodResolver } from '@tinycld/core/ui/form'
 import { useEffect } from 'react'
 import { toAddressItems } from './address-items'
 import type { PersonAddress } from './usePersonEmail'
@@ -57,7 +57,7 @@ export function DefaultFromPicker({
     }, [watch, mutate])
 
     return (
-        <SelectInput
+        <ButtonGroup
             control={control}
             name="default_from"
             label="Send new mail from"
