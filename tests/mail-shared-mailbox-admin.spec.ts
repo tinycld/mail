@@ -1,12 +1,11 @@
 import { expect, test } from '@playwright/test'
 import PocketBase from 'pocketbase'
-import { navigateToSharedInboxSettings } from './helpers'
-
-// PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
-// through to PB transparently — see scripts/dev.ts::isPbPath.
-const PB_URL = 'http://127.0.0.1:7200'
-const SUPERUSER_EMAIL = process.env.POCKETBASE_EMAIL || 'admin@tinycld.org'
-const SUPERUSER_PASSWORD = process.env.POCKETBASE_PASSWORD || 'AdminPass1234!'
+import {
+    navigateToSharedInboxSettings,
+    PB_URL,
+    SUPERUSER_EMAIL,
+    SUPERUSER_PASSWORD,
+} from './helpers'
 
 interface SeededUser {
     email: string

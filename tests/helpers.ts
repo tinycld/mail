@@ -170,9 +170,10 @@ export async function giveEveryoneAnAddressOn(page: Page, domain: string) {
     await expect(card.getByText('Apply', { exact: true })).toBeHidden()
 }
 
-// PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
-// through to PB transparently — see scripts/dev.ts::isPbPath.
-export const PB_URL = 'http://127.0.0.1:7200'
+// The e2e server serves the app and PocketBase on one port. It follows
+// E2E_PORT, as playwright.config.ts does, so a run on another port seeds
+// the server it tests.
+export const PB_URL = `http://127.0.0.1:${process.env.E2E_PORT ?? 7200}`
 export const SUPERUSER_EMAIL = process.env.POCKETBASE_EMAIL || 'admin@tinycld.org'
 export const SUPERUSER_PASSWORD = process.env.POCKETBASE_PASSWORD || 'AdminPass1234!'
 
