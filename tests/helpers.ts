@@ -296,18 +296,10 @@ export async function createSharedMailbox(page: Page, label: string): Promise<st
     await page.getByText('New shared inbox', { exact: true }).click()
     await expect(page.getByText('Set up a shared inbox')).toBeVisible()
     await page.getByTestId('address').fill(local)
-    // The domain choice renders only when the org has more than one domain
-    // (the custom-domain spec adds some), and it defaults to the first one.
-    // The inbound webhook delivers to tinycld.org, so pick it explicitly.
-    // The picker and the preview's domain both derive from the loaded domain
-    // list, so wait until the preview names a domain (not the '…' it shows
-    // while the list loads) or the picker is up; only then is the picker's
-    // absence an answer rather than a render not yet reached.
-    const domainChoice = page.getByText(MAIL_DOMAIN, { exact: true })
-    const domainResolved = page.getByText(/will be: .*@[^…]/)
-    await expect(domainResolved.or(domainChoice).first()).toBeVisible()
-    if (await domainChoice.isVisible()) await domainChoice.click()
-    await expect(page.getByText(`will be: ${local}@${MAIL_DOMAIN}`)).toBeVisible()
+    // Every domain starts checked, so the inbox gets this address on
+    // tinycld.org, where the inbound webhook delivers, whatever domains other
+    // specs have added. Leave the choice as it is: a click would uncheck it.
+    await expect(page.getByText(`${local}@${MAIL_DOMAIN}`).first()).toBeVisible()
     await page.getByTestId('display_name').fill(local)
     await page.getByText('Create inbox', { exact: true }).click()
     await expect(page.getByText('Set up a shared inbox')).toBeHidden()

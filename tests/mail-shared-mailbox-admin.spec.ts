@@ -76,11 +76,10 @@ test.describe('Mail — Shared mailbox lifecycle as admin', () => {
         await navigateToSharedInboxSettings(page)
 
         // Create a baseline mailbox owned by this test, then attempt to
-        // create a second one with the same address. The unique index
-        // `idx_mail_mailboxes_addr_domain` rejects the duplicate and
-        // PocketBase returns validation_not_unique. We don't reuse the
-        // seeded "support" mailbox — other parallel specs may
-        // delete/rename it.
+        // create a second one with the same address. The form knows every
+        // existing address, so it refuses the duplicate before it is sent.
+        // We don't reuse the seeded "support" mailbox — other parallel specs
+        // may delete/rename it.
         const address = `dup-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 
         await page.getByText('New shared inbox', { exact: true }).click()
@@ -95,16 +94,11 @@ test.describe('Mail — Shared mailbox lifecycle as admin', () => {
         await expect(page.getByText('Set up a shared inbox')).toBeVisible()
         await page.getByTestId('address').fill(address)
         await page.getByTestId('display_name').fill('Duplicate Test')
-        await page.getByText('Create inbox', { exact: true }).click()
 
-        // The drawer must stay open and surface the error to the user. Scope
-        // the match to the form's own error summary — /already|in use|exists/
-        // anywhere in the DOM is satisfiable by any other package's content.
-        await expect(page.getByText('Set up a shared inbox')).toBeVisible()
-        await expect(page.getByTestId('mailbox-form-errors')).toBeVisible()
-        await expect(page.getByTestId('mailbox-form-errors')).toContainText(
-            /already|unique|in use|exists/i
-        )
+        // The address field names the full address that collides; the
+        // random address keeps the match from hitting other content.
+        await expect(page.getByText(new RegExp(`^${address}@\\S+ already exists$`))).toBeVisible()
+        await expect(page.getByTestId('mailbox-form-submit')).toBeDisabled()
     })
 
     test('admin can create a shared mailbox and add another org member to it', async ({ page }) => {

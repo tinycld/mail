@@ -14,7 +14,7 @@ import { useOrgInfo } from '@tinycld/core/lib/use-org-info'
 import { Button, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import { useRouter } from 'expo-router'
 import { Text, View } from 'react-native'
-import { MailboxForm } from '../settings/MailboxForm'
+import { PersonalMailboxCreateForm } from '../settings/MailboxForm'
 import { defaultAddressFor } from '../settings/mailbox-records'
 import {
     EMAIL_DOMAIN_STEP_HREF,
@@ -246,9 +246,7 @@ function NewMailboxForm() {
     const defaults = { address: defaultAddressFor(me.username), display_name: me.name }
     return (
         <View className="mb-4">
-            <MailboxForm
-                mode="create"
-                type="personal"
+            <PersonalMailboxCreateForm
                 domainOptions={readyDomainOptions(rows)}
                 userId={me.id}
                 defaults={defaults}

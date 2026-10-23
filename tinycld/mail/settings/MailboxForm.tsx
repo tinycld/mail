@@ -4,59 +4,185 @@ import { useStore } from '@tinycld/core/lib/pocketbase'
 import { ButtonIcon, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import {
     FormErrorSummary,
-    SelectInput,
+    MultiSelectInput,
+    RadioInput,
     TextInput,
     useForm,
-    z,
     zodResolver,
 } from '@tinycld/core/ui/form'
 import { Plus } from 'lucide-react-native'
 import { newRecordId } from 'pbtsdb/core'
+import { type ReactNode, useMemo } from 'react'
 import { Text, View } from 'react-native'
-import { type MailboxType, newMailboxRecords } from './mailbox-records'
+import type { AddressRules } from './addressSchema'
+import { newMailboxRecords } from './mailbox-records'
+import {
+    type MailboxFormValues,
+    mailboxSchema,
+    type SharedMailboxFormValues,
+    sharedMailboxSchemaFor,
+} from './mailbox-schema'
+import { useAddressRules } from './useAddressRules'
 
-const mailboxSchema = z.object({
-    address: z
-        .string()
-        .min(1, 'Address is required')
-        .max(64)
-        .regex(/^[a-z0-9._-]+$/, 'Only lowercase letters, numbers, dots, hyphens, underscores'),
-    domain: z.string().min(1, 'Domain is required'),
-    display_name: z.string().min(1, 'Display name is required').max(200),
-})
+type DomainOption = { label: string; value: string }
 
-export type MailboxFormValues = z.infer<typeof mailboxSchema>
+const DISPLAY_NAME_HINT = 'shown in the From: header and in the admin list'
 
-interface CreateProps {
-    mode: 'create'
-    domainOptions: Array<{ label: string; value: string }>
+function useCreateMailbox({
+    type,
+    userId,
+    onSuccess,
+    onError,
+}: {
+    type: 'shared' | 'personal'
+    userId: string
+    onSuccess: () => void
+    onError: (error: unknown) => void
+}) {
+    const [mailboxesCollection, membersCollection, addressesCollection] = useStore(
+        'mail_mailboxes',
+        'mail_mailbox_members',
+        'mail_addresses'
+    )
+    return useMutation({
+        mutationFn: mutation(function* (data: {
+            address: string
+            display_name: string
+            domains: readonly string[]
+        }) {
+            const { mailbox, member, addresses } = newMailboxRecords({
+                address: data.address,
+                displayName: data.display_name,
+                domains: data.domains,
+                type,
+                userId,
+                newId: newRecordId,
+            })
+            yield mailboxesCollection.insert(mailbox)
+            yield membersCollection.insert(member)
+            yield addresses.map(a => addressesCollection.insert(a))
+        }),
+        onSuccess,
+        onError,
+    })
+}
+
+// Every domain starts checked: a team address such as support@ is usually
+// wanted on each of the org's domains, and an admin can uncheck the rest.
+export function SharedMailboxCreateForm({
+    userId,
+    onDone,
+}: {
     userId: string
     onDone: () => void
-    /** Default 'shared'. 'personal' makes the creator's own address. */
-    type?: MailboxType
-    defaults?: Partial<Pick<MailboxFormValues, 'address' | 'display_name'>>
-}
-
-interface EditProps {
-    mode: 'edit'
-    mailboxId: string
-    initial: MailboxFormValues
-    domainName: string
-    onDone: () => void
-}
-
-type Props = CreateProps | EditProps
-
-export function MailboxForm(props: Props) {
-    return props.mode === 'create' ? <CreateForm {...props} /> : <EditForm {...props} />
-}
-
-function CreateForm({ domainOptions, userId, onDone, type = 'shared', defaults }: CreateProps) {
-    const [mailboxesCollection, membersCollection] = useStore(
-        'mail_mailboxes',
-        'mail_mailbox_members'
+}) {
+    const { rules, domainOptions, isReady } = useAddressRules(null)
+    // The form reads its defaults once, so it mounts after the domains load.
+    if (!isReady) return null
+    return (
+        <SharedForm rules={rules} domainOptions={domainOptions} userId={userId} onDone={onDone} />
     )
+}
 
+function SharedForm({
+    rules,
+    domainOptions,
+    userId,
+    onDone,
+}: {
+    rules: AddressRules
+    domainOptions: DomainOption[]
+    userId: string
+    onDone: () => void
+}) {
+    const domainNames = useMemo(
+        () => new Map(domainOptions.map(d => [d.value, d.label])),
+        [domainOptions]
+    )
+    const schema = useMemo(() => sharedMailboxSchemaFor(rules, domainNames), [rules, domainNames])
+    const {
+        control,
+        handleSubmit,
+        setError,
+        getValues,
+        watch,
+        reset,
+        formState: { errors, isSubmitted, isValid },
+    } = useForm<SharedMailboxFormValues>({
+        mode: 'onChange',
+        resolver: zodResolver(schema),
+        defaultValues: {
+            address: '',
+            domains: domainOptions.map(d => d.value),
+            display_name: '',
+        },
+    })
+    const createMutation = useCreateMailbox({
+        type: 'shared',
+        userId,
+        onSuccess: () => {
+            reset()
+            onDone()
+        },
+        onError: handleMutationErrorsWithForm({ setError, getValues }),
+    })
+    const onSubmit = handleSubmit(d => createMutation.mutate(d))
+    const values = watch()
+    const chosenNames = (values.domains ?? []).map(id => domainNames.get(id) ?? '')
+
+    return (
+        <FormLayout
+            errors={errors}
+            isSubmitted={isSubmitted}
+            preview={{
+                address: values.address,
+                domainName: chosenNames[0] ?? '',
+                displayName: values.display_name,
+            }}
+            submitLabel={createMutation.isPending ? 'Creating…' : 'Create inbox'}
+            canSubmit={!createMutation.isPending && isValid}
+            onSubmit={onSubmit}
+        >
+            <TextInput
+                control={control}
+                name="address"
+                label="Address"
+                placeholder="support"
+                hint={addressHint(values.address, chosenNames)}
+            />
+            <DomainChoices isVisible={domainOptions.length > 1}>
+                <MultiSelectInput
+                    control={control}
+                    name="domains"
+                    label="Domains"
+                    options={domainOptions}
+                    hint="The inbox gets this address on each checked domain."
+                />
+            </DomainChoices>
+            <TextInput
+                control={control}
+                name="display_name"
+                label="Display name"
+                placeholder="Support Team"
+                hint={DISPLAY_NAME_HINT}
+            />
+        </FormLayout>
+    )
+}
+
+// A personal inbox has one address. The person's email name on each domain
+// with a rule comes from that rule, so a second address here would clash.
+export function PersonalMailboxCreateForm({
+    domainOptions,
+    userId,
+    onDone,
+    defaults,
+}: {
+    domainOptions: DomainOption[]
+    userId: string
+    onDone: () => void
+    defaults: Pick<MailboxFormValues, 'address' | 'display_name'>
+}) {
     const {
         control,
         handleSubmit,
@@ -68,35 +194,20 @@ function CreateForm({ domainOptions, userId, onDone, type = 'shared', defaults }
     } = useForm<MailboxFormValues>({
         mode: 'onChange',
         resolver: zodResolver(mailboxSchema),
-        defaultValues: {
-            address: defaults?.address ?? '',
-            domain: domainOptions[0]?.value ?? '',
-            display_name: defaults?.display_name ?? '',
-        },
+        defaultValues: { ...defaults, domain: domainOptions[0]?.value ?? '' },
     })
-
-    const createMutation = useMutation({
-        mutationFn: mutation(function* (data: MailboxFormValues) {
-            const { mailbox, member } = newMailboxRecords({
-                data,
-                type,
-                userId,
-                mailboxId: newRecordId(),
-                memberId: newRecordId(),
-            })
-            yield mailboxesCollection.insert(mailbox)
-            yield membersCollection.insert(member)
-        }),
+    const createMutation = useCreateMailbox({
+        type: 'personal',
+        userId,
         onSuccess: () => {
             reset()
             onDone()
         },
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
-
-    const onSubmit = handleSubmit(d => createMutation.mutate(d))
-    // Not gated on isDirty: prefilled defaults are a valid submission as-is.
-    const canSubmit = !createMutation.isPending && isValid
+    const onSubmit = handleSubmit(({ domain, ...rest }) =>
+        createMutation.mutate({ ...rest, domains: [domain] })
+    )
     const values = watch()
     const domainName = domainOptions.find(d => d.value === values.domain)?.label ?? ''
 
@@ -104,21 +215,54 @@ function CreateForm({ domainOptions, userId, onDone, type = 'shared', defaults }
         <FormLayout
             errors={errors}
             isSubmitted={isSubmitted}
-            control={control}
-            domainOptions={domainOptions}
             preview={{
                 address: values.address,
                 domainName,
                 displayName: values.display_name,
             }}
             submitLabel={createMutation.isPending ? 'Creating…' : 'Create inbox'}
-            canSubmit={canSubmit}
+            // Not gated on isDirty: prefilled defaults are a valid submission as-is.
+            canSubmit={!createMutation.isPending && isValid}
             onSubmit={onSubmit}
-        />
+        >
+            <TextInput
+                control={control}
+                name="address"
+                label="Address"
+                placeholder="support"
+                hint={addressHint(values.address, [domainName])}
+            />
+            <DomainChoices isVisible={domainOptions.length > 1}>
+                <RadioInput
+                    control={control}
+                    name="domain"
+                    label="Domain"
+                    options={domainOptions}
+                />
+            </DomainChoices>
+            <TextInput
+                control={control}
+                name="display_name"
+                label="Display name"
+                placeholder="Support Team"
+                hint={DISPLAY_NAME_HINT}
+            />
+        </FormLayout>
     )
 }
 
-function EditForm({ mailboxId, initial, domainName, onDone }: EditProps) {
+// The domain is fixed after creation; other domains are added as addresses.
+export function MailboxEditForm({
+    mailboxId,
+    initial,
+    domainName,
+    onDone,
+}: {
+    mailboxId: string
+    initial: MailboxFormValues
+    domainName: string
+    onDone: () => void
+}) {
     const [mailboxesCollection] = useStore('mail_mailboxes')
 
     const {
@@ -147,50 +291,68 @@ function EditForm({ mailboxId, initial, domainName, onDone }: EditProps) {
     })
 
     const onSubmit = handleSubmit(d => editMutation.mutate(d))
-    const canSubmit = !editMutation.isPending && isDirty && isValid
     const values = watch()
 
     return (
         <FormLayout
             errors={errors}
             isSubmitted={isSubmitted}
-            control={control}
-            domainOptions={[{ label: domainName, value: initial.domain }]}
-            domainDisabled
             preview={{
                 address: values.address,
                 domainName,
                 displayName: values.display_name,
             }}
             submitLabel={editMutation.isPending ? 'Saving…' : 'Save changes'}
-            canSubmit={canSubmit}
+            canSubmit={!editMutation.isPending && isDirty && isValid}
             onSubmit={onSubmit}
-        />
+        >
+            <TextInput
+                control={control}
+                name="address"
+                label="Address"
+                placeholder="support"
+                hint={addressHint(values.address, [domainName])}
+            />
+            <TextInput
+                control={control}
+                name="display_name"
+                label="Display name"
+                placeholder="Support Team"
+                hint={DISPLAY_NAME_HINT}
+            />
+        </FormLayout>
     )
+}
+
+function addressHint(address: string, domainNames: string[]) {
+    const local = address || '…'
+    const names = domainNames.length > 0 ? domainNames : ['…']
+    return `will be: ${names.map(name => `${local}@${name || '…'}`).join(', ')}`
+}
+
+function DomainChoices({ isVisible, children }: { isVisible: boolean; children: ReactNode }) {
+    if (!isVisible) return null
+    return <>{children}</>
 }
 
 interface FormLayoutProps {
     errors: Parameters<typeof FormErrorSummary>[0]['errors']
     isSubmitted: boolean
-    control: ReturnType<typeof useForm<MailboxFormValues>>['control']
-    domainOptions: Array<{ label: string; value: string }>
-    domainDisabled?: boolean
     preview: { address: string; domainName: string; displayName: string }
     submitLabel: string
     canSubmit: boolean
     onSubmit: () => void
+    children: ReactNode
 }
 
 function FormLayout({
     errors,
     isSubmitted,
-    control,
-    domainOptions,
-    domainDisabled,
     preview,
     submitLabel,
     canSubmit,
     onSubmit,
+    children,
 }: FormLayoutProps) {
     const previewInitial = (preview.displayName || preview.address || '?')
         .trim()
@@ -204,28 +366,7 @@ function FormLayout({
                 isEnabled={isSubmitted}
                 testID="mailbox-form-errors"
             />
-            <TextInput
-                control={control}
-                name="address"
-                label="Address"
-                placeholder="support"
-                hint={`will be: ${preview.address || '…'}@${preview.domainName || '…'}`}
-            />
-            {domainOptions.length > 1 && !domainDisabled ? (
-                <SelectInput
-                    control={control}
-                    name="domain"
-                    label="Domain"
-                    options={domainOptions}
-                />
-            ) : null}
-            <TextInput
-                control={control}
-                name="display_name"
-                label="Display name"
-                placeholder="Support Team"
-                hint="shown in the From: header and in the admin list"
-            />
+            {children}
             <View className="flex-row gap-3 items-center rounded-lg p-3 border border-border">
                 <View
                     className="items-center justify-center rounded-lg bg-primary/10"
