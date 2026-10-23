@@ -20,8 +20,9 @@ import { newRecordId } from 'pbtsdb/core'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MailboxAddressesPanel } from './MailboxAddressesPanel'
-import { MailboxForm, type MailboxFormValues } from './MailboxForm'
+import { MailboxEditForm, SharedMailboxCreateForm } from './MailboxForm'
 import { MailboxMemberRow, type Role } from './MailboxMemberRow'
+import type { MailboxFormValues } from './mailbox-schema'
 import type { MemberRow } from './member-rows'
 import { viewerIsOwner } from './viewer-is-owner'
 
@@ -55,7 +56,6 @@ interface Props {
     mailbox: ViewMailbox | null
     members: MemberRow[]
     orgMembers: OrgMemberRow[]
-    domainOptions: Array<{ label: string; value: string }>
     userId: string
 }
 
@@ -67,7 +67,6 @@ export function MailboxDrawer({
     mailbox,
     members,
     orgMembers,
-    domainOptions,
     userId,
 }: Props) {
     const isOpen = mode.kind !== 'closed'
@@ -75,9 +74,7 @@ export function MailboxDrawer({
         <Drawer isOpen={isOpen} onClose={onClose} anchor="right" size="md">
             <DrawerBackdrop />
             <DrawerContent>
-                {mode.kind === 'create' && (
-                    <CreateView domainOptions={domainOptions} userId={userId} onDone={onClose} />
-                )}
+                {mode.kind === 'create' && <CreateView userId={userId} onDone={onClose} />}
                 {mode.kind === 'edit' && mailbox && (
                     <EditView
                         mailbox={mailbox}
@@ -99,15 +96,7 @@ export function MailboxDrawer({
     )
 }
 
-function CreateView({
-    domainOptions,
-    userId,
-    onDone,
-}: {
-    domainOptions: Array<{ label: string; value: string }>
-    userId: string
-    onDone: () => void
-}) {
+function CreateView({ userId, onDone }: { userId: string; onDone: () => void }) {
     const mutedColor = useThemeColor('muted-foreground')
     return (
         <>
@@ -120,7 +109,7 @@ function CreateView({
                         className="text-muted-foreground"
                         style={{ fontSize: 12.5, marginTop: 2 }}
                     >
-                        Choose an address and display name to get started.
+                        Choose an address, its domains, and a display name.
                     </Text>
                 </View>
                 <DrawerCloseButton onPress={onDone} accessibilityLabel="Close">
@@ -128,12 +117,7 @@ function CreateView({
                 </DrawerCloseButton>
             </DrawerHeader>
             <DrawerBody>
-                <MailboxForm
-                    mode="create"
-                    domainOptions={domainOptions}
-                    userId={userId}
-                    onDone={onDone}
-                />
+                <SharedMailboxCreateForm userId={userId} onDone={onDone} />
             </DrawerBody>
         </>
     )
@@ -173,8 +157,7 @@ function EditView({
                 </DrawerCloseButton>
             </DrawerHeader>
             <DrawerBody>
-                <MailboxForm
-                    mode="edit"
+                <MailboxEditForm
                     mailboxId={mailbox.id}
                     initial={initial}
                     domainName={mailbox.domainName}

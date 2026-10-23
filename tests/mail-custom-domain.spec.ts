@@ -1,6 +1,7 @@
 import { expect, type Page, test } from '@playwright/test'
 import { login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 import PocketBase from 'pocketbase'
+import { PB_URL, SUPERUSER_EMAIL, SUPERUSER_PASSWORD } from './helpers'
 
 // A real Postmark account is not available in CI, and POST /api/mail/domains
 // enrolls with the mail provider before it creates the row — see
@@ -27,12 +28,6 @@ import PocketBase from 'pocketbase'
 // actual DNS record values Postmark returns). Do not read this spec as
 // end-to-end coverage of domain enrollment — it only covers the client-side
 // settings UI rendering a mail_domains row.
-
-// PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
-// through to PB transparently — see scripts/dev.ts::isPbPath.
-const PB_URL = 'http://127.0.0.1:7200'
-const SUPERUSER_EMAIL = process.env.POCKETBASE_EMAIL || 'admin@tinycld.org'
-const SUPERUSER_PASSWORD = process.env.POCKETBASE_PASSWORD || 'AdminPass1234!'
 
 interface StubbedOutbound {
     dkim_host: string

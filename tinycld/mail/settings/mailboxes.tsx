@@ -228,7 +228,6 @@ export default function MailboxesSettings() {
         )
     }
 
-    const domainOptions = data.domains.map(d => ({ label: d.domain, value: d.id }))
     const hasDomains = data.domains.length > 0
     const sharedFooter = sharedInboxesFooter(grouped.totals.shared, data.domains[0]?.domain)
 
@@ -392,7 +391,6 @@ export default function MailboxesSettings() {
                 mailbox={selectedMailbox}
                 members={selectedMembers}
                 orgMembers={data.orgMembers}
-                domainOptions={domainOptions}
                 userId={currentUserId}
             />
         </>

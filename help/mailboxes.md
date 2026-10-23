@@ -19,8 +19,11 @@ An admin or an owner of the workspace sees every shared inbox in **Settings → 
 
 1. Open **Settings → Mail → Shared inboxes**.
 2. Click **New shared inbox**.
-3. Type the part of the address before the `@`, choose the domain, and type a display name.
-4. Click **Create inbox**.
+3. Type the part of the address before the `@`, and type a display name.
+4. Under **Domains**, clear each domain where the inbox must not have this address. All domains are checked at the start. The inbox gets the address on each checked domain, and the first checked domain gives its main address.
+5. Click **Create inbox**.
+
+If the address already exists on a checked domain, the form shows that address. Clear that domain or type a different address.
 
 You become the owner. To add other members, click the inbox row, open **Members**, and click **Add member**.
 
