@@ -4,9 +4,9 @@ import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import {
+    ButtonGroup,
     type Control,
     NumberInput,
-    SelectInput,
     TextInput,
     Toggle,
     useForm,
@@ -161,7 +161,7 @@ export default function MailSystemProvider() {
                 The mail provider for this deployment. Applies server-wide — outbound sending and
                 inbound delivery both use it.
             </Text>
-            <SelectInput
+            <ButtonGroup
                 control={control}
                 name="provider"
                 label="Provider"
@@ -287,7 +287,7 @@ function SmtpFields({
                 placeholder="tinycld"
                 autoCapitalize="none"
             />
-            <SelectInput
+            <ButtonGroup
                 control={control}
                 name="smtp_inbound_mode"
                 label="Inbound mode"

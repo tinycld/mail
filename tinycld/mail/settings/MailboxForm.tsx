@@ -3,8 +3,8 @@ import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { ButtonIcon, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import {
+    ButtonGroup,
     FormErrorSummary,
-    SelectInput,
     TextInput,
     useForm,
     z,
@@ -212,7 +212,7 @@ function FormLayout({
                 hint={`will be: ${preview.address || '…'}@${preview.domainName || '…'}`}
             />
             {domainOptions.length > 1 && !domainDisabled ? (
-                <SelectInput
+                <ButtonGroup
                     control={control}
                     name="domain"
                     label="Domain"

@@ -4,8 +4,8 @@ import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { ButtonIcon, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import {
+    ButtonGroup,
     FormErrorSummary,
-    SelectInput,
     TextInput,
     useForm,
     zodResolver,
@@ -120,7 +120,7 @@ export function AddAddressForm({ target, onDone }: { target: AddressTarget; onDo
         <View className="gap-2">
             <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
             <TextInput control={control} name="local_part" label="Address" placeholder="sales" />
-            <SelectInput control={control} name="domain" label="Domain" options={domainOptions} />
+            <ButtonGroup control={control} name="domain" label="Domain" options={domainOptions} />
             <ServerActionButton
                 size="sm"
                 onPress={onSubmit}
