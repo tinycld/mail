@@ -16,6 +16,7 @@ const THREAD_COUNT = 101
 // Sequential delivery of 101 messages takes minutes; batches keep the spec
 // inside the default test timeout.
 const DELIVERY_BATCH = 20
+const DAY_MS = 24 * 60 * 60 * 1000
 
 test.describe('Mail — Paging', () => {
     test.beforeEach(async ({ page }) => {
@@ -35,8 +36,11 @@ test.describe('Mail — Paging', () => {
         )
         // One second apart and fixed from the index: the Date header has
         // one-second resolution, so a burst would tie on latest_date, and
-        // concurrent deliveries finish in any order.
-        const firstDate = Date.now() - THREAD_COUNT * 1000
+        // concurrent deliveries finish in any order. A day in the past: the
+        // shared test user is a member of this inbox, so its threads are in
+        // All Inboxes too, and dated now they pushed the threads other specs
+        // deliver meanwhile off that list's first page.
+        const firstDate = Date.now() - DAY_MS - THREAD_COUNT * 1000
         for (let start = 0; start < THREAD_COUNT; start += DELIVERY_BATCH) {
             const batch = subjects.slice(start, start + DELIVERY_BATCH)
             await Promise.all(
