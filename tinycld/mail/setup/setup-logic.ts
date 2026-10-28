@@ -2,6 +2,7 @@ import type { SendEmailRequest } from '@tinycld/app-generated/mail-api'
 import { errorToString } from '@tinycld/core/lib/errors'
 import { log } from '@tinycld/core/lib/logger'
 import { appHref } from '@tinycld/core/lib/org-routes'
+import { ClientResponseError } from 'pocketbase'
 import { type DomainChecks, isDomainReady } from '../settings/domain-ready'
 import { testMessageHtml, testMessageSubject, testMessageText } from './test-message'
 
@@ -109,7 +110,14 @@ export function testMessageLabel(state: TestMessageState): string {
 }
 
 // logSetupFailure logs a failed setup action whose message the step already
-// shows to the user.
+// shows to the user. A 4xx is the server refusing for a reason the org can
+// act on (no mail provider, DKIM not verified), so it is not a warning.
 export function logSetupFailure(context: string, error: unknown) {
+    const isRefusal =
+        error instanceof ClientResponseError && error.status >= 400 && error.status < 500
+    if (isRefusal) {
+        log.info(context, errorToString(error))
+        return
+    }
     log.warn(context, errorToString(error))
 }
