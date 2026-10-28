@@ -1422,10 +1422,13 @@ func (s *imapSession) markSeen(msg *core.Record) {
 func storeRawHeaders(app core.App, record *core.Record, headers []byte) {
 	f, err := filesystem.NewFileFromBytes(headers, "headers.txt")
 	if err != nil {
+		imapLog.Warn("could not create the raw headers file", "message", record.Id, "error", err)
 		return
 	}
 	record.Set("raw_headers", f)
-	app.Save(record)
+	if err := app.Save(record); err != nil {
+		imapLog.Warn("could not save the raw headers", "message", record.Id, "error", err)
+	}
 }
 
 // matchesCriteria checks if a message matches IMAP search criteria.
