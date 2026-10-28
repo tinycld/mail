@@ -1,6 +1,8 @@
 package mail
 
 import (
+	"bytes"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -119,5 +121,28 @@ func TestCheckSendAllowed_RefusesAnUnverifiedDomain(t *testing.T) {
 
 	if refusal := checkSendAllowed(app, "u1", "mb1", nil, 1); refusal == nil {
 		t.Error("a send with no resolved domain must be refused")
+	}
+}
+
+// An unverified domain is the owner's DNS setup, and the sender already sees
+// a refusal that names the missing record. It is not a warning. A send with
+// no resolved domain still is: the caller failed to find one.
+func TestCheckSendAllowed_UnverifiedDomainIsNotAWarning(t *testing.T) {
+	// Not parallel: it swaps the process-wide slog default.
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	app := setupSendCapApp(t, "")
+
+	checkSendAllowed(app, "u1", "mb1", domainWith(t, app, true, false, true), 1)
+	if strings.Contains(buf.String(), "level=WARN") {
+		t.Errorf("an unverified domain was logged as a warning:\n%s", buf.String())
+	}
+
+	buf.Reset()
+	checkSendAllowed(app, "u1", "mb1", nil, 1)
+	if !strings.Contains(buf.String(), "level=WARN") {
+		t.Errorf("a send with no resolved domain must stay a warning:\n%s", buf.String())
 	}
 }
