@@ -62,14 +62,16 @@ func checkSendAllowed(app core.App, userID, mailboxID string, domain *core.Recor
 	}
 
 	if refusal := checkDomainAuthenticated(domain); refusal != nil {
-		// domain may be nil here — that is one of the states being refused —
-		// so the name is resolved defensively rather than off the record.
-		domainName := "<unresolved>"
-		if domain != nil {
-			domainName = domain.GetString("domain")
+		if domain == nil {
+			// The caller could not resolve the sending domain: a fault.
+			gateLog.Warn("refused an outbound message with no resolved domain",
+				"user", userID, "mailbox", mailboxID)
+			return refusal
 		}
-		gateLog.Warn("refused an outbound message from an unauthenticated domain",
-			"user", userID, "mailbox", mailboxID, "domain", domainName)
+		// Unverified DNS is the owner's setup, and the refusal names the
+		// record to add, so it is not a warning.
+		gateLog.Info("refused an outbound message from an unauthenticated domain",
+			"user", userID, "mailbox", mailboxID, "domain", domain.GetString("domain"))
 		return refusal
 	}
 
