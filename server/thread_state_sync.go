@@ -32,13 +32,32 @@ func registerThreadStateSyncHooks(app core.App) {
 		return e.Next()
 	})
 	app.OnRecordUpdateRequest("mail_thread_state").BindFunc(func(e *core.RecordRequestEvent) error {
-		// Restore rather than refuse: a client that saves an edited state row
-		// can send the whole record back, these columns included.
-		original := e.Record.Original()
-		for _, field := range threadOwnedStateFields {
-			e.Record.Set(field, original.GetString(field))
-		}
-		return e.Next()
+		// The request loaded the row before it waited to write, and it saves
+		// every column. A server write in between (an IMAP APPEND marking the
+		// thread sent) would be overwritten with the loaded values, so the
+		// stored row is read again inside the transaction that saves it: all
+		// writes share one connection, so nothing commits between this read
+		// and the save.
+		return e.App.RunInTransaction(func(txApp core.App) error {
+			stored, err := txApp.FindRecordById("mail_thread_state", e.Record.Id)
+			if err != nil {
+				return err
+			}
+			// Restore rather than refuse: a client that saves an edited state
+			// row can send the whole record back, these columns included.
+			for _, field := range threadOwnedStateFields {
+				e.Record.Set(field, stored.GetString(field))
+			}
+			// is_sent only ever becomes true (a send, or filing the thread
+			// under Sent), so a stored true is kept.
+			if stored.GetBool("is_sent") {
+				e.Record.Set("is_sent", true)
+			}
+			originalApp := e.App
+			e.App = txApp
+			defer func() { e.App = originalApp }()
+			return e.Next()
+		})
 	})
 	app.OnRecordAfterUpdateSuccess("mail_threads").BindFunc(func(e *core.RecordEvent) error {
 		original := e.Record.Original()
