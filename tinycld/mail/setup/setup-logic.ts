@@ -1,4 +1,6 @@
 import type { SendEmailRequest } from '@tinycld/app-generated/mail-api'
+import { errorToString } from '@tinycld/core/lib/errors'
+import { log } from '@tinycld/core/lib/logger'
 import { appHref } from '@tinycld/core/lib/org-routes'
 import { type DomainChecks, isDomainReady } from '../settings/domain-ready'
 import { testMessageHtml, testMessageSubject, testMessageText } from './test-message'
@@ -104,4 +106,10 @@ export function testMessageLabel(state: TestMessageState): string {
             return state.reason ? `${prefix}: ${state.reason}` : prefix
         }
     }
+}
+
+// logSetupFailure logs a failed setup action whose message the step already
+// shows to the user.
+export function logSetupFailure(context: string, error: unknown) {
+    log.warn(context, errorToString(error))
 }

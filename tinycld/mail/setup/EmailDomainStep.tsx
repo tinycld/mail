@@ -5,7 +5,6 @@ import { SetupTabs } from '@tinycld/core/components/setup/wizard/SetupTabs'
 import { StepHeading } from '@tinycld/core/components/setup/wizard/StepHeading'
 import { SlotContribution } from '@tinycld/core/components/sidebar-primitives/SidebarSlot'
 import { errorToString } from '@tinycld/core/lib/errors'
-import { log } from '@tinycld/core/lib/logger'
 import { useMutation } from '@tinycld/core/lib/mutations'
 import { packageSidebarContributions } from '@tinycld/core/lib/packages/derive-components'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
@@ -23,7 +22,12 @@ import { type VerificationProblem, verificationProblems } from '../settings/veri
 import { assertVerifySaved } from '../settings/verify-domain'
 import { useDomainChoiceStore } from '../stores/domain-choice-store'
 import { currentChoice, domainTabs, showDomainTabs, showOwnDomainForm } from './domain-choice'
-import { domainPanelTarget, hasReadyDomain, setupAddDomainError } from './setup-logic'
+import {
+    domainPanelTarget,
+    hasReadyDomain,
+    logSetupFailure,
+    setupAddDomainError,
+} from './setup-logic'
 
 // Adding and verifying domains is an owner/admin action on the server.
 export function useIsStepVisible() {
@@ -82,7 +86,7 @@ function useVerifyDomain() {
         mutationFn: async (id: string) =>
             assertVerifySaved(await pb.send(`/api/mail/domains/${id}/verify`, { method: 'POST' })),
         // Shown under the Verify button; the default toast would repeat it.
-        onError: error => log.warn('mail.setup.verify', errorToString(error)),
+        onError: error => logSetupFailure('mail.setup.verify', error),
     })
     return {
         verify: verify.mutate,
