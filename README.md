@@ -200,10 +200,11 @@ fts_mail_messages
   FTS5 virtual table mirroring mail_messages (subject, snippet, sender_name, sender_email, body_text)
 mail_folder_counts
   base collection: one row per (user, mailbox) with inbox / inbox_total /
-  archive / drafts / sent / starred / trash / spam / total counts
+  archive / drafts / sent / starred / trash / spam / total counts, plus
+  inbox_by_address (JSON: unread inbox count per address)
 ```
 
-The folder-counts collection (`1830000013_folder_counts_table.js`, which replaces the earlier `1830000000_create_mail_folder_counts_view.js` view) is what the sidebar's per-folder badge numbers query — a single aggregated row per user × mailbox, so the sidebar doesn't run separate filtered counts per mailbox. A Go hook (`registerFolderCountHooks` in `server/folder_counts.go`) recomputes the row on every `mail_thread_state` create, update, or delete, so realtime keeps the badges current. `useMailboxFolderCounts` exposes every column, including `archive`, `inboxTotal`, and `total`; the sidebar shows badges only for Inbox (unread), Drafts, Spam, and Trash, and the per-folder totals feed the thread list's page indicator.
+The folder-counts collection (`1830000013_folder_counts_table.js`, which replaces the earlier `1830000000_create_mail_folder_counts_view.js` view) is what the sidebar's per-folder badge numbers query — a single aggregated row per user × mailbox, so the sidebar doesn't run separate filtered counts per mailbox. A Go hook (`registerFolderCountHooks` in `server/folder_counts.go`) recomputes the row on every `mail_thread_state` create, update, or delete, so realtime keeps the badges current. `useMailboxFolderCounts` exposes every column, including `archive`, `inboxTotal`, and `total`; the sidebar shows folder badges for Inbox (unread), Drafts, Spam, and Trash, plus unread badges on "All Inboxes" and on each per-address view (from `inbox_by_address`), and the per-folder totals feed the thread list's page indicator.
 
 ### Threading
 
@@ -258,8 +259,8 @@ The 25 MB limit on submission is `mailproto.StartSMTP`'s default `MaxMessageByte
 `server/imap_server.go` drives core's `tinycld.org/core/mailproto` transport (`mailproto.StartIMAP` owns TLS, bind, serve, and shutdown); mail supplies only the session factory, touching `imapserver` just for the session type. Per-session state lives in `imapSession` (`imap_session.go`):
 
 - **LOGIN** — same auth as SMTP. Loads the user's `mail_mailbox_members` rows (membership points at `users` directly, so this is one query), resolves the user's read-only verdict once per session, then materializes a per-mailbox namespace prefixed with the mailbox's friendly name (its `name`, falling back to `display_name`, then `address@domain`) — e.g. `Acme Corp/INBOX`.
-- **LIST** — returns the standard set: `INBOX`, `Sent`, `Drafts`, `Trash`, `Spam`, `Archive`, `Starred`, `All Mail`, with the appropriate `\Sent` / `\Drafts` / `\Trash` / `\Junk` / `\Archive` / `\Flagged` / `\All` special-use flags. When the user has address views on (`mail_identities.address_views`), the personal inbox also lists one `Addresses/<address>` folder per visible address, if it has two or more. A message cannot be copied, moved or appended into these folders.
-- **SELECT** — opens a mailbox/folder, returning UID validity and UID next. UID validity and the next-UID counter live on `mail_imap_mailbox_state`, keyed per-mailbox (one row per `mail_mailboxes` record, regardless of how many members it has). UID assignment is serialized through an in-process per-mailbox mutex (`mailboxUIDMutex`) so monotonicity is guaranteed under concurrent inbound writes.
+- **LIST** — returns the standard set: `INBOX`, `Sent`, `Drafts`, `Trash`, `Spam`, `Archive`, `Starred`, `All Mail`, with the appropriate `\Sent` / `\Drafts` / `\Trash` / `\Junk` / `\Archive` / `\Flagged` / `\All` special-use flags. When the user has address views on (`mail_identities.address_views`), the personal inbox also lists one `Addresses/<address>` folder per visible address, if it has two or more. A message cannot be copied, moved or appended into these folders. The user's labels are listed as `Labels/<name>` folders; copying a message into one adds the label, and `CREATE` is allowed only for `Labels/<name>`.
+- **SELECT** — opens a mailbox/folder, returning UID validity and UID next. UID validity and the next-UID counter live on `mail_imap_mailbox_state`, keyed per-mailbox (one row per `mail_mailboxes` record, regardless of how many members it has). UID assignment is one SQL statement (`bumpUIDNext` in `imap_uid.go`: `UPDATE … SET uid_next = uid_next + 1 … RETURNING`). No Go lock is held; SQLite's single write connection keeps UIDs monotonic under concurrent inbound writes.
 - **STORE / APPEND / EXPUNGE / COPY / MOVE** — gated by `requireWritable`: a read-only user gets a `NO Your mail access is read-only` instead of a silent no-op.
 - **FETCH** — converts `mail_messages` rows to RFC 5322 bytes on the fly via `imap_rfc5322.go`. This is the only place TinyCld emits raw RFC 5322 — internally everything is structured fields.
 - **IDLE** — the session subscribes to a per-mailbox channel via the package's `globalNotifier` (core's `mailproto.NewIdleNotifier()`, in `imap_notifier.go`). When the package-level hooks see a new `mail_messages` row or a `mail_thread_state` change for a mailbox, they call `globalNotifier.Notify(mailboxID)`, which wakes up every IDLE'd session subscribed to that mailbox and dispatches an `EXISTS` / `EXPUNGE` / flag-update untagged response.
@@ -389,7 +390,7 @@ manifest.ts                package manifest (repo root — routes, nav, sidebar,
                            sidebarContributions, setupSteps, settings, accountSettings,
                            systemSettings, migrations, collections, help, notifications,
                            seed, search, automation, server, ports, payloads, cli,
-                           repository, peerVersions)
+                           repository, recordLabels, peerVersions)
 tinycld/mail/
     sidebar.tsx            All Inboxes + per-mailbox sections + labels
     collections.ts         pbtsdb registration for the eleven mail_* collections (labels come from core's useLabels)
