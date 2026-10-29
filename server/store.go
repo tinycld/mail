@@ -309,15 +309,6 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 		}
 	}
 
-	// Assign IMAP UID for the new message
-	thread, err := app.FindRecordById("mail_threads", threadID)
-	if err == nil {
-		mailboxID := thread.GetString("mailbox")
-		if _, uidErr := ensureMessageUID(app, mailboxID, record); uidErr != nil {
-			app.Logger().Warn("failed to assign imap_uid", "messageID", record.Id, "error", uidErr)
-		}
-	}
-
 	// Index in FTS — done inline so we have access to full TextBody + attachments
 	attachmentText := extractTextFromAttachments(msg.Attachments)
 	syncMessageToFTS(app, record.Id, msg, attachmentText)

@@ -232,6 +232,7 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 		t.Fatalf("failed to save mail_folder_counts: %v", err)
 	}
 
+	registerMessageUIDHook(app)
 	return app
 }
 

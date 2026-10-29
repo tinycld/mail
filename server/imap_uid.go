@@ -102,8 +102,9 @@ func assignUID(app core.App, mailboxID string, messageRecord *core.Record) (uint
 	return uid, nil
 }
 
-// ensureMessageUID assigns a UID to a message if it doesn't have one yet.
-// Called on message creation paths (inbound, send, draft).
+// ensureMessageUID returns a message's UID, assigning one if it has none.
+// Every new message gets one on create (registerMessageUIDHook); this covers
+// a stored row from before that, which IMAP APPEND can return as a duplicate.
 func ensureMessageUID(app core.App, mailboxID string, messageRecord *core.Record) (uint32, error) {
 	existing := messageRecord.GetInt("imap_uid")
 	if existing > 0 {
@@ -173,4 +174,32 @@ func getMailboxUIDValidity(app core.App, mailboxID string) (uint32, error) {
 func getMailboxUIDNext(app core.App, mailboxID string) (uint32, error) {
 	_, next, err := mailboxUIDState(app, mailboxID)
 	return next, err
+}
+
+// registerMessageUIDHook gives every new message its IMAP UID as it is
+// created, whoever writes it: storeMessage, or the records API the Takeout
+// importer posts to. IMAP lists only messages that have a UID, so 5,587
+// imported messages that skipped storeMessage were invisible to mail clients.
+// It runs before the insert and inside the writer's transaction, so the row
+// is written once, and a writer inside a transaction (IMAP APPEND) has the
+// UID before it commits. A failed allocation keeps the message: it still
+// shows on the web, which is better than refusing the mail.
+func registerMessageUIDHook(app core.App) {
+	app.OnRecordCreate("mail_messages").BindFunc(func(e *core.RecordEvent) error {
+		if e.Record.GetInt("imap_uid") > 0 {
+			return e.Next()
+		}
+		thread, err := e.App.FindRecordById("mail_threads", e.Record.GetString("thread"))
+		if err != nil {
+			imapLog.Warn("could not find the thread to assign an imap_uid", "thread", e.Record.GetString("thread"), "error", err)
+			return e.Next()
+		}
+		uid, err := nextUID(e.App, thread.GetString("mailbox"))
+		if err != nil {
+			imapLog.Warn("could not assign an imap_uid", "thread", thread.Id, "error", err)
+			return e.Next()
+		}
+		e.Record.Set("imap_uid", int(uid))
+		return e.Next()
+	})
 }
