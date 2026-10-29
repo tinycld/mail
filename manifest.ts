@@ -120,7 +120,7 @@ const manifest = {
     // MultiSelectInput, useMyLiveQuery's queryKey and the app on group
     // membership events, which this version uses. It is also the first core
     // with `mailhost` and `useMailHost` (Settings → Account → Mail apps).
-    peerVersions: { '@tinycld/core': '>=0.8.1 <0.9.0' },
+    peerVersions: { '@tinycld/core': '>=0.9.0 <0.10.0' },
 }
 
 export default manifest
