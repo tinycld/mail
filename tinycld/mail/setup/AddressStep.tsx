@@ -5,7 +5,6 @@ import { SetupContinueButton } from '@tinycld/core/components/setup/wizard/Setup
 import { StepHeading } from '@tinycld/core/components/setup/wizard/StepHeading'
 import { useAuth } from '@tinycld/core/lib/auth'
 import { errorToString } from '@tinycld/core/lib/errors'
-import { log } from '@tinycld/core/lib/logger'
 import { useMutation } from '@tinycld/core/lib/mutations'
 import { pb, useStore } from '@tinycld/core/lib/pocketbase'
 import type { SetupStepProps } from '@tinycld/core/lib/setup/types'
@@ -19,6 +18,7 @@ import { defaultAddressFor } from '../settings/mailbox-records'
 import {
     EMAIL_DOMAIN_STEP_HREF,
     hasReadyDomain,
+    logSetupFailure,
     readyDomainOptions,
     type TestMessageState,
     testMessageLabel,
@@ -110,7 +110,7 @@ function useTestMessage(mailbox: { id: string; email: string }) {
                 }),
             }),
         // Shown under the send button; the default toast would repeat it.
-        onError: error => log.warn('mail.setup.test-message', errorToString(error)),
+        onError: error => logSetupFailure('mail.setup.test-message', error),
     })
     return {
         to: user.email,
