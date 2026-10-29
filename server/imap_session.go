@@ -1009,11 +1009,15 @@ func (s *imapSession) buildStatusData(name, mailboxID string, options *imap.Stat
 	// go-imap dereferences the pointer of every item the client requested, so
 	// each requested item must be set or the whole call must fail. A nil
 	// pointer here panics the connection.
-	if options.NumMessages || options.Size {
-		messages, err := s.messagesForFolder(name, mailboxID)
+	//
+	// Every count is of what a SELECT of the folder lists (listedMessages), or
+	// a client sees one number in STATUS and another on SELECT.
+	if options.NumMessages || options.Size || options.NumUnseen {
+		all, err := s.messagesForFolder(name, mailboxID)
 		if err != nil {
 			return nil, err
 		}
+		messages := listedMessages(all)
 		if options.NumMessages {
 			n := uint32(len(messages))
 			data.NumMessages = &n
@@ -1024,6 +1028,27 @@ func (s *imapSession) buildStatusData(name, mailboxID string, options *imap.Stat
 				size += int64(msg.GetInt("total_size"))
 			}
 			data.Size = &size
+		}
+		if options.NumUnseen {
+			// \Seen comes from the thread's read state (messageFlags), so a
+			// message is unseen when its thread is unread.
+			filter, params := folderToFilter(s.app, name, s.user.Id, mailboxID)
+			filter += " && is_read = false"
+			states, err := s.app.FindRecordsByFilter("mail_thread_state", filter, "", 0, 0, params)
+			if err != nil {
+				return nil, err
+			}
+			unread := make(map[string]bool, len(states))
+			for _, state := range states {
+				unread[state.GetString("thread")] = true
+			}
+			var n uint32
+			for _, msg := range messages {
+				if unread[msg.GetString("thread")] {
+					n++
+				}
+			}
+			data.NumUnseen = &n
 		}
 	}
 
@@ -1041,17 +1066,6 @@ func (s *imapSession) buildStatusData(name, mailboxID string, options *imap.Stat
 			return nil, err
 		}
 		data.UIDNext = imap.UID(n)
-	}
-
-	if options.NumUnseen {
-		filter, params := folderToFilter(s.app, name, s.user.Id, mailboxID)
-		filter += " && is_read = false"
-		states, err := s.app.FindRecordsByFilter("mail_thread_state", filter, "", 0, 0, params)
-		if err != nil {
-			return nil, err
-		}
-		n := uint32(len(states))
-		data.NumUnseen = &n
 	}
 
 	// \Deleted marks live only in the selecting session (s.deleted) and are
@@ -1098,14 +1112,22 @@ func (s *imapSession) messagesForSelectedFolder() (map[int]*core.Record, error) 
 	}
 
 	result := make(map[int]*core.Record)
-	seqNum := 1
-	for _, msg := range msgs {
-		if msg.GetInt("imap_uid") > 0 {
-			result[seqNum] = msg
-			seqNum++
-		}
+	for i, msg := range listedMessages(msgs) {
+		result[i+1] = msg
 	}
 	return result, nil
+}
+
+// listedMessages are the messages a folder lists over IMAP: only those with a
+// UID, since a message is addressed by its UID.
+func listedMessages(msgs []*core.Record) []*core.Record {
+	listed := make([]*core.Record, 0, len(msgs))
+	for _, msg := range msgs {
+		if msg.GetInt("imap_uid") > 0 {
+			listed = append(listed, msg)
+		}
+	}
+	return listed
 }
 
 // messagesForFolder loads messages for a specific IMAP folder name.
