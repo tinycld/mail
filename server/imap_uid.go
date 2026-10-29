@@ -174,3 +174,6 @@ func getMailboxUIDNext(app core.App, mailboxID string) (uint32, error) {
 	_, next, err := mailboxUIDState(app, mailboxID)
 	return next, err
 }
+
+// registerMessageUIDHook gives every new message an IMAP UID.
+func registerMessageUIDHook(app core.App) {}

@@ -307,6 +307,7 @@ func registerShared(app *pocketbase.PocketBase) {
 	registerClientSetupRoutes(app)
 	registerThreadMarkerHooks(app)
 	registerThreadStateSyncHooks(app)
+	registerMessageUIDHook(app)
 	registerThreadOwnedFieldsGuard(app)
 	registerFolderCountHooks(app)
 	registerMemberBackfillHooks(app)
