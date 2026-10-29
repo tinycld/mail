@@ -609,8 +609,11 @@ function DangerZone({ mailboxId, onDeleted }: { mailboxId: string; onDeleted: ()
         },
     })
 
+    // w-full: the drawer footer is a justify-end row from sm up, which gives a
+    // child only its content width. Without it the text never wraps, and once
+    // the confirm buttons replace Delete the row runs out past the drawer.
     return (
-        <View className="flex-row items-center justify-between gap-3">
+        <View className="w-full flex-row items-center justify-between gap-3">
             <View className="flex-1">
                 <Text className="text-foreground" style={{ fontSize: 12.5, fontWeight: '600' }}>
                     Delete this shared inbox.
