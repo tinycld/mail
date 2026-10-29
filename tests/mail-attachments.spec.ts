@@ -3,13 +3,17 @@ import * as path from 'node:path'
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
 import { login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 import PocketBase from 'pocketbase'
-import { emailRow, openThread, TEST_USER_MAILBOX } from './helpers'
+import {
+    emailRow,
+    openThread,
+    PB_URL,
+    SUPERUSER_EMAIL,
+    SUPERUSER_PASSWORD,
+    TEST_USER_MAILBOX,
+} from './helpers'
 
 // PB sits behind the dev.ts proxy on the test Expo port. /api/* routes
 // through to PB transparently — see scripts/dev.ts::isPbPath.
-const PB_URL = 'http://127.0.0.1:7200'
-const SUPERUSER_EMAIL = process.env.POCKETBASE_EMAIL || 'admin@tinycld.org'
-const SUPERUSER_PASSWORD = process.env.POCKETBASE_PASSWORD || 'AdminPass1234!'
 
 const FIXTURE_PATH = path.join(import.meta.dirname, 'fixtures', 'hippo.jpg')
 

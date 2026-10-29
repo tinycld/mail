@@ -1,11 +1,10 @@
-import { useLiveQuery } from '@tanstack/react-db'
 import { handleMutationErrorsWithForm } from '@tinycld/core/lib/errors'
 import { mutation, useMutation } from '@tinycld/core/lib/mutations'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { ButtonIcon, ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import {
-    ButtonGroup,
     FormErrorSummary,
+    RadioInput,
     TextInput,
     useForm,
     zodResolver,
@@ -15,11 +14,8 @@ import { newRecordId } from 'pbtsdb/core'
 import { useMemo } from 'react'
 import { View } from 'react-native'
 import { type AddressFormValues, addressSchemaFor } from './addressSchema'
+import { useAddressRules } from './useAddressRules'
 
-// The rules come from every address, domain and identity in the org. This is
-// an admin screen and the sets are small (people × domains), and loading them
-// up front keeps the schema independent of what is typed, so the form has one
-// resolver that does not change while the user types.
 export type AddressTarget =
     | { kind: 'inbox'; mailboxId: string }
     | { kind: 'group'; groupId: string }
@@ -29,61 +25,10 @@ function ownInboxOf(target: AddressTarget) {
     return target.kind === 'inbox' ? target.mailboxId : null
 }
 
-function useAddressRules(target: AddressTarget) {
-    const ownInbox = ownInboxOf(target)
-    const [addressesCollection, domainsCollection, identitiesCollection] = useStore(
-        'mail_addresses',
-        'mail_domains',
-        'mail_identities'
-    )
-    const { data: domains } = useLiveQuery({
-        queryKey: ['mail_address_rule_domains'],
-        query: query =>
-            query.from({ domain: domainsCollection }).orderBy(({ domain }) => domain.rank, 'asc'),
-    })
-    const { data: addresses } = useLiveQuery({
-        queryKey: ['mail_address_rule_addresses'],
-        query: query =>
-            query.from({ address: addressesCollection }).select(({ address }) => ({
-                localPart: address.local_part,
-                domain: address.domain,
-            })),
-    })
-    const { data: identities } = useLiveQuery({
-        queryKey: ['mail_address_rule_identities'],
-        query: query =>
-            query.from({ identity: identitiesCollection }).select(({ identity }) => ({
-                emailName: identity.email_name,
-                inbox: identity.inbox,
-                retired: identity.retired,
-            })),
-    })
-
-    const schema = useMemo(
-        () =>
-            addressSchemaFor({
-                taken: new Set((addresses ?? []).map(a => `${a.localPart}@${a.domain}`)),
-                reservedNames: new Set(
-                    (identities ?? [])
-                        .filter(i => !i.retired && i.inbox !== ownInbox)
-                        .map(i => i.emailName)
-                ),
-                // Same rule as server/addresses.go domainHasRule.
-                ruleDomainIds: new Set(
-                    (domains ?? [])
-                        .filter(d => d.coverage === 'everyone' || d.coverage === 'groups')
-                        .map(d => d.id)
-                ),
-            }),
-        [addresses, identities, domains, ownInbox]
-    )
-    const domainOptions = (domains ?? []).map(d => ({ label: d.domain, value: d.id }))
-    return { schema, domainOptions }
-}
-
 export function AddAddressForm({ target, onDone }: { target: AddressTarget; onDone: () => void }) {
     const [addressesCollection] = useStore('mail_addresses')
-    const { schema, domainOptions } = useAddressRules(target)
+    const { rules, domainOptions } = useAddressRules(ownInboxOf(target))
+    const schema = useMemo(() => addressSchemaFor(rules), [rules])
     const {
         control,
         handleSubmit,
@@ -120,7 +65,7 @@ export function AddAddressForm({ target, onDone }: { target: AddressTarget; onDo
         <View className="gap-2">
             <FormErrorSummary errors={errors} isEnabled={isSubmitted} />
             <TextInput control={control} name="local_part" label="Address" placeholder="sales" />
-            <ButtonGroup control={control} name="domain" label="Domain" options={domainOptions} />
+            <RadioInput control={control} name="domain" label="Domain" options={domainOptions} />
             <ServerActionButton
                 size="sm"
                 onPress={onSubmit}
