@@ -1,19 +1,13 @@
 package mail
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
-	"sync"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 )
-
-// uidMutex serializes UID allocation per mailbox to guarantee monotonicity.
-var uidMutex sync.Map // map[string]*sync.Mutex  (mailboxID → mutex)
-
-func mailboxUIDMutex(mailboxID string) *sync.Mutex {
-	v, _ := uidMutex.LoadOrStore(mailboxID, &sync.Mutex{})
-	return v.(*sync.Mutex)
-}
 
 // findMailboxState returns the mail_imap_mailbox_state record for a mailbox,
 // or nil when it has none yet.
@@ -35,53 +29,76 @@ func findMailboxState(app core.App, mailboxID string) (*core.Record, error) {
 	return records[0], nil
 }
 
-// getOrCreateMailboxState returns the mail_imap_mailbox_state record for a
-// mailbox, creating one if it doesn't exist (uid_validity=1, uid_next=1).
-func getOrCreateMailboxState(app core.App, mailboxID string) (*core.Record, error) {
-	if state, err := findMailboxState(app, mailboxID); err == nil && state != nil {
-		return state, nil
-	}
-
+// createMailboxState writes the row a mailbox gets with its first UID
+// (uid_validity=1, uid_next=1). The unique index on mailbox rejects a second
+// row, so a concurrent first use fails here and then reads the winner's row.
+func createMailboxState(app core.App, mailboxID string) error {
 	collection, err := app.FindCollectionByNameOrId("mail_imap_mailbox_state")
 	if err != nil {
-		return nil, fmt.Errorf("mail_imap_mailbox_state collection not found: %w", err)
+		return fmt.Errorf("mail_imap_mailbox_state collection not found: %w", err)
 	}
 	record := core.NewRecord(collection)
 	record.Set("mailbox", mailboxID)
 	record.Set("uid_validity", 1)
 	record.Set("uid_next", 1)
-	if err := app.Save(record); err != nil {
-		return nil, fmt.Errorf("failed to create mailbox state: %w", err)
-	}
-	return record, nil
+	return app.Save(record)
 }
 
-// assignUID atomically allocates the next UID for a message within a mailbox
-// and sets imap_uid on the message record.
-func assignUID(app core.App, mailboxID string, messageRecord *core.Record) (uint32, error) {
-	mu := mailboxUIDMutex(mailboxID)
-	mu.Lock()
-	defer mu.Unlock()
-
-	state, err := getOrCreateMailboxState(app, mailboxID)
+// bumpUIDNext reserves the next UID of a mailbox in one statement and returns
+// it, or sql.ErrNoRows when the mailbox has no state row yet. A raw update,
+// not a record save: the counter must move in one step, and the row has no
+// hooks to run.
+func bumpUIDNext(app core.App, mailboxID string) (uint32, error) {
+	var uid int
+	err := app.NonconcurrentDB().
+		NewQuery("UPDATE {{mail_imap_mailbox_state}} SET uid_next = uid_next + 1 WHERE mailbox = {:mailbox} RETURNING uid_next - 1").
+		Bind(dbx.Params{"mailbox": mailboxID}).
+		Row(&uid)
 	if err != nil {
 		return 0, err
 	}
+	return uint32(uid), nil
+}
 
-	uid := uint32(state.GetInt("uid_next"))
-
-	// Increment uid_next
-	state.Set("uid_next", int(uid)+1)
-	if err := app.Save(state); err != nil {
-		return 0, fmt.Errorf("failed to update uid_next: %w", err)
+// nextUID allocates the next UID for a mailbox.
+//
+// The single UPDATE is the whole allocation, so allocators cannot interleave:
+// SQLite's one write connection already serializes them, inside or outside a
+// transaction. No Go lock is held across it. A lock held while waiting for
+// that connection deadlocked the server: inbound delivery and IMAP APPEND
+// allocate inside a transaction that owns the connection, while a draft, a
+// send or SMTP allocates outside one. The outside allocator took the lock and
+// waited for the connection; the transaction then waited for the lock, and
+// every write on the server, sign-in included, queued behind them until a
+// restart.
+func nextUID(app core.App, mailboxID string) (uint32, error) {
+	uid, err := bumpUIDNext(app, mailboxID)
+	if !errors.Is(err, sql.ErrNoRows) {
+		return uid, err
 	}
+	if createErr := createMailboxState(app, mailboxID); createErr != nil {
+		// Either a concurrent first use won the unique index, in which case
+		// its row is there to bump, or the create failed for real.
+		uid, err = bumpUIDNext(app, mailboxID)
+		if err != nil {
+			return 0, fmt.Errorf("failed to create mailbox state: %w", createErr)
+		}
+		return uid, nil
+	}
+	return bumpUIDNext(app, mailboxID)
+}
 
-	// Set UID on message
+// assignUID allocates the next UID for a message within a mailbox and sets
+// imap_uid on the message record.
+func assignUID(app core.App, mailboxID string, messageRecord *core.Record) (uint32, error) {
+	uid, err := nextUID(app, mailboxID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to allocate imap_uid: %w", err)
+	}
 	messageRecord.Set("imap_uid", int(uid))
 	if err := app.Save(messageRecord); err != nil {
 		return 0, fmt.Errorf("failed to set imap_uid on message: %w", err)
 	}
-
 	return uid, nil
 }
 
@@ -133,7 +150,7 @@ func lookupMessagesByUID(app core.App, mailboxID string, uidLow, uidHigh uint32)
 // mailboxUIDState reads a mailbox's UIDVALIDITY and UIDNEXT without creating
 // its state row. SELECT and STATUS only read, so they must not write — the
 // server may be read-only. A mailbox with no row yet has the values the row
-// is created with (see getOrCreateMailboxState) once its first UID is
+// is created with (see createMailboxState) once its first UID is
 // assigned.
 func mailboxUIDState(app core.App, mailboxID string) (validity, next uint32, err error) {
 	state, err := findMailboxState(app, mailboxID)
