@@ -16,7 +16,9 @@ import (
 // against them.
 func newRealSchemaApp(t testing.TB) *tests.TestApp {
 	t.Helper()
-	return rlstest.NewAssembledApp(t, rlstest.MigrationsDir(t, "../pb-migrations"))
+	app := rlstest.NewAssembledApp(t, rlstest.MigrationsDir(t, "../pb-migrations"))
+	registerMessageUIDHook(app)
+	return app
 }
 
 // newMailRulesApp applies this package's shipped migrations, without core's,
