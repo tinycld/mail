@@ -159,5 +159,11 @@ func TestInjectedListenersCompositionMatchesOwnPortsExactly(t *testing.T) {
 	rlstest.AssertCompositionDiff(t,
 		rlstest.HookHandlerCounts(t, host),
 		rlstest.HookHandlerCounts(t, injected),
-		map[string]int{})
+		map[string]int{
+			// registerMailListeners (own ports only) registers the listener
+			// drain hook; drainhooks binds one terminate handler per app to
+			// drop it from the process drain. Injected listeners are drained
+			// by the embedder, so that composition registers no drain hook.
+			"OnTerminate": 1,
+		})
 }

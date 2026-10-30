@@ -84,7 +84,7 @@ func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func()
 	}
 	app.Logger().Info("inbound SMTP server listening", "addr", addr, "hostname", hostname, "starttls", tlsConfig != nil)
 
-	return mailproto.ServeSMTP(app, server, ln, "inbound SMTP"), nil
+	return mailproto.ServeSMTP(app, mailproto.ServiceMX, server, ln, "inbound SMTP"), nil
 }
 
 // maxInboundMessageBytes is the size limit of one inbound message. go-smtp
@@ -135,7 +135,7 @@ func startSMTPInboundOnListener(app core.App, listen mailproto.ListenFunc) (func
 	}
 	app.Logger().Info("inbound SMTP server listening (external TLS termination)", "hostname", hostname)
 
-	return mailproto.ServeSMTP(app, server, ln, "inbound SMTP"), nil
+	return mailproto.ServeSMTP(app, mailproto.ServiceMX, server, ln, "inbound SMTP"), nil
 }
 
 // inboundHostname resolves the identity the MX greeting announces:
