@@ -25,8 +25,8 @@ import (
 // a different embedding uses. Unlike IMAP/submission, this server always
 // binds exactly one address (there is no separate dev address), so the
 // inherited listener is always for the address actually requested.
-func listenInbound(addr string) (net.Listener, error) {
-	return acceptingListeners.listen("smtp", addr)(addr)
+func listenInbound(app core.App, addr string) (net.Listener, error) {
+	return acceptingListenersOf(app).listen("smtp", addr)(addr)
 }
 
 // StartSMTPInboundServer starts the public-facing SMTP listener that accepts
@@ -78,7 +78,7 @@ func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func()
 	server := newInboundSMTPServer(app, hostname, tlsConfig)
 	server.Addr = addr
 
-	ln, err := listenInbound(addr)
+	ln, err := listenInbound(app, addr)
 	if err != nil {
 		return nil, fmt.Errorf("inbound SMTP listen on %s: %w", addr, err)
 	}

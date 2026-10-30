@@ -6,18 +6,23 @@ import (
 	"sync"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/appstate"
 	"tinycld.org/core/drainhooks"
 	"tinycld.org/core/listeners"
 	"tinycld.org/core/mailproto"
 )
 
-// acceptingListeners holds every listener the IMAP, submission and inbound
-// SMTP servers accept on. Under a supervisor, a drain begins only once the
-// next server is ready on the same ports, so from then on new mail
-// connections belong to it. Closing these listeners stops this process
-// accepting at once while its open sessions finish within the drain; the
-// supervisor's own copy of each port stays open for the next server.
-var acceptingListeners = &listenerSet{}
+// acceptingListenersKey holds the listeners one app's IMAP, submission and
+// inbound SMTP servers accept on. Under a supervisor, a drain begins only once
+// the next server is ready on the same ports, so from then on new mail
+// connections belong to it. Closing these listeners stops this app accepting
+// at once while its open sessions finish within the drain; the supervisor's
+// own copy of each port stays open for the next server.
+var acceptingListenersKey = appstate.NewKey[*listenerSet]("mail.acceptingListeners")
+
+func acceptingListenersOf(app core.App) *listenerSet {
+	return acceptingListenersKey.GetOrInit(app, func() *listenerSet { return &listenerSet{} })
+}
 
 type listenerSet struct {
 	mu sync.Mutex
@@ -82,5 +87,5 @@ func (s *listenerSet) closeAll() {
 }
 
 func registerDrainHook(app core.App) {
-	drainhooks.OnBegin(app, "mail-listeners", acceptingListeners.closeAll)
+	drainhooks.OnBegin(app, "mail-listeners", acceptingListenersOf(app).closeAll)
 }
