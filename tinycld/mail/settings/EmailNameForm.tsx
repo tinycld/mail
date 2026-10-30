@@ -127,14 +127,15 @@ export function EmailNameForm({
         defaultValues: { email_name: identity.emailName, keep_old: true },
     })
     const rename = useRename(identity, addresses, { setError, getValues }, onDone)
-    const onSubmit = handleSubmit(values => {
-        // The schema has trimmed and lowercased the name.
-        if (values.email_name === identity.emailName) {
-            onDone()
-            return
-        }
-        rename.mutate(values)
-    })
+    const onSubmit = () =>
+        void handleSubmit(values => {
+            // The schema has trimmed and lowercased the name.
+            if (values.email_name === identity.emailName) {
+                onDone()
+                return
+            }
+            rename.mutate(values)
+        })()
 
     return (
         <View className="gap-2">

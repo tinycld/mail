@@ -127,7 +127,7 @@ export default function MailSystemProvider() {
         await upsert.mutateAsync({ key: `mail.${field}`, value, isSecret })
     }
 
-    const onSubmit = handleSubmit(async data => {
+    const save = handleSubmit(async data => {
         await persist('provider', data.provider)
         if (data.provider === 'postmark') {
             await persist('postmark_server_token', data.postmark_server_token)
@@ -150,6 +150,7 @@ export default function MailSystemProvider() {
             }
         }
     })
+    const onSubmit = () => void save()
 
     const serverTokenSet = Boolean(byKey.get('mail.postmark_server_token')?.value)
     const accountTokenSet = Boolean(byKey.get('mail.postmark_account_token')?.value)
