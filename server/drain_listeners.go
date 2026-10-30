@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/drainhooks"
 	"tinycld.org/core/listeners"
 	"tinycld.org/core/mailproto"
@@ -80,6 +81,6 @@ func (s *listenerSet) closeAll() {
 	}
 }
 
-func registerDrainHook() {
-	drainhooks.OnBegin("mail-listeners", acceptingListeners.closeAll)
+func registerDrainHook(app core.App) {
+	drainhooks.OnBegin(app, "mail-listeners", acceptingListeners.closeAll)
 }

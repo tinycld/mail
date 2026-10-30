@@ -449,7 +449,7 @@ func registerShared(app *pocketbase.PocketBase) {
 // terminate runs only after core's HTTP drain, so a drain-begin hook stops
 // them accepting first.
 func registerMailListeners(app *pocketbase.PocketBase) {
-	registerDrainHook()
+	registerDrainHook(app)
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		// In production a failed mail listener is a deploy-breaking
 		// misconfiguration (missing/unreadable cert, lost privileged-port
