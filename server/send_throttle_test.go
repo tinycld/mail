@@ -10,20 +10,16 @@ import (
 	"tinycld.org/core/sendquota"
 )
 
-// claimSendLimits installs a resolver for the duration of one test, standing
-// in for the supervising composition that sets these in production.
-func claimSendLimits(t *testing.T, l sendquota.SendLimits) {
+// claimSendLimits claims app's send ceilings, standing in for the supervising
+// composition that sets these in production.
+func claimSendLimits(t *testing.T, app core.App, l sendquota.SendLimits) {
 	t.Helper()
-	sendquota.ResetForTesting()
-	t.Cleanup(sendquota.ResetForTesting)
-	sendquota.SetLimits(func(core.App) sendquota.SendLimits { return l })
+	sendquota.SetLimits(app, func(core.App) sendquota.SendLimits { return l })
 }
 
 // With nobody claiming the seam a deployment keeps its own daily cap and has
 // no hourly throttle — the standalone case must be unchanged by all of this.
 func TestSendLimits_StandaloneFallsBackToItsOwnSetting(t *testing.T) {
-	sendquota.ResetForTesting()
-	t.Cleanup(sendquota.ResetForTesting)
 
 	app := setupSendCapApp(t, "250")
 
@@ -41,7 +37,7 @@ func TestSendLimits_StandaloneFallsBackToItsOwnSetting(t *testing.T) {
 // not be a throttle.
 func TestSendLimits_AClaimedSeamOverridesTheLocalSetting(t *testing.T) {
 	app := setupSendCapApp(t, "250")
-	claimSendLimits(t, sendquota.SendLimits{PerDay: 10, PerHour: 5})
+	claimSendLimits(t, app, sendquota.SendLimits{PerDay: 10, PerHour: 5})
 
 	got := sendLimits(app)
 	if got.PerDay != 10 || got.PerHour != 5 {
@@ -52,7 +48,7 @@ func TestSendLimits_AClaimedSeamOverridesTheLocalSetting(t *testing.T) {
 func TestCheckSendAllowed_AllowsUnderTheHourlyThrottle(t *testing.T) {
 	app := setupSendCapApp(t, "")
 	domain := verifiedDomain(t, app)
-	claimSendLimits(t, sendquota.SendLimits{PerHour: 5})
+	claimSendLimits(t, app, sendquota.SendLimits{PerHour: 5})
 
 	now := time.Now().UTC()
 	for i := 0; i < 4; i++ {
@@ -67,7 +63,7 @@ func TestCheckSendAllowed_AllowsUnderTheHourlyThrottle(t *testing.T) {
 func TestCheckSendAllowed_RefusesAtTheHourlyThrottle(t *testing.T) {
 	app := setupSendCapApp(t, "")
 	domain := verifiedDomain(t, app)
-	claimSendLimits(t, sendquota.SendLimits{PerHour: 5})
+	claimSendLimits(t, app, sendquota.SendLimits{PerHour: 5})
 
 	now := time.Now().UTC()
 	for i := 0; i < 5; i++ {
@@ -92,7 +88,7 @@ func TestCheckSendAllowed_RefusesAtTheHourlyThrottle(t *testing.T) {
 func TestCheckSendAllowed_HourlyWindowRolls(t *testing.T) {
 	app := setupSendCapApp(t, "")
 	domain := verifiedDomain(t, app)
-	claimSendLimits(t, sendquota.SendLimits{PerHour: 2})
+	claimSendLimits(t, app, sendquota.SendLimits{PerHour: 2})
 
 	now := time.Now().UTC()
 	// Two sends, but both more than an hour ago.
@@ -110,7 +106,7 @@ func TestCheckSendAllowed_HourlyWindowRolls(t *testing.T) {
 func TestCheckSendAllowed_ThrottleReasonWinsOverTheDailyCap(t *testing.T) {
 	app := setupSendCapApp(t, "")
 	domain := verifiedDomain(t, app)
-	claimSendLimits(t, sendquota.SendLimits{PerDay: 1000, PerHour: 2})
+	claimSendLimits(t, app, sendquota.SendLimits{PerDay: 1000, PerHour: 2})
 
 	now := time.Now().UTC()
 	for i := 0; i < 2; i++ {
@@ -132,7 +128,7 @@ func TestCheckSendAllowed_ThrottleReasonWinsOverTheDailyCap(t *testing.T) {
 func TestCheckSendAllowed_ZeroThrottleIsUnlimited(t *testing.T) {
 	app := setupSendCapApp(t, "")
 	domain := verifiedDomain(t, app)
-	claimSendLimits(t, sendquota.SendLimits{})
+	claimSendLimits(t, app, sendquota.SendLimits{})
 
 	now := time.Now().UTC()
 	for i := 0; i < 50; i++ {
@@ -148,7 +144,7 @@ func TestCheckSendAllowed_ZeroThrottleIsUnlimited(t *testing.T) {
 func TestCheckSendAllowed_ThrottleFailsClosed(t *testing.T) {
 	app := setupSendCapApp(t, "")
 	domain := verifiedDomain(t, app)
-	claimSendLimits(t, sendquota.SendLimits{PerHour: 5})
+	claimSendLimits(t, app, sendquota.SendLimits{PerHour: 5})
 
 	if _, err := app.DB().NewQuery(`DROP TABLE mail_messages`).Execute(); err != nil {
 		t.Fatalf("drop mail_messages: %v", err)

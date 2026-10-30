@@ -200,7 +200,7 @@ func checkDomainAuthenticated(domain *core.Record) *sendError {
 // keeps the single-deployment case exactly as it was — a daily cap it sets
 // and owns — while a supervised one has both ceilings set for it.
 func sendLimits(app core.App) sendquota.SendLimits {
-	if sendquota.IsClaimed() {
+	if sendquota.IsClaimed(app) {
 		return sendquota.Limits(app)
 	}
 	return sendquota.SendLimits{PerDay: configuredDailyCap(app)}
