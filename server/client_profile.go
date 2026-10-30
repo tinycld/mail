@@ -144,9 +144,9 @@ func handleMobileconfig(app core.App, re *core.RequestEvent) error {
 // its own address as the Host header, so the request host is only a fallback
 // for an install with no public URL set or one that points at this machine.
 func profileHost(app core.App, requestHost string) string {
-	host := mailhost.Host(app.Settings().Meta.AppURL)
+	host := mailhost.Host(app, app.Settings().Meta.AppURL)
 	if host == "" || isLoopbackHost(host) {
-		return mailhost.Host(requestHost)
+		return mailhost.Host(app, requestHost)
 	}
 	return host
 }

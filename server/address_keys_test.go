@@ -133,13 +133,12 @@ func TestAddressKeys_InboundAddsDeliveredTo(t *testing.T) {
 
 func TestAddressKeys_SendAddsSentFrom(t *testing.T) {
 	env := setupAddressKeysEnv(t)
-	syscfg.SetResolver(func(key string) string {
+	syscfg.SetResolver(env.app, func(key string) string {
 		if key == "mail.postmark_server_token" {
 			return "test-token"
 		}
 		return ""
 	})
-	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
 	inbound := env.deliverTo(t, "ann@q.example", "<in-2@sender.example>", "")
 
 	result, err := sendMessage(env.app, sendParams{
@@ -299,13 +298,12 @@ func TestAddressKeys_DraftUpdateAddsNewFrom(t *testing.T) {
 // from.
 func TestAddressKeys_SMTPDedupAddsSentFrom(t *testing.T) {
 	env := setupAddressKeysEnv(t)
-	syscfg.SetResolver(func(key string) string {
+	syscfg.SetResolver(env.app, func(key string) string {
 		if key == "mail.postmark_server_token" {
 			return "test-token"
 		}
 		return ""
 	})
-	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
 	thread, err := findOrCreateThread(env.app, env.desk.Id, "Plan", "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -409,13 +407,12 @@ func captureLastThreadUpdate(app core.App) map[string]threadBroadcast {
 
 func TestAddressKeys_SendBroadcastCarriesMarkersAndKeys(t *testing.T) {
 	env := setupAddressKeysEnv(t)
-	syscfg.SetResolver(func(key string) string {
+	syscfg.SetResolver(env.app, func(key string) string {
 		if key == "mail.postmark_server_token" {
 			return "test-token"
 		}
 		return ""
 	})
-	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
 	last := captureLastThreadUpdate(env.app)
 
 	result, err := sendMessage(env.app, sendParams{

@@ -497,11 +497,8 @@ func registerMailListeners(app *pocketbase.PocketBase) {
 // values they are never written to this deployment's database, so a direct
 // lookup finds nothing and mail silently falls back to an unconfigured provider
 // — the failure mode being a deployment that cannot send and cannot say why.
-//
-// The app argument is retained so every call site keeps its shape; the seam is
-// process-wide and needs no app.
-func systemSetting(_ core.App, key string) string {
-	return syscfg.Get(key)
+func systemSetting(app core.App, key string) string {
+	return syscfg.Get(app, key)
 }
 
 // reconcileMailDomainsRegistrar (re-)installs the maildomains registrar

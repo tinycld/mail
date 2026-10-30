@@ -30,13 +30,12 @@ func setupSendCapApp(t *testing.T, cap string) *tests.TestApp {
 		t.Fatalf("save mail_messages: %v", err)
 	}
 
-	syscfg.SetResolver(func(key string) string {
+	syscfg.SetResolver(app, func(key string) string {
 		if key == "mail.max_sends_per_day" {
 			return cap
 		}
 		return ""
 	})
-	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
 
 	return app
 }

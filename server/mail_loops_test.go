@@ -67,13 +67,12 @@ func seedLoopEnv(t *testing.T) *loopEnv {
 	if err := s.app.Save(s.domain); err != nil {
 		t.Fatal(err)
 	}
-	syscfg.SetResolver(func(key string) string {
+	syscfg.SetResolver(s.app, func(key string) string {
 		if key == "mail.postmark_server_token" {
 			return "test-token"
 		}
 		return ""
 	})
-	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
 	s.app.Settings().Meta.AppURL = "https://mail.q.example:8443"
 	return &loopEnv{groupDeliverySeed: s, sent: fakePostmark(t)}
 }

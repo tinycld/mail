@@ -53,13 +53,12 @@ func fakePostmarkWith(t *testing.T, onSend func()) *[]map[string]any {
 func smtpSendEnv(t *testing.T) (*sendAddressEnv, *smtpSession) {
 	t.Helper()
 	env := setupSendAddressEnv(t)
-	syscfg.SetResolver(func(key string) string {
+	syscfg.SetResolver(env.app, func(key string) string {
 		if key == "mail.postmark_server_token" {
 			return "test-token"
 		}
 		return ""
 	})
-	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
 
 	for _, d := range []string{"tinycld.org", "tinycld.com"} {
 		domain, err := env.app.FindFirstRecordByData("mail_domains", "domain", d)

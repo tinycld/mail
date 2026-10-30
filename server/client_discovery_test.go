@@ -19,15 +19,13 @@ const discoveryMailHost = "mail.acme.example"
 
 func newDiscoveryTestApp(t *testing.T) *tests.TestApp {
 	t.Helper()
-	syscfg.ResetForTesting()
-	t.Cleanup(syscfg.ResetForTesting)
-	syscfg.SetResolver(func(key string) string {
+	app := newAddressTestApp(t)
+	syscfg.SetResolver(app, func(key string) string {
 		if key == mailhost.Key {
 			return discoveryMailHost
 		}
 		return ""
 	})
-	app := newAddressTestApp(t)
 	app.Settings().Meta.AppName = "Acme & Co"
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "acme.example", "verified": true})
 	saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "pending.example", "verified": false})

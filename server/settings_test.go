@@ -45,7 +45,7 @@ func setupSettingsTestApp(t *testing.T) *tests.TestApp {
 	// querying the collection. In the app this is wired by coreserver; here,
 	// point it at this test app's rows so saveSystemSetting still drives what
 	// the code under test reads.
-	syscfg.SetResolver(func(key string) string {
+	syscfg.SetResolver(app, func(key string) string {
 		rec, err := app.FindFirstRecordByFilter(
 			"system_settings", "key = {:key}", map[string]any{"key": key})
 		if err != nil {
@@ -53,7 +53,6 @@ func setupSettingsTestApp(t *testing.T) *tests.TestApp {
 		}
 		return rec.GetString("value")
 	})
-	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
 
 	return app
 }
