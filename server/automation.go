@@ -29,7 +29,7 @@ func registerAutomationResolver() {
 
 	// Core's "Send an email" action can run on a received message too, so it
 	// must not answer automatic mail either.
-	automation.RegisterSendGuard("mail_messages", automaticMailSendGuard)
+	automation.RegisterSendGuard("mail_messages", "mail.automatic-mail", automaticMailSendGuard)
 }
 
 // deliveryFailureStatuses are the two delivery_status values that mean the

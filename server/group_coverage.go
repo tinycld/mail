@@ -2,7 +2,6 @@ package mail
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/pocketbase/dbx"
 	validation "github.com/pocketbase/ozzo-validation/v4"
@@ -76,22 +75,13 @@ func checkCoverageGroups(domain *core.Record) error {
 	return nil
 }
 
-var registerMembershipListenerOnce sync.Once
-
 // registerGroupMembershipListener keeps rule addresses on group domains in
 // step with group membership. Core delivers each join and leave after it
 // commits — also the leaves a group delete or an offboard causes — and sends
-// none at boot, which the boot reconcile covers. Core's registry is process
-// global and Register can run more than once in one process (tests), so the
-// listener is added only once.
+// none at boot, which the boot reconcile covers. Core ignores a repeat of
+// the same name, so every app's Register can call this.
 func registerGroupMembershipListener() {
-	registerMembershipListenerOnce.Do(bindGroupMembershipListener)
-}
-
-// bindGroupMembershipListener adds the listener with no once-guard, for a
-// test that has cleared core's registry with groups.ResetForTesting.
-func bindGroupMembershipListener() {
-	groups.OnMembershipChange(onGroupMembershipChange)
+	groups.OnMembershipChange("mail.rule-addresses", onGroupMembershipChange)
 }
 
 // onGroupMembershipChange reconciles the rule addresses of the person who

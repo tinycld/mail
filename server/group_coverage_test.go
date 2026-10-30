@@ -314,7 +314,7 @@ func newMembershipTestApp(t *testing.T) *tests.TestApp {
 	groups.ResetForTesting()
 	t.Cleanup(groups.ResetForTesting)
 	groups.Register(&pocketbase.PocketBase{App: app})
-	bindGroupMembershipListener()
+	registerGroupMembershipListener()
 	return app
 }
 
@@ -445,7 +445,7 @@ func TestGroupMembership_OffboardCreatesNothing(t *testing.T) {
 	t.Cleanup(groups.ResetForTesting)
 	groups.Register(&pocketbase.PocketBase{App: app})
 	var passed []groups.MembershipEvent
-	groups.OnMembershipChange(func(e groups.MembershipEvent) error {
+	groups.OnMembershipChange("mail-test.recorder", func(e groups.MembershipEvent) error {
 		err := onGroupMembershipChange(e)
 		if err != nil {
 			t.Errorf("mail listener for %+v: %v", e, err)
