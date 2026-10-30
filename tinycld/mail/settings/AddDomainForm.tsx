@@ -58,7 +58,7 @@ export function AddDomainForm({
         },
     })
 
-    const onSubmit = handleSubmit(data => addMutation.mutate(data))
+    const onSubmit = () => void handleSubmit(data => addMutation.mutate(data))()
     const canSubmit = !addMutation.isPending && isDirty
 
     const addButton = (

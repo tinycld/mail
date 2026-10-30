@@ -59,7 +59,7 @@ export function AddAddressForm({ target, onDone }: { target: AddressTarget; onDo
         onSuccess: onDone,
         onError: handleMutationErrorsWithForm({ setError, getValues }),
     })
-    const onSubmit = handleSubmit(d => create.mutate(d))
+    const onSubmit = () => void handleSubmit(d => create.mutate(d))()
 
     return (
         <View className="gap-2">

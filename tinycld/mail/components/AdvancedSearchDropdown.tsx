@@ -88,10 +88,11 @@ export function AdvancedSearchDropdown({
         defaultValues: defaults,
     })
 
-    const onSubmit = handleSubmit(data => {
-        onApply(formDataToFilters(data))
-        onClose()
-    })
+    const onSubmit = () =>
+        void handleSubmit(data => {
+            onApply(formDataToFilters(data))
+            onClose()
+        })()
 
     const onClear = useCallback(() => {
         reset(makeDefaultValues())

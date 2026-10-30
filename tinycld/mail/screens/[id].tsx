@@ -11,7 +11,12 @@ import { useNavigateBack } from '@tinycld/core/lib/use-navigate-back'
 import { useScrollShadow } from '@tinycld/core/lib/use-scroll-shadow'
 import { useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
+import type {
+    LayoutChangeEvent,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    ViewInstance,
+} from 'react-native'
 import { Dimensions, Keyboard, Platform, Pressable, ScrollView, Text, View } from 'react-native'
 import { type AttachmentGroup, AttachmentStrip } from '../components/AttachmentStrip'
 import { EmailBody } from '../components/EmailBody'
@@ -153,7 +158,7 @@ export default function MailDetailScreen() {
     const { isScrolled, onScroll: onScrollShadow } = useScrollShadow()
     const [dockHeight, setDockHeight] = useState(0)
     const [keyboardOffset, setKeyboardOffset] = useState(0)
-    const dockRef = useRef<View | null>(null)
+    const dockRef = useRef<ViewInstance | null>(null)
     const onDockLayout = useCallback((e: LayoutChangeEvent) => {
         setDockHeight(e.nativeEvent.layout.height)
     }, [])

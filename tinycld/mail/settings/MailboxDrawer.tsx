@@ -523,7 +523,7 @@ function AddMemberPicker({
         onSuccess: close,
     })
 
-    const onSubmit = handleSubmit(data => addMutation.mutate(data))
+    const onSubmit = () => void handleSubmit(data => addMutation.mutate(data))()
 
     if (!isVisible) return null
 
