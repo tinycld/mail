@@ -149,7 +149,7 @@ func TestSMTPInboundSession_ReadOnlyDefersWith451(t *testing.T) {
 	app := setupInboundTestApp(t)
 	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_smtp_in_ro1")
 	seedMember(t, app, "mb_smtp_in_ro1", "user_alice")
-	t.Cleanup(readonly.Leave)
+	t.Cleanup(func() { readonly.Leave(app) })
 
 	assert451 := func(step string, err error) {
 		t.Helper()
@@ -159,10 +159,10 @@ func TestSMTPInboundSession_ReadOnlyDefersWith451(t *testing.T) {
 		}
 	}
 
-	readonly.Enter()
+	readonly.Enter(app)
 	sess := &smtpInboundSession{app: app, hostname: "mx.tinycld.test"}
 	assert451("MAIL FROM", sess.Mail("sender@external.example", &smtp.MailOptions{}))
-	readonly.Leave()
+	readonly.Leave(app)
 
 	// Read-only can begin mid-session, after the recipients were accepted.
 	sess = &smtpInboundSession{app: app, hostname: "mx.tinycld.test"}
@@ -172,7 +172,7 @@ func TestSMTPInboundSession_ReadOnlyDefersWith451(t *testing.T) {
 	if err := sess.Rcpt("alice@acme.com", &smtp.RcptOptions{}); err != nil {
 		t.Fatalf("Rcpt: %v", err)
 	}
-	readonly.Enter()
+	readonly.Enter(app)
 	raw := buildPlainRFC5322(t, "sender@external.example", "alice@acme.com", "Deferred while read-only", "ro-smtp-inbound", "body")
 	assert451("DATA", sess.Data(bytes.NewReader(raw)))
 

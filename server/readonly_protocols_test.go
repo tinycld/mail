@@ -163,8 +163,8 @@ var imapWriteCases = []imapWriteCase{
 func TestIMAPWritesRefusedWhileReadOnly(t *testing.T) {
 	for _, tc := range imapWriteCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Cleanup(readonly.Leave)
 			env := seedDestination(t)
+			t.Cleanup(func() { readonly.Leave(env.app) })
 			client := dialAddressFolder(t, env.addressFolderEnv)
 			selectInbox(t, client)
 			if tc.prepare != nil {
@@ -172,7 +172,7 @@ func TestIMAPWritesRefusedWhileReadOnly(t *testing.T) {
 			}
 			logs := readonlytest.CaptureLogs(t)
 
-			readonly.Enter()
+			readonly.Enter(env.app)
 			wantIMAPUnavailable(t, tc.name, tc.run(env, client))
 			if tc.written(t, env) {
 				t.Fatalf("%s wrote while the server was read-only", tc.name)
@@ -182,7 +182,7 @@ func TestIMAPWritesRefusedWhileReadOnly(t *testing.T) {
 				t.Fatalf("refusal not logged at Info with its command and user: %+v (found %v)", r, ok)
 			}
 
-			readonly.Leave()
+			readonly.Leave(env.app)
 			if err := tc.run(env, client); err != nil {
 				t.Fatalf("%s after the mode was left: %v", tc.name, err)
 			}
@@ -213,8 +213,8 @@ func fetchBody(t *testing.T, client *imapclient.Client) []byte {
 // not set \Seen, which is a write. After the mode is left the same FETCH
 // marks the thread read.
 func TestIMAPFetchWhileReadOnlyServesBodyWithoutSeen(t *testing.T) {
-	t.Cleanup(readonly.Leave)
 	env := seedDestination(t)
+	t.Cleanup(func() { readonly.Leave(env.app) })
 	state := env.state(t, env.thread.Id)
 	state.Set("is_read", false)
 	if err := env.app.Save(state); err != nil {
@@ -224,7 +224,7 @@ func TestIMAPFetchWhileReadOnlyServesBodyWithoutSeen(t *testing.T) {
 	selectInbox(t, client)
 	logs := readonlytest.CaptureLogs(t)
 
-	readonly.Enter()
+	readonly.Enter(env.app)
 	if body := fetchBody(t, client); !strings.Contains(string(body), "Subject: plan") {
 		t.Fatalf("FETCH while read-only did not serve the message:\n%s", body)
 	}
@@ -237,7 +237,7 @@ func TestIMAPFetchWhileReadOnlyServesBodyWithoutSeen(t *testing.T) {
 		}
 	}
 
-	readonly.Leave()
+	readonly.Leave(env.app)
 	fetchBody(t, client)
 	if !env.state(t, env.thread.Id).GetBool("is_read") {
 		t.Fatal("FETCH did not set \\Seen after the mode was left")
@@ -247,11 +247,11 @@ func TestIMAPFetchWhileReadOnlyServesBodyWithoutSeen(t *testing.T) {
 // SELECT and STATUS only read: while read-only they must not create the
 // mailbox's UID state row.
 func TestIMAPSelectWhileReadOnlyDoesNotWrite(t *testing.T) {
-	t.Cleanup(readonly.Leave)
 	env := seedDestination(t)
+	t.Cleanup(func() { readonly.Leave(env.app) })
 	client := dialAddressFolder(t, env.addressFolderEnv)
 
-	readonly.Enter()
+	readonly.Enter(env.app)
 	data, err := client.Select("INBOX", nil).Wait()
 	if err != nil {
 		t.Fatalf("SELECT while read-only: %v", err)
@@ -314,11 +314,11 @@ func sentCopies(t *testing.T, app core.App) int {
 // Sent copy is stored, so the send and its copy cannot split. It works once
 // the mode is left.
 func TestSMTPSubmissionRefusedWhileReadOnly(t *testing.T) {
-	t.Cleanup(readonly.Leave)
 	env, s, sent := submissionEnv(t, nil)
+	t.Cleanup(func() { readonly.Leave(env.app) })
 	logs := readonlytest.CaptureLogs(t)
 
-	readonly.Enter()
+	readonly.Enter(env.app)
 	wantSMTPReadOnly(t, "MAIL FROM", submit(s))
 	if len(*sent) != 0 || sentCopies(t, env.app) != 0 {
 		t.Fatalf("while read-only: %d sends and %d Sent copies, want none", len(*sent), sentCopies(t, env.app))
@@ -328,7 +328,7 @@ func TestSMTPSubmissionRefusedWhileReadOnly(t *testing.T) {
 		t.Fatalf("refusal not logged at Info with stage mail: %+v (found %v)", r, ok)
 	}
 
-	readonly.Leave()
+	readonly.Leave(env.app)
 	if err := submit(s); err != nil {
 		t.Fatalf("submission after the mode was left: %v", err)
 	}
@@ -340,8 +340,8 @@ func TestSMTPSubmissionRefusedWhileReadOnly(t *testing.T) {
 // Read-only can begin after MAIL FROM was accepted: DATA checks again before
 // the send.
 func TestSMTPSubmissionDataRefusedWhenReadOnlyBeginsAfterMail(t *testing.T) {
-	t.Cleanup(readonly.Leave)
 	env, s, sent := submissionEnv(t, nil)
+	t.Cleanup(func() { readonly.Leave(env.app) })
 	if err := s.Mail("nathan@tinycld.com", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +349,7 @@ func TestSMTPSubmissionDataRefusedWhenReadOnlyBeginsAfterMail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	readonly.Enter()
+	readonly.Enter(env.app)
 	wantSMTPReadOnly(t, "DATA", s.Data(strings.NewReader(readOnlySubmitRaw)))
 	if len(*sent) != 0 || sentCopies(t, env.app) != 0 {
 		t.Fatalf("while read-only: %d sends and %d Sent copies, want none", len(*sent), sentCopies(t, env.app))
@@ -360,14 +360,16 @@ func TestSMTPSubmissionDataRefusedWhenReadOnlyBeginsAfterMail(t *testing.T) {
 // delivered, so DATA answers 250, but its Sent copy waits for the mode to be
 // left rather than being written while read-only.
 func TestSMTPSubmissionSentCopyWaitsOutReadOnly(t *testing.T) {
-	t.Cleanup(readonly.Leave)
 	sending := make(chan struct{})
+	var app core.App
 	env, s, sent := submissionEnv(t, func() {
-		readonly.Enter()
+		readonly.Enter(app)
 		close(sending)
 	})
+	app = env.app
+	t.Cleanup(func() { readonly.Leave(env.app) })
 	env.app.OnRecordCreate("mail_messages").BindFunc(func(e *core.RecordEvent) error {
-		if readonly.Active() {
+		if readonly.Active(env.app) {
 			t.Error("the Sent copy was stored while the server was read-only")
 		}
 		return e.Next()
@@ -393,7 +395,7 @@ func TestSMTPSubmissionSentCopyWaitsOutReadOnly(t *testing.T) {
 		t.Fatalf("DATA returned (%v) before the mode was left; the Sent copy was dropped", err)
 	case <-time.After(200 * time.Millisecond):
 	}
-	readonly.Leave()
+	readonly.Leave(env.app)
 
 	if err := <-done; err != nil {
 		t.Fatalf("DATA of a delivered message: %v", err)

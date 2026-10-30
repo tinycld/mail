@@ -52,7 +52,7 @@ func backfillMemberThreadState(ctx context.Context, app core.App, mailboxID, use
 		if ctx.Err() != nil {
 			return firstErr
 		}
-		if !waitMemberJobWritable(ctx, "backfill", mailboxID, userID) {
+		if !waitMemberJobWritable(ctx, app, "backfill", mailboxID, userID) {
 			return firstErr
 		}
 		// The job can run after the person lost access again, and the

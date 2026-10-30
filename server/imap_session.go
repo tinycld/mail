@@ -159,7 +159,7 @@ func (s *imapSession) requireWritable(command string) error {
 			Text: "Your mail access is read-only",
 		}
 	}
-	if readonly.Active() {
+	if readonly.Active(s.app) {
 		imapLog.Info("imap write refused: the server is read-only", "command", command, "user", s.userID())
 		return errServerReadOnly
 	}
@@ -1421,7 +1421,7 @@ func (s *imapSession) applyAppendFlags(threadID string, flags []imap.Flag) {
 // and an unread mark is the harmless side to err on.
 func (s *imapSession) markSeen(msg *core.Record) {
 	threadID := msg.GetString("thread")
-	if readonly.Active() {
+	if readonly.Active(s.app) {
 		imapLog.Debug("imap fetch did not set \\Seen: the server is read-only", "thread", threadID, "user", s.userID())
 		return
 	}

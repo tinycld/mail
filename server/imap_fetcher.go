@@ -131,7 +131,7 @@ func (m *imapFetcherManager) tick(ctx context.Context, cfg SMTPConfig) error {
 	// A read-only server is waiting to be replaced; a message it stores now
 	// is lost if the next build rolls back. Waiting leaves it unseen on the
 	// remote server, so a later tick (here or in the next build) pulls it.
-	if err := readonly.WaitInactive(ctx); err != nil {
+	if err := readonly.WaitInactive(ctx, m.app); err != nil {
 		return fmt.Errorf("imap fetcher: wait for read-only to end: %w", err)
 	}
 	addr := imapAddress(cfg)
@@ -178,7 +178,7 @@ func (m *imapFetcherManager) tick(ctx context.Context, cfg SMTPConfig) error {
 	var successUIDs []imap.UID
 	for i, msgBuf := range messages {
 		// Read-only can begin mid-batch; the rest stay unseen for a later tick.
-		if readonly.Active() {
+		if readonly.Active(m.app) {
 			break
 		}
 		body := firstBodySection(msgBuf)

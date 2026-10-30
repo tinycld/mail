@@ -25,21 +25,21 @@ func TestReverifyUnconfirmedDomainsSkipsWhileReadOnly(t *testing.T) {
 	withMXLookup(t, func(_ context.Context, _ string) ([]*net.MX, error) {
 		return []*net.MX{{Host: "inbound.postmarkapp.com.", Pref: 10}}, nil
 	})
-	t.Cleanup(readonly.Leave)
 
 	app := newReverifyTestApp(t)
+	t.Cleanup(func() { readonly.Leave(app) })
 	maildomains.SetResolver(app, &stubRegistrar{rec: &maildomains.DomainRecords{Domain: "acme.com", ID: 1}})
 	saveSystemSetting(t, app, "mail.provider", "postmark")
 	saveSystemSetting(t, app, "mail.postmark_server_token", "tok")
 	record := newReverifyTestRecord(t, app)
 
-	readonly.Enter()
+	readonly.Enter(app)
 	reverifyUnconfirmedDomains(context.Background(), app)
 	if got := lastCheckedAt(t, app, record.Id); got != "" {
 		t.Fatalf("last_checked_at = %q: the re-check wrote while read-only", got)
 	}
 
-	readonly.Leave()
+	readonly.Leave(app)
 	reverifyUnconfirmedDomains(context.Background(), app)
 	if lastCheckedAt(t, app, record.Id) == "" {
 		t.Fatal("last_checked_at is empty: the re-check did not run after read-only ended")
@@ -60,12 +60,12 @@ func lastCheckedAt(t *testing.T, app core.App, id string) string {
 func TestFlushMailBufferHoldsWhileReadOnly(t *testing.T) {
 	const userID = "user_ro_batcher"
 	t.Cleanup(func() { mailBuffer.Delete(userID) })
-	t.Cleanup(readonly.Leave)
 	app := newNotificationsTestApp(t)
+	t.Cleanup(func() { readonly.Leave(app) })
 
 	bufferMailNotificationForUser(userID, "sender@external.example", "held while read-only")
 
-	readonly.Enter()
+	readonly.Enter(app)
 	flushMailBuffer(context.Background(), app)
 	if n := countNotifications(t, app, userID); n != 0 {
 		t.Fatalf("%d notifications were written while read-only", n)
@@ -74,7 +74,7 @@ func TestFlushMailBufferHoldsWhileReadOnly(t *testing.T) {
 		t.Fatal("the flush dropped the buffered mail while read-only")
 	}
 
-	readonly.Leave()
+	readonly.Leave(app)
 	flushMailBuffer(context.Background(), app)
 	if n := countNotifications(t, app, userID); n != 1 {
 		t.Fatalf("%d notifications after read-only ended, want 1", n)
@@ -115,13 +115,13 @@ func countNotifications(t *testing.T, app core.App, userID string) int {
 func TestIMAPFetcherWaitsWhileReadOnly(t *testing.T) {
 	const subject = "fetched after read-only"
 	app, mgr, cfg := setupIMAPFetchTest(t, subject)
-	t.Cleanup(readonly.Leave)
+	t.Cleanup(func() { readonly.Leave(app) })
 	stored := func() int {
 		msgs, _ := app.FindRecordsByFilter("mail_messages", "subject = {:s}", "", 10, 0, map[string]any{"s": subject})
 		return len(msgs)
 	}
 
-	readonly.Enter()
+	readonly.Enter(app)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	if err := mgr.tick(ctx, cfg); !errors.Is(err, context.DeadlineExceeded) {
@@ -133,7 +133,7 @@ func TestIMAPFetcherWaitsWhileReadOnly(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() { done <- mgr.tick(context.Background(), cfg) }()
-	readonly.Leave()
+	readonly.Leave(app)
 	select {
 	case err := <-done:
 		if err != nil {
@@ -151,7 +151,7 @@ func TestIMAPFetcherWaitsWhileReadOnly(t *testing.T) {
 // wait to be saved until it ends.
 func TestSaveWhenWritableWaitsWhileReadOnly(t *testing.T) {
 	app := newNotificationsTestApp(t)
-	t.Cleanup(readonly.Leave)
+	t.Cleanup(func() { readonly.Leave(app) })
 	col, err := app.FindCollectionByNameOrId("notifications")
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +159,7 @@ func TestSaveWhenWritableWaitsWhileReadOnly(t *testing.T) {
 	record := core.NewRecord(col)
 	record.Set("title", "thumbnail write")
 
-	readonly.Enter()
+	readonly.Enter(app)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	if err := saveWhenWritable(ctx, app, record); !errors.Is(err, context.DeadlineExceeded) {
@@ -171,7 +171,7 @@ func TestSaveWhenWritableWaitsWhileReadOnly(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() { done <- saveWhenWritable(context.Background(), app, record) }()
-	readonly.Leave()
+	readonly.Leave(app)
 	select {
 	case err := <-done:
 		if err != nil {
@@ -214,8 +214,8 @@ func TestMailBatcherFlushWaitsWhileReadOnly(t *testing.T) {
 	t.Cleanup(func() { mailBuffer.Delete(userID) })
 	app := newNotificationsTestApp(t)
 	bufferMailNotificationForUser(userID, "sender@external.example", "waits for read-only")
-	readonly.Enter()
-	t.Cleanup(readonly.Leave)
+	readonly.Enter(app)
+	t.Cleanup(func() { readonly.Leave(app) })
 
 	probe, waiting := readonlytest.WaitProbe(t)
 	done := make(chan struct{})
@@ -228,7 +228,7 @@ func TestMailBatcherFlushWaitsWhileReadOnly(t *testing.T) {
 		t.Fatalf("%d notifications were written while read-only", n)
 	}
 
-	readonly.Leave()
+	readonly.Leave(app)
 	waitDone(t, done, "the mail notification flush")
 	if n := countNotifications(t, app, userID); n != 1 {
 		t.Fatalf("%d notifications after read-only ended, want 1", n)
@@ -244,8 +244,8 @@ func TestMailBatcherFlushDroppedAndLoggedWhenReadOnlyOutlastsTheWait(t *testing.
 	bufferMailNotificationForUser(userID, "sender@external.example", "dropped one")
 	bufferMailNotificationForUser(userID, "sender@external.example", "dropped two")
 	logs := readonlytest.CaptureLogs(t)
-	readonly.Enter()
-	t.Cleanup(readonly.Leave)
+	readonly.Enter(app)
+	t.Cleanup(func() { readonly.Leave(app) })
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -292,8 +292,8 @@ func TestMemberBackfillWaitsWhileReadOnly(t *testing.T) {
 	env := setupScopeEnv(t)
 	joiner := newUser(t, env.app, "ro-joiner@example.org")
 	seedMember(t, env.app, env.mbA.Id, joiner.Id)
-	readonly.Enter()
-	t.Cleanup(readonly.Leave)
+	readonly.Enter(env.app)
+	t.Cleanup(func() { readonly.Leave(env.app) })
 
 	probe, waiting := readonlytest.WaitProbe(t)
 	done := make(chan struct{})
@@ -308,7 +308,7 @@ func TestMemberBackfillWaitsWhileReadOnly(t *testing.T) {
 		t.Fatalf("the backfill wrote %d state rows while read-only", n)
 	}
 
-	readonly.Leave()
+	readonly.Leave(env.app)
 	waitDone(t, done, "the member backfill")
 	if n := stateRowCount(t, env.app, joiner.Id); n == 0 {
 		t.Fatal("the backfill wrote no state rows after read-only ended")
@@ -335,8 +335,8 @@ func TestMemberAccessCleanupWaitsWhileReadOnly(t *testing.T) {
 	if err := env.app.Delete(member); err != nil {
 		t.Fatal(err)
 	}
-	readonly.Enter()
-	t.Cleanup(readonly.Leave)
+	readonly.Enter(env.app)
+	t.Cleanup(func() { readonly.Leave(env.app) })
 
 	probe, waiting := readonlytest.WaitProbe(t)
 	done := make(chan struct{})
@@ -351,7 +351,7 @@ func TestMemberAccessCleanupWaitsWhileReadOnly(t *testing.T) {
 		t.Fatalf("the cleanup deleted rows while read-only: %d left of %d", n, rows)
 	}
 
-	readonly.Leave()
+	readonly.Leave(env.app)
 	waitDone(t, done, "the member access cleanup")
 	if n := stateRowCount(t, env.app, leaver.Id); n != 0 {
 		t.Fatalf("%d state rows left after read-only ended, want 0", n)
@@ -362,12 +362,13 @@ func TestMemberAccessCleanupWaitsWhileReadOnly(t *testing.T) {
 func TestMemberJobDroppedAndLoggedWhenReadOnlyOutlastsTheWait(t *testing.T) {
 	t.Parallel()
 	logs := readonlytest.CaptureLogs(t)
-	readonly.Enter()
-	t.Cleanup(readonly.Leave)
+	app := newNotificationsTestApp(t)
+	readonly.Enter(app)
+	t.Cleanup(func() { readonly.Leave(app) })
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if waitMemberJobWritable(ctx, "backfill", "mbx_ro", "user_ro") {
+	if waitMemberJobWritable(ctx, app, "backfill", "mbx_ro", "user_ro") {
 		t.Fatal("the wait reported writable while read-only")
 	}
 	r, ok := readonlytest.Find(logs(), memberJobDroppedMsg)

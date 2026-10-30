@@ -206,7 +206,7 @@ var errReadOnly = &smtp.SMTPError{
 }
 
 func (s *smtpInboundSession) Mail(from string, _ *smtp.MailOptions) error {
-	if readonly.Active() {
+	if readonly.Active(s.app) {
 		return errReadOnly
 	}
 	s.from = from
@@ -279,7 +279,7 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 func (s *smtpInboundSession) Data(r io.Reader) error {
 	// Read-only can begin after MAIL FROM was accepted, so DATA checks again
 	// before it stores anything.
-	if readonly.Active() {
+	if readonly.Active(s.app) {
 		return errReadOnly
 	}
 	if len(s.mailboxes) == 0 {

@@ -87,7 +87,7 @@ func startMailBatcher(ctx context.Context, app core.App) {
 func flushMailBufferWhenWritable(ctx context.Context, app core.App) {
 	waitCtx, cancel := context.WithTimeout(ctx, readonly.TailWait)
 	defer cancel()
-	err := readonly.WhenWritable(waitCtx, func() error {
+	err := readonly.WhenWritable(waitCtx, app, func() error {
 		flushMailBuffer(ctx, app)
 		return nil
 	})
@@ -124,7 +124,7 @@ func dropMailBuffer() (users, messages int) {
 // regardless.
 func flushMailBuffer(ctx context.Context, app core.App) {
 	mailBuffer.Range(func(key, value any) bool {
-		if readonly.Active() {
+		if readonly.Active(app) {
 			return false
 		}
 		userID := key.(string)

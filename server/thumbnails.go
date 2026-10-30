@@ -171,7 +171,7 @@ func generateAttachmentThumbnails(ctx context.Context, app core.App, record *cor
 // can arrive just before the mode begins, and its background work must not
 // write while the mode is on: the write is lost if the next build rolls back.
 func saveWhenWritable(ctx context.Context, app core.App, record *core.Record) error {
-	if err := readonly.WaitInactive(ctx); err != nil {
+	if err := readonly.WaitInactive(ctx, app); err != nil {
 		return fmt.Errorf("mail: wait for read-only to end: %w", err)
 	}
 	return app.Save(record)
