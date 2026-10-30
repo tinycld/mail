@@ -308,7 +308,7 @@ func (s *smtpInboundSession) Data(r io.Reader) error {
 	}
 	// Use the SMTP provider's ParseInbound — it just wraps parseRFC5322 in
 	// the InboundMessage shape that processInboundForMailbox expects.
-	parser := NewSMTPProvider(SMTPConfig{PublicHostname: s.hostname})
+	parser := NewSMTPProvider(s.app, SMTPConfig{PublicHostname: s.hostname})
 	msg, err := parser.ParseInbound(body)
 	if err != nil {
 		s.app.Logger().Error("inbound SMTP: parse failed", "error", err, "from", s.from)

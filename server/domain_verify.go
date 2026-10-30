@@ -207,7 +207,7 @@ func boolPtr(b bool) *bool { return &b }
 // scan happens at most once per domain, a newly learned id is persisted, and
 // the provider's answer is stamped with checked_at on every call, success or
 // failure, so "asked and told no" stays distinguishable from "never asked".
-func checkOutbound(ctx context.Context, record *core.Record) api.OutboundCheckResult {
+func checkOutbound(ctx context.Context, app core.App, record *core.Record) api.OutboundCheckResult {
 	domain := record.GetString("domain")
 	meta := readProviderDomainMetadata(record)
 	var priorID int64
@@ -216,7 +216,7 @@ func checkOutbound(ctx context.Context, record *core.Record) api.OutboundCheckRe
 	}
 
 	result := api.OutboundCheckResult{}
-	rec, err := maildomains.Current().GetDomain(ctx, domain, priorID)
+	rec, err := maildomains.Current(app).GetDomain(ctx, domain, priorID)
 
 	// A lookup BY STORED ID that comes back "not enrolled" is ambiguous: the
 	// domain may genuinely be gone, or the operator may have deleted and
@@ -227,7 +227,7 @@ func checkOutbound(ctx context.Context, record *core.Record) api.OutboundCheckRe
 	// re-adding the domain returns "already configured on this host".
 	relearnedID := false
 	if priorID != 0 && errors.Is(err, maildomains.ErrDomainNotEnrolled) {
-		rec, err = maildomains.Current().GetDomain(ctx, domain, 0)
+		rec, err = maildomains.Current(app).GetDomain(ctx, domain, 0)
 		relearnedID = true
 	}
 
@@ -343,7 +343,7 @@ func verifyDomainRecord(ctx context.Context, app core.App, record *core.Record) 
 	mxHost := expectedInboundMXHost(app, provider)
 	details.MX = checkMX(ctx, domain, mxHost)
 	details.Provider = checkProviderInbound(ctx, app, provider, domain)
-	details.Outbound = checkOutbound(ctx, record)
+	details.Outbound = checkOutbound(ctx, app, record)
 	// Stamped from the same value the MX check just used, not read back off
 	// details.MX.Expected, so the DNS panel's MX row always matches the row
 	// above it.

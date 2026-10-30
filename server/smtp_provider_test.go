@@ -11,6 +11,7 @@ import (
 // ParseInbound returns an InboundMessage shape compatible with
 // processInboundForMailbox for a minimal text/plain RFC 5322 message.
 func TestSMTPProviderParseInbound_PlainText(t *testing.T) {
+	app := newBareApp(t)
 	t.Parallel()
 	raw := []byte(strings.Join([]string{
 		"From: Alice <alice@example.com>",
@@ -23,7 +24,7 @@ func TestSMTPProviderParseInbound_PlainText(t *testing.T) {
 		"hello world",
 	}, "\r\n"))
 
-	p := NewSMTPProvider(SMTPConfig{})
+	p := NewSMTPProvider(app, SMTPConfig{})
 	msg, err := p.ParseInbound(raw)
 	if err != nil {
 		t.Fatalf("ParseInbound: %v", err)
@@ -48,6 +49,7 @@ func TestSMTPProviderParseInbound_PlainText(t *testing.T) {
 // Threading headers (In-Reply-To, References) must round-trip so
 // findOrCreateThread can stitch the message onto an existing thread.
 func TestSMTPProviderParseInbound_ThreadingHeaders(t *testing.T) {
+	app := newBareApp(t)
 	t.Parallel()
 	raw := []byte(strings.Join([]string{
 		"From: a@example.com",
@@ -62,7 +64,7 @@ func TestSMTPProviderParseInbound_ThreadingHeaders(t *testing.T) {
 		"reply body",
 	}, "\r\n"))
 
-	p := NewSMTPProvider(SMTPConfig{})
+	p := NewSMTPProvider(app, SMTPConfig{})
 	msg, err := p.ParseInbound(raw)
 	if err != nil {
 		t.Fatalf("ParseInbound: %v", err)
@@ -78,8 +80,9 @@ func TestSMTPProviderParseInbound_ThreadingHeaders(t *testing.T) {
 // Bounce parsing must surface the no-webhook sentinel so the bounce endpoint
 // can return a clear error instead of a generic parse failure.
 func TestSMTPProviderParseBounce_ReturnsSentinel(t *testing.T) {
+	app := newBareApp(t)
 	t.Parallel()
-	p := NewSMTPProvider(SMTPConfig{})
+	p := NewSMTPProvider(app, SMTPConfig{})
 	_, err := p.ParseBounce([]byte("{}"))
 	if !errors.Is(err, errSMTPNoBounceWebhook) {
 		t.Errorf("expected errSMTPNoBounceWebhook, got %v", err)
@@ -89,6 +92,7 @@ func TestSMTPProviderParseBounce_ReturnsSentinel(t *testing.T) {
 // CheckInboundDomain reflects the org's inbound mode so domain_verify can
 // reason about MX expectations correctly.
 func TestSMTPProviderCheckInboundDomain_ReflectsMode(t *testing.T) {
+	app := newBareApp(t)
 	t.Parallel()
 	tests := []struct {
 		name        string
@@ -116,7 +120,7 @@ func TestSMTPProviderCheckInboundDomain_ReflectsMode(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			p := NewSMTPProvider(tc.cfg)
+			p := NewSMTPProvider(app, tc.cfg)
 			info, err := p.CheckInboundDomain(context.Background())
 			if err != nil {
 				t.Fatalf("CheckInboundDomain: %v", err)

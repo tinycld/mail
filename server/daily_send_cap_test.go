@@ -7,8 +7,6 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 	"github.com/pocketbase/pocketbase/tools/types"
-
-	"tinycld.org/core/syscfg"
 )
 
 // setupSendCapApp builds the smallest schema the cap reads: mail_messages
@@ -30,12 +28,7 @@ func setupSendCapApp(t *testing.T, cap string) *tests.TestApp {
 		t.Fatalf("save mail_messages: %v", err)
 	}
 
-	syscfg.SetResolver(app, func(key string) string {
-		if key == "mail.max_sends_per_day" {
-			return cap
-		}
-		return ""
-	})
+	setTestSetting(app, "mail.max_sends_per_day", cap)
 
 	return app
 }

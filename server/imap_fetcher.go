@@ -173,7 +173,7 @@ func (m *imapFetcherManager) tick(ctx context.Context, cfg SMTPConfig) error {
 		return fmt.Errorf("fetch: %w", err)
 	}
 
-	parser := NewSMTPProvider(cfg)
+	parser := NewSMTPProvider(m.app, cfg)
 
 	var successUIDs []imap.UID
 	for i, msgBuf := range messages {

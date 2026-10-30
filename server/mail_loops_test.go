@@ -14,7 +14,6 @@ import (
 	"github.com/emersion/go-imap/v2/imapserver/imapmemserver"
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/automation"
-	"tinycld.org/core/syscfg"
 )
 
 func TestIsAutoSubmitted(t *testing.T) {
@@ -67,14 +66,9 @@ func seedLoopEnv(t *testing.T) *loopEnv {
 	if err := s.app.Save(s.domain); err != nil {
 		t.Fatal(err)
 	}
-	syscfg.SetResolver(s.app, func(key string) string {
-		if key == "mail.postmark_server_token" {
-			return "test-token"
-		}
-		return ""
-	})
+	setTestSetting(s.app, "mail.postmark_server_token", "test-token")
 	s.app.Settings().Meta.AppURL = "https://mail.q.example:8443"
-	return &loopEnv{groupDeliverySeed: s, sent: fakePostmark(t)}
+	return &loopEnv{groupDeliverySeed: s, sent: fakePostmark(t, s.app)}
 }
 
 // rule saves a personal rule owned by owner. The action handlers read only
@@ -119,7 +113,7 @@ func postmarkInbound(t *testing.T, app core.App, payload map[string]any) {
 		t.Fatal(err)
 	}
 	re, rec := makeInboundRequest(t, app, "tok-loop", body)
-	if err := handleInbound(app, NewPostmarkProvider("", ""), re, "tok-loop"); err != nil {
+	if err := handleInbound(app, NewPostmarkProvider(app, "", ""), re, "tok-loop"); err != nil {
 		t.Fatalf("handleInbound: %v", err)
 	}
 	if rec.Code != http.StatusOK {

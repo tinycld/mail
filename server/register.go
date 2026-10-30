@@ -508,7 +508,7 @@ func systemSetting(app core.App, key string) string {
 // reconciles on the same events — see reconcileOnMailSettings /
 // reconcileOnSystemMail.
 //
-// Must handle BOTH branches, not just smtp: SetResolver is last-writer-wins
+// Must handle BOTH branches, not just smtp: SetResolver is last-writer-wins on app's seam
 // with no way to "uninstall", so leaving the non-SMTP branch as a no-op
 // stranded whatever registrar was already installed (typically core's
 // Postmark one from wireMailDomains) when a deployment switched TO SMTP and
@@ -535,12 +535,12 @@ func reconcileMailDomainsRegistrar(app core.App) {
 		name = "postmark"
 	}
 	if name == "smtp" {
-		maildomains.SetResolver(NewSMTPRegistrar(smtpConfigFromSystem(app)))
+		maildomains.SetResolver(app, NewSMTPRegistrar(smtpConfigFromSystem(app)))
 		return
 	}
 	accountToken := func() string { return systemSetting(app, "mail.postmark_account_token") }
 	client := postmark.NewClient(systemSetting(app, "mail.postmark_server_token"), accountToken())
-	maildomains.SetResolver(maildomains.NewPostmarkRegistrar(accountToken, client))
+	maildomains.SetResolver(app, maildomains.NewPostmarkRegistrar(accountToken, client))
 }
 
 // newProviderFromSystem builds the provider from system settings. The provider
@@ -554,6 +554,7 @@ func newProviderFromSystem(app core.App) Provider {
 	smtpCfg := smtpConfigFromSystem(app)
 
 	return newProviderByName(
+		app,
 		name,
 		postmarkServerToken(app),
 		systemSetting(app, "mail.postmark_account_token"),
@@ -571,14 +572,14 @@ func postmarkServerToken(app core.App) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	token, err := maildomains.ServerToken(ctx)
+	token, err := maildomains.ServerToken(ctx, app)
 	if err != nil {
 		return ""
 	}
 	return token
 }
 
-func newProviderByName(name, serverToken, accountToken string, smtpCfg SMTPConfig) Provider {
+func newProviderByName(app core.App, name, serverToken, accountToken string, smtpCfg SMTPConfig) Provider {
 	switch name {
 	case "postmark":
 		// Return a PostmarkProvider even without a server token: ParseInbound
@@ -589,9 +590,9 @@ func newProviderByName(name, serverToken, accountToken string, smtpCfg SMTPConfi
 		// provider.Configured() (false when the token is empty) and reject
 		// early, so a missing token surfaces a clear "not configured" error
 		// instead of an opaque API failure.
-		return NewPostmarkProvider(serverToken, accountToken)
+		return NewPostmarkProvider(app, serverToken, accountToken)
 	case "smtp":
-		return NewSMTPProvider(smtpCfg)
+		return NewSMTPProvider(app, smtpCfg)
 	default:
 		return &NoopProvider{}
 	}

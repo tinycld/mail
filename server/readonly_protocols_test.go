@@ -288,7 +288,7 @@ func submissionEnv(t *testing.T, onSend func()) (*sendAddressEnv, *smtpSession, 
 	if err := env.app.Save(s.user); err != nil {
 		t.Fatal(err)
 	}
-	return env, s, fakePostmarkWith(t, onSend)
+	return env, s, fakePostmarkWith(t, env.app, onSend)
 }
 
 func submit(s *smtpSession) error {

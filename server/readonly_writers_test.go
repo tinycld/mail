@@ -22,15 +22,13 @@ import (
 
 // The hourly domain re-check skips its run: the next run picks the rows up.
 func TestReverifyUnconfirmedDomainsSkipsWhileReadOnly(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(&stubRegistrar{rec: &maildomains.DomainRecords{Domain: "acme.com", ID: 1}})
 	withMXLookup(t, func(_ context.Context, _ string) ([]*net.MX, error) {
 		return []*net.MX{{Host: "inbound.postmarkapp.com.", Pref: 10}}, nil
 	})
 	t.Cleanup(readonly.Leave)
 
 	app := newReverifyTestApp(t)
+	maildomains.SetResolver(app, &stubRegistrar{rec: &maildomains.DomainRecords{Domain: "acme.com", ID: 1}})
 	saveSystemSetting(t, app, "mail.provider", "postmark")
 	saveSystemSetting(t, app, "mail.postmark_server_token", "tok")
 	record := newReverifyTestRecord(t, app)
