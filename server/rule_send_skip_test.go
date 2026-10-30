@@ -19,7 +19,6 @@ import (
 func startRuleEngine(t *testing.T, e *loopEnv) {
 	t.Helper()
 	t.Cleanup(automation.ResetRegistriesForTest)
-	t.Cleanup(automation.ResetRunStateForTest)
 
 	setTestSetting(e.app, "mail.postmark_server_token", "test-token")
 
