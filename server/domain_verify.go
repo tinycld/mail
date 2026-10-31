@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/appstate"
 	"tinycld.org/core/maildomains"
 	"tinycld.org/packages/mail/api"
 )
@@ -56,9 +57,11 @@ func expectedInboundMXHost(app core.App, provider Provider) string {
 // mxLookup is swappable for tests.
 var mxLookup = net.DefaultResolver.LookupMX
 
-// verifyLocks serializes verify runs per mail_domains record so the hourly
-// ticker and a user-triggered Verify don't write to the same row concurrently.
-var verifyLocks sync.Map // recordID -> *sync.Mutex
+// verifyLocksKey holds the app's verify locks, recordID -> *sync.Mutex, so
+// the hourly ticker and a user-triggered Verify don't write to the same row
+// concurrently. Per app: a row id is unique only in its app, and the map is
+// freed with the app.
+var verifyLocksKey = appstate.NewKey[*sync.Map]("mail.verifyLocks")
 
 // errProviderNotConfigured is a sentinel the endpoint can detect to return
 // a targeted 400 instead of persisting misleading per-check failures when
@@ -313,10 +316,11 @@ func describeProvider(provider Provider) (string, bool) {
 	}
 }
 
-// recordLock returns a mutex that is unique per record ID. Callers must call
-// the returned unlock func when done.
-func recordLock(recordID string) func() {
-	m, _ := verifyLocks.LoadOrStore(recordID, &sync.Mutex{})
+// recordLock returns a mutex that is unique per record ID in app. Callers
+// must call the returned unlock func when done.
+func recordLock(app core.App, recordID string) func() {
+	locks := verifyLocksKey.GetOrInit(app, func() *sync.Map { return &sync.Map{} })
+	m, _ := locks.LoadOrStore(recordID, &sync.Mutex{})
 	mu := m.(*sync.Mutex)
 	mu.Lock()
 	return mu.Unlock
@@ -328,7 +332,7 @@ func recordLock(recordID string) func() {
 // match). Outbound checks are advisory. Concurrent calls on the same record
 // serialize via recordLock so writes don't interleave.
 func verifyDomainRecord(ctx context.Context, app core.App, record *core.Record) (*api.VerificationDetails, error) {
-	unlock := recordLock(record.Id)
+	unlock := recordLock(app, record.Id)
 	defer unlock()
 
 	domain := record.GetString("domain")

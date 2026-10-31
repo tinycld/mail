@@ -13,6 +13,7 @@ import (
 	"github.com/mrz1836/postmark"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/appstate"
 	"tinycld.org/core/audit"
 	"tinycld.org/core/authidentity"
 	"tinycld.org/core/background"
@@ -238,7 +239,7 @@ func registerShared(app *pocketbase.PocketBase) {
 	// On create: skip if storeMessage() already indexed inline (full body + attachments).
 	// Otherwise load HTML + attachments from storage for a complete index.
 	app.OnRecordAfterCreateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
-		if _, ok := recentlyIndexed.LoadAndDelete(e.Record.Id); ok {
+		if _, ok := recentlyIndexed.LoadAndDelete(appstate.Scoped(app, e.Record.Id)); ok {
 			return e.Next()
 		}
 		indexMessageRecordFromStorage(app, e.Record)
@@ -249,7 +250,7 @@ func registerShared(app *pocketbase.PocketBase) {
 	// saves that don't change indexed content (cid_map after inbound)
 	// skip a duplicate reindex.
 	app.OnRecordAfterUpdateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
-		if _, ok := recentlyIndexed.LoadAndDelete(e.Record.Id); ok {
+		if _, ok := recentlyIndexed.LoadAndDelete(appstate.Scoped(app, e.Record.Id)); ok {
 			return e.Next()
 		}
 		indexMessageRecordFromStorage(app, e.Record)

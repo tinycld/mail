@@ -12,6 +12,7 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
+	"tinycld.org/core/appstate"
 	"tinycld.org/core/logging"
 )
 
@@ -278,10 +279,10 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 	record.Set("recipients_bcc", string(bccJSON))
 
 	// Mark as recently indexed so the record hook skips re-indexing
-	recentlyIndexed.Store(record.Id, true)
+	recentlyIndexed.Store(appstate.Scoped(app, record.Id), true)
 
 	if err := app.Save(record); err != nil {
-		recentlyIndexed.Delete(record.Id)
+		recentlyIndexed.Delete(appstate.Scoped(app, record.Id))
 		return nil, fmt.Errorf("failed to store message: %w", err)
 	}
 
@@ -301,9 +302,9 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 		cidJSON, err := json.Marshal(cidMap)
 		if err == nil {
 			record.Set("cid_map", string(cidJSON))
-			recentlyIndexed.Store(record.Id, true)
+			recentlyIndexed.Store(appstate.Scoped(app, record.Id), true)
 			if err := app.Save(record); err != nil {
-				recentlyIndexed.Delete(record.Id)
+				recentlyIndexed.Delete(appstate.Scoped(app, record.Id))
 				app.Logger().Warn("failed to save cid_map", "messageID", record.Id, "error", err)
 			}
 		}
