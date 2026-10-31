@@ -23,7 +23,7 @@ import (
 // The point is to exercise the real production symbol so removing
 // the call fails here.
 //
-// The observable signal is maildomains.Current(): a sentinel registrar is
+// The observable signal is maildomains.Current(app): a sentinel registrar is
 // installed first, the real hook is then fired, and Current() must have been
 // replaced by the registrar matching the configured provider (*SMTPRegistrar).
 // A removed call leaves the sentinel in place.
@@ -53,14 +53,12 @@ func setupReconcileWiringApp(t *testing.T) *tests.TestApp {
 }
 
 // installSentinel resets the seam, installs the sentinel, and registers the
-// cleanup. Returns nothing: the assertion is always on maildomains.Current().
-func installSentinel(t *testing.T) {
+// cleanup. Returns nothing: the assertion is always on maildomains.Current(app).
+func installSentinel(t *testing.T, app core.App) {
 	t.Helper()
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(sentinelRegistrar{})
-	if _, ok := maildomains.Current().(sentinelRegistrar); !ok {
-		t.Fatalf("precondition: Current() = %T, want the sentinel", maildomains.Current())
+	maildomains.SetResolver(app, sentinelRegistrar{})
+	if _, ok := maildomains.Current(app).(sentinelRegistrar); !ok {
+		t.Fatalf("precondition: Current() = %T, want the sentinel", maildomains.Current(app))
 	}
 }
 
@@ -75,7 +73,7 @@ func TestRegister_OnServeReconcilesMailDomainsRegistrarAtBoot(t *testing.T) {
 	app := setupReconcileWiringApp(t)
 	Register(&pocketbase.PocketBase{App: app})
 
-	installSentinel(t)
+	installSentinel(t, app)
 
 	router, err := apis.NewRouter(app)
 	if err != nil {
@@ -86,10 +84,10 @@ func TestRegister_OnServeReconcilesMailDomainsRegistrarAtBoot(t *testing.T) {
 		t.Fatalf("OnServe trigger: %v", err)
 	}
 
-	if _, ok := maildomains.Current().(*SMTPRegistrar); !ok {
+	if _, ok := maildomains.Current(app).(*SMTPRegistrar); !ok {
 		t.Fatalf("after boot: Current() = %T, want *SMTPRegistrar — "+
 			"Register's OnServe hook did not reconcile the maildomains registrar",
-			maildomains.Current())
+			maildomains.Current(app))
 	}
 }
 
@@ -99,7 +97,7 @@ func TestRegister_MailSettingsChangeReconcilesMailDomainsRegistrar(t *testing.T)
 	app := setupReconcileWiringApp(t)
 	Register(&pocketbase.PocketBase{App: app})
 
-	installSentinel(t)
+	installSentinel(t, app)
 
 	col, err := app.FindCollectionByNameOrId("settings")
 	if err != nil {
@@ -113,10 +111,10 @@ func TestRegister_MailSettingsChangeReconcilesMailDomainsRegistrar(t *testing.T)
 		t.Fatalf("save settings record: %v", err)
 	}
 
-	if _, ok := maildomains.Current().(*SMTPRegistrar); !ok {
+	if _, ok := maildomains.Current(app).(*SMTPRegistrar); !ok {
 		t.Fatalf("after a mail settings change: Current() = %T, want *SMTPRegistrar — "+
 			"the settings-change hook did not reconcile the maildomains registrar",
-			maildomains.Current())
+			maildomains.Current(app))
 	}
 }
 
@@ -127,14 +125,14 @@ func TestRegister_SystemMailSettingChangeReconcilesMailDomainsRegistrar(t *testi
 	app := setupReconcileWiringApp(t)
 	Register(&pocketbase.PocketBase{App: app})
 
-	installSentinel(t)
+	installSentinel(t, app)
 
 	saveSystemSetting(t, app, "mail.smtp_public_hostname", "mx2.operator.example")
 
-	if _, ok := maildomains.Current().(*SMTPRegistrar); !ok {
+	if _, ok := maildomains.Current(app).(*SMTPRegistrar); !ok {
 		t.Fatalf("after a mail.* system_settings change: Current() = %T, want *SMTPRegistrar — "+
 			"the system-settings hook did not reconcile the maildomains registrar",
-			maildomains.Current())
+			maildomains.Current(app))
 	}
 }
 
@@ -145,13 +143,13 @@ func TestRegister_UnrelatedSystemSettingDoesNotReconcile(t *testing.T) {
 	app := setupReconcileWiringApp(t)
 	Register(&pocketbase.PocketBase{App: app})
 
-	installSentinel(t)
+	installSentinel(t, app)
 
 	saveSystemSetting(t, app, "sentry.dsn", "https://example.invalid/1")
 
-	if _, ok := maildomains.Current().(sentinelRegistrar); !ok {
+	if _, ok := maildomains.Current(app).(sentinelRegistrar); !ok {
 		t.Fatalf("after an unrelated system setting: Current() = %T, want the sentinel "+
-			"(a non-mail.* key must not churn the registrar)", maildomains.Current())
+			"(a non-mail.* key must not churn the registrar)", maildomains.Current(app))
 	}
 }
 

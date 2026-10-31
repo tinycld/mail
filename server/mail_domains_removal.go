@@ -27,13 +27,13 @@ const domainRemovalTimeout = 30 * time.Second
 // the domain again and deletes it again.
 func registerMailDomainRemovalHook(app core.App) {
 	app.OnRecordAfterDeleteSuccess("mail_domains").BindFunc(func(e *core.RecordEvent) error {
-		releaseDeletedDomain(e.Record)
+		releaseDeletedDomain(e.App, e.Record)
 		return e.Next()
 	})
 }
 
-func releaseDeletedDomain(record *core.Record) {
-	remover, ok := maildomains.Current().(maildomains.Remover)
+func releaseDeletedDomain(app core.App, record *core.Record) {
+	remover, ok := maildomains.Current(app).(maildomains.Remover)
 	if !ok {
 		return
 	}

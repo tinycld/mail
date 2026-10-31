@@ -25,8 +25,8 @@ import (
 // a different embedding uses. Unlike IMAP/submission, this server always
 // binds exactly one address (there is no separate dev address), so the
 // inherited listener is always for the address actually requested.
-func listenInbound(addr string) (net.Listener, error) {
-	return acceptingListeners.listen("smtp", addr)(addr)
+func listenInbound(app core.App, addr string) (net.Listener, error) {
+	return acceptingListenersOf(app).listen("smtp", addr)(addr)
 }
 
 // StartSMTPInboundServer starts the public-facing SMTP listener that accepts
@@ -78,13 +78,13 @@ func StartSMTPInboundServer(app core.App, certManager *autocert.Manager) (func()
 	server := newInboundSMTPServer(app, hostname, tlsConfig)
 	server.Addr = addr
 
-	ln, err := listenInbound(addr)
+	ln, err := listenInbound(app, addr)
 	if err != nil {
 		return nil, fmt.Errorf("inbound SMTP listen on %s: %w", addr, err)
 	}
 	app.Logger().Info("inbound SMTP server listening", "addr", addr, "hostname", hostname, "starttls", tlsConfig != nil)
 
-	return mailproto.ServeSMTP(app, server, ln, "inbound SMTP"), nil
+	return mailproto.ServeSMTP(app, mailproto.ServiceMX, server, ln, "inbound SMTP"), nil
 }
 
 // maxInboundMessageBytes is the size limit of one inbound message. go-smtp
@@ -135,7 +135,7 @@ func startSMTPInboundOnListener(app core.App, listen mailproto.ListenFunc) (func
 	}
 	app.Logger().Info("inbound SMTP server listening (external TLS termination)", "hostname", hostname)
 
-	return mailproto.ServeSMTP(app, server, ln, "inbound SMTP"), nil
+	return mailproto.ServeSMTP(app, mailproto.ServiceMX, server, ln, "inbound SMTP"), nil
 }
 
 // inboundHostname resolves the identity the MX greeting announces:
@@ -206,7 +206,7 @@ var errReadOnly = &smtp.SMTPError{
 }
 
 func (s *smtpInboundSession) Mail(from string, _ *smtp.MailOptions) error {
-	if readonly.Active() {
+	if readonly.Active(s.app) {
 		return errReadOnly
 	}
 	s.from = from
@@ -279,7 +279,7 @@ func (s *smtpInboundSession) Rcpt(to string, _ *smtp.RcptOptions) error {
 func (s *smtpInboundSession) Data(r io.Reader) error {
 	// Read-only can begin after MAIL FROM was accepted, so DATA checks again
 	// before it stores anything.
-	if readonly.Active() {
+	if readonly.Active(s.app) {
 		return errReadOnly
 	}
 	if len(s.mailboxes) == 0 {
@@ -308,7 +308,7 @@ func (s *smtpInboundSession) Data(r io.Reader) error {
 	}
 	// Use the SMTP provider's ParseInbound — it just wraps parseRFC5322 in
 	// the InboundMessage shape that processInboundForMailbox expects.
-	parser := NewSMTPProvider(SMTPConfig{PublicHostname: s.hostname})
+	parser := NewSMTPProvider(s.app, SMTPConfig{PublicHostname: s.hostname})
 	msg, err := parser.ParseInbound(body)
 	if err != nil {
 		s.app.Logger().Error("inbound SMTP: parse failed", "error", err, "from", s.from)

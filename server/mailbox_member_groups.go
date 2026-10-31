@@ -146,7 +146,7 @@ func cleanupLostMailboxAccess(ctx context.Context, app core.App, mailboxID, user
 		if ctx.Err() != nil {
 			return nil
 		}
-		if !waitMemberJobWritable(ctx, "access cleanup", mailboxID, userID) {
+		if !waitMemberJobWritable(ctx, app, "access cleanup", mailboxID, userID) {
 			return nil
 		}
 		has, err := userHasMailboxRow(app, mailboxID, userID)

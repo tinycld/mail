@@ -32,12 +32,10 @@ func (r *removingRegistrar) RemoveDomain(_ context.Context, domain string, provi
 func TestDeletedDomainIsReleasedWithItsStoredProviderID(t *testing.T) {
 	t.Setenv("IMAP_ENABLED", "false")
 	t.Setenv("SMTP_ENABLED", "false")
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
 	registrar := &removingRegistrar{}
-	maildomains.SetResolver(registrar)
 
 	app := setupAddDomainTestApp(t)
+	maildomains.SetResolver(app, registrar)
 	Register(&pocketbase.PocketBase{App: app})
 	rec := seedGuardDomain(t, app, "acme.com")
 
@@ -52,12 +50,10 @@ func TestDeletedDomainIsReleasedWithItsStoredProviderID(t *testing.T) {
 }
 
 func TestDeletedDomainWithoutStoredIDIsReleasedByName(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
 	registrar := &removingRegistrar{}
-	maildomains.SetResolver(registrar)
 
 	app := setupAddDomainTestApp(t)
+	maildomains.SetResolver(app, registrar)
 	registerMailDomainRemovalHook(app)
 	rec := newOutboundTestRecord(t, app, "legacy.example", 0)
 
@@ -71,12 +67,10 @@ func TestDeletedDomainWithoutStoredIDIsReleasedByName(t *testing.T) {
 }
 
 func TestProviderFailureNeverBlocksTheDelete(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
 	registrar := &removingRegistrar{removeErr: errors.New("provider down")}
-	maildomains.SetResolver(registrar)
 
 	app := setupAddDomainTestApp(t)
+	maildomains.SetResolver(app, registrar)
 	registerMailDomainRemovalHook(app)
 	rec := seedGuardDomain(t, app, "acme.com")
 
@@ -92,11 +86,9 @@ func TestProviderFailureNeverBlocksTheDelete(t *testing.T) {
 }
 
 func TestRegistrarWithoutRemoverIsSkipped(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(&stubRegistrar{})
 
 	app := setupAddDomainTestApp(t)
+	maildomains.SetResolver(app, &stubRegistrar{})
 	registerMailDomainRemovalHook(app)
 	rec := seedGuardDomain(t, app, "acme.com")
 

@@ -60,7 +60,7 @@ func handleAddDomain(app core.App) func(*core.RequestEvent) error {
 					SetParams(map[string]any{"id": existing.Id})})
 		}
 
-		rec, err := maildomains.Current().AddDomain(re.Request.Context(), domain)
+		rec, err := maildomains.Current(app).AddDomain(re.Request.Context(), domain)
 		var refused *maildomains.RefusedError
 		switch {
 		case errors.As(err, &refused):

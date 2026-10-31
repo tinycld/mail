@@ -49,7 +49,7 @@ func startDomainReverifyLoop(ctx context.Context, app core.App) {
 func reverifyUnconfirmedDomains(ctx context.Context, app core.App) {
 	// A read-only server is waiting to be replaced; a row it stamps now is
 	// lost if the next build rolls back. The next hourly run re-checks it.
-	if readonly.Active() {
+	if readonly.Active(app) {
 		return
 	}
 	// The same guard handleVerifyDomain applies, and for the same reason: with
@@ -78,7 +78,7 @@ func reverifyUnconfirmedDomains(ctx context.Context, app core.App) {
 
 	app.Logger().Info("mail: reverifying unconfirmed domains", "count", len(records))
 	for _, record := range records {
-		if ctx.Err() != nil || readonly.Active() {
+		if ctx.Err() != nil || readonly.Active(app) {
 			return
 		}
 		runCtx, cancel := context.WithTimeout(ctx, domainReverifyTimeout)

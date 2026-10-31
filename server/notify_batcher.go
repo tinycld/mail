@@ -9,6 +9,7 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/approutes"
+	"tinycld.org/core/appstate"
 	"tinycld.org/core/logging"
 	"tinycld.org/core/notify"
 	"tinycld.org/core/readonly"
@@ -34,17 +35,24 @@ type pendingMail struct {
 	subject string
 }
 
-var mailBuffer sync.Map // map[string]*mailBucket
+// mailBufferKey holds the app's pending notifications, userID ->
+// *mailBucket. Per app: each app's batcher must flush only its own users'
+// mail, and a user id is unique only in its app.
+var mailBufferKey = appstate.NewKey[*sync.Map]("mail.notifyBuffer")
+
+func mailBufferFor(app core.App) *sync.Map {
+	return mailBufferKey.GetOrInit(app, func() *sync.Map { return &sync.Map{} })
+}
 
 type mailBucket struct {
 	mu    sync.Mutex
 	items []pendingMail
 }
 
-// bufferMailNotificationForUser adds a mail message to the per-user buffer
-// for batched delivery. Called from the inbound message hook.
-func bufferMailNotificationForUser(userID, sender, subject string) {
-	val, _ := mailBuffer.LoadOrStore(userID, &mailBucket{})
+// bufferMailNotificationForUser adds a mail message to the app's per-user
+// buffer for batched delivery. Called from the inbound message hook.
+func bufferMailNotificationForUser(app core.App, userID, sender, subject string) {
+	val, _ := mailBufferFor(app).LoadOrStore(userID, &mailBucket{})
 	buf := val.(*mailBucket)
 	buf.mu.Lock()
 	buf.items = append(buf.items, pendingMail{
@@ -87,27 +95,28 @@ func startMailBatcher(ctx context.Context, app core.App) {
 func flushMailBufferWhenWritable(ctx context.Context, app core.App) {
 	waitCtx, cancel := context.WithTimeout(ctx, readonly.TailWait)
 	defer cancel()
-	err := readonly.WhenWritable(waitCtx, func() error {
+	err := readonly.WhenWritable(waitCtx, app, func() error {
 		flushMailBuffer(ctx, app)
 		return nil
 	})
 	if err != nil {
-		users, messages := dropMailBuffer()
+		users, messages := dropMailBuffer(app)
 		if messages > 0 {
 			notifyLog.Warn(mailNotifyDroppedMsg, "users", users, "messages", messages, "err", err)
 		}
 	}
 }
 
-// dropMailBuffer empties the buffer and reports what it held.
-func dropMailBuffer() (users, messages int) {
-	mailBuffer.Range(func(key, value any) bool {
+// dropMailBuffer empties the app's buffer and reports what it held.
+func dropMailBuffer(app core.App) (users, messages int) {
+	buffer := mailBufferFor(app)
+	buffer.Range(func(key, value any) bool {
 		buf := value.(*mailBucket)
 		buf.mu.Lock()
 		n := len(buf.items)
 		buf.items = nil
 		buf.mu.Unlock()
-		mailBuffer.Delete(key)
+		buffer.Delete(key)
 		if n > 0 {
 			users++
 			messages += n
@@ -123,8 +132,9 @@ func dropMailBuffer() (users, messages int) {
 // ctx bounds the push dispatches; the notification rows are written
 // regardless.
 func flushMailBuffer(ctx context.Context, app core.App) {
-	mailBuffer.Range(func(key, value any) bool {
-		if readonly.Active() {
+	buffer := mailBufferFor(app)
+	buffer.Range(func(key, value any) bool {
+		if readonly.Active(app) {
 			return false
 		}
 		userID := key.(string)
@@ -135,7 +145,7 @@ func flushMailBuffer(ctx context.Context, app core.App) {
 		buf.items = nil
 		buf.mu.Unlock()
 
-		mailBuffer.Delete(userID)
+		buffer.Delete(userID)
 
 		if len(items) == 0 {
 			return true

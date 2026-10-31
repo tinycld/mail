@@ -113,9 +113,6 @@ func runAddDomainScenario(
 	t.Setenv("IMAP_ENABLED", "false")
 	t.Setenv("SMTP_ENABLED", "false")
 
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-
 	var tokenUser *core.Record
 
 	scenario := tests.ApiScenario{
@@ -134,7 +131,7 @@ func runAddDomainScenario(
 			return app
 		},
 	}
-	scenario.BeforeTestFunc = func(_ testing.TB, _ *tests.TestApp, _ *core.ServeEvent) {
+	scenario.BeforeTestFunc = func(_ testing.TB, app *tests.TestApp, _ *core.ServeEvent) {
 		// Register only BINDS its OnServe handlers inside TestAppFactory; they
 		// don't run until ApiScenario triggers OnServe below, which is what
 		// calls Register's own boot-time reconcileMailDomainsRegistrar (see
@@ -147,7 +144,7 @@ func runAddDomainScenario(
 		// AFTER reconcileMailDomainsRegistrar's handler has already run via
 		// e.Next() — so setting the stub here, not in TestAppFactory, is what
 		// makes it the one handleAddDomain actually calls through to.
-		maildomains.SetResolver(registrar)
+		maildomains.SetResolver(app, registrar)
 		if tokenUser != nil {
 			scenario.Headers["Authorization"] = authTokenFor(t, tokenUser)
 		}

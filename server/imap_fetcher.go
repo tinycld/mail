@@ -12,6 +12,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/appstate"
 	"tinycld.org/core/background"
 	"tinycld.org/core/readonly"
 )
@@ -35,21 +36,26 @@ type imapFetcherManager struct {
 	cancel context.CancelFunc // non-nil while the fetcher loop is running
 }
 
-// globalIMAPManager is set by startIMAPFetchers and consulted by the settings
-// record hook so a settings change can trigger a reconcile. nil before
-// startup and after shutdown — callers must nil-check.
-var globalIMAPManager *imapFetcherManager
+// imapManagerKey holds the app's manager. startIMAPFetchers sets it and the
+// settings record hooks read it, so a settings change can trigger a
+// reconcile. Unset before startup and after shutdown — callers must
+// nil-check.
+var imapManagerKey = appstate.NewKey[*imapFetcherManager]("mail.imapManager")
+
+func imapManagerFor(app core.App) *imapFetcherManager {
+	return imapManagerKey.Get(app)
+}
 
 // startIMAPFetchers wires the manager into the app lifecycle. The reconciles
 // and the poll loop run as jobs, which the app's terminate cancels and waits
 // for. Returns a shutdown function for OnTerminate.
 func startIMAPFetchers(app core.App, jobs *background.Jobs) func() {
 	m := &imapFetcherManager{app: app, jobs: jobs}
-	globalIMAPManager = m
+	imapManagerKey.Set(app, m)
 	m.startReconcile()
 	return func() {
 		m.stop()
-		globalIMAPManager = nil
+		imapManagerKey.Delete(app)
 	}
 }
 
@@ -131,7 +137,7 @@ func (m *imapFetcherManager) tick(ctx context.Context, cfg SMTPConfig) error {
 	// A read-only server is waiting to be replaced; a message it stores now
 	// is lost if the next build rolls back. Waiting leaves it unseen on the
 	// remote server, so a later tick (here or in the next build) pulls it.
-	if err := readonly.WaitInactive(ctx); err != nil {
+	if err := readonly.WaitInactive(ctx, m.app); err != nil {
 		return fmt.Errorf("imap fetcher: wait for read-only to end: %w", err)
 	}
 	addr := imapAddress(cfg)
@@ -173,12 +179,12 @@ func (m *imapFetcherManager) tick(ctx context.Context, cfg SMTPConfig) error {
 		return fmt.Errorf("fetch: %w", err)
 	}
 
-	parser := NewSMTPProvider(cfg)
+	parser := NewSMTPProvider(m.app, cfg)
 
 	var successUIDs []imap.UID
 	for i, msgBuf := range messages {
 		// Read-only can begin mid-batch; the rest stay unseen for a later tick.
-		if readonly.Active() {
+		if readonly.Active(m.app) {
 			break
 		}
 		body := firstBodySection(msgBuf)

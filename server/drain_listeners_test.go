@@ -29,7 +29,8 @@ func refused(addr string) bool {
 
 func TestDrainBeginStopsInboundAcceptingAndKeepsSessions(t *testing.T) {
 	t.Cleanup(drainhooks.ResetForTest)
-	registerDrainHook()
+	app := newProdApp(t)
+	registerDrainHook(app)
 	t.Setenv("MAIL_INBOUND_SMTP_ENABLED", "true")
 	t.Setenv("SMTP_INBOUND_ADDR", "127.0.0.1:1")
 
@@ -38,7 +39,7 @@ func TestDrainBeginStopsInboundAcceptingAndKeepsSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(listeners.SetForTest(map[string]net.Listener{"smtp": mxLn}))
-	shutdown, err := StartSMTPInboundServer(newProdApp(t), nil)
+	shutdown, err := StartSMTPInboundServer(app, nil)
 	if err != nil {
 		t.Fatalf("StartSMTPInboundServer: %v", err)
 	}
@@ -55,7 +56,7 @@ func TestDrainBeginStopsInboundAcceptingAndKeepsSessions(t *testing.T) {
 		t.Fatalf("greeting = %q, %v", greeting, err)
 	}
 
-	drainhooks.RunBegin()
+	drainhooks.RunBegin(app)
 
 	if !refused(mxLn.Addr().String()) {
 		t.Fatal("the inbound server still accepts after the drain began")
@@ -70,7 +71,6 @@ func TestDrainBeginStopsInboundAcceptingAndKeepsSessions(t *testing.T) {
 
 func TestDrainBeginStopsIMAPAndSubmissionAccepting(t *testing.T) {
 	t.Cleanup(drainhooks.ResetForTest)
-	registerDrainHook()
 	certPath, keyPath := setupTestCert(t)
 	t.Setenv("IMAP_TLS_CERT", certPath)
 	t.Setenv("IMAP_TLS_KEY", keyPath)
@@ -89,6 +89,7 @@ func TestDrainBeginStopsIMAPAndSubmissionAccepting(t *testing.T) {
 	}
 	t.Cleanup(listeners.SetForTest(map[string]net.Listener{"imaps": imapsLn, "submissions": subLn}))
 	app := newProdApp(t)
+	registerDrainHook(app)
 	imapShutdown, err := StartIMAPServer(app, nil)
 	if err != nil {
 		t.Fatalf("StartIMAPServer: %v", err)
@@ -111,7 +112,7 @@ func TestDrainBeginStopsIMAPAndSubmissionAccepting(t *testing.T) {
 		t.Fatalf("IMAP greeting = %q, %v", greeting, err)
 	}
 
-	drainhooks.RunBegin()
+	drainhooks.RunBegin(app)
 
 	if !refused(imapsLn.Addr().String()) {
 		t.Fatal("the IMAP server still accepts after the drain began")

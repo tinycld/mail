@@ -180,12 +180,12 @@ func TestInboundSMTP_MessageAtSizeLimitRefused(t *testing.T) {
 // 451 4.3.2 at MAIL FROM, nothing stored, and delivery works once the mode is
 // left.
 func TestInboundSMTP_ReadOnlyRefusedThroughServer(t *testing.T) {
-	t.Cleanup(readonly.Leave)
 	s := seedGroupDelivery(t)
+	t.Cleanup(func() { readonly.Leave(s.app) })
 	addr := startTestInbound(t, s.app)
 	const messageID = "<readonly-inbound@sender.example>"
 
-	readonly.Enter()
+	readonly.Enter(s.app)
 	var refusal *smtp.SMTPError
 	err := sendTestMessage(addr, "ann@q.example", testInboundMessage(messageID))
 	if !errors.As(err, &refusal) || refusal.Code != 451 || refusal.EnhancedCode != (smtp.EnhancedCode{4, 3, 2}) {
@@ -195,7 +195,7 @@ func TestInboundSMTP_ReadOnlyRefusedThroughServer(t *testing.T) {
 		t.Fatalf("%d copies stored while read-only, want none", n)
 	}
 
-	readonly.Leave()
+	readonly.Leave(s.app)
 	if err := sendTestMessage(addr, "ann@q.example", testInboundMessage(messageID)); err != nil {
 		t.Fatalf("delivery after the mode was left: %v", err)
 	}

@@ -8,21 +8,20 @@ import (
 	"strings"
 	"testing"
 
-	"tinycld.org/core/mailer"
-	"tinycld.org/core/syscfg"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 // fakePostmark stands in for Postmark's send API and records each email it
 // is asked to send, so a test can read the From header and metadata that
 // would have gone out.
-func fakePostmark(t *testing.T) *[]map[string]any {
+func fakePostmark(t *testing.T, app core.App) *[]map[string]any {
 	t.Helper()
-	return fakePostmarkWith(t, nil)
+	return fakePostmarkWith(t, app, nil)
 }
 
 // fakePostmarkWith is fakePostmark that also runs onSend, when not nil,
 // inside each send before it answers.
-func fakePostmarkWith(t *testing.T, onSend func()) *[]map[string]any {
+func fakePostmarkWith(t *testing.T, app core.App, onSend func()) *[]map[string]any {
 	t.Helper()
 	var sent []map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -39,27 +38,14 @@ func fakePostmarkWith(t *testing.T, onSend func()) *[]map[string]any {
 		_, _ = w.Write([]byte(`{"ErrorCode":0,"Message":"OK","MessageID":"pm-1"}`))
 	}))
 	t.Cleanup(server.Close)
-	previous := mailer.ConfigResolver
-	mailer.ConfigResolver = func(key string) string {
-		if key == "mail.postmark_api_url" {
-			return server.URL
-		}
-		return previous(key)
-	}
-	t.Cleanup(func() { mailer.ConfigResolver = previous })
+	setTestSetting(app, "mail.postmark_api_url", server.URL)
 	return &sent
 }
 
 func smtpSendEnv(t *testing.T) (*sendAddressEnv, *smtpSession) {
 	t.Helper()
 	env := setupSendAddressEnv(t)
-	syscfg.SetResolver(func(key string) string {
-		if key == "mail.postmark_server_token" {
-			return "test-token"
-		}
-		return ""
-	})
-	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
+	setTestSetting(env.app, "mail.postmark_server_token", "test-token")
 
 	for _, d := range []string{"tinycld.org", "tinycld.com"} {
 		domain, err := env.app.FindFirstRecordByData("mail_domains", "domain", d)
@@ -88,7 +74,7 @@ func TestSMTPSubmission_SendsAsSecondDomainAddress(t *testing.T) {
 	if err := env.app.Save(s.user); err != nil {
 		t.Fatal(err)
 	}
-	sent := fakePostmark(t)
+	sent := fakePostmark(t, env.app)
 
 	if err := s.Mail("nathan@tinycld.com", nil); err != nil {
 		t.Fatal(err)

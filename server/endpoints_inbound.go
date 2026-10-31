@@ -11,6 +11,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
+	"tinycld.org/core/logging"
 	"tinycld.org/packages/mail/api"
 )
 
@@ -111,7 +112,7 @@ func handleInbound(app core.App, provider Provider, re *core.RequestEvent, secre
 			"messageID", messageID,
 			"webhookSecretPrefix", secretPrefix(secret),
 		)
-		hub := sentry.CurrentHub().Clone()
+		hub := logging.Hub(app).Clone()
 		hub.WithScope(func(scope *sentry.Scope) {
 			scope.SetLevel(sentry.LevelWarning)
 			scope.SetTag("mail.inbound", "no-mailbox-403")

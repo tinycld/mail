@@ -85,7 +85,7 @@ func discoveryTarget(app core.App, name string) (domain, host string, err error)
 	if err != nil || row == nil {
 		return "", "", err
 	}
-	host = mailhost.Host(app.Settings().Meta.AppURL)
+	host = mailhost.Host(app, app.Settings().Meta.AppURL)
 	if host == "" {
 		return "", "", nil
 	}

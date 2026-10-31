@@ -13,6 +13,7 @@ import (
 	"github.com/mrz1836/postmark"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/appstate"
 	"tinycld.org/core/audit"
 	"tinycld.org/core/authidentity"
 	"tinycld.org/core/background"
@@ -160,8 +161,8 @@ func registerShared(app *pocketbase.PocketBase) {
 	// provider config is deployment-wide in system_settings.)
 	reconcileOnMailSettings := func(e *core.RecordEvent) error {
 		if e.Record.GetString("app") == "mail" {
-			if globalIMAPManager != nil {
-				globalIMAPManager.onSettingsChanged()
+			if m := imapManagerFor(app); m != nil {
+				m.onSettingsChanged()
 			}
 			reconcileMailDomainsRegistrar(app)
 		}
@@ -210,8 +211,8 @@ func registerShared(app *pocketbase.PocketBase) {
 	// too (filtered so sentry.*/vapid.* edits don't churn either one).
 	reconcileOnSystemMail := func(e *core.RecordEvent) error {
 		if strings.HasPrefix(e.Record.GetString("key"), "mail.") {
-			if globalIMAPManager != nil {
-				globalIMAPManager.onSettingsChanged()
+			if m := imapManagerFor(app); m != nil {
+				m.onSettingsChanged()
 			}
 			reconcileMailDomainsRegistrar(app)
 		}
@@ -238,7 +239,7 @@ func registerShared(app *pocketbase.PocketBase) {
 	// On create: skip if storeMessage() already indexed inline (full body + attachments).
 	// Otherwise load HTML + attachments from storage for a complete index.
 	app.OnRecordAfterCreateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
-		if _, ok := recentlyIndexed.LoadAndDelete(e.Record.Id); ok {
+		if _, ok := recentlyIndexed.LoadAndDelete(appstate.Scoped(app, e.Record.Id)); ok {
 			return e.Next()
 		}
 		indexMessageRecordFromStorage(app, e.Record)
@@ -249,7 +250,7 @@ func registerShared(app *pocketbase.PocketBase) {
 	// saves that don't change indexed content (cid_map after inbound)
 	// skip a duplicate reindex.
 	app.OnRecordAfterUpdateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
-		if _, ok := recentlyIndexed.LoadAndDelete(e.Record.Id); ok {
+		if _, ok := recentlyIndexed.LoadAndDelete(appstate.Scoped(app, e.Record.Id)); ok {
 			return e.Next()
 		}
 		indexMessageRecordFromStorage(app, e.Record)
@@ -265,7 +266,7 @@ func registerShared(app *pocketbase.PocketBase) {
 		threadID := e.Record.GetString("thread")
 		thread, err := app.FindRecordById("mail_threads", threadID)
 		if err == nil {
-			globalNotifier.Notify(thread.GetString("mailbox"))
+			idleNotifier(app).Notify(thread.GetString("mailbox"))
 		}
 		return e.Next()
 	})
@@ -273,7 +274,7 @@ func registerShared(app *pocketbase.PocketBase) {
 		threadID := e.Record.GetString("thread")
 		thread, err := app.FindRecordById("mail_threads", threadID)
 		if err == nil {
-			globalNotifier.Notify(thread.GetString("mailbox"))
+			idleNotifier(app).Notify(thread.GetString("mailbox"))
 		}
 		return e.Next()
 	})
@@ -345,7 +346,7 @@ func registerShared(app *pocketbase.PocketBase) {
 
 		// IMAP fetcher manager — runs one polling worker per org with the
 		// self-hosted SMTP provider in "imap" inbound mode. Reconciles on
-		// every mail settings record change via globalIMAPManager.
+		// every mail settings record change through imapManagerFor.
 		imapFetcherShutdown := startIMAPFetchers(app, jobs)
 		app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
 			imapFetcherShutdown()
@@ -449,7 +450,7 @@ func registerShared(app *pocketbase.PocketBase) {
 // terminate runs only after core's HTTP drain, so a drain-begin hook stops
 // them accepting first.
 func registerMailListeners(app *pocketbase.PocketBase) {
-	registerDrainHook()
+	registerDrainHook(app)
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		// In production a failed mail listener is a deploy-breaking
 		// misconfiguration (missing/unreadable cert, lost privileged-port
@@ -497,21 +498,18 @@ func registerMailListeners(app *pocketbase.PocketBase) {
 // values they are never written to this deployment's database, so a direct
 // lookup finds nothing and mail silently falls back to an unconfigured provider
 // — the failure mode being a deployment that cannot send and cannot say why.
-//
-// The app argument is retained so every call site keeps its shape; the seam is
-// process-wide and needs no app.
-func systemSetting(_ core.App, key string) string {
-	return syscfg.Get(key)
+func systemSetting(app core.App, key string) string {
+	return syscfg.Get(app, key)
 }
 
 // reconcileMailDomainsRegistrar (re-)installs the maildomains registrar
 // matching this deployment's configured provider. Called once at boot and
 // again whenever mail/system settings change (the provider can be switched
-// between SMTP and Postmark at runtime), mirroring how globalIMAPManager
+// between SMTP and Postmark at runtime), mirroring how the IMAP fetcher manager
 // reconciles on the same events — see reconcileOnMailSettings /
 // reconcileOnSystemMail.
 //
-// Must handle BOTH branches, not just smtp: SetResolver is last-writer-wins
+// Must handle BOTH branches, not just smtp: SetResolver is last-writer-wins on app's seam
 // with no way to "uninstall", so leaving the non-SMTP branch as a no-op
 // stranded whatever registrar was already installed (typically core's
 // Postmark one from wireMailDomains) when a deployment switched TO SMTP and
@@ -538,12 +536,12 @@ func reconcileMailDomainsRegistrar(app core.App) {
 		name = "postmark"
 	}
 	if name == "smtp" {
-		maildomains.SetResolver(NewSMTPRegistrar(smtpConfigFromSystem(app)))
+		maildomains.SetResolver(app, NewSMTPRegistrar(smtpConfigFromSystem(app)))
 		return
 	}
 	accountToken := func() string { return systemSetting(app, "mail.postmark_account_token") }
 	client := postmark.NewClient(systemSetting(app, "mail.postmark_server_token"), accountToken())
-	maildomains.SetResolver(maildomains.NewPostmarkRegistrar(accountToken, client))
+	maildomains.SetResolver(app, maildomains.NewPostmarkRegistrar(accountToken, client))
 }
 
 // newProviderFromSystem builds the provider from system settings. The provider
@@ -557,6 +555,7 @@ func newProviderFromSystem(app core.App) Provider {
 	smtpCfg := smtpConfigFromSystem(app)
 
 	return newProviderByName(
+		app,
 		name,
 		postmarkServerToken(app),
 		systemSetting(app, "mail.postmark_account_token"),
@@ -574,14 +573,14 @@ func postmarkServerToken(app core.App) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	token, err := maildomains.ServerToken(ctx)
+	token, err := maildomains.ServerToken(ctx, app)
 	if err != nil {
 		return ""
 	}
 	return token
 }
 
-func newProviderByName(name, serverToken, accountToken string, smtpCfg SMTPConfig) Provider {
+func newProviderByName(app core.App, name, serverToken, accountToken string, smtpCfg SMTPConfig) Provider {
 	switch name {
 	case "postmark":
 		// Return a PostmarkProvider even without a server token: ParseInbound
@@ -592,9 +591,9 @@ func newProviderByName(name, serverToken, accountToken string, smtpCfg SMTPConfi
 		// provider.Configured() (false when the token is empty) and reject
 		// early, so a missing token surfaces a clear "not configured" error
 		// instead of an opaque API failure.
-		return NewPostmarkProvider(serverToken, accountToken)
+		return NewPostmarkProvider(app, serverToken, accountToken)
 	case "smtp":
-		return NewSMTPProvider(smtpCfg)
+		return NewSMTPProvider(app, smtpCfg)
 	default:
 		return &NoopProvider{}
 	}
@@ -723,7 +722,7 @@ func bufferMailNotification(app core.App, msgRecord *core.Record) {
 
 	for _, member := range members {
 		if userID := member.GetString("user"); userID != "" {
-			bufferMailNotificationForUser(userID, sender, subject)
+			bufferMailNotificationForUser(app, userID, sender, subject)
 		}
 	}
 }

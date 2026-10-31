@@ -15,7 +15,9 @@ import (
 )
 
 // recentlyIndexed tracks message IDs that were indexed inline by storeMessage(),
-// so the PB record hook can skip re-indexing with a truncated snippet.
+// so the PB record hook can skip re-indexing with a truncated snippet. Keys
+// are appstate.Scoped(app, messageID): an entry lives only between the save
+// and its hook, and a message id is unique only in its app.
 var recentlyIndexed sync.Map
 
 // fts5SpecialChars matches characters that have special meaning in FTS5 queries.

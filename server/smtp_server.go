@@ -41,6 +41,6 @@ func StartSMTPServer(app core.App, certManager *autocert.Manager) (func(), error
 			"to readable cert/key files, or enable autocert " +
 			"(AUTOCERT_ENABLED=true + PRIMARY_DOMAIN), " +
 			"or set SMTP_ENABLED=false to run without SMTP submission",
-		Listen: acceptingListeners.listen("submissions", envOrDefault("SMTPS_ADDR", defaultSMTPSAddr)),
+		Listen: acceptingListenersOf(app).listen("submissions", envOrDefault("SMTPS_ADDR", defaultSMTPSAddr)),
 	})
 }

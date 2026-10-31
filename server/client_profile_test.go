@@ -138,16 +138,16 @@ func TestProfileFollowsTheChosenDefaultFrom(t *testing.T) {
 
 // unsetMailHost removes the configured mail host, so the profile falls back to
 // the public URL or the request.
-func unsetMailHost(t *testing.T) {
+func unsetMailHost(t *testing.T, app core.App) {
 	t.Helper()
-	syscfg.SetResolver(func(string) string { return "" })
+	syscfg.SetResolver(app, func(string) string { return "" })
 }
 
 // A proxy may forward its own address as the Host header; the public URL
 // names the host people use, as the set-up page shows.
 func TestProfileHostIsThePublicURLNotTheProxyHost(t *testing.T) {
 	f := newProfileFixture(t, "Nathan")
-	unsetMailHost(t)
+	unsetMailHost(t, f.app)
 	f.app.Settings().Meta.AppURL = "https://Web.Acme.example"
 	runProfile(t, f, tests.ApiScenario{
 		Name:               "bogus Host header",
@@ -161,7 +161,7 @@ func TestProfileHostIsThePublicURLNotTheProxyHost(t *testing.T) {
 func TestProfileHostFallsBackToTheRequestHost(t *testing.T) {
 	for name, appURL := range map[string]string{"empty": "", "loopback": "http://localhost:8090"} {
 		f := newProfileFixture(t, "Nathan")
-		unsetMailHost(t)
+		unsetMailHost(t, f.app)
 		f.app.Settings().Meta.AppURL = appURL
 		runProfile(t, f, tests.ApiScenario{
 			Name:            "AppURL " + name,

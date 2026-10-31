@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/mailer"
 )
 
@@ -78,11 +79,11 @@ type SMTPProvider struct {
 // NewSMTPProvider builds an SMTPProvider with defaults applied. Callers
 // (providerForOrg) populate cfg from system settings. Outbound sending is
 // handled by a core mailer.SMTPSender built from the outbound config subset.
-func NewSMTPProvider(cfg SMTPConfig) *SMTPProvider {
+func NewSMTPProvider(app core.App, cfg SMTPConfig) *SMTPProvider {
 	cfg.applyDefaults()
 	return &SMTPProvider{
 		cfg: cfg,
-		sender: mailer.NewSMTPSender(mailer.SMTPConfig{
+		sender: mailer.NewSMTPSender(app, mailer.SMTPConfig{
 			PublicHostname:  cfg.PublicHostname,
 			OutboundTimeout: cfg.OutboundTimeout,
 		}),

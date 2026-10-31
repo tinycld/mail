@@ -9,7 +9,6 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 
-	"tinycld.org/core/maildomains"
 	"tinycld.org/core/rlstest"
 )
 
@@ -98,9 +97,6 @@ func runDomainGuardScenarioAs(
 	t.Helper()
 	t.Setenv("IMAP_ENABLED", "false")
 	t.Setenv("SMTP_ENABLED", "false")
-
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
 
 	var tokenUser *core.Record
 

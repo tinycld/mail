@@ -4,20 +4,13 @@ import (
 	"context"
 	"testing"
 
-	"tinycld.org/core/syscfg"
 	"tinycld.org/packages/mail/api"
 )
 
 // Sending as an address on a second domain signs and stores as that domain.
 func TestSendMessage_FromAddressOnSecondDomain(t *testing.T) {
 	env := setupSendAddressEnv(t)
-	syscfg.SetResolver(func(key string) string {
-		if key == "mail.postmark_server_token" {
-			return "test-token"
-		}
-		return ""
-	})
-	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
+	setTestSetting(env.app, "mail.postmark_server_token", "test-token")
 
 	env.com.Set("spf_verified", true)
 	env.com.Set("dkim_verified", true)

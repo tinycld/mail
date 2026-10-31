@@ -13,6 +13,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 
+	"tinycld.org/core/appstate"
 	"tinycld.org/core/background"
 	"tinycld.org/core/readonly"
 	"tinycld.org/core/thumbnails"
@@ -49,6 +50,7 @@ func attachmentsChanged(record *core.Record) bool {
 // fires on every create and update, including the update we ourselves trigger to
 // store the generated thumbnails — without this guard, two parallel runs against
 // the same record could see the same "no thumbs yet" snapshot and double-write.
+// Keys are appstate.Scoped(app, recordID): a record id is unique only in its app.
 var thumbInFlight sync.Map
 
 // generateAttachmentThumbnails walks every attachment on a mail_messages record
@@ -70,10 +72,11 @@ func generateAttachmentThumbnails(ctx context.Context, app core.App, record *cor
 
 	// Acquire the per-record in-flight lock; bail if another job is already
 	// processing this record.
-	if _, busy := thumbInFlight.LoadOrStore(record.Id, struct{}{}); busy {
+	key := appstate.Scoped(app, record.Id)
+	if _, busy := thumbInFlight.LoadOrStore(key, struct{}{}); busy {
 		return
 	}
-	defer thumbInFlight.Delete(record.Id)
+	defer thumbInFlight.Delete(key)
 
 	// Don't regenerate for attachments that already have a thumbnail mapping.
 	existingMap := readThumbnailMap(record)
@@ -171,7 +174,7 @@ func generateAttachmentThumbnails(ctx context.Context, app core.App, record *cor
 // can arrive just before the mode begins, and its background work must not
 // write while the mode is on: the write is lost if the next build rolls back.
 func saveWhenWritable(ctx context.Context, app core.App, record *core.Record) error {
-	if err := readonly.WaitInactive(ctx); err != nil {
+	if err := readonly.WaitInactive(ctx, app); err != nil {
 		return fmt.Errorf("mail: wait for read-only to end: %w", err)
 	}
 	return app.Save(record)

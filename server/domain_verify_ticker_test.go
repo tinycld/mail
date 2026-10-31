@@ -22,9 +22,6 @@ import (
 // the missing config. That is precisely what the endpoint's guard exists to
 // prevent, reintroduced on a timer nobody triggered.
 func TestReverifyUnconfirmedDomainsSkipsWhenProviderUnconfigured(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(&stubRegistrar{err: maildomains.ErrNotConfigured})
 
 	// Any MX answer at all; the point is that the check must never run.
 	withMXLookup(t, func(_ context.Context, _ string) ([]*net.MX, error) {
@@ -32,6 +29,7 @@ func TestReverifyUnconfirmedDomainsSkipsWhenProviderUnconfigured(t *testing.T) {
 	})
 
 	app := newReverifyTestApp(t)
+	maildomains.SetResolver(app, &stubRegistrar{err: maildomains.ErrNotConfigured})
 	// No mail.provider and no credentials: newProviderFromSystem defaults to
 	// Postmark with an empty token, so Configured() is false — the exact state
 	// the endpoint guard refuses to run in.
@@ -59,17 +57,15 @@ func TestReverifyUnconfirmedDomainsSkipsWhenProviderUnconfigured(t *testing.T) {
 // The guard must not disable the ticker outright: with a provider configured,
 // the run proceeds and stamps the row as before.
 func TestReverifyUnconfirmedDomainsRunsWhenProviderConfigured(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(&stubRegistrar{rec: &maildomains.DomainRecords{
-		Domain: "acme.com", ID: 1,
-	}})
 
 	withMXLookup(t, func(_ context.Context, _ string) ([]*net.MX, error) {
 		return []*net.MX{{Host: "inbound.postmarkapp.com.", Pref: 10}}, nil
 	})
 
 	app := newReverifyTestApp(t)
+	maildomains.SetResolver(app, &stubRegistrar{rec: &maildomains.DomainRecords{
+		Domain: "acme.com", ID: 1,
+	}})
 	saveSystemSetting(t, app, "mail.provider", "postmark")
 	saveSystemSetting(t, app, "mail.postmark_server_token", "tok")
 	record := newReverifyTestRecord(t, app)
@@ -90,17 +86,15 @@ func TestReverifyUnconfirmedDomainsRunsWhenProviderConfigured(t *testing.T) {
 // (DKIM still pending) must be re-checked, or it stays refused by the send
 // gate until someone clicks Verify by hand.
 func TestReverifyUnconfirmedDomainsRechecksRowThatCannotSend(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(&stubRegistrar{rec: &maildomains.DomainRecords{
-		Domain: "acme.com", ID: 1,
-	}})
 
 	withMXLookup(t, func(_ context.Context, _ string) ([]*net.MX, error) {
 		return []*net.MX{{Host: "inbound.postmarkapp.com.", Pref: 10}}, nil
 	})
 
 	app := newReverifyTestApp(t)
+	maildomains.SetResolver(app, &stubRegistrar{rec: &maildomains.DomainRecords{
+		Domain: "acme.com", ID: 1,
+	}})
 	saveSystemSetting(t, app, "mail.provider", "postmark")
 	saveSystemSetting(t, app, "mail.postmark_server_token", "tok")
 	record := newReverifyTestRecord(t, app)

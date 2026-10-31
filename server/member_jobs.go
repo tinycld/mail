@@ -156,10 +156,10 @@ const memberJobDroppedMsg = "member job dropped: the server stayed read-only pas
 // the next build rolls back. The wait is bounded by readonly.TailWait and by
 // ctx, which ends when the app terminates. When the wait ends first, the job
 // is dropped and logged, and this returns false.
-func waitMemberJobWritable(ctx context.Context, kind, mailboxID, userID string) bool {
+func waitMemberJobWritable(ctx context.Context, app core.App, kind, mailboxID, userID string) bool {
 	waitCtx, cancel := context.WithTimeout(ctx, readonly.TailWait)
 	defer cancel()
-	if err := readonly.WaitInactive(waitCtx); err != nil {
+	if err := readonly.WaitInactive(waitCtx, app); err != nil {
 		memberJobLog.Warn(memberJobDroppedMsg, "job", kind, "mailbox", mailboxID, "user", userID, "err", err)
 		return false
 	}

@@ -45,7 +45,7 @@ func setupSettingsTestApp(t *testing.T) *tests.TestApp {
 	// querying the collection. In the app this is wired by coreserver; here,
 	// point it at this test app's rows so saveSystemSetting still drives what
 	// the code under test reads.
-	syscfg.SetResolver(func(key string) string {
+	syscfg.SetResolver(app, func(key string) string {
 		rec, err := app.FindFirstRecordByFilter(
 			"system_settings", "key = {:key}", map[string]any{"key": key})
 		if err != nil {
@@ -53,7 +53,6 @@ func setupSettingsTestApp(t *testing.T) *tests.TestApp {
 		}
 		return rec.GetString("value")
 	})
-	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
 
 	return app
 }
@@ -113,17 +112,18 @@ func TestNewProviderFromSystem_NoToken_NotConfigured(t *testing.T) {
 // without a token, but it must report Configured() == false so credentialed
 // paths gate on it.
 func TestNewProviderByName_PostmarkConfiguredReflectsToken(t *testing.T) {
+	app := newBareApp(t)
 	t.Parallel()
-	if got := newProviderByName("postmark", "", "", SMTPConfig{}).Configured(); got {
+	if got := newProviderByName(app, "postmark", "", "", SMTPConfig{}).Configured(); got {
 		t.Error("postmark provider with empty token: Configured() = true, want false")
 	}
-	if got := newProviderByName("postmark", "tok", "", SMTPConfig{}).Configured(); !got {
+	if got := newProviderByName(app, "postmark", "tok", "", SMTPConfig{}).Configured(); !got {
 		t.Error("postmark provider with token: Configured() = false, want true")
 	}
-	if got := newProviderByName("unknown", "tok", "", SMTPConfig{}).Configured(); got {
+	if got := newProviderByName(app, "unknown", "tok", "", SMTPConfig{}).Configured(); got {
 		t.Error("noop provider: Configured() = true, want false")
 	}
-	if got := newProviderByName("smtp", "", "", SMTPConfig{}).Configured(); !got {
+	if got := newProviderByName(app, "smtp", "", "", SMTPConfig{}).Configured(); !got {
 		t.Error("smtp provider: Configured() = false, want true (smtp needs no credentials)")
 	}
 }
@@ -180,23 +180,21 @@ func TestSmtpConfigFromSystem_DrivesImapFetcher(t *testing.T) {
 // "enrolled" from pure DNS lookups forever, including across restarts (I1
 // from the final whole-branch review).
 func TestReconcileMailDomainsRegistrar_SwitchesProviderType(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
 
 	app := setupSettingsTestApp(t)
 	saveSystemSetting(t, app, "mail.provider", "smtp")
 	saveSystemSetting(t, app, "mail.smtp_host", "smtp.example.com")
 
 	reconcileMailDomainsRegistrar(app)
-	if _, ok := maildomains.Current().(*SMTPRegistrar); !ok {
-		t.Fatalf("after smtp: Current() = %T, want *SMTPRegistrar", maildomains.Current())
+	if _, ok := maildomains.Current(app).(*SMTPRegistrar); !ok {
+		t.Fatalf("after smtp: Current() = %T, want *SMTPRegistrar", maildomains.Current(app))
 	}
 
 	saveSystemSetting(t, app, "mail.provider", "postmark")
 	saveSystemSetting(t, app, "mail.postmark_account_token", "acct-token")
 
 	reconcileMailDomainsRegistrar(app)
-	if _, ok := maildomains.Current().(*maildomains.PostmarkRegistrar); !ok {
-		t.Fatalf("after switch to postmark: Current() = %T, want *maildomains.PostmarkRegistrar", maildomains.Current())
+	if _, ok := maildomains.Current(app).(*maildomains.PostmarkRegistrar); !ok {
+		t.Fatalf("after switch to postmark: Current() = %T, want *maildomains.PostmarkRegistrar", maildomains.Current(app))
 	}
 }

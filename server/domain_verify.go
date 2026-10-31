@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/appstate"
 	"tinycld.org/core/maildomains"
 	"tinycld.org/packages/mail/api"
 )
@@ -56,9 +57,11 @@ func expectedInboundMXHost(app core.App, provider Provider) string {
 // mxLookup is swappable for tests.
 var mxLookup = net.DefaultResolver.LookupMX
 
-// verifyLocks serializes verify runs per mail_domains record so the hourly
-// ticker and a user-triggered Verify don't write to the same row concurrently.
-var verifyLocks sync.Map // recordID -> *sync.Mutex
+// verifyLocksKey holds the app's verify locks, recordID -> *sync.Mutex, so
+// the hourly ticker and a user-triggered Verify don't write to the same row
+// concurrently. Per app: a row id is unique only in its app, and the map is
+// freed with the app.
+var verifyLocksKey = appstate.NewKey[*sync.Map]("mail.verifyLocks")
 
 // errProviderNotConfigured is a sentinel the endpoint can detect to return
 // a targeted 400 instead of persisting misleading per-check failures when
@@ -207,7 +210,7 @@ func boolPtr(b bool) *bool { return &b }
 // scan happens at most once per domain, a newly learned id is persisted, and
 // the provider's answer is stamped with checked_at on every call, success or
 // failure, so "asked and told no" stays distinguishable from "never asked".
-func checkOutbound(ctx context.Context, record *core.Record) api.OutboundCheckResult {
+func checkOutbound(ctx context.Context, app core.App, record *core.Record) api.OutboundCheckResult {
 	domain := record.GetString("domain")
 	meta := readProviderDomainMetadata(record)
 	var priorID int64
@@ -216,7 +219,7 @@ func checkOutbound(ctx context.Context, record *core.Record) api.OutboundCheckRe
 	}
 
 	result := api.OutboundCheckResult{}
-	rec, err := maildomains.Current().GetDomain(ctx, domain, priorID)
+	rec, err := maildomains.Current(app).GetDomain(ctx, domain, priorID)
 
 	// A lookup BY STORED ID that comes back "not enrolled" is ambiguous: the
 	// domain may genuinely be gone, or the operator may have deleted and
@@ -227,7 +230,7 @@ func checkOutbound(ctx context.Context, record *core.Record) api.OutboundCheckRe
 	// re-adding the domain returns "already configured on this host".
 	relearnedID := false
 	if priorID != 0 && errors.Is(err, maildomains.ErrDomainNotEnrolled) {
-		rec, err = maildomains.Current().GetDomain(ctx, domain, 0)
+		rec, err = maildomains.Current(app).GetDomain(ctx, domain, 0)
 		relearnedID = true
 	}
 
@@ -313,10 +316,11 @@ func describeProvider(provider Provider) (string, bool) {
 	}
 }
 
-// recordLock returns a mutex that is unique per record ID. Callers must call
-// the returned unlock func when done.
-func recordLock(recordID string) func() {
-	m, _ := verifyLocks.LoadOrStore(recordID, &sync.Mutex{})
+// recordLock returns a mutex that is unique per record ID in app. Callers
+// must call the returned unlock func when done.
+func recordLock(app core.App, recordID string) func() {
+	locks := verifyLocksKey.GetOrInit(app, func() *sync.Map { return &sync.Map{} })
+	m, _ := locks.LoadOrStore(recordID, &sync.Mutex{})
 	mu := m.(*sync.Mutex)
 	mu.Lock()
 	return mu.Unlock
@@ -328,7 +332,7 @@ func recordLock(recordID string) func() {
 // match). Outbound checks are advisory. Concurrent calls on the same record
 // serialize via recordLock so writes don't interleave.
 func verifyDomainRecord(ctx context.Context, app core.App, record *core.Record) (*api.VerificationDetails, error) {
-	unlock := recordLock(record.Id)
+	unlock := recordLock(app, record.Id)
 	defer unlock()
 
 	domain := record.GetString("domain")
@@ -343,7 +347,7 @@ func verifyDomainRecord(ctx context.Context, app core.App, record *core.Record) 
 	mxHost := expectedInboundMXHost(app, provider)
 	details.MX = checkMX(ctx, domain, mxHost)
 	details.Provider = checkProviderInbound(ctx, app, provider, domain)
-	details.Outbound = checkOutbound(ctx, record)
+	details.Outbound = checkOutbound(ctx, app, record)
 	// Stamped from the same value the MX check just used, not read back off
 	// details.MX.Expected, so the DNS panel's MX row always matches the row
 	// above it.

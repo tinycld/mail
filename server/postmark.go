@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jaytaylor/html2text"
+	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/mailer"
 )
 
@@ -29,9 +30,9 @@ type PostmarkProvider struct {
 	serverToken string
 }
 
-func NewPostmarkProvider(serverToken, accountToken string) *PostmarkProvider {
+func NewPostmarkProvider(app core.App, serverToken, accountToken string) *PostmarkProvider {
 	return &PostmarkProvider{
-		sender:      mailer.NewPostmarkSender(serverToken, accountToken, ""),
+		sender:      mailer.NewPostmarkSender(app, serverToken, accountToken, ""),
 		serverToken: serverToken,
 	}
 }

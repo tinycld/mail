@@ -166,7 +166,7 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 	// A message is sent only when its Sent copy can be stored, so nothing
 	// is accepted while the server is read-only; the 451 makes the client
 	// keep the message in its outbox and retry.
-	if readonly.Active() {
+	if readonly.Active(s.app) {
 		return s.refuse("mail", errReadOnly, nil, "from", from)
 	}
 
@@ -360,7 +360,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 
 	// Read-only can begin after MAIL FROM was accepted, so the send checks
 	// again before anything goes out.
-	if readonly.Active() {
+	if readonly.Active(s.app) {
 		return s.refuse("data", errReadOnly, nil)
 	}
 
@@ -406,7 +406,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 		msg: msg, result: result, displayName: displayName, senderEmail: senderEmail, fromAddr: fromAddr,
 		inReplyTo: inReplyToHeader, references: referencesHeader, bcc: bcc,
 	}
-	if err := readonly.WhenWritable(tailCtx, func() error {
+	if err := readonly.WhenWritable(tailCtx, s.app, func() error {
 		s.storeSentCopy(sent)
 		return nil
 	}); err != nil {
@@ -457,7 +457,7 @@ func (s *smtpSession) storeSentCopy(c sentCopy) {
 		if err := markThreadSent(s.app, existingThread.Id, s.user.Id); err != nil {
 			smtpLog.Error("SMTP: failed to mark deduped thread sent", "error", err)
 		}
-		globalNotifier.Notify(mailboxID)
+		idleNotifier(s.app).Notify(mailboxID)
 		return
 	}
 
@@ -510,7 +510,7 @@ func (s *smtpSession) storeSentCopy(c sentCopy) {
 		smtpLog.Error("SMTP: failed to mark thread sent", "error", err)
 	}
 
-	globalNotifier.Notify(mailboxID)
+	idleNotifier(s.app).Notify(mailboxID)
 }
 
 // Reset clears transaction state but preserves authentication.

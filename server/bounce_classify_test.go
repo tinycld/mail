@@ -156,6 +156,7 @@ func TestBounceClass_String(t *testing.T) {
 // the provider's payload. A parser that silently drops From or ID looks fine
 // until something tries to attribute or deduplicate.
 func TestParseBounce_CarriesTheNewFields(t *testing.T) {
+	app := newBareApp(t)
 	t.Parallel()
 	body := []byte(`{
 		"ID": 42,
@@ -171,7 +172,7 @@ func TestParseBounce_CarriesTheNewFields(t *testing.T) {
 		"BouncedAt": "2026-09-22T10:00:00Z"
 	}`)
 
-	event, err := NewPostmarkProvider("tok", "acct").ParseBounce(body)
+	event, err := NewPostmarkProvider(app, "tok", "acct").ParseBounce(body)
 	if err != nil {
 		t.Fatalf("ParseBounce: %v", err)
 	}
@@ -197,8 +198,9 @@ func TestParseBounce_CarriesTheNewFields(t *testing.T) {
 // A payload with no ID must not produce a dedupe key of "0", which would
 // collide across every such notification.
 func TestParseBounce_AbsentIDIsEmptyNotZero(t *testing.T) {
+	app := newBareApp(t)
 	t.Parallel()
-	event, err := NewPostmarkProvider("tok", "acct").
+	event, err := NewPostmarkProvider(app, "tok", "acct").
 		ParseBounce([]byte(`{"RecordType":"Bounce","MessageID":"m","Type":"HardBounce"}`))
 	if err != nil {
 		t.Fatalf("ParseBounce: %v", err)

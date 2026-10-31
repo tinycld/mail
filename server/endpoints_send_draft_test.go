@@ -16,7 +16,6 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
-	"tinycld.org/core/syscfg"
 	"tinycld.org/packages/mail/api"
 )
 
@@ -31,13 +30,7 @@ type draftSendEnv struct {
 func setupDraftSendEnv(t *testing.T) *draftSendEnv {
 	t.Helper()
 	env := setupSendAddressEnv(t)
-	syscfg.SetResolver(func(key string) string {
-		if key == "mail.postmark_server_token" {
-			return "test-token"
-		}
-		return ""
-	})
-	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
+	setTestSetting(env.app, "mail.postmark_server_token", "test-token")
 	env.com.Set("spf_verified", true)
 	env.com.Set("dkim_verified", true)
 	env.com.Set("return_path_verified", true)
@@ -537,13 +530,7 @@ func TestSendMessage_AGoneDraftWithSavedFilesShownIsRefused(t *testing.T) {
 func TestSendMessage_AGroupDerivedMemberSendsADraftWithItsFiles(t *testing.T) {
 	app := newInboxGroupTestApp(t)
 	registerAddressHooks(app)
-	syscfg.SetResolver(func(key string) string {
-		if key == "mail.postmark_server_token" {
-			return "test-token"
-		}
-		return ""
-	})
-	t.Cleanup(func() { syscfg.SetResolver(func(string) string { return "" }) })
+	setTestSetting(app, "mail.postmark_server_token", "test-token")
 
 	s := seedInboxGroup(t, app)
 	domain, err := app.FindRecordById("mail_domains", s.shared.GetString("domain"))

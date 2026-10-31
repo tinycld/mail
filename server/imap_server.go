@@ -28,6 +28,6 @@ func StartIMAPServer(app core.App, certManager *autocert.Manager) (func(), error
 		NewSession: func(app core.App, _ *imapserver.Conn) imapserver.Session {
 			return newIMAPSession(app)
 		},
-		Listen: acceptingListeners.listen("imaps", envOrDefault("IMAPS_ADDR", defaultIMAPSAddr)),
+		Listen: acceptingListenersOf(app).listen("imaps", envOrDefault("IMAPS_ADDR", defaultIMAPSAddr)),
 	})
 }

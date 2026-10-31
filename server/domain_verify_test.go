@@ -98,13 +98,13 @@ func TestCheckMX_EmptyExpectedSkipsLookup(t *testing.T) {
 
 func TestExpectedInboundMXHost_PerProvider(t *testing.T) {
 	app := setupSettingsTestApp(t)
-	if got := expectedInboundMXHost(app, NewPostmarkProvider("tok", "")); got != postmarkInboundMXHost {
+	if got := expectedInboundMXHost(app, NewPostmarkProvider(app, "tok", "")); got != postmarkInboundMXHost {
 		t.Errorf("postmark: got %q, want %q", got, postmarkInboundMXHost)
 	}
-	if got := expectedInboundMXHost(app, NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "smtp"})); got != "mx.example.com" {
+	if got := expectedInboundMXHost(app, NewSMTPProvider(app, SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "smtp"})); got != "mx.example.com" {
 		t.Errorf("smtp/listener: got %q, want %q", got, "mx.example.com")
 	}
-	if got := expectedInboundMXHost(app, NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "imap"})); got != "" {
+	if got := expectedInboundMXHost(app, NewSMTPProvider(app, SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "imap"})); got != "" {
 		t.Errorf("smtp/imap-fetch: got %q, want empty (no MX on our side)", got)
 	}
 	if got := expectedInboundMXHost(app, &NoopProvider{}); got != "" {
@@ -119,13 +119,13 @@ func TestExpectedInboundMXHost_SystemSettingOverridesProvider(t *testing.T) {
 	app := setupSettingsTestApp(t)
 	saveSystemSetting(t, app, "mail.inbound_mx_host", "mx.inbound.example.com")
 
-	if got := expectedInboundMXHost(app, NewPostmarkProvider("tok", "")); got != "mx.inbound.example.com" {
+	if got := expectedInboundMXHost(app, NewPostmarkProvider(app, "tok", "")); got != "mx.inbound.example.com" {
 		t.Errorf("postmark: got %q, want the system setting to win", got)
 	}
-	if got := expectedInboundMXHost(app, NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "smtp"})); got != "mx.inbound.example.com" {
+	if got := expectedInboundMXHost(app, NewSMTPProvider(app, SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "smtp"})); got != "mx.inbound.example.com" {
 		t.Errorf("smtp/listener: got %q, want the system setting to win", got)
 	}
-	if got := expectedInboundMXHost(app, NewSMTPProvider(SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "imap"})); got != "mx.inbound.example.com" {
+	if got := expectedInboundMXHost(app, NewSMTPProvider(app, SMTPConfig{PublicHostname: "mx.example.com", InboundMode: "imap"})); got != "mx.inbound.example.com" {
 		t.Errorf("smtp/imap-fetch: got %q, want the system setting to win even in imap mode", got)
 	}
 	if got := expectedInboundMXHost(app, &NoopProvider{}); got != "mx.inbound.example.com" {
@@ -318,18 +318,16 @@ func newOutboundTestRecord(t *testing.T, app core.App, domain string, providerDo
 // The record values must survive into the wire type — they are what the admin
 // publishes in DNS, and the old code fetched and discarded them.
 func TestCheckOutboundCarriesRecords(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(&stubRegistrar{rec: &maildomains.DomainRecords{
+
+	app := newOutboundTestApp(t)
+	maildomains.SetResolver(app, &stubRegistrar{rec: &maildomains.DomainRecords{
 		Domain: "acme.com", ID: 12345, SPFVerified: true, DKIMVerified: true,
 		DKIMHost: "sel._domainkey.acme.com", DKIMTextValue: "k=rsa;p=X",
 		ReturnPathDomain: "pm-bounces.acme.com", ReturnPathCNAMEValue: "pm.mtasv.net",
 	}})
-
-	app := newOutboundTestApp(t)
 	record := newOutboundTestRecord(t, app, "acme.com", 0)
 
-	got := checkOutbound(context.Background(), record)
+	got := checkOutbound(context.Background(), app, record)
 
 	if !got.SPF || !got.DKIM {
 		t.Errorf("got = %+v, want SPF and DKIM true", got)
@@ -348,14 +346,12 @@ func TestCheckOutboundCarriesRecords(t *testing.T) {
 // A domain the provider has never heard of is reported as not enrolled, which
 // is actionable, rather than as a generic error.
 func TestCheckOutboundNotEnrolled(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(&stubRegistrar{err: maildomains.ErrDomainNotEnrolled})
 
 	app := newOutboundTestApp(t)
+	maildomains.SetResolver(app, &stubRegistrar{err: maildomains.ErrDomainNotEnrolled})
 	record := newOutboundTestRecord(t, app, "acme.com", 0)
 
-	got := checkOutbound(context.Background(), record)
+	got := checkOutbound(context.Background(), app, record)
 
 	if got.Enrolled != "no" {
 		t.Fatalf("Enrolled = %q, want %q", got.Enrolled, "no")
@@ -369,14 +365,12 @@ func TestCheckOutboundNotEnrolled(t *testing.T) {
 // the provider account being restarted must not make a working domain look
 // unenrolled.
 func TestCheckOutboundTransportFailureIsUnknown(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(&stubRegistrar{err: errors.New("socket closed")})
 
 	app := newOutboundTestApp(t)
+	maildomains.SetResolver(app, &stubRegistrar{err: errors.New("socket closed")})
 	record := newOutboundTestRecord(t, app, "acme.com", 0)
 
-	got := checkOutbound(context.Background(), record)
+	got := checkOutbound(context.Background(), app, record)
 
 	if got.Enrolled != "unknown" {
 		t.Fatalf("Enrolled = %q, want %q", got.Enrolled, "unknown")
@@ -389,15 +383,13 @@ func TestCheckOutboundTransportFailureIsUnknown(t *testing.T) {
 // AMENDMENT 1: checkOutbound must read the stored provider id off the record
 // and pass it to the seam, so a by-name scan happens at most once per domain.
 func TestCheckOutboundPassesStoredProviderID(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
 	registrar := &stubRegistrar{rec: &maildomains.DomainRecords{Domain: "acme.com", ID: 999}}
-	maildomains.SetResolver(registrar)
 
 	app := newOutboundTestApp(t)
+	maildomains.SetResolver(app, registrar)
 	record := newOutboundTestRecord(t, app, "acme.com", 999)
 
-	checkOutbound(context.Background(), record)
+	checkOutbound(context.Background(), app, record)
 
 	if registrar.gotDomainID != 999 {
 		t.Fatalf("gotDomainID = %d, want 999 (the id stored on the record)", registrar.gotDomainID)
@@ -408,14 +400,12 @@ func TestCheckOutboundPassesStoredProviderID(t *testing.T) {
 // scan fallback), checkOutbound persists the id it learned so the scan runs
 // at most once per domain thereafter.
 func TestCheckOutboundPersistsLearnedProviderID(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(&stubRegistrar{rec: &maildomains.DomainRecords{Domain: "acme.com", ID: 4242}})
 
 	app := newOutboundTestApp(t)
+	maildomains.SetResolver(app, &stubRegistrar{rec: &maildomains.DomainRecords{Domain: "acme.com", ID: 4242}})
 	record := newOutboundTestRecord(t, app, "acme.com", 0)
 
-	checkOutbound(context.Background(), record)
+	checkOutbound(context.Background(), app, record)
 
 	meta := readProviderDomainMetadata(record)
 	if meta.Postmark == nil || meta.Postmark.DomainID != 4242 {
@@ -427,14 +417,12 @@ func TestCheckOutboundPersistsLearnedProviderID(t *testing.T) {
 // stamp are written into provider_domain_metadata on every call — success or
 // failure — so "asked and told no" is distinguishable from "never asked".
 func TestCheckOutboundStampsMetadataOnFailure(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(&stubRegistrar{err: maildomains.ErrDomainNotEnrolled})
 
 	app := newOutboundTestApp(t)
+	maildomains.SetResolver(app, &stubRegistrar{err: maildomains.ErrDomainNotEnrolled})
 	record := newOutboundTestRecord(t, app, "acme.com", 0)
 
-	checkOutbound(context.Background(), record)
+	checkOutbound(context.Background(), app, record)
 
 	meta := readProviderDomainMetadata(record)
 	if meta.Postmark == nil {
@@ -488,10 +476,6 @@ func newVerifyVerdictApp(t *testing.T) *tests.TestApp {
 func runVerifyVerdict(t *testing.T, inboundOK bool, registrar maildomains.Registrar) *core.Record {
 	t.Helper()
 
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(registrar)
-
 	// The SMTP provider's expected MX host is its PublicHostname; answering
 	// with a different host is how the inbound leg is driven to false.
 	mxHost := "mx.operator.example."
@@ -503,6 +487,7 @@ func runVerifyVerdict(t *testing.T, inboundOK bool, registrar maildomains.Regist
 	})
 
 	app := newVerifyVerdictApp(t)
+	maildomains.SetResolver(app, registrar)
 	if !inboundOK {
 		// An inbound mode the provider does not serve makes
 		// CheckInboundDomain report no inbound domain at all, so the Provider
@@ -634,14 +619,12 @@ func (s *sequencedRegistrar) GetDomain(_ context.Context, _ string, providerDoma
 // disqualify `verified`, so the admin saw a GREEN badge on a domain the
 // provider has never enrolled while every outbound message failed.
 func TestCheckOutboundNotConfiguredIsNotEnrolled(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(&stubRegistrar{err: maildomains.ErrNotConfigured})
 
 	app := newOutboundTestApp(t)
+	maildomains.SetResolver(app, &stubRegistrar{err: maildomains.ErrNotConfigured})
 	record := newOutboundTestRecord(t, app, "acme.com", 0)
 
-	got := checkOutbound(context.Background(), record)
+	got := checkOutbound(context.Background(), app, record)
 
 	if got.Enrolled != "no" {
 		t.Fatalf("Enrolled = %q, want %q: we cannot assert a domain is enrolled "+
@@ -678,14 +661,12 @@ func TestVerifyDomainRecord_NotConfiguredIsNotVerified(t *testing.T) {
 // timestamp"; writing false for a call that failed defeats that, and a nil
 // pointer already expresses "we did not get an answer".
 func TestCheckOutboundUnknownStampsNoEnrolledVerdict(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(&stubRegistrar{err: errors.New("socket closed")})
 
 	app := newOutboundTestApp(t)
+	maildomains.SetResolver(app, &stubRegistrar{err: errors.New("socket closed")})
 	record := newOutboundTestRecord(t, app, "acme.com", 0)
 
-	checkOutbound(context.Background(), record)
+	checkOutbound(context.Background(), app, record)
 
 	meta := readProviderDomainMetadata(record)
 	if meta.Postmark == nil {
@@ -708,18 +689,16 @@ func TestCheckOutboundUnknownStampsNoEnrolledVerdict(t *testing.T) {
 // re-adding returns 409 "already configured on this host" — no self-service
 // recovery at all, only direct DB surgery.
 func TestCheckOutboundRelearnsStaleProviderID(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
 	registrar := &sequencedRegistrar{
 		byIDErr: maildomains.ErrDomainNotEnrolled,
 		byName:  &maildomains.DomainRecords{Domain: "acme.com", ID: 99, DKIMVerified: true},
 	}
-	maildomains.SetResolver(registrar)
 
 	app := newOutboundTestApp(t)
+	maildomains.SetResolver(app, registrar)
 	record := newOutboundTestRecord(t, app, "acme.com", 42)
 
-	got := checkOutbound(context.Background(), record)
+	got := checkOutbound(context.Background(), app, record)
 
 	if got.Enrolled != "yes" {
 		t.Fatalf("Enrolled = %q, want %q: the by-name rescan found the re-created domain",
@@ -742,18 +721,16 @@ func TestCheckOutboundRelearnsStaleProviderID(t *testing.T) {
 // must still be cleared, so the next check starts on the by-name path rather
 // than re-deriving "no" from an id that can never resolve again.
 func TestCheckOutboundClearsIDWhenRescanAlsoFails(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
 	registrar := &sequencedRegistrar{
 		byIDErr:   maildomains.ErrDomainNotEnrolled,
 		byNameErr: maildomains.ErrDomainNotEnrolled,
 	}
-	maildomains.SetResolver(registrar)
 
 	app := newOutboundTestApp(t)
+	maildomains.SetResolver(app, registrar)
 	record := newOutboundTestRecord(t, app, "acme.com", 42)
 
-	got := checkOutbound(context.Background(), record)
+	got := checkOutbound(context.Background(), app, record)
 
 	if got.Enrolled != "no" {
 		t.Fatalf("Enrolled = %q, want %q after both lookups failed", got.Enrolled, "no")
@@ -770,15 +747,13 @@ func TestCheckOutboundClearsIDWhenRescanAlsoFails(t *testing.T) {
 // socket error means we learned nothing, and discarding the id over it would
 // force a by-name scan on every blip.
 func TestCheckOutboundKeepsIDOnTransportFailure(t *testing.T) {
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
 	registrar := &sequencedRegistrar{byIDErr: errors.New("socket closed")}
-	maildomains.SetResolver(registrar)
 
 	app := newOutboundTestApp(t)
+	maildomains.SetResolver(app, registrar)
 	record := newOutboundTestRecord(t, app, "acme.com", 42)
 
-	got := checkOutbound(context.Background(), record)
+	got := checkOutbound(context.Background(), app, record)
 
 	if got.Enrolled != "unknown" {
 		t.Fatalf("Enrolled = %q, want %q", got.Enrolled, "unknown")
@@ -819,9 +794,7 @@ func TestVerifyDomainRecord_SystemMXHostVerifies(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	maildomains.ResetForTesting()
-	t.Cleanup(maildomains.ResetForTesting)
-	maildomains.SetResolver(&stubRegistrar{rec: &maildomains.DomainRecords{Domain: "example.com", ID: 7}})
+	maildomains.SetResolver(app, &stubRegistrar{rec: &maildomains.DomainRecords{Domain: "example.com", ID: 7}})
 	withMXLookup(t, func(context.Context, string) ([]*net.MX, error) {
 		return []*net.MX{{Host: "mx.inbound.example.com.", Pref: 10}}, nil
 	})

@@ -7,7 +7,6 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/automation"
-	"tinycld.org/core/mailer"
 )
 
 // rule_send_skip_test.go runs "a message arrives" rules through the real
@@ -20,16 +19,8 @@ import (
 func startRuleEngine(t *testing.T, e *loopEnv) {
 	t.Helper()
 	t.Cleanup(automation.ResetRegistriesForTest)
-	t.Cleanup(automation.ResetRunStateForTest)
 
-	previous := mailer.ConfigResolver
-	mailer.ConfigResolver = func(key string) string {
-		if key == "mail.postmark_server_token" {
-			return "test-token"
-		}
-		return previous(key)
-	}
-	t.Cleanup(func() { mailer.ConfigResolver = previous })
+	setTestSetting(e.app, "mail.postmark_server_token", "test-token")
 
 	text := func(keys ...string) []automation.ParamDef {
 		params := make([]automation.ParamDef, 0, len(keys))
