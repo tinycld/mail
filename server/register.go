@@ -160,8 +160,8 @@ func registerShared(app *pocketbase.PocketBase) {
 	// provider config is deployment-wide in system_settings.)
 	reconcileOnMailSettings := func(e *core.RecordEvent) error {
 		if e.Record.GetString("app") == "mail" {
-			if globalIMAPManager != nil {
-				globalIMAPManager.onSettingsChanged()
+			if m := imapManagerFor(app); m != nil {
+				m.onSettingsChanged()
 			}
 			reconcileMailDomainsRegistrar(app)
 		}
@@ -210,8 +210,8 @@ func registerShared(app *pocketbase.PocketBase) {
 	// too (filtered so sentry.*/vapid.* edits don't churn either one).
 	reconcileOnSystemMail := func(e *core.RecordEvent) error {
 		if strings.HasPrefix(e.Record.GetString("key"), "mail.") {
-			if globalIMAPManager != nil {
-				globalIMAPManager.onSettingsChanged()
+			if m := imapManagerFor(app); m != nil {
+				m.onSettingsChanged()
 			}
 			reconcileMailDomainsRegistrar(app)
 		}
@@ -265,7 +265,7 @@ func registerShared(app *pocketbase.PocketBase) {
 		threadID := e.Record.GetString("thread")
 		thread, err := app.FindRecordById("mail_threads", threadID)
 		if err == nil {
-			globalNotifier.Notify(thread.GetString("mailbox"))
+			idleNotifier(app).Notify(thread.GetString("mailbox"))
 		}
 		return e.Next()
 	})
@@ -273,7 +273,7 @@ func registerShared(app *pocketbase.PocketBase) {
 		threadID := e.Record.GetString("thread")
 		thread, err := app.FindRecordById("mail_threads", threadID)
 		if err == nil {
-			globalNotifier.Notify(thread.GetString("mailbox"))
+			idleNotifier(app).Notify(thread.GetString("mailbox"))
 		}
 		return e.Next()
 	})
@@ -345,7 +345,7 @@ func registerShared(app *pocketbase.PocketBase) {
 
 		// IMAP fetcher manager — runs one polling worker per org with the
 		// self-hosted SMTP provider in "imap" inbound mode. Reconciles on
-		// every mail settings record change via globalIMAPManager.
+		// every mail settings record change through imapManagerFor.
 		imapFetcherShutdown := startIMAPFetchers(app, jobs)
 		app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
 			imapFetcherShutdown()
@@ -504,7 +504,7 @@ func systemSetting(app core.App, key string) string {
 // reconcileMailDomainsRegistrar (re-)installs the maildomains registrar
 // matching this deployment's configured provider. Called once at boot and
 // again whenever mail/system settings change (the provider can be switched
-// between SMTP and Postmark at runtime), mirroring how globalIMAPManager
+// between SMTP and Postmark at runtime), mirroring how the IMAP fetcher manager
 // reconciles on the same events — see reconcileOnMailSettings /
 // reconcileOnSystemMail.
 //
@@ -721,7 +721,7 @@ func bufferMailNotification(app core.App, msgRecord *core.Record) {
 
 	for _, member := range members {
 		if userID := member.GetString("user"); userID != "" {
-			bufferMailNotificationForUser(userID, sender, subject)
+			bufferMailNotificationForUser(app, userID, sender, subject)
 		}
 	}
 }

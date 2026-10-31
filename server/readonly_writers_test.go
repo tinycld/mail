@@ -59,18 +59,17 @@ func lastCheckedAt(t *testing.T, app core.App, id string) string {
 // notifications go out at the first flush after the mode ends.
 func TestFlushMailBufferHoldsWhileReadOnly(t *testing.T) {
 	const userID = "user_ro_batcher"
-	t.Cleanup(func() { mailBuffer.Delete(userID) })
 	app := newNotificationsTestApp(t)
 	t.Cleanup(func() { readonly.Leave(app) })
 
-	bufferMailNotificationForUser(userID, "sender@external.example", "held while read-only")
+	bufferMailNotificationForUser(app, userID, "sender@external.example", "held while read-only")
 
 	readonly.Enter(app)
 	flushMailBuffer(context.Background(), app)
 	if n := countNotifications(t, app, userID); n != 0 {
 		t.Fatalf("%d notifications were written while read-only", n)
 	}
-	if _, held := mailBuffer.Load(userID); !held {
+	if _, held := mailBufferFor(app).Load(userID); !held {
 		t.Fatal("the flush dropped the buffered mail while read-only")
 	}
 
@@ -211,9 +210,8 @@ func waitDone(t *testing.T, done <-chan struct{}, what string) {
 // end, and then sends the buffered notifications.
 func TestMailBatcherFlushWaitsWhileReadOnly(t *testing.T) {
 	const userID = "user_ro_flush_wait"
-	t.Cleanup(func() { mailBuffer.Delete(userID) })
 	app := newNotificationsTestApp(t)
-	bufferMailNotificationForUser(userID, "sender@external.example", "waits for read-only")
+	bufferMailNotificationForUser(app, userID, "sender@external.example", "waits for read-only")
 	readonly.Enter(app)
 	t.Cleanup(func() { readonly.Leave(app) })
 
@@ -239,10 +237,9 @@ func TestMailBatcherFlushWaitsWhileReadOnly(t *testing.T) {
 // notifications are dropped, and the drop is logged at Warn.
 func TestMailBatcherFlushDroppedAndLoggedWhenReadOnlyOutlastsTheWait(t *testing.T) {
 	const userID = "user_ro_flush_drop"
-	t.Cleanup(func() { mailBuffer.Delete(userID) })
 	app := newNotificationsTestApp(t)
-	bufferMailNotificationForUser(userID, "sender@external.example", "dropped one")
-	bufferMailNotificationForUser(userID, "sender@external.example", "dropped two")
+	bufferMailNotificationForUser(app, userID, "sender@external.example", "dropped one")
+	bufferMailNotificationForUser(app, userID, "sender@external.example", "dropped two")
 	logs := readonlytest.CaptureLogs(t)
 	readonly.Enter(app)
 	t.Cleanup(func() { readonly.Leave(app) })
@@ -254,7 +251,7 @@ func TestMailBatcherFlushDroppedAndLoggedWhenReadOnlyOutlastsTheWait(t *testing.
 	if n := countNotifications(t, app, userID); n != 0 {
 		t.Fatalf("%d notifications were written while read-only", n)
 	}
-	if _, held := mailBuffer.Load(userID); held {
+	if _, held := mailBufferFor(app).Load(userID); held {
 		t.Fatal("the buffer still holds the dropped mail")
 	}
 	r, ok := readonlytest.Find(logs(), mailNotifyDroppedMsg)
@@ -273,9 +270,8 @@ func TestMailBatcherFlushDroppedAndLoggedWhenReadOnlyOutlastsTheWait(t *testing.
 // what it holds instead of losing it.
 func TestMailBatcherFlushesAtTerminate(t *testing.T) {
 	const userID = "user_flush_at_terminate"
-	t.Cleanup(func() { mailBuffer.Delete(userID) })
 	app := newNotificationsTestApp(t)
-	bufferMailNotificationForUser(userID, "sender@external.example", "sent at terminate")
+	bufferMailNotificationForUser(app, userID, "sender@external.example", "sent at terminate")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

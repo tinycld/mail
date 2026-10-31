@@ -671,7 +671,7 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 	uidValidity, _ := getMailboxUIDValidity(s.app, mailboxID)
 
 	// Notify IDLE sessions
-	globalNotifier.Notify(mailboxID)
+	idleNotifier(s.app).Notify(mailboxID)
 
 	return &imap.AppendData{
 		UID:         imap.UID(uid),
@@ -813,8 +813,9 @@ func (s *imapSession) Idle(w *imapserver.UpdateWriter, stop <-chan struct{}) err
 	}
 
 	ch := make(chan struct{}, 1)
-	globalNotifier.Subscribe(s.selectedMailboxID, ch)
-	defer globalNotifier.Unsubscribe(s.selectedMailboxID, ch)
+	notifier := idleNotifier(s.app)
+	notifier.Subscribe(s.selectedMailboxID, ch)
+	defer notifier.Unsubscribe(s.selectedMailboxID, ch)
 
 	for {
 		select {

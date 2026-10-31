@@ -457,7 +457,7 @@ func (s *smtpSession) storeSentCopy(c sentCopy) {
 		if err := markThreadSent(s.app, existingThread.Id, s.user.Id); err != nil {
 			smtpLog.Error("SMTP: failed to mark deduped thread sent", "error", err)
 		}
-		globalNotifier.Notify(mailboxID)
+		idleNotifier(s.app).Notify(mailboxID)
 		return
 	}
 
@@ -510,7 +510,7 @@ func (s *smtpSession) storeSentCopy(c sentCopy) {
 		smtpLog.Error("SMTP: failed to mark thread sent", "error", err)
 	}
 
-	globalNotifier.Notify(mailboxID)
+	idleNotifier(s.app).Notify(mailboxID)
 }
 
 // Reset clears transaction state but preserves authentication.

@@ -12,6 +12,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/appstate"
 	"tinycld.org/core/background"
 	"tinycld.org/core/readonly"
 )
@@ -35,21 +36,26 @@ type imapFetcherManager struct {
 	cancel context.CancelFunc // non-nil while the fetcher loop is running
 }
 
-// globalIMAPManager is set by startIMAPFetchers and consulted by the settings
-// record hook so a settings change can trigger a reconcile. nil before
-// startup and after shutdown — callers must nil-check.
-var globalIMAPManager *imapFetcherManager
+// imapManagerKey holds the app's manager. startIMAPFetchers sets it and the
+// settings record hooks read it, so a settings change can trigger a
+// reconcile. Unset before startup and after shutdown — callers must
+// nil-check.
+var imapManagerKey = appstate.NewKey[*imapFetcherManager]("mail.imapManager")
+
+func imapManagerFor(app core.App) *imapFetcherManager {
+	return imapManagerKey.Get(app)
+}
 
 // startIMAPFetchers wires the manager into the app lifecycle. The reconciles
 // and the poll loop run as jobs, which the app's terminate cancels and waits
 // for. Returns a shutdown function for OnTerminate.
 func startIMAPFetchers(app core.App, jobs *background.Jobs) func() {
 	m := &imapFetcherManager{app: app, jobs: jobs}
-	globalIMAPManager = m
+	imapManagerKey.Set(app, m)
 	m.startReconcile()
 	return func() {
 		m.stop()
-		globalIMAPManager = nil
+		imapManagerKey.Delete(app)
 	}
 }
 
