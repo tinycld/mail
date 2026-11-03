@@ -87,7 +87,7 @@ const automation = {
             label: 'Send a message',
             kind: 'native',
             params: [
-                { key: 'to', type: 'text', label: 'To' },
+                { key: 'to', type: 'text', label: 'To', recipient: true },
                 { key: 'subject', type: 'text', label: 'Subject' },
                 { key: 'body', type: 'text', label: 'Body' },
             ],

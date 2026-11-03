@@ -8,9 +8,9 @@ import {
     SidebarSlot,
 } from '@tinycld/core/components/sidebar-primitives'
 import { openHelpPackage } from '@tinycld/core/lib/help/open-help'
-import { useOrgHref } from '@tinycld/core/lib/org-routes'
+import { appHref, useOrgHref } from '@tinycld/core/lib/org-routes'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
-import { useUrl } from '@tinycld/core/lib/use-url'
+import { type Url, useUrl } from '@tinycld/core/lib/use-url'
 import { useRouter } from 'expo-router'
 import { HelpCircle, Pencil, Settings, Workflow } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
@@ -49,9 +49,23 @@ function useActiveView() {
     }
 }
 
+// Whether the mail list at `params` is the view already on screen. Pushing it
+// again would stack a second copy of the list (an extra Back step, and the
+// list reloads and loses its scroll), so a click on the current folder or
+// label does nothing.
+function isCurrentView(url: Url, params: Record<string, string>): boolean {
+    if (url.pathname !== appHref('mail')) return false
+    const current = Object.entries(url.params as Record<string, unknown>).filter(
+        ([, v]) => typeof v === 'string' && v !== ''
+    )
+    if (current.length !== Object.keys(params).length) return false
+    return current.every(([k, v]) => params[k] === v)
+}
+
 export default function MailSidebar(_props: MailSidebarProps) {
     const router = useRouter()
-    const { pathname } = useUrl()
+    const url = useUrl()
+    const { pathname } = url
     const mutedColor = useThemeColor('muted-foreground')
     const { folder: activeFolder, activeLabels, activeMailbox, isDefaultView } = useActiveView()
     const orgHref = useOrgHref()
@@ -72,6 +86,11 @@ export default function MailSidebar(_props: MailSidebarProps) {
         return total
     }, [counts])
 
+    const goToList = (params: Record<string, string>) => {
+        if (isCurrentView(url, params)) return
+        router.push(orgHref('mail', Object.keys(params).length ? params : undefined))
+    }
+
     const navigateTo = (mailboxId: string, folder: string) => {
         const params: Record<string, string> = {}
         if (mailboxId && mailboxId !== personal?.id) params.mailbox = mailboxId
@@ -82,19 +101,16 @@ export default function MailSidebar(_props: MailSidebarProps) {
         if (showUnifiedInbox && mailboxId === personal?.id && folder === 'inbox') {
             params.folder = 'inbox'
         }
-        router.push(orgHref('mail', Object.keys(params).length ? params : undefined))
+        goToList(params)
     }
 
-    const navigateToUnified = () => {
-        router.push(orgHref('mail', { folder: 'all-inboxes' }))
-    }
+    const navigateToUnified = () => goToList({ folder: 'all-inboxes' })
 
     const toggleLabel = (labelId: string) => {
         const next = new Set(activeLabels)
         if (next.has(labelId)) next.delete(labelId)
         else next.add(labelId)
-        if (next.size === 0) router.push(orgHref('mail'))
-        else router.push(orgHref('mail', { label: Array.from(next).join(',') }))
+        goToList(next.size === 0 ? {} : { label: Array.from(next).join(',') })
     }
 
     const labelItems = orgLabels.map(label => (
