@@ -263,7 +263,7 @@ The 25 MB limit on submission is `mailproto.StartSMTP`'s default `MaxMessageByte
 - **SELECT** — opens a mailbox/folder, returning UID validity and UID next. UID validity and the next-UID counter live on `mail_imap_mailbox_state`, keyed per-mailbox (one row per `mail_mailboxes` record, regardless of how many members it has). UID assignment is one SQL statement (`bumpUIDNext` in `imap_uid.go`: `UPDATE … SET uid_next = uid_next + 1 … RETURNING`). No Go lock is held; SQLite's single write connection keeps UIDs monotonic under concurrent inbound writes.
 - **STORE / APPEND / EXPUNGE / COPY / MOVE** — gated by `requireWritable`: a read-only user gets a `NO Your mail access is read-only` instead of a silent no-op.
 - **FETCH** — converts `mail_messages` rows to RFC 5322 bytes on the fly via `imap_rfc5322.go`. This is the only place TinyCld emits raw RFC 5322 — internally everything is structured fields.
-- **IDLE** — the session subscribes to a per-mailbox channel via the package's `globalNotifier` (core's `mailproto.NewIdleNotifier()`, in `imap_notifier.go`). When the package-level hooks see a new `mail_messages` row or a `mail_thread_state` change for a mailbox, they call `globalNotifier.Notify(mailboxID)`, which wakes up every IDLE'd session subscribed to that mailbox and dispatches an `EXISTS` / `EXPUNGE` / flag-update untagged response.
+- **IDLE** — the session subscribes to a per-mailbox channel via `idleNotifier(app)` (in `imap_notifier.go`), the core `mailproto.IdleNotifier` attached to the PocketBase app. When the package-level hooks see a new `mail_messages` row or a `mail_thread_state` change for a mailbox, they call `idleNotifier(app).Notify(mailboxID)`, which wakes up every IDLE'd session subscribed to that mailbox and dispatches an `EXISTS` / `EXPUNGE` / flag-update untagged response.
 
 ### Domain verification
 
@@ -370,7 +370,7 @@ server/
     imap_server.go             :993 / :1143 startup
     imap_session.go            per-connection state, LOGIN, namespacing, read-only guard
     imap_folders.go            INBOX / Sent / Drafts / Trash / Spam / Archive
-    imap_notifier.go           globalNotifier — IDLE pub/sub
+    imap_notifier.go           idleNotifier(app) — IDLE pub/sub
     imap_uid.go                UID validity / UID next per mailbox
     imap_rfc5322.go            on-the-fly RFC 5322 emission for FETCH
     smtp_server.go             :465 / :1587 startup
