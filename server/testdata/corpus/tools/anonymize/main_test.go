@@ -43,3 +43,34 @@ func TestAnonymize(t *testing.T) {
 		t.Errorf("placeholder written %d times, want once", n)
 	}
 }
+
+const headerLeaks = "From: =?utf-8?q?J=C3=B6rg_Private?= <joerg@private.example.net>\r\n" +
+	"To: A One <a@private.example.net>,\r\n Bob Smith <b@private.example.net>,\r\n \"Trailing, Name\"\r\n" +
+	"Reply-To: Reply Name <reply@private.example.net>\r\n" +
+	"Resent-From: Resent Name <resent@private.example.net>\r\n" +
+	"Mail-Followup-To: Followup Name <follow@private.example.net>\r\n" +
+	"Content-Description: private description\r\n" +
+	"Comments: private comment\r\n" +
+	"Keywords: private keyword\r\n" +
+	"X-Unknown-Thing: secret-value\r\n" +
+	"Message-Id: <ABC123>\r\n" +
+	"In-Reply-To: <parent-id>\r\n" +
+	"Mime-Version: 1.0\r\n" +
+	"Content-Type: text/plain;\r\n charset=utf-8\r\n\r\nbody\r\n"
+
+func TestAnonymizeHeaders(t *testing.T) {
+	out := anonymize([]byte(headerLeaks), 256)
+	for _, private := range []string{"Private", "J=C3", "Bob Smith", "A One", "Trailing", "Reply Name", "Resent Name", "Followup Name", "private", "secret-value", "Comments", "Keywords", "ABC123", "parent-id", "Content-Description", "X-Unknown"} {
+		if bytes.Contains(out, []byte(private)) {
+			t.Errorf("output still holds %q:\n%s", private, out)
+		}
+	}
+	for _, kept := range []string{"\r\nReply-To: Person ", "\r\nResent-From: Person ", "\r\nMail-Followup-To: Person ", "Message-Id: <id", "In-Reply-To: <id", "Mime-Version: 1.0", "charset=utf-8"} {
+		if !bytes.Contains(out, []byte(kept)) {
+			t.Errorf("output lost %q:\n%s", kept, out)
+		}
+	}
+	if n := strings.Count(string(out), "@example.com"); n < 6 {
+		t.Errorf("want every address replaced, got %d replaced addresses:\n%s", n, out)
+	}
+}

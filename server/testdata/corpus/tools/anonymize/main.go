@@ -38,17 +38,28 @@ func main() {
 
 var (
 	emailRe    = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`)
+	addressRe  = regexp.MustCompile(`[^\s<>,;"()]+@[^\s<>,;"()]+`)
+	idRe       = regexp.MustCompile(`<[^<>]*>`)
 	boundaryRe = regexp.MustCompile(`(?i)boundary\s*=\s*"?([^";\r\n]+)"?`)
 	nameRe     = regexp.MustCompile(`(?i)\b((?:file)?name\*?[0-9]*\*?)\s*=\s*("[^"]*"|[^;\s]+)`)
-	cteRe      = regexp.MustCompile(`(?i)^content-transfer-encoding:\s*(\S+)`)
-	dropRe     = regexp.MustCompile(`(?i)^(received|return-path|delivered-to|dkim-signature|arc-[a-z-]+|authentication-results|x-[a-z0-9-]+|thread-[a-z]+|list-[a-z-]+):`)
-	addrRe     = regexp.MustCompile(`(?i)^(from|to|cc|bcc|reply-to|sender):`)
 	qpEscape   = regexp.MustCompile(`=[0-9A-Fa-f]{2}|=\r?$`)
 )
+
+// addressHeader reports whether a header holds people. Display names can be
+// anywhere in the value, so the whole value is rewritten.
+func addressHeader(name string) bool {
+	switch name {
+	case "from", "to", "cc", "bcc", "reply-to", "sender", "mail-followup-to",
+		"disposition-notification-to", "return-receipt-to", "return-path":
+		return true
+	}
+	return strings.HasPrefix(name, "resent-")
+}
 
 type anon struct {
 	emails map[string]string
 	files  map[string]string // original file name → fileN.ext
+	ids    map[string]string // original message id → <idN@example.com>
 }
 
 func (a *anon) email(e string) string {
@@ -61,8 +72,17 @@ func (a *anon) email(e string) string {
 	return v
 }
 
+func (a *anon) id(id string) string {
+	if v, ok := a.ids[id]; ok {
+		return v
+	}
+	v := fmt.Sprintf("<id%d@example.com>", len(a.ids)+1)
+	a.ids[id] = v
+	return v
+}
+
 func anonymize(raw []byte, keep int) []byte {
-	a := &anon{emails: map[string]string{}, files: map[string]string{}}
+	a := &anon{emails: map[string]string{}, files: map[string]string{}, ids: map[string]string{}}
 	eol := "\n"
 	if bytes.Contains(raw, []byte("\r\n")) {
 		eol = "\r\n"
@@ -70,29 +90,39 @@ func anonymize(raw []byte, keep int) []byte {
 	lines := strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n")
 	boundaries := map[string]bool{}
 	var out []string
-	inHeader, cte, dropping := true, "", false
+	inHeader, cte := true, ""
 	placed := false // the current base64 part's placeholder is written
-	for _, line := range lines {
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
 		if inHeader {
-			if line == "" {
-				inHeader, dropping = false, false
-				out = append(out, line)
-				continue
+			// Fields are unfolded first: a name can sit on a continuation line.
+			var fields []string
+			for ; i < len(lines) && lines[i] != ""; i++ {
+				if c := lines[i][0]; (c == ' ' || c == '\t') && len(fields) > 0 {
+					fields[len(fields)-1] += lines[i]
+				} else {
+					fields = append(fields, lines[i])
+				}
 			}
-			continued := line[0] == ' ' || line[0] == '\t'
-			if !continued {
-				dropping = dropRe.MatchString(line)
+			for _, f := range fields {
+				name, value, _ := strings.Cut(f, ":")
+				name = strings.ToLower(strings.TrimSpace(name))
+				if name == "content-type" {
+					for _, m := range boundaryRe.FindAllStringSubmatch(value, -1) {
+						boundaries[m[1]] = true
+					}
+				}
+				if name == "content-transfer-encoding" {
+					cte = strings.ToLower(strings.TrimSpace(value))
+				}
+				if h, ok := a.header(f, name, value); ok {
+					out = append(out, h)
+				}
 			}
-			if dropping {
-				continue
+			if i < len(lines) {
+				out = append(out, "")
+				inHeader = false
 			}
-			for _, m := range boundaryRe.FindAllStringSubmatch(line, -1) {
-				boundaries[m[1]] = true
-			}
-			if m := cteRe.FindStringSubmatch(line); m != nil {
-				cte = strings.ToLower(m[1])
-			}
-			out = append(out, a.header(line, continued))
 			continue
 		}
 		if isDelimiter(line, boundaries) {
@@ -115,18 +145,28 @@ func anonymize(raw []byte, keep int) []byte {
 	return []byte(strings.Join(out, eol))
 }
 
-func (a *anon) header(line string, continued bool) string {
-	lower := strings.ToLower(line)
+// header rewrites one unfolded field. Only the headers the parser depends on
+// are kept; every other header can carry private text, so it is dropped.
+func (a *anon) header(field, name, value string) (string, bool) {
 	switch {
-	case !continued && strings.HasPrefix(lower, "subject:"):
-		return "Subject: Fixture message"
-	case !continued && strings.HasPrefix(lower, "date:"):
-		return "Date: Mon, 02 Nov 2026 12:00:00 +0000"
-	case !continued && addrRe.MatchString(line):
-		name, rest, _ := strings.Cut(line, ":")
-		return name + ":" + a.addresses(rest)
+	case name == "subject":
+		return "Subject: Fixture message", true
+	case name == "date":
+		return "Date: Mon, 02 Nov 2026 12:00:00 +0000", true
+	case name == "message-id" || name == "in-reply-to" || name == "references" || name == "content-id":
+		return field[:len(name)] + ":" + idRe.ReplaceAllStringFunc(value, a.id), true
+	case addressHeader(name):
+		entries := a.addresses(value)
+		return field[:len(name)] + ":" + entries, entries != ""
+	case name == "mime-version" || name == "content-transfer-encoding":
+		return field, true
+	case name == "content-type" || name == "content-disposition":
+		return a.names(emailRe.ReplaceAllStringFunc(field, a.email)), true
 	}
-	line = emailRe.ReplaceAllStringFunc(line, a.email)
+	return "", false
+}
+
+func (a *anon) names(line string) string {
 	return nameRe.ReplaceAllStringFunc(line, func(m string) string {
 		parts := nameRe.FindStringSubmatch(m)
 		original := strings.Trim(parts[2], `"`)
@@ -143,15 +183,13 @@ func (a *anon) header(line string, continued bool) string {
 	})
 }
 
-// addresses replaces each display name with "Person N" and each address.
+// addresses replaces every address in v, and so every display name, with
+// "Person N <personN@example.com>". A name with no address is dropped.
 func (a *anon) addresses(v string) string {
 	var out []string
-	for _, addr := range strings.Split(v, ",") {
-		e := emailRe.FindString(addr)
-		if e == "" {
-			continue
-		}
-		out = append(out, fmt.Sprintf(" Person %s <%s>", strings.TrimSuffix(strings.TrimPrefix(a.email(e), "person"), "@example.com"), a.email(e)))
+	for _, e := range addressRe.FindAllString(v, -1) {
+		p := a.email(e)
+		out = append(out, fmt.Sprintf(" Person %s <%s>", strings.TrimSuffix(strings.TrimPrefix(p, "person"), "@example.com"), p))
 	}
 	return strings.Join(out, ",")
 }
