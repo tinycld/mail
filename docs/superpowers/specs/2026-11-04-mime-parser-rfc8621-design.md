@@ -32,6 +32,10 @@ fix is a process, not a fourth patch:
 
 ## Goals
 
+- **Accept liberally.** The parser does its best to salvage something from
+  every part, however malformed. It never refuses a message, and it never
+  discards bytes it could show or store: what it cannot decode it keeps
+  undecoded, and what it cannot classify it keeps as a file.
 - Every leaf part of every message ends up as text, HTML or a file. No part
   is lost silently, and parsing never stops part-way.
 - Text in any charset that `golang.org/x/text` knows is decoded to UTF-8.
@@ -61,16 +65,19 @@ The parser becomes three steps, each a small unit with its own tests:
 raw bytes ──readTree──▶ part tree (+ warnings) ──parseStructure──▶ text/html/attachment lists ──flatten──▶ storedMessage
 ```
 
-`parseRFC5322(raw)` keeps its signature for its four callers and returns
-the warnings beside the message:
+`parseRFC5322(raw)` no longer returns an error; it always returns a
+message, with the warnings beside it. Its four callers change with it:
 
 ```go
-func parseRFC5322(raw []byte) (*storedMessage, []parseWarning, error)
+func parseRFC5322(raw []byte) (*storedMessage, []parseWarning)
 ```
+
+The SMTP "message could not be parsed" (554) path goes away: a message that
+reaches DATA is always stored or sent with whatever was salvaged.
 
 ### Step 1: `readTree` (new file `server/mimetree.go`)
 
-`readTree(raw []byte) (*mimePart, []parseWarning, error)` reads the whole
+`readTree(raw []byte) (*mimePart, []parseWarning)` reads the whole
 tree with go-message's entity reader (`message.Read`, recursing through
 `MultipartReader`), not `mail.Reader`, so containers, dispositions and
 order are all kept.
@@ -88,24 +95,60 @@ type mimePart struct {
 }
 ```
 
-Rules:
+The rule for every case below is the same: **keep the part, keep the most
+useful bytes we can get, add a warning, and go on.** Nothing here returns an
+error, and nothing ends the walk of the tree.
 
 - `server` imports `github.com/emersion/go-message/charset`, so the common
   charsets decode.
-- **Unknown charset:** go-message returns the part together with an
-  unknown-charset error. The part is kept. If its body is valid UTF-8 it is
-  used as is, otherwise it is decoded as Windows-1252, and a warning names the
-  charset. The loop goes on.
-- **Any other error inside a multipart** (a bad boundary, a truncated part):
-  the parts read so far are kept, a warning is added, and that multipart
-  ends. Its siblings and parents go on.
-- **Errors:** only a top-level header that cannot be read at all is an
-  error. Everything else is a warning.
-- **`message/rfc822` and other `message/*`:** a leaf, kept as bytes and not
-  recursed into, as RFC 8621 says. It becomes an `.eml` file.
-- **Nesting:** limited to 50 levels. A deeper multipart becomes a single file
-  part, with a warning (against nesting bombs).
-- **Single-part messages:** the root is itself a leaf.
+- **Headers:**
+  - **Header block cannot be read:** a top-level header block that cannot be
+    read at all (for example binary garbage before the first blank line)
+    makes the whole input one `text/plain` part. Its body is the raw bytes,
+    charset-guessed as below.
+  - **Bad header field:** a single malformed field is skipped; the others
+    stay.
+- **Content type:**
+  - **Missing or unparseable `Content-Type`:** the part is `text/plain`, as
+    RFC 2045 says. If the raw value starts with `multipart/` and a boundary
+    can still be found in it, the part is read as that multipart.
+  - **Bad parameters** (broken RFC 2231 continuations, unbalanced quotes):
+    each parameter keeps its raw value when it cannot be decoded, so a
+    filename survives as written.
+- **Transfer encoding:**
+  - **Unknown `Content-Transfer-Encoding`:** the body is kept as it is.
+  - **Invalid base64 or quoted-printable:** the part is decoded up to the
+    first bad byte, and the rest is kept raw (skipping whitespace and
+    characters that cannot be base64, as lenient decoders do). If nothing
+    decodes, the raw body is kept.
+- **Charset:**
+  - **Unknown, missing or wrong:** go-message returns the part together
+    with an unknown-charset error, and the part is kept. Its body is used as
+    is when it is valid UTF-8. For HTML, a `<meta charset>` in the body is
+    tried next. Otherwise the body is decoded as Windows-1252, which maps
+    every byte to some character.
+  - **Text that still is not valid UTF-8** after decoding has its bad
+    sequences replaced with U+FFFD, so the text can always be stored and
+    shown.
+- **Multipart structure:**
+  - **Boundary missing, or never found in the body:** the body becomes one
+    leaf. It is `text/plain` when it looks like text, and a file otherwise.
+  - **Truncated multipart** (no closing delimiter, or the input ends inside
+    a part): every part read so far is kept, including the last, partial
+    one.
+  - **Any other read error inside a multipart:** the parts read so far are
+    kept, and the rest of that multipart's body, from the failing point,
+    becomes one more leaf. Its siblings and parents go on.
+  - **Preamble and epilogue:** dropped, as RFC 2046 says, unless the
+    multipart has no parts at all. The preamble is then its text.
+- **Other cases:**
+  - **`message/rfc822` and other `message/*`:** a leaf, kept as bytes and not
+    recursed into, as RFC 8621 says. It becomes an `.eml` file.
+  - **Nesting:** limited to 50 levels. A deeper multipart becomes one file
+    part with its raw bytes (against nesting bombs).
+  - **Single-part messages:** the root is itself a leaf.
+  - **Empty parts:** kept. They are in the tree, but a body list or the file
+    list skips a part with no bytes.
 
 ### Step 2: `parseStructure` (new file `server/bodystructure.go`)
 
@@ -172,10 +215,15 @@ string, one HTML string and a file list:
 ### Warnings and diagnostics
 
 `parseWarning` is `{Part int; Kind string; Detail string}`. `Kind` is one of:
-- `unknown-charset`
-- `bad-multipart`
-- `too-deep`
+- `bad-header`
+- `bad-content-type`
 - `bad-header-param`
+- `bad-encoding`
+- `unknown-charset`
+- `invalid-utf8`
+- `bad-multipart`
+- `truncated`
+- `too-deep`
 
 The callers log a warning line through `logging.ForPackage("mail")`:
 - when there are warnings;
@@ -232,8 +280,9 @@ pinned commits, so a refresh is a reviewed diff and not a hand copy.
 ### The tests (`server/corpus_test.go`)
 
 1. **`TestCorpus_LosesNothing`** runs on every message of every source:
-   - `parseRFC5322` returns no error;
-   - every leaf of the tree is in the text, HTML or attachment list;
+   - every leaf of the tree with bytes is in the text, HTML or attachment
+     list;
+   - no leaf that had bytes in the raw message has an empty body;
    - whenever the tree has a `text/*` leaf that is not an attachment, the
      text or the HTML body is not empty;
    - the result is the same on a second run.
@@ -253,7 +302,7 @@ pinned commits, so a refresh is a reviewed diff and not a hand copy.
    - the attachments by name, type and size;
    - that no body is empty.
 4. **`FuzzParseRFC5322`** is seeded with every corpus message. It checks:
-   - no panic;
+   - no panic, and always a message back;
    - the LosesNothing properties;
    - that each input is parsed within one second.
 
@@ -302,7 +351,8 @@ No public corpus has mail from current clients. We build our own:
 
 ## Testing
 
-- Corpus: the four tests above, on about 400 messages.
+- Corpus: the four tests above, on about 280 messages (about 0.5 MB in the
+  repo), 334 with the Hunny samples.
 - Unit: `readTree`, `parseStructure` (a test per RFC branch), `flatten`.
 - The callers' existing tests (`imap_rfc5322_test.go`, `message_files_test.go`,
   SMTP and IMAP tests) keep passing, with the new warnings return value.
