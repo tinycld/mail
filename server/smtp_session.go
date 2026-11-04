@@ -288,14 +288,8 @@ func (s *smtpSession) Data(r io.Reader) error {
 		}, err)
 	}
 
-	msg, err := parseRFC5322(raw)
-	if err != nil {
-		return s.refuse("data", &smtp.SMTPError{
-			Code:         554,
-			EnhancedCode: smtp.EnhancedCode{5, 6, 0},
-			Message:      "Message could not be parsed",
-		}, err)
-	}
+	// Any message is accepted: parsing salvages what it can and never fails.
+	msg, _ := parseRFC5322(raw)
 
 	// Build From address from the mailbox record — we intentionally use the
 	// mailbox's configured display name, not the one from the message headers,

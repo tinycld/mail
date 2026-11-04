@@ -3,7 +3,6 @@ package mail
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -113,13 +112,10 @@ func (p *SMTPProvider) Send(ctx context.Context, req *SendRequest) (*SendResult,
 // ParseInbound parses a raw RFC 5322 message into the InboundMessage shape
 // expected by processInboundForMailbox. We reuse parseRFC5322 (also used by
 // IMAP APPEND) and adapt its storedMessage output to InboundMessage so the
-// downstream pipeline stays unchanged. parseRFC5322 already returns message
+// downstream pipeline stays unchanged. Parsing never fails. parseRFC5322 already returns message
 // ids in the stored "<id@host>" form.
 func (p *SMTPProvider) ParseInbound(body []byte) (*InboundMessage, error) {
-	stored, err := parseRFC5322(body)
-	if err != nil {
-		return nil, fmt.Errorf("smtp inbound: %w", err)
-	}
+	stored, _ := parseRFC5322(body)
 
 	msg := &InboundMessage{
 		From:        Recipient{Name: stored.SenderName, Email: stored.SenderEmail},

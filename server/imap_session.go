@@ -572,10 +572,7 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 		return nil, fmt.Errorf("failed to read literal: %w", err)
 	}
 
-	msg, err := parseRFC5322(raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse message: %w", err)
-	}
+	msg, _ := parseRFC5322(raw)
 
 	// Set delivery status based on folder
 	switch target.folder {
