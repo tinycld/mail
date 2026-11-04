@@ -13,11 +13,18 @@ mail from a widely used client, each time with a different fault:
 1. A body split around a file kept only its last, empty part, and the file
    marked `inline` was dropped (mail v0.10.1).
 2. HTML that sanitizes to nothing made the store fail (mail v0.10.1).
-3. A part whose charset go-message does not decode (anything but UTF-8 and
-   US-ASCII) ends the part loop, so every body is lost and Postmark refuses
-   the send. This one is still live.
+3. A message with a subject and two files and no text part (Apple Mail:
+   `multipart/mixed` of an `application/octet-stream` attachment and an
+   inline PDF) parses correctly, but SMTP submission sends Postmark an empty
+   `TextBody` and no `HtmlBody`, which Postmark refuses (ErrorCode 300), so
+   the client gets a 451 and retries for ever. This one is still live.
 
-The faults share a cause: the rules that decide which part is the text
+A fourth fault is latent: a part whose charset go-message does not decode
+(anything but UTF-8 and US-ASCII) ends the part loop, so every part after it
+is lost.
+
+Faults 1, 2 and the latent one share a cause, and fault 3 is the same
+cause at the send step: the rules that decide which part is the text
 body, which is the HTML body and which is a file are our own, written case
 by case, and were tested only against messages written by hand. The
 fix is a process, not a fourth patch:
@@ -42,7 +49,9 @@ fix is a process, not a fourth patch:
 - For the messages in the corpus that have expected results, the text-body,
   HTML-body and attachment lists match them, except for a short, reviewed
   list of deviations.
-- The three faults above are fixtures in the corpus.
+- A message with only a subject, or only a subject and files, is valid: it
+  is stored and sent.
+- The faults above are fixtures in the corpus.
 - A message that parses badly in production leaves a log line that names
   its structure.
 
@@ -243,16 +252,27 @@ size, and which list it went to. It never includes names, addresses or body
 text. With this line, the third fault would have been found from the log,
 without asking for the raw source.
 
-### A message with files and no text
+### A message with no text
 
-SMTP submission still refuses to send a message whose bodies are both empty,
-because Postmark refuses it. This is a 451 that clients retry for ever.
+A message with only a subject, or a subject and files, is valid mail:
+someone sends a file, or puts everything in the subject. It is stored with
+empty bodies and sent with `TextBody = " "` when both bodies are empty.
 
-- A message with files but no text is valid mail (for example a forwarded
-  attachment). It gets `TextBody = " "`, if Postmark accepts that (to be
-  checked against Postmark before implementation).
-- Otherwise the submission gets a permanent 554 "message has no body", so the
-  client stops retrying.
+Postmark refuses an empty body and accepts whitespace. Checked on
+2026-11-04 with Postmark's test token (`POSTMARK_API_TEST`, validated but
+not delivered):
+
+| Body sent | Postmark |
+|---|---|
+| `TextBody: ""` (or no body) | ErrorCode 300, "Provide either 'TextBody' or 'HtmlBody'" |
+| `TextBody: " "` | accepted |
+| `TextBody: "\r\n"` | accepted |
+| `HtmlBody: " "` | accepted |
+
+The mailer (`core/server/mailer/postmark.go`) sends the fields as given and
+trims nothing, so `" "` reaches Postmark as is. The send path
+(`smtp_session.go`) sets it; the stored message keeps its empty bodies, so
+the UI shows no body rather than a space.
 
 ## The corpus harness
 
@@ -265,13 +285,13 @@ license text.
 | Source | From | Expected results | License |
 |---|---|---|---|
 | `stalwart/rfc`, `malformed`, `regressions`, `issues`, `thirdparty` | stalwartlabs/mail-parser `resources/eml` | yes (`.json`) | Apache-2.0 OR MIT; `thirdparty` is Dovecot's, MIT |
-| `stalwart/legacy` | the Hunny Software samples in the same tree | yes | Hunny copyright; open question 1 |
+| `stalwart/legacy` | the Hunny Software samples in the same tree | yes | Hunny Software copyright; redistributed by stalwart and (with permission) zbateson; vendored with its COPYING note |
 | `enmime` | jhillyerd/enmime `testdata/mail` | no | MIT |
 | `mimekit` | jstedfast/MimeKit `UnitTests/TestData/messages` | no | MIT |
 | `zbateson` | zbateson/mail-mime-parser `tests/_data/emails` (GitHub-issue messages; the Hunny ones duplicate `legacy`) | no | BSD-2 |
 | `cpython` | python/cpython `Lib/test/test_email/data` | no | PSF |
 | `thunderbird` | comm-central `mailnews/test/data` MIME torture test | no | MPL-2.0 (file-level) |
-| `faults` | the three faults above, as minimal messages | yes (ours) | ours |
+| `faults` | the faults above. Fault 3 is the real message, anonymized: names and addresses replaced, each attachment's bytes replaced by the same number of placeholder bytes (the structure, headers, boundaries, encodings and sizes stay) | yes (ours) | ours |
 | `clients` | real client messages (below) | yes (ours) | ours |
 
 A script, `server/testdata/corpus/fetch.sh`, takes the external sources at
@@ -351,19 +371,16 @@ No public corpus has mail from current clients. We build our own:
 
 ## Testing
 
-- Corpus: the four tests above, on about 280 messages (about 0.5 MB in the
-  repo), 334 with the Hunny samples.
+- Corpus: the four tests above, on about 334 messages, about 0.7 MB in the
+  repo (fault 3 is larger, about 5 MB, unless its attachments are shortened;
+  see the anonymizer).
 - Unit: `readTree`, `parseStructure` (a test per RFC branch), `flatten`.
 - The callers' existing tests (`imap_rfc5322_test.go`, `message_files_test.go`,
   SMTP and IMAP tests) keep passing, with the new warnings return value.
 
 ## Open questions
 
-1. **Hunny Software samples (`stalwart/legacy`, about 54 messages):** zbateson
-   says they were copied with permission, and stalwart ships them with a
-   COPYING note. Do we vendor them, or fetch them at test time and keep them
-   out of the repo?
-2. **`TextBody = " "` for file-only messages:** does Postmark accept a single
-   space? If not, the choice is between a permanent 554 and a short fixed
-   text.
-3. **Who captures the real-client messages, and from which accounts?**
+1. **Who captures the real-client messages, and from which accounts?**
+2. **Fault 3's size:** keep its 4.9 MB attachment at full length (it tests
+   a large base64 part), or shorten it to a few KB in the fixture and cover
+   large parts with a generated test instead?
