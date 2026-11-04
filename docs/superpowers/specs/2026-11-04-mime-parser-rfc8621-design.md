@@ -1,0 +1,319 @@
+# MIME parsing by RFC 8621, tested against a corpus — design
+
+Date: 2026-11-04
+Status: draft, for review
+
+## Why
+
+`parseRFC5322` (`server/imap_rfc5322.go`) turns a raw message into the
+`storedMessage` that IMAP APPEND, SMTP submission, the port-25 listener and
+the SMTP provider path store or send. It has failed three times on ordinary
+mail from a widely used client, each time with a different fault:
+
+1. A body split around a file kept only its last, empty part, and the file
+   marked `inline` was dropped (mail v0.10.1).
+2. HTML that sanitizes to nothing made the store fail (mail v0.10.1).
+3. A part whose charset go-message does not decode (anything but UTF-8 and
+   US-ASCII) ends the part loop, so every body is lost and Postmark refuses
+   the send. This one is still live.
+
+The faults share a cause: the rules that decide which part is the text
+body, which is the HTML body and which is a file are our own, written case
+by case, and were tested only against messages written by hand. The
+fix is a process, not a fourth patch:
+
+- The rules come from a published algorithm, RFC 8621 §4.1.4
+  `parseStructure`, which Stalwart and Thunderbird's new protocol code use
+  through the `mail-parser` crate.
+- A corpus of real and malformed messages, most with expected results,
+  gates every change.
+- When parsing still goes wrong in production, the log says what the
+  message looked like, without its content.
+
+## Goals
+
+- Every leaf part of every message ends up as text, HTML or a file. No part
+  is lost silently, and parsing never stops part-way.
+- Text in any charset that `golang.org/x/text` knows is decoded to UTF-8.
+- For the messages in the corpus that have expected results, the text-body,
+  HTML-body and attachment lists match them, except for a short, reviewed
+  list of deviations.
+- The three faults above are fixtures in the corpus.
+- A message that parses badly in production leaves a log line that names
+  its structure.
+
+## Non-goals
+
+- Building messages (`buildRFC5322`), IMAP FETCH, and the storage schema.
+  `storedMessage` keeps its fields.
+- The Postmark inbound webhook (`postmark.go` `ParseInbound`): Postmark sends
+  JSON it has already split, not MIME.
+- S/MIME, PGP, TNEF (`winmail.dat`) and calendar invitations beyond keeping
+  their parts as files.
+- Replacing go-message. It stays the reader; go-imap v2 and our message
+  building use it too.
+
+## Design
+
+The parser becomes three steps, each a small unit with its own tests:
+
+```
+raw bytes ──readTree──▶ part tree (+ warnings) ──parseStructure──▶ text/html/attachment lists ──flatten──▶ storedMessage
+```
+
+`parseRFC5322(raw)` keeps its signature for its four callers and returns
+the warnings beside the message:
+
+```go
+func parseRFC5322(raw []byte) (*storedMessage, []parseWarning, error)
+```
+
+### Step 1: `readTree` (new file `server/mimetree.go`)
+
+`readTree(raw []byte) (*mimePart, []parseWarning, error)` reads the whole
+tree with go-message's entity reader (`message.Read`, recursing through
+`MultipartReader`), not `mail.Reader`, so containers, dispositions and
+order are all kept.
+
+```go
+type mimePart struct {
+	Type        string            // lower case, e.g. "text/html"; "text/plain" when missing
+	Params      map[string]string // content-type parameters
+	Disposition string            // "inline", "attachment" or ""
+	Name        string            // filename (RFC 2231 and 2047 decoded) or content-type name
+	ContentID   string
+	Body        []byte            // transfer-decoded; text/* also charset-decoded to UTF-8
+	Children    []*mimePart       // multipart/* only
+	Index       int               // depth-first position, for logs and tests
+}
+```
+
+Rules:
+
+- `server` imports `github.com/emersion/go-message/charset`, so the common
+  charsets decode.
+- **Unknown charset:** go-message returns the part together with an
+  unknown-charset error. The part is kept. If its body is valid UTF-8 it is
+  used as is, otherwise it is decoded as Windows-1252, and a warning names the
+  charset. The loop goes on.
+- **Any other error inside a multipart** (a bad boundary, a truncated part):
+  the parts read so far are kept, a warning is added, and that multipart
+  ends. Its siblings and parents go on.
+- **Errors:** only a top-level header that cannot be read at all is an
+  error. Everything else is a warning.
+- **`message/rfc822` and other `message/*`:** a leaf, kept as bytes and not
+  recursed into, as RFC 8621 says. It becomes an `.eml` file.
+- **Nesting:** limited to 50 levels. A deeper multipart becomes a single file
+  part, with a warning (against nesting bombs).
+- **Single-part messages:** the root is itself a leaf.
+
+### Step 2: `parseStructure` (new file `server/bodystructure.go`)
+
+`parseStructure(root *mimePart) (text, html, attachments []*mimePart)` is
+a direct port of the RFC 8621 §4.1.4 algorithm:
+
+- `isInline`:
+  - not `Content-Disposition: attachment`;
+  - type `text/plain`, `text/html` or `image|audio|video/*`;
+  - and first in its multipart, or (not in `multipart/related` and
+    (inline media or no name)).
+- In `multipart/alternative`: `text/plain` goes to the text body, `text/html`
+  to the HTML body, and anything else is an attachment.
+- Inside an alternative, a `text/plain` part ends the HTML list for that
+  branch, and a `text/html` part ends the text list.
+- Inline media is in both body lists, and is also an attachment when only
+  one list takes it.
+- At the end of an alternative, a branch that filled only one list copies its
+  parts into the other.
+- A single-part root is handled as `parts = [root]` in a `mixed` multipart.
+
+RFC 8621 calls this algorithm "a starting point … likely to require
+workarounds for malformed content". Each workaround we add:
+
+- is justified by a named corpus message that fails without it;
+- is written as its own small rule with that message named in its comment;
+- is listed in the design section of the code (`bodystructure.go` header
+  comment).
+
+This lets us tell a workaround from a bug. Stalwart's issue #67
+fixes (an alternative child with disposition attachment, a named HTML part
+in an alternative, an unterminated alternative) are the first candidates;
+the harness shows which ones we need.
+
+### Step 3: `flatten` (in `server/bodystructure.go`)
+
+`flatten` maps the three lists onto `storedMessage`, which holds one text
+string, one HTML string and a file list:
+
+- **TextBody:** the text-body parts in order, joined with `"\n"`.
+  - `text/plain` is used as is.
+  - `text/html` (there when a branch had only HTML) goes through
+    `stripHTMLToText`.
+  - Media parts are left out of the text.
+- **HTMLBody:** the HTML-body parts in order, joined.
+  - `text/html` is used as is. Each part's own `<html>`/`<body>` wrappers stay;
+    `sanitizeEmailHTML` flattens them later.
+  - `text/plain` becomes `<div style="white-space: pre-wrap">` with the text
+    escaped.
+  - A media part becomes `<img src="cid:…">` at its place in the order, unless
+    an HTML part already references its Content-ID. A part with no Content-ID
+    gets a generated one (`part-<index>@tinycld.invalid`). An image placed
+    between two HTML parts then shows where the sender put it.
+- If the HTML-body list holds no `text/html` part at all, HTMLBody stays
+  empty. A plain-text message stays plain text, as today.
+- **Attachments:** the RFC attachment list plus every media part of the body
+  lists, without duplicates, in depth-first order.
+  - Every file keeps its Content-ID, so `buildCIDMap` can resolve `cid:` links.
+  - A part with no name is named from its type (`newInboundAttachment`, as
+    today).
+- **Text from HTML:** if TextBody is empty or only whitespace and HTMLBody is
+  not, TextBody is `stripHTMLToText(HTMLBody)`, as today.
+
+### Warnings and diagnostics
+
+`parseWarning` is `{Part int; Kind string; Detail string}`. `Kind` is one of:
+- `unknown-charset`
+- `bad-multipart`
+- `too-deep`
+- `bad-header-param`
+
+The callers log a warning line through `logging.ForPackage("mail")`:
+- when there are warnings;
+- when, after flattening, both bodies are empty but the tree has a `text/*`
+  leaf that is not an attachment.
+
+The line carries the structure and no content:
+
+```
+msg="message parsed with problems" user=… route=smtp-submission
+structure="0 multipart/mixed; 1 text/html charset=windows-1252 →html; 2 application/pdf inline 48211B →file; 3 text/html charset=windows-1252 →html"
+warnings="1 unknown-charset windows-1252 (decoded as Windows-1252)"
+```
+
+The structure lists, for each part: its index, type, charset, disposition,
+size, and which list it went to. It never includes names, addresses or body
+text. With this line, the third fault would have been found from the log,
+without asking for the raw source.
+
+### A message with files and no text
+
+SMTP submission still refuses to send a message whose bodies are both empty,
+because Postmark refuses it. This is a 451 that clients retry for ever.
+
+- A message with files but no text is valid mail (for example a forwarded
+  attachment). It gets `TextBody = " "`, if Postmark accepts that (to be
+  checked against Postmark before implementation).
+- Otherwise the submission gets a permanent 554 "message has no body", so the
+  client stops retrying.
+
+## The corpus harness
+
+### Layout
+
+`server/testdata/corpus/<source>/` holds the messages of one source, and a
+`SOURCE.md` with the origin URL, the commit it was taken from and the
+license text.
+
+| Source | From | Expected results | License |
+|---|---|---|---|
+| `stalwart/rfc`, `malformed`, `regressions`, `issues`, `thirdparty` | stalwartlabs/mail-parser `resources/eml` | yes (`.json`) | Apache-2.0 OR MIT; `thirdparty` is Dovecot's, MIT |
+| `stalwart/legacy` | the Hunny Software samples in the same tree | yes | Hunny copyright; open question 1 |
+| `enmime` | jhillyerd/enmime `testdata/mail` | no | MIT |
+| `mimekit` | jstedfast/MimeKit `UnitTests/TestData/messages` | no | MIT |
+| `zbateson` | zbateson/mail-mime-parser `tests/_data/emails` (GitHub-issue messages; the Hunny ones duplicate `legacy`) | no | BSD-2 |
+| `cpython` | python/cpython `Lib/test/test_email/data` | no | PSF |
+| `thunderbird` | comm-central `mailnews/test/data` MIME torture test | no | MPL-2.0 (file-level) |
+| `faults` | the three faults above, as minimal messages | yes (ours) | ours |
+| `clients` | real client messages (below) | yes (ours) | ours |
+
+A script, `server/testdata/corpus/fetch.sh`, takes the external sources at
+pinned commits, so a refresh is a reviewed diff and not a hand copy.
+
+### The tests (`server/corpus_test.go`)
+
+1. **`TestCorpus_LosesNothing`** runs on every message of every source:
+   - `parseRFC5322` returns no error;
+   - every leaf of the tree is in the text, HTML or attachment list;
+   - whenever the tree has a `text/*` leaf that is not an attachment, the
+     text or the HTML body is not empty;
+   - the result is the same on a second run.
+2. **`TestCorpus_MatchesExpected`** runs on the stalwart sets:
+   - **Expected side:** for message 0, the expected `text_body`, `html_body`
+     and `attachments` part lists, each part as (type, decoded content) from
+     the JSON's `text` or `binary` field.
+   - **Our side:** the three lists from `readTree` + `parseStructure`, before
+     flattening, as (type, decoded body).
+   - Content is compared with CRLF changed to LF on both sides.
+   - A mismatch fails the test unless `known_deviations.txt` lists that
+     message with a reason. A listed message that now matches also fails the
+     test, so the list can only shrink.
+3. **`TestCorpus_Flatten`** runs on `faults` and `clients`. Each message has
+   an `NAME.expect.json` with the `storedMessage` facts that matter:
+   - text and HTML snippets that must appear;
+   - the attachments by name, type and size;
+   - that no body is empty.
+4. **`FuzzParseRFC5322`** is seeded with every corpus message. It checks:
+   - no panic;
+   - the LosesNothing properties;
+   - that each input is parsed within one second.
+
+   It runs as a normal test over the seeds in CI. Longer fuzz runs are local.
+
+The three steps also get unit tests of their own: `readTree` errors and
+warnings, the RFC algorithm branch by branch, and the flatten mapping.
+
+### Real-client messages
+
+No public corpus has mail from current clients. We build our own:
+
+- **Cases:**
+  1. plain text;
+  2. rich text;
+  3. an inline image;
+  4. a PDF placed inside the text;
+  5. non-ASCII text (accents, emoji, a right-to-left line);
+  6. a reply with a quote;
+  7. a forward as attachment;
+  8. a message with a file and no text.
+- **Clients:**
+  - Apple Mail on macOS and iOS;
+  - Outlook for Windows and Outlook on the web;
+  - Gmail web and the Gmail app;
+  - Thunderbird.
+- **Capture:** send each case to a test mailbox and save the raw source with
+  the client's or webmail's "show original" or "raw source". Run
+  `testdata/corpus/clients/anonymize.go` over it. It replaces addresses,
+  names, Message-IDs and `Received` hosts and keeps the structure byte for
+  byte.
+- **Expected results:** written by hand from what the sending client showed.
+- This needs a person with those clients. The harness and the other sources
+  do not wait for it. The set grows as clients are captured.
+
+## Rollout
+
+1. Land the harness and the corpus first, with the current parser, and
+   record its failures. This is the baseline. It shows how much the new
+   parser fixes, and that it fixes the live fault.
+2. Land `readTree`, `parseStructure` and `flatten` behind the same
+   `parseRFC5322` signature.
+3. Land the diagnostics.
+4. Release mail as a patch. Move tinycld.com to it with
+   `pnpm run hosting -- expedite mail@<version>`.
+
+## Testing
+
+- Corpus: the four tests above, on about 400 messages.
+- Unit: `readTree`, `parseStructure` (a test per RFC branch), `flatten`.
+- The callers' existing tests (`imap_rfc5322_test.go`, `message_files_test.go`,
+  SMTP and IMAP tests) keep passing, with the new warnings return value.
+
+## Open questions
+
+1. **Hunny Software samples (`stalwart/legacy`, about 54 messages):** zbateson
+   says they were copied with permission, and stalwart ships them with a
+   COPYING note. Do we vendor them, or fetch them at test time and keep them
+   out of the repo?
+2. **`TextBody = " "` for file-only messages:** does Postmark accept a single
+   space? If not, the choice is between a permanent 554 and a short fixed
+   text.
+3. **Who captures the real-client messages, and from which accounts?**
