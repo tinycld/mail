@@ -86,10 +86,26 @@ reaches DATA is always stored or sent with whatever was salvaged.
 
 ### Step 1: `readTree` (new file `server/mimetree.go`)
 
-`readTree(raw []byte) (*mimePart, []parseWarning)` reads the whole
-tree with go-message's entity reader (`message.Read`, recursing through
-`MultipartReader`), not `mail.Reader`, so containers, dispositions and
-order are all kept.
+`readTree(raw []byte) (*mimePart, []parseWarning)` reads the whole tree,
+with containers, dispositions and order all kept.
+
+It does not use go-message's entity reader. That reader refuses a malformed
+header line, and it decodes transfer encoding and charset itself, with no way
+to keep a partial result. Both are exactly where we must salvage. So
+`readTree` has three pieces of its own, each small:
+
+- **A lenient header parser.** It reads up to the first blank line and
+  unfolds continuation lines. A line with no colon is skipped with a
+  warning. It fills a go-message `textproto.Header`, so go-message's
+  `mail.Header` address, date and subject helpers keep working on it.
+- **A boundary splitter.** It finds delimiter lines (`--boundary`, with
+  trailing white space allowed, CRLF or LF) in the multipart's bytes. It
+  returns the preamble, the parts and the epilogue, and it marks a missing
+  close delimiter instead of failing. The line break before each delimiter
+  belongs to the delimiter, as RFC 2046 says.
+- **Decoders.** base64 and quoted-printable, lenient as described below.
+  Charset labels go through `go-message/charset` (`charset.Reader`, built on
+  `golang.org/x/text`).
 
 ```go
 type mimePart struct {
