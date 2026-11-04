@@ -218,7 +218,11 @@ func parseRFC5322(raw []byte) (*storedMessage, error) {
 		}
 	}
 
-	// Parse body parts
+	// A client that places a file inside the text splits the body around it:
+	// Apple Mail sends the html before the file, the file, then the html after
+	// it. Each body type is joined across its parts, so the empty trailing part
+	// cannot replace the real body.
+	var textParts, htmlParts []string
 	for {
 		p, err := mr.NextPart()
 		if err == io.EOF {
@@ -228,40 +232,57 @@ func parseRFC5322(raw []byte) (*storedMessage, error) {
 			break
 		}
 
+		body, err := io.ReadAll(p.Body)
+		if err != nil {
+			continue
+		}
+
 		switch h := p.Header.(type) {
 		case *gomail.InlineHeader:
 			ct, _, _ := h.ContentType()
-			body, err := io.ReadAll(p.Body)
-			if err != nil {
-				continue
-			}
+			// Inline only says where to show the part; a named or non-text
+			// inline part (Apple Mail's in-text PDF, a cid: image) is a file.
+			filename, _ := (&gomail.AttachmentHeader{Header: h.Header}).Filename()
 			switch {
-			case strings.HasPrefix(ct, "text/html"):
-				msg.HTMLBody = string(body)
-			case strings.HasPrefix(ct, "text/plain"):
-				msg.TextBody = string(body)
+			case filename == "" && strings.HasPrefix(ct, "text/html"):
+				htmlParts = append(htmlParts, string(body))
+			case filename == "" && strings.HasPrefix(ct, "text/plain"):
+				textParts = append(textParts, string(body))
+			default:
+				msg.Attachments = append(msg.Attachments, newInboundAttachment(filename, ct, h.Get("Content-Id"), body))
 			}
 		case *gomail.AttachmentHeader:
 			filename, _ := h.Filename()
-			body, err := io.ReadAll(p.Body)
-			if err != nil {
-				continue
-			}
 			ct, _, _ := h.ContentType()
-			msg.Attachments = append(msg.Attachments, InboundAttachment{
-				Name:        filename,
-				ContentType: ct,
-				Content:     base64.StdEncoding.EncodeToString(body),
-				Size:        int64(len(body)),
-			})
+			msg.Attachments = append(msg.Attachments, newInboundAttachment(filename, ct, h.Get("Content-Id"), body))
 		}
 	}
 
-	if msg.TextBody == "" && msg.HTMLBody != "" {
+	msg.TextBody = strings.Join(textParts, "")
+	msg.HTMLBody = strings.Join(htmlParts, "")
+	if strings.TrimSpace(msg.TextBody) == "" && msg.HTMLBody != "" {
 		msg.TextBody = stripHTMLToText(msg.HTMLBody)
 	}
 
 	return msg, nil
+}
+
+// newInboundAttachment names an unnamed part from its content type, so the
+// stored file keeps an extension the client can open it with.
+func newInboundAttachment(filename, contentType, contentID string, body []byte) InboundAttachment {
+	if filename == "" {
+		filename = "attachment"
+		if exts, _ := mime.ExtensionsByType(contentType); len(exts) > 0 {
+			filename += exts[0]
+		}
+	}
+	return InboundAttachment{
+		Name:        filename,
+		ContentType: contentType,
+		Content:     base64.StdEncoding.EncodeToString(body),
+		ContentID:   contentID,
+		Size:        int64(len(body)),
+	}
 }
 
 // loadHTMLBody reads the body_html file content from a message record.
