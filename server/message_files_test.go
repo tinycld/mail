@@ -54,3 +54,16 @@ func TestMessageFiles_StoresHeadersThatStartWithReceived(t *testing.T) {
 		t.Fatal("raw_headers is empty")
 	}
 }
+
+// An html part with no content (Apple Mail's trailing part) sanitizes to an
+// empty string, which PocketBase refuses to store as a file.
+func TestMessageFiles_StoresMessageWithEmptyHTMLBody(t *testing.T) {
+	app := newRealSchemaApp(t)
+	record, err := storeSniffTestMessage(t, app, `<html><head><meta charset="utf-8"></head><body></body></html>`)
+	if err != nil {
+		t.Fatalf("store a message whose html is empty: %v", err)
+	}
+	if record.GetString("body_html") != "" {
+		t.Fatalf("body_html = %q, want no file", record.GetString("body_html"))
+	}
+}
