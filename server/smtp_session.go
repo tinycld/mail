@@ -249,6 +249,18 @@ func (s *smtpSession) Rcpt(to string, opts *smtp.RcptOptions) error {
 	return nil
 }
 
+// submissionBodies is what SMTP submission hands the provider. A message
+// with only a subject, or a subject and files, is valid mail, but Postmark
+// refuses a send with no body at all (ErrorCode 300) and accepts white
+// space, so it goes out as a single space. The stored copy keeps its empty
+// bodies.
+func submissionBodies(msg *storedMessage) (text, html string) {
+	if strings.TrimSpace(msg.TextBody) == "" && strings.TrimSpace(msg.HTMLBody) == "" {
+		return " ", ""
+	}
+	return msg.TextBody, msg.HTMLBody
+}
+
 // Data handles the DATA command — parses the RFC 5322 message and sends it
 // through the existing provider pipeline.
 func (s *smtpSession) Data(r io.Reader) error {
@@ -338,6 +350,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 		messageID = mailer.GenerateMessageID(domainName)
 	}
 
+	text, html := submissionBodies(msg)
 	sendReq := &SendRequest{
 		MessageID:   messageID,
 		From:        fromAddr,
@@ -345,8 +358,8 @@ func (s *smtpSession) Data(r io.Reader) error {
 		Cc:          msg.Cc,
 		Bcc:         bcc,
 		Subject:     msg.Subject,
-		HTMLBody:    msg.HTMLBody,
-		TextBody:    msg.TextBody,
+		HTMLBody:    html,
+		TextBody:    text,
 		InReplyTo:   inReplyToHeader,
 		References:  referencesHeader,
 		Attachments: attachments,
