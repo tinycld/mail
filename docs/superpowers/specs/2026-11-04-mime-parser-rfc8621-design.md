@@ -291,7 +291,7 @@ license text.
 | `zbateson` | zbateson/mail-mime-parser `tests/_data/emails` (GitHub-issue messages; the Hunny ones duplicate `legacy`) | no | BSD-2 |
 | `cpython` | python/cpython `Lib/test/test_email/data` | no | PSF |
 | `thunderbird` | comm-central `mailnews/test/data` MIME torture test | no | MPL-2.0 (file-level) |
-| `faults` | the faults above. Fault 3 is the real message, anonymized: names and addresses replaced, each attachment's bytes replaced by the same number of placeholder bytes (the structure, headers, boundaries, encodings and sizes stay) | yes (ours) | ours |
+| `faults` | the faults above. Fault 3 is the real message, anonymized: names and addresses replaced, and each attachment's content replaced by a short placeholder (about 1 KB, still base64, not a valid file of its type). The structure, headers, boundaries, encodings and dispositions stay | yes (ours) | ours |
 | `clients` | real client messages (below) | yes (ours) | ours |
 
 A script, `server/testdata/corpus/fetch.sh`, takes the external sources at
@@ -372,15 +372,13 @@ No public corpus has mail from current clients. We build our own:
 ## Testing
 
 - Corpus: the four tests above, on about 334 messages, about 0.7 MB in the
-  repo (fault 3 is larger, about 5 MB, unless its attachments are shortened;
-  see the anonymizer).
+  repo.
 - Unit: `readTree`, `parseStructure` (a test per RFC branch), `flatten`.
 - The callers' existing tests (`imap_rfc5322_test.go`, `message_files_test.go`,
   SMTP and IMAP tests) keep passing, with the new warnings return value.
 
 ## Open questions
 
-1. **Who captures the real-client messages, and from which accounts?**
-2. **Fault 3's size:** keep its 4.9 MB attachment at full length (it tests
-   a large base64 part), or shorten it to a few KB in the fixture and cover
-   large parts with a generated test instead?
+1. **Who captures the real-client messages, and from which accounts?** The
+   harness, the anonymizer and the other sources do not wait for this; the
+   `clients` set starts empty.
