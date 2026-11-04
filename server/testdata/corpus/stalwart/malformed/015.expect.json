@@ -1,0 +1,23 @@
+{
+  "text": [
+    {
+      "type": "text/plain",
+      "size": 29,
+      "sha256": "9766e1413f52f6f2e612d6b29a37bac60a290ec71ad428316b97f08f8247a681"
+    }
+  ],
+  "html": [
+    {
+      "type": "text/plain",
+      "size": 29,
+      "sha256": "9766e1413f52f6f2e612d6b29a37bac60a290ec71ad428316b97f08f8247a681"
+    }
+  ],
+  "attachments": [
+    {
+      "type": "application/pgp-signature",
+      "size": 8,
+      "sha256": "28fca28ef02d08bd61931c03999b7a5b822392132867682e88b2db492ee9f087"
+    }
+  ]
+}

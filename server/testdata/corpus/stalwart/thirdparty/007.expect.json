@@ -1,0 +1,21 @@
+{
+  "text": [],
+  "html": [],
+  "attachments": [
+    {
+      "type": "message/rfc822",
+      "size": 73,
+      "sha256": "05e7caefc32d7e9ab6ba045cb4ca13d92a0c3afe8429e7f0e108a86fd27ac703"
+    },
+    {
+      "type": "message/rfc822",
+      "size": 74,
+      "sha256": "e72f0c2d1a8c267444fd09259689b5d23bc94586f692ceb5145cdb4961872bff"
+    },
+    {
+      "type": "message/rfc822",
+      "size": 318,
+      "sha256": "aff87ecc5bf1447a740a84e3414f02be78cad663fe98779fdb0e8c4bd2724589"
+    }
+  ]
+}

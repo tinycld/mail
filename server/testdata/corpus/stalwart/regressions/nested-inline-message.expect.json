@@ -1,0 +1,23 @@
+{
+  "text": [
+    {
+      "type": "text/plain",
+      "size": 5,
+      "sha256": "c432b372e0e30267e65e26a12a42c7957ab52e25dfe3c6d4b929213d88965e45"
+    }
+  ],
+  "html": [
+    {
+      "type": "text/plain",
+      "size": 5,
+      "sha256": "c432b372e0e30267e65e26a12a42c7957ab52e25dfe3c6d4b929213d88965e45"
+    }
+  ],
+  "attachments": [
+    {
+      "type": "message/rfc822",
+      "size": 53,
+      "sha256": "96a3fb9c539fbb4c85d67d53b25367318bbaadd6595b6774f325d49d976c06c6"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+From: person1@example.com
+Subject: Fixture message
+Content-Type: multipart/alternative; boundary=a
+
+--a
+Content-Type: text/plain; charset=x-nobody-knows
+
+Café au lait
+--a
+Content-Type: text/html; charset=utf-8
+
+<p>CafÃ© au lait</p>
+--a--

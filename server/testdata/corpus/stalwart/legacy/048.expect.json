@@ -1,0 +1,47 @@
+{
+  "text": [
+    {
+      "type": "text/plain",
+      "size": 753,
+      "sha256": "96619dc2a740123460d564e8b8fed496c774d27f3c7a1f35352334ddb3d2d1e1"
+    },
+    {
+      "type": "image/png",
+      "size": 2032,
+      "sha256": "10d46844387f04117b54d0959dc649e12eec81925f0dbd5dcce517b5e71d6bd6"
+    },
+    {
+      "type": "image/png",
+      "size": 1818,
+      "sha256": "6b3903533a96c4de8a96a8ee12a32a8fe197f12d2eb543ebbe828aac20e56f71"
+    },
+    {
+      "type": "image/png",
+      "size": 1855,
+      "sha256": "2497806f474bab08a9943df79575abf2073228c0801c106be16c5999d515a471"
+    }
+  ],
+  "html": [
+    {
+      "type": "text/plain",
+      "size": 753,
+      "sha256": "96619dc2a740123460d564e8b8fed496c774d27f3c7a1f35352334ddb3d2d1e1"
+    },
+    {
+      "type": "image/png",
+      "size": 2032,
+      "sha256": "10d46844387f04117b54d0959dc649e12eec81925f0dbd5dcce517b5e71d6bd6"
+    },
+    {
+      "type": "image/png",
+      "size": 1818,
+      "sha256": "6b3903533a96c4de8a96a8ee12a32a8fe197f12d2eb543ebbe828aac20e56f71"
+    },
+    {
+      "type": "image/png",
+      "size": 1855,
+      "sha256": "2497806f474bab08a9943df79575abf2073228c0801c106be16c5999d515a471"
+    }
+  ],
+  "attachments": []
+}

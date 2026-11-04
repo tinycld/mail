@@ -1,0 +1,23 @@
+{
+  "text": [
+    {
+      "type": "text/plain",
+      "size": 16,
+      "sha256": "8ddd61c5a3f855c8712e5ff8e644e3a487da1b7c3cf66596d5478fc47f1e005e"
+    }
+  ],
+  "html": [
+    {
+      "type": "text/plain",
+      "size": 16,
+      "sha256": "8ddd61c5a3f855c8712e5ff8e644e3a487da1b7c3cf66596d5478fc47f1e005e"
+    }
+  ],
+  "attachments": [
+    {
+      "type": "application/octet-stream",
+      "size": 5,
+      "sha256": "185f8db32271fe25f561a6fc938b2e264306ec304eda518007d1764826381969"
+    }
+  ]
+}
