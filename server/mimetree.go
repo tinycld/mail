@@ -174,7 +174,7 @@ func (r *treeReader) disposition(p *mimePart) (string, string) {
 	if strings.TrimSpace(raw) != "" {
 		d, ps, err := mime.ParseMediaType(raw)
 		if err != nil {
-			d, ps = lenientMediaType(raw)
+			d, ps = lenientMediaType(raw, dispositionToken)
 			r.warn(p.Index, "bad-header-param", "Content-Disposition of %d bytes read leniently", len(raw))
 		}
 		disp, params = strings.ToLower(d), ps
@@ -226,23 +226,27 @@ func parseHeaderBlock(b []byte) (textproto.Header, []byte, string) {
 			if len(fields) == 0 {
 				return textproto.Header{}, b, ""
 			}
-			// RFC 5322 unfolding removes the line break and keeps the white space.
-			fields[len(fields)-1].value += string(line)
+			// RFC 5322 unfolding removes the line break and keeps the white
+			// space. Appending to a byte slice keeps a message of many
+			// continuation lines linear; string concatenation copied the whole
+			// value per line.
+			fields[len(fields)-1].value = append(fields[len(fields)-1].value, line...)
 		default:
 			if m := headerFieldLine.FindSubmatch(line); m != nil {
-				fields = append(fields, headerLine{string(m[1]), string(m[2])})
+				fields = append(fields, headerLine{string(m[1]), append([]byte(nil), m[2]...)})
 				break
-			}
-			if pos == 0 {
-				return textproto.Header{}, b, ""
 			}
 			// Problems name a line's length, never its text: a header line
 			// can hold a name or an address, and warnings reach the log.
 			if next < len(b) {
 				if following, _ := lineAt(b, next); headerFieldLine.Match(following) {
+					// Also the first line: an mbox "From " line comes before the fields.
 					problem = fmt.Sprintf("skipped a header line of %d bytes that is not a field", len(line))
 					break
 				}
+			}
+			if pos == 0 {
+				return textproto.Header{}, b, ""
 			}
 			return headerOf(fields), b[pos:], fmt.Sprintf("header ended early at a line of %d bytes that is not a field", len(line))
 		}
@@ -251,7 +255,10 @@ func parseHeaderBlock(b []byte) (textproto.Header, []byte, string) {
 	return headerOf(fields), nil, problem
 }
 
-type headerLine struct{ name, value string }
+type headerLine struct {
+	name  string
+	value []byte
+}
 
 // headerOf builds a go-message header from fields in message order. The
 // header stores fields last-first, so they are added in reverse: Get then
@@ -260,7 +267,7 @@ type headerLine struct{ name, value string }
 func headerOf(fields []headerLine) textproto.Header {
 	var h textproto.Header
 	for i := len(fields) - 1; i >= 0; i-- {
-		h.Add(strings.TrimSpace(fields[i].name), strings.TrimSpace(fields[i].value))
+		h.Add(strings.TrimSpace(fields[i].name), strings.TrimSpace(string(fields[i].value)))
 	}
 	return h
 }
@@ -285,8 +292,8 @@ func parseContentType(v, defaultType string) (string, map[string]string, bool) {
 	if mt, params, err := mime.ParseMediaType(v); err == nil {
 		return mt, params, true
 	}
-	mt, params := lenientMediaType(v)
-	if !strings.Contains(mt, "/") {
+	mt, params := lenientMediaType(v, mediaTypeToken)
+	if mt == "" {
 		return defaultType, params, false
 	}
 	return mt, params, false
@@ -294,13 +301,23 @@ func parseContentType(v, defaultType string) (string, map[string]string, bool) {
 
 var lenientParam = regexp.MustCompile(`(?i)([a-z0-9!#$&^_.+-]+)(\*[0-9]*\*?)?\s*=\s*("(?:[^"\\]|\\.)*"?|[^;\s]*)`)
 
+var (
+	mediaTypeToken   = regexp.MustCompile(`(?i)^\s*([a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+)`)
+	dispositionToken = regexp.MustCompile(`(?i)^\s*([a-z0-9!#$&^_.+-]+)`)
+)
+
 // lenientMediaType reads a Content-Type or Content-Disposition value that
-// mime.ParseMediaType refuses: the type is the text before the first ';' and
-// each name=value pair after it is a parameter. RFC 2231 continuations
-// (name*0, name*1) are joined and extended values (name*=charset'lang'text) are
-// percent-decoded; a value that cannot be decoded stays as written.
-func lenientMediaType(v string) (string, map[string]string) {
-	typ, rest, _ := strings.Cut(v, ";")
+// mime.ParseMediaType refuses: the type is the leading token (so a missing
+// ';' before the parameters still gives the right type), and each name=value
+// pair in the rest of the value is a parameter. A value with no leading token
+// gives an empty type but keeps its parameters. RFC 2231 continuations
+// (name*0, name*1) are joined and extended values (name*=charset'lang'text)
+// are percent-decoded; a value that cannot be decoded stays as written.
+func lenientMediaType(v string, token *regexp.Regexp) (string, map[string]string) {
+	typ, rest := "", v
+	if loc := token.FindStringSubmatchIndex(v); loc != nil {
+		typ, rest = v[loc[2]:loc[3]], v[loc[1]:]
+	}
 	params := map[string]string{}
 	pieces := map[string][]string{}
 	for _, m := range lenientParam.FindAllStringSubmatch(rest, -1) {
@@ -532,20 +549,45 @@ func unhex(c byte) byte {
 
 var metaCharset = regexp.MustCompile(`(?i)<meta[^>]+charset\s*=\s*["']?\s*([a-z0-9_.:-]+)`)
 
+// decodeMeta reads HTML bytes with the charset of their <meta> tag. It is a
+// last resort for bytes that are not UTF-8, so a stale tag on UTF-8 text
+// never overrides the bytes.
+func decodeMeta(typ string, b []byte) ([]byte, bool) {
+	if typ != "text/html" {
+		return nil, false
+	}
+	m := metaCharset.FindSubmatch(b[:min(len(b), 2048)])
+	if m == nil {
+		return nil, false
+	}
+	rd, err := charset.Reader(strings.ToLower(string(m[1])), bytes.NewReader(b))
+	if err != nil {
+		return nil, false
+	}
+	out, err := io.ReadAll(rd)
+	if err != nil {
+		return nil, false
+	}
+	return bytes.ToValidUTF8(out, []byte("\uFFFD")), true
+}
+
 // decodeText turns a text part's bytes into UTF-8. A declared charset that
-// go-message's charset package knows is used. Otherwise, and when none is
-// declared (for HTML, after a <meta charset>), the bytes are used as they are
-// when they are UTF-8 and read as Windows-1252 when not, which maps every
-// byte to a character. kind and problem say what had to be guessed.
+// go-message's charset package knows is used. With no charset, or one nobody
+// knows, bytes that are valid UTF-8 are used as they are; otherwise HTML is
+// read with its <meta charset> and anything else as Windows-1252, which maps
+// every byte to a character. kind and problem say what had to be guessed.
 func decodeText(typ, label string, b []byte) ([]byte, string, string) {
 	label = strings.ToLower(strings.TrimSpace(label))
-	if label == "" && typ == "text/html" {
-		if m := metaCharset.FindSubmatch(b[:min(len(b), 2048)]); m != nil {
-			label = strings.ToLower(string(m[1]))
-		}
-	}
 	switch label {
-	case "", "us-ascii", "ascii":
+	case "":
+		if utf8.Valid(b) {
+			return b, "", ""
+		}
+		if out, ok := decodeMeta(typ, b); ok {
+			return out, "", ""
+		}
+		return windows1252(b), "unknown-charset", "no charset and not UTF-8; read as Windows-1252"
+	case "us-ascii", "ascii":
 		if utf8.Valid(b) {
 			return b, "", ""
 		}
@@ -554,18 +596,21 @@ func decodeText(typ, label string, b []byte) ([]byte, string, string) {
 		if utf8.Valid(b) {
 			return b, "", ""
 		}
-		return bytes.ToValidUTF8(b, []byte("�")), "invalid-utf8", "declared UTF-8 but holds invalid sequences; replaced them with U+FFFD"
+		return bytes.ToValidUTF8(b, []byte("\uFFFD")), "invalid-utf8", "declared UTF-8 but holds invalid sequences; replaced them with U+FFFD"
 	}
 	if rd, err := charset.Reader(label, bytes.NewReader(b)); err == nil {
 		if decoded, err := io.ReadAll(rd); err == nil {
 			if utf8.Valid(decoded) {
 				return decoded, "", ""
 			}
-			return bytes.ToValidUTF8(decoded, []byte("�")), "invalid-utf8", fmt.Sprintf("%s text decoded to invalid UTF-8; replaced the bad sequences", label)
+			return bytes.ToValidUTF8(decoded, []byte("\uFFFD")), "invalid-utf8", fmt.Sprintf("%s text decoded to invalid UTF-8; replaced the bad sequences", label)
 		}
 	}
 	if utf8.Valid(b) {
 		return b, "unknown-charset", fmt.Sprintf("unknown charset %q; the bytes are UTF-8 and were used as such", label)
+	}
+	if out, ok := decodeMeta(typ, b); ok {
+		return out, "unknown-charset", fmt.Sprintf("unknown charset %q; read with the charset of the HTML meta tag", label)
 	}
 	return windows1252(b), "unknown-charset", fmt.Sprintf("unknown charset %q; read as Windows-1252", label)
 }

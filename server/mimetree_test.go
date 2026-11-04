@@ -155,6 +155,8 @@ func TestDecodeText(t *testing.T) {
 		{"none, not UTF-8", "text/plain", "", []byte("caf\xe9"), "café", "unknown-charset"},
 		{"declared UTF-8, invalid", "text/plain", "utf-8", []byte("caf\xff"), "caf�", "invalid-utf8"},
 		{"html meta", "text/html", "", []byte(`<meta charset="iso-8859-1"><p>caf` + "\xe9"), `<meta charset="iso-8859-1"><p>café`, ""},
+		{"html stale meta on UTF-8", "text/html", "", []byte(`<meta charset="iso-8859-1"><p>café`), `<meta charset="iso-8859-1"><p>café`, ""},
+		{"html unknown label uses meta", "text/html", "x-nobody-knows", []byte(`<meta charset="iso-8859-1"><p>caf` + "\xe9"), `<meta charset="iso-8859-1"><p>café`, "unknown-charset"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, kind, _ := decodeText(tc.typ, tc.label, tc.in)
@@ -303,5 +305,53 @@ func TestReadTree_UndecodableFilenameIsKept(t *testing.T) {
 	}
 	if !hasWarning(warnings, "bad-header-param") {
 		t.Fatalf("warnings %+v", warnings)
+	}
+}
+
+func TestParseHeaderBlock_ManyContinuationLines(t *testing.T) {
+	t.Parallel()
+	// 200k folded lines: string concatenation per line would copy GBs.
+	in := "Subject: a\r\n" + strings.Repeat(" a\r\n", 200_000) + "\r\nbody"
+	h, body, problem := parseHeaderBlock([]byte(in))
+	if got := len(h.Get("Subject")); got != 1+2*200_000 || string(body) != "body" || problem != "" {
+		t.Fatalf("subject length %d body %q problem %q", got, body, problem)
+	}
+}
+
+func TestParseHeaderBlock_MboxFromLine(t *testing.T) {
+	t.Parallel()
+	h, body, problem := parseHeaderBlock(crlf("From sender@example.org Tue Nov  4 10:00:00 2026\nSubject: s\nContent-Type: text/html\n\n<p>x</p>"))
+	if h.Get("Subject") != "s" || h.Get("Content-Type") != "text/html" || string(body) != "<p>x</p>" || problem == "" {
+		t.Fatalf("subject %q ct %q body %q problem %q", h.Get("Subject"), h.Get("Content-Type"), body, problem)
+	}
+	if strings.Contains(problem, "sender@example.org") {
+		t.Fatalf("problem quotes the line: %q", problem)
+	}
+}
+
+func TestReadTree_LenientContentType(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, header, typ, param, value string
+	}{
+		{"no semicolon before charset", "Content-Type: text/html charset=utf-8", "text/html", "charset", "utf-8"},
+		{"no semicolon before boundary", "Content-Type: multipart/mixed boundary=x", "multipart/mixed", "boundary", "x"},
+		{"no semicolon before name", "Content-Type: application/pdf name=x.pdf", "application/pdf", "name", "x.pdf"},
+		{"no usable type", "Content-Type: ;;; charset=utf-8", "text/plain", "charset", "utf-8"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, warnings := readTree(crlf(tc.header + "\n\n--x\n\nbody\n--x--\n"))
+			if root.Type != tc.typ || root.Params[tc.param] != tc.value {
+				t.Fatalf("type %q params %v", root.Type, root.Params)
+			}
+			if !hasWarning(warnings, "bad-content-type") {
+				t.Fatalf("warnings %+v", warnings)
+			}
+			for _, w := range warnings {
+				if w.Kind == "bad-content-type" && strings.Contains(w.Detail, "=") {
+					t.Fatalf("detail quotes the header: %q", w.Detail)
+				}
+			}
+		})
 	}
 }
