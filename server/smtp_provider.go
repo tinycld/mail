@@ -109,12 +109,19 @@ func (p *SMTPProvider) Send(ctx context.Context, req *SendRequest) (*SendResult,
 	return p.sender.SendFull(ctx, req)
 }
 
-// ParseInbound parses a raw RFC 5322 message into the InboundMessage shape
-// expected by processInboundForMailbox. We reuse parseRFC5322 (also used by
-// IMAP APPEND) and adapt its storedMessage output to InboundMessage so the
-// downstream pipeline stays unchanged. Parsing never fails. parseRFC5322 already returns message
-// ids in the stored "<id@host>" form.
+// ParseInbound satisfies the provider interface. SMTP parsing never fails, so
+// the error is always nil; callers that hold an *SMTPProvider use
+// inboundMessage directly.
 func (p *SMTPProvider) ParseInbound(body []byte) (*InboundMessage, error) {
+	return p.inboundMessage(body), nil
+}
+
+// inboundMessage parses a raw RFC 5322 message into the InboundMessage shape
+// expected by processInboundForMailbox. It reuses parseRFC5322 (also used by
+// IMAP APPEND) and adapts its storedMessage output so the downstream
+// pipeline stays unchanged. parseRFC5322 already returns message ids in the
+// stored "<id@host>" form.
+func (p *SMTPProvider) inboundMessage(body []byte) *InboundMessage {
 	stored, _ := parseRFC5322(body)
 
 	msg := &InboundMessage{
@@ -131,7 +138,7 @@ func (p *SMTPProvider) ParseInbound(body []byte) (*InboundMessage, error) {
 		Headers:     stored.Headers,
 		Attachments: stored.Attachments,
 	}
-	return msg, nil
+	return msg
 }
 
 // ParseBounce is not used for SMTP — bounces are reported inline by Send via
