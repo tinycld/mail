@@ -316,6 +316,7 @@ func (s *smtpSession) Data(r io.Reader) error {
 			Name:        att.Name,
 			ContentType: att.ContentType,
 			Content:     att.Content,
+			ContentID:   att.ContentID,
 		})
 	}
 

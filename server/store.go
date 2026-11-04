@@ -235,8 +235,9 @@ func storeMessage(app core.App, threadID string, msg *storedMessage) (*core.Reco
 		record.Set("bounce_reason", reason)
 	}
 
-	if msg.HTMLBody != "" {
-		sanitized := sanitizeEmailHTML(msg.HTMLBody)
+	// Markup with no content (an empty <body>) sanitizes to nothing, and
+	// PocketBase cannot store an empty file; the text body stands in for it.
+	if sanitized := sanitizeEmailHTML(msg.HTMLBody); sanitized != "" {
 		htmlFile, err := filesystem.NewFileFromBytes([]byte(sanitized), "body.html")
 		if err != nil {
 			return nil, fmt.Errorf("failed to create body_html file: %w", err)
