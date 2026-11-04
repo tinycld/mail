@@ -14,8 +14,14 @@ import (
 // content". Every workaround added here names the corpus message that fails
 // without it (testdata/corpus), so a workaround can be told from a bug.
 //
-// Workarounds:
-//   - (none yet)
+// Deviations from the RFC's algorithm:
+//   - The text != nil / html != nil guards in the alternative case. The RFC's
+//     JavaScript would push to null (alternative > mixed[html, alternative[plain]]
+//     does); such a part goes to attachments so nothing is lost.
+//   - backfill: RFC 8621 defines attachments as every non-multipart part in
+//     neither body list, but the algorithm can drop one.
+//   - rootText: a single-part message has no delimiter to take its final line
+//     break, so one break is removed (MIME framing, not content).
 
 type bodyLists struct {
 	text, html, attachments []*mimePart
@@ -33,7 +39,7 @@ func parseStructure(root *mimePart) bodyLists {
 	return l
 }
 
-// structure is the RFC's parseStructure. A nil list pointer is the RFC's
+// structure is the RFC's parseStructure, with the deviations listed above. A nil list pointer is the RFC's
 // null: that branch stops adding to it, and only within this call, as the
 // JavaScript's local parameters do.
 func structure(parts []*mimePart, multipartType string, inAlternative bool, html, text, attachments *[]*mimePart) {
@@ -121,6 +127,20 @@ func backfill(root *mimePart, l bodyLists) []*mimePart {
 
 var cidRef = regexp.MustCompile(`(?i)cid:([^"'\s>)]+)`)
 
+// rootText is a text part's body. The root leaf is the whole message, so no
+// delimiter took its closing line break: exactly one is framing. Parts inside
+// a multipart already lost theirs, so any break left is the sender's.
+func rootText(p *mimePart) string {
+	b := string(p.Body)
+	if p.Index != 0 || p.isMultipart() {
+		return b
+	}
+	if t := strings.TrimSuffix(b, "\n"); t != b {
+		return strings.TrimSuffix(t, "\r")
+	}
+	return b
+}
+
 // flatten maps the three lists onto storedMessage, which holds one text, one
 // HTML and a file list (design, "Step 3"). Empty parts are skipped.
 func flatten(l bodyLists, msg *storedMessage) {
@@ -131,9 +151,7 @@ func flatten(l bodyLists, msg *storedMessage) {
 		case p.Type == "text/html":
 			texts = append(texts, stripHTMLToText(string(p.Body)))
 		default:
-			// A top-level part has no delimiter to take its closing line break,
-			// so the message's own final break would end the text.
-			texts = append(texts, strings.TrimRight(string(p.Body), "\r\n"))
+			texts = append(texts, rootText(p))
 		}
 	}
 	msg.TextBody = strings.Join(texts, "\n")
@@ -165,7 +183,7 @@ func flatten(l bodyLists, msg *storedMessage) {
 			hasHTML = true
 			b.Write(p.Body)
 		case p.Type == "text/plain":
-			b.WriteString(`<div style="white-space: pre-wrap">` + html.EscapeString(string(p.Body)) + `</div>`)
+			b.WriteString(`<div style="white-space: pre-wrap">` + html.EscapeString(rootText(p)) + `</div>`)
 		case isInlineMediaType(p.Type):
 			if p.ContentID == "" {
 				p.ContentID = fmt.Sprintf("<part-%d@tinycld.invalid>", p.Index)

@@ -179,3 +179,73 @@ func TestFlatten(t *testing.T) {
 		t.Errorf("attached message: %+v", msg.Attachments)
 	}
 }
+
+func TestFlatten_RootLeafLosesOneLineBreak(t *testing.T) {
+	t.Parallel()
+
+	// crlf turns "hello\n\n" into "hello\r\n\r\n"; one break is framing.
+	if msg := flattened(t, "Content-Type: text/plain\n\nhello\n\n"); msg.TextBody != "hello\r\n" {
+		t.Errorf("single part = %q", msg.TextBody)
+	}
+	// The delimiter took one break; the other two are the sender's, and the
+	// splitter leaves "hi\r\n\r\n" in the part.
+	msg := flattened(t, "Content-Type: multipart/mixed; boundary=m\n\n--m\nContent-Type: text/plain\n\nhi\n\n\n--m--\n")
+	if msg.TextBody != "hi\r\n\r\n" {
+		t.Errorf("multipart part = %q", msg.TextBody)
+	}
+}
+
+// alternative > mixed[html, alternative[plain]] makes the RFC's JavaScript
+// push to null; the plain part must land in attachments instead.
+func TestParseStructure_NilListGoesToAttachments(t *testing.T) {
+	t.Parallel()
+	l := structureOf(t, "Content-Type: multipart/alternative; boundary=a\n\n"+
+		"--a\nContent-Type: multipart/mixed; boundary=m\n\n"+
+		"--m\nContent-Type: text/html\n\n<p>x</p>\n"+
+		"--m\nContent-Type: multipart/alternative; boundary=b\n\n"+
+		"--b\nContent-Type: text/plain\n\nnested\n--b--\n--m--\n--a--\n")
+	if got := indexes(l.attachments); !slices.Equal(got, []int{4}) {
+		t.Errorf("attachments = %v, text %v html %v", got, indexes(l.text), indexes(l.html))
+	}
+}
+
+func TestFlatten_ReferencedCIDIsNotInsertedAgain(t *testing.T) {
+	t.Parallel()
+	msg := flattened(t, "Content-Type: multipart/mixed; boundary=m\n\n"+
+		"--m\nContent-Type: text/html\n\n<img src=\"cid:x\">\n"+
+		"--m\nContent-Type: image/png\nContent-Id: <x>\n\nPNG\n--m--\n")
+	if n := strings.Count(msg.HTMLBody, "cid:x"); n != 1 {
+		t.Errorf("cid:x appears %d times in %q", n, msg.HTMLBody)
+	}
+	if len(msg.Attachments) != 1 || msg.Attachments[0].ContentID != "<x>" {
+		t.Errorf("attachments = %+v", msg.Attachments)
+	}
+}
+
+func TestFlatten_PlainInHTMLListIsEscaped(t *testing.T) {
+	t.Parallel()
+	msg := flattened(t, "Content-Type: multipart/mixed; boundary=m\n\n"+
+		"--m\nContent-Type: text/html\n\n<p>one</p>\n"+
+		"--m\nContent-Type: text/plain\n\na <b> & c\n--m--\n")
+	want := `<div style="white-space: pre-wrap">a &lt;b&gt; &amp; c</div>`
+	if !strings.Contains(msg.HTMLBody, want) {
+		t.Errorf("html = %q", msg.HTMLBody)
+	}
+}
+
+func TestFlatten_ImageWithoutContentIDGetsOne(t *testing.T) {
+	t.Parallel()
+	msg := flattened(t, "Content-Type: multipart/mixed; boundary=m\n\n"+
+		"--m\nContent-Type: text/plain\n\nlook\n--m\nContent-Type: image/png\n\nPNG\n--m--\n")
+	if len(msg.Attachments) != 1 || msg.Attachments[0].ContentID != "<part-2@tinycld.invalid>" {
+		t.Errorf("attachments = %+v", msg.Attachments)
+	}
+}
+
+func TestFlatten_HTMLOnlyFillsEmptyText(t *testing.T) {
+	t.Parallel()
+	msg := flattened(t, "Content-Type: text/html\n\n<p>Hello there</p>\n")
+	if want := stripHTMLToText(msg.HTMLBody); msg.TextBody == "" || msg.TextBody != want {
+		t.Errorf("text = %q, want %q", msg.TextBody, want)
+	}
+}
