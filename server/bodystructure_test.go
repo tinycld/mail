@@ -75,6 +75,13 @@ func TestParseStructure_RFC8621(t *testing.T) {
 			text: []int{1}, html: []int{1}, files: []int{2},
 		},
 		{
+			// Workaround relatedRootFirst: mimekit/multipart-related-mhtml.eml.
+			name: "related root of its type parameter, after the image",
+			raw: "Content-Type: multipart/related; type=\"text/html\"; boundary=r\n\n" +
+				"--r\nContent-Type: image/png\n\nPNG\n--r\nContent-Type: text/html\n\n<img src=\"cid:x\">\n--r--\n",
+			text: []int{2}, html: []int{2}, files: []int{1},
+		},
+		{
 			name: "files only, no text",
 			raw: "Content-Type: multipart/mixed; boundary=m\n\n" +
 				"--m\nContent-Type: application/octet-stream\nContent-Disposition: attachment; filename=a.bin\n\nBIN\n" +

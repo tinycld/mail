@@ -22,6 +22,11 @@ import (
 //     neither body list, but the algorithm can drop one.
 //   - rootText: a single-part message has no delimiter to take its final line
 //     break, so one break is removed (MIME framing, not content).
+//
+// Workarounds:
+//   - relatedRootFirst: a multipart/related whose first part is not of its
+//     "type" parameter is read with the part of that type first, as its root
+//     (RFC 2387 §3.1): mimekit/multipart-related-mhtml.eml.
 
 type bodyLists struct {
 	text, html, attachments []*mimePart
@@ -57,7 +62,11 @@ func structure(parts []*mimePart, multipartType string, inAlternative bool, html
 		switch {
 		case part.isMultipart():
 			sub := strings.TrimPrefix(part.Type, "multipart/")
-			structure(part.Children, sub, inAlternative || sub == "alternative", html, text, attachments)
+			children := part.Children
+			if sub == "related" {
+				children = relatedRootFirst(part)
+			}
+			structure(children, sub, inAlternative || sub == "alternative", html, text, attachments)
 		case isInline:
 			if multipartType == "alternative" {
 				switch {
@@ -100,6 +109,25 @@ func structure(parts []*mimePart, multipartType string, inAlternative bool, html
 			*html = append(*html, (*text)[textLength:]...)
 		}
 	}
+}
+
+// relatedRootFirst returns a multipart/related's parts with its root first.
+// RFC 2387 makes the first part the root and says the "type" parameter is the
+// root's type. When the two disagree, the first part of that type is taken as
+// the root: an MHTML file with its image before its HTML would otherwise show
+// no body at all (mimekit/multipart-related-mhtml.eml).
+func relatedRootFirst(p *mimePart) []*mimePart {
+	want := strings.ToLower(strings.TrimSpace(p.Params["type"]))
+	if want == "" || len(p.Children) == 0 || p.Children[0].Type == want {
+		return p.Children
+	}
+	for i, c := range p.Children {
+		if c.Type == want {
+			out := append([]*mimePart{c}, p.Children[:i]...)
+			return append(out, p.Children[i+1:]...)
+		}
+	}
+	return p.Children
 }
 
 // backfill adds every leaf the algorithm put in no list to attachments, in
