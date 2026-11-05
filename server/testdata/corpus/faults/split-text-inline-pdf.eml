@@ -1,0 +1,23 @@
+From: Nathan <nathan@example.org>
+To: a@example.org
+Subject: Attach pdf here
+Mime-Version: 1.0 (Mac OS X Mail 16.0)
+Content-Type: multipart/mixed; boundary="B"
+
+--B
+Content-Type: text/plain; charset=us-ascii
+
+Attach pdf here
+
+--B
+Content-Disposition: inline; filename=doc.pdf
+Content-Type: application/pdf; x-unix-mode=0644; name="doc.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQK
+--B
+Content-Type: text/plain; charset=us-ascii
+
+
+
+--B--

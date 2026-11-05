@@ -372,7 +372,11 @@ server/
     imap_folders.go            INBOX / Sent / Drafts / Trash / Spam / Archive
     imap_notifier.go           idleNotifier(app) — IDLE pub/sub
     imap_uid.go                UID validity / UID next per mailbox
-    imap_rfc5322.go            on-the-fly RFC 5322 emission for FETCH
+    imap_rfc5322.go            builds RFC 5322 messages for FETCH; holds parseRFC5322, which IMAP APPEND, SMTP submission and SMTP inbound use
+    mimetree.go                readTree: salvages a MIME tree from any input (own header parser, boundary splitter and lenient decoders)
+    bodystructure.go           RFC 8621 parseStructure, and flatten onto storedMessage
+    parsereport.go             what parsing salvaged, and the structure-only log line
+    testdata/corpus/           the vendored corpus that gates the parser; refresh it with `go run ./testdata/corpus/tools/fetch`
     smtp_server.go             :465 / :1587 startup
     smtp_session.go            AUTH (incl. read-only refusal), MAIL FROM address check, DATA → Send
     notify_batcher.go          buffered new-mail notification batcher (2 min tick)

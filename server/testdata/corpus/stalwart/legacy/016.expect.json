@@ -1,0 +1,28 @@
+{
+  "text": [
+    {
+      "type": "text/plain",
+      "size": 755,
+      "sha256": "a8fc60eff6a6eee33a22c97e3f3e1ecccc53b83dcd2470ffaa1cabb10fac4dc7"
+    }
+  ],
+  "html": [
+    {
+      "type": "text/plain",
+      "size": 755,
+      "sha256": "a8fc60eff6a6eee33a22c97e3f3e1ecccc53b83dcd2470ffaa1cabb10fac4dc7"
+    }
+  ],
+  "attachments": [
+    {
+      "type": "application/mac-binhex40",
+      "size": 1898,
+      "sha256": "8e180044e16b2c11eeb592ef3e8e4816c0011d2c17d5dde3636db15017b8221c"
+    },
+    {
+      "type": "application/mac-binhex40",
+      "size": 1112,
+      "sha256": "02aaf966e20f232a10674d8187404040d42ddac0ea8d932d50906bcf0e9f4112"
+    }
+  ]
+}

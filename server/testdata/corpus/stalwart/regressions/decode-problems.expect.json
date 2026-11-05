@@ -1,0 +1,83 @@
+{
+  "text": [
+    {
+      "type": "text/plain",
+      "size": 5,
+      "sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
+    },
+    {
+      "type": "text/plain",
+      "size": 5,
+      "sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
+    },
+    {
+      "type": "text/plain",
+      "size": 9,
+      "sha256": "13ab8764bce84d07277cc4c99c4bbb0f03f62339550b53b18c343eb415180adb"
+    },
+    {
+      "type": "text/plain",
+      "size": 5,
+      "sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
+    },
+    {
+      "type": "text/plain",
+      "size": 6,
+      "sha256": "fb1552c13c0c349659055113e153971759608ad969bc9f4f67f4542c75ab98db"
+    },
+    {
+      "type": "text/plain",
+      "size": 3,
+      "sha256": "83d544ccc223c057d2bf80d3f2a32982c32c3c0db8e2674820da5064783fb097"
+    },
+    {
+      "type": "text/plain",
+      "size": 3,
+      "sha256": "5a5eb8495e7e1ac0c27110b65f43139572793233f4ec2d3452d60c9c4e50498d"
+    }
+  ],
+  "html": [
+    {
+      "type": "text/plain",
+      "size": 5,
+      "sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
+    },
+    {
+      "type": "text/plain",
+      "size": 5,
+      "sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
+    },
+    {
+      "type": "text/plain",
+      "size": 9,
+      "sha256": "13ab8764bce84d07277cc4c99c4bbb0f03f62339550b53b18c343eb415180adb"
+    },
+    {
+      "type": "text/plain",
+      "size": 5,
+      "sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
+    },
+    {
+      "type": "text/plain",
+      "size": 6,
+      "sha256": "fb1552c13c0c349659055113e153971759608ad969bc9f4f67f4542c75ab98db"
+    },
+    {
+      "type": "text/plain",
+      "size": 3,
+      "sha256": "83d544ccc223c057d2bf80d3f2a32982c32c3c0db8e2674820da5064783fb097"
+    },
+    {
+      "type": "text/plain",
+      "size": 3,
+      "sha256": "5a5eb8495e7e1ac0c27110b65f43139572793233f4ec2d3452d60c9c4e50498d"
+    }
+  ],
+  "attachments": [
+    {
+      "type": "application/octet-stream",
+      "size": 11,
+      "sha256": "06d571869827415dcba63743f0d1d3fc177fa30b4d1cd337be22bff1c2ee1920"
+    }
+  ]
+}

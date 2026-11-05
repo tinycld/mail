@@ -1,0 +1,28 @@
+{
+  "text": [
+    {
+      "type": "text/plain",
+      "size": 45,
+      "sha256": "8f82e7e0f38dcb531432c3ceb359551b977a71993f2a65cdb30c6f2e3021aefe"
+    }
+  ],
+  "html": [
+    {
+      "type": "text/plain",
+      "size": 45,
+      "sha256": "8f82e7e0f38dcb531432c3ceb359551b977a71993f2a65cdb30c6f2e3021aefe"
+    }
+  ],
+  "attachments": [
+    {
+      "type": "message/rfc822",
+      "size": 100,
+      "sha256": "aabad9e152c678f7401d7bdcfb50ed59c0488cf2ef663cdcb931ca8f1156dc97"
+    },
+    {
+      "type": "message/rfc822",
+      "size": 125,
+      "sha256": "5628a25d4fbae7621d50c394560733ec1435e53231ff5898d0f97cac67d28357"
+    }
+  ]
+}

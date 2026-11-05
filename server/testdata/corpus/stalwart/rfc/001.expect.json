@@ -1,0 +1,21 @@
+{
+  "text": [],
+  "html": [],
+  "attachments": [
+    {
+      "type": "message/external-body",
+      "size": 79,
+      "sha256": "e605dd6557e1487c08b94cdcef9f50dfad11682f48e5e49dc226979e85baf582"
+    },
+    {
+      "type": "message/external-body",
+      "size": 79,
+      "sha256": "e605dd6557e1487c08b94cdcef9f50dfad11682f48e5e49dc226979e85baf582"
+    },
+    {
+      "type": "message/external-body",
+      "size": 97,
+      "sha256": "bba88d3935e2586e376a64bdeaf52c11f54ca8b04e8c3d650f092f0be5ea3cfe"
+    }
+  ]
+}

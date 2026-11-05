@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/emersion/go-message"
 	gomail "github.com/emersion/go-message/mail"
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -166,16 +167,22 @@ func writeAttachmentFromRecord(app core.App, record *core.Record, filename strin
 	return nil
 }
 
-// parseRFC5322 parses an RFC 5322 message into a storedMessage struct
-// for use with storeMessage(). Used by IMAP APPEND.
-func parseRFC5322(raw []byte) (*storedMessage, error) {
-	mr, err := gomail.CreateReader(bytes.NewReader(raw))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse RFC 5322: %w", err)
-	}
+// parseRFC5322 turns a raw message into the storedMessage that IMAP APPEND,
+// SMTP submission and SMTP inbound store or send. It accepts any input and
+// never fails: readTree salvages a part tree, RFC 8621's parseStructure picks
+// the bodies and files, and flatten maps them onto storedMessage. The report
+// says what had to be salvaged.
+func parseRFC5322(raw []byte) (*storedMessage, parseReport) {
+	root, warnings := readTree(raw)
+	msg := storedHeaderFields(gomail.Header{Header: message.Header{Header: root.Header}})
+	lists := parseStructure(root)
+	flatten(lists, msg)
+	return msg, parseReport{Warnings: warnings, root: root, lists: lists, msg: msg}
+}
 
-	h := mr.Header
-
+// storedHeaderFields reads the fields storedMessage keeps from the top-level
+// header.
+func storedHeaderFields(h gomail.Header) *storedMessage {
 	date, _ := h.Date()
 	subject, _ := h.Subject()
 	messageID, _ := h.MessageID()
@@ -217,54 +224,7 @@ func parseRFC5322(raw []byte) (*storedMessage, error) {
 			msg.Cc = append(msg.Cc, Recipient{Name: addr.Name, Email: addr.Address})
 		}
 	}
-
-	// A client that places a file inside the text splits the body around it:
-	// Apple Mail sends the html before the file, the file, then the html after
-	// it. Each body type is joined across its parts, so the empty trailing part
-	// cannot replace the real body.
-	var textParts, htmlParts []string
-	for {
-		p, err := mr.NextPart()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			break
-		}
-
-		body, err := io.ReadAll(p.Body)
-		if err != nil {
-			continue
-		}
-
-		switch h := p.Header.(type) {
-		case *gomail.InlineHeader:
-			ct, _, _ := h.ContentType()
-			// Inline only says where to show the part; a named or non-text
-			// inline part (Apple Mail's in-text PDF, a cid: image) is a file.
-			filename, _ := (&gomail.AttachmentHeader{Header: h.Header}).Filename()
-			switch {
-			case filename == "" && strings.HasPrefix(ct, "text/html"):
-				htmlParts = append(htmlParts, string(body))
-			case filename == "" && strings.HasPrefix(ct, "text/plain"):
-				textParts = append(textParts, string(body))
-			default:
-				msg.Attachments = append(msg.Attachments, newInboundAttachment(filename, ct, h.Get("Content-Id"), body))
-			}
-		case *gomail.AttachmentHeader:
-			filename, _ := h.Filename()
-			ct, _, _ := h.ContentType()
-			msg.Attachments = append(msg.Attachments, newInboundAttachment(filename, ct, h.Get("Content-Id"), body))
-		}
-	}
-
-	msg.TextBody = strings.Join(textParts, "")
-	msg.HTMLBody = strings.Join(htmlParts, "")
-	if strings.TrimSpace(msg.TextBody) == "" && msg.HTMLBody != "" {
-		msg.TextBody = stripHTMLToText(msg.HTMLBody)
-	}
-
-	return msg, nil
+	return msg
 }
 
 // newInboundAttachment names an unnamed part from its content type, so the

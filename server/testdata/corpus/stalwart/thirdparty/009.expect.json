@@ -1,0 +1,23 @@
+{
+  "text": [
+    {
+      "type": "text/plain",
+      "size": 48,
+      "sha256": "abe5f1a9a3908ebad7f518926065282f502abb4e8806406fa79c825b613e59b0"
+    }
+  ],
+  "html": [
+    {
+      "type": "text/plain",
+      "size": 48,
+      "sha256": "abe5f1a9a3908ebad7f518926065282f502abb4e8806406fa79c825b613e59b0"
+    }
+  ],
+  "attachments": [
+    {
+      "type": "message/partial",
+      "size": 241,
+      "sha256": "15cd104d307a186ee73ddfb5af2e1bdb14a9928d7e35823f12071d110ca50e37"
+    }
+  ]
+}

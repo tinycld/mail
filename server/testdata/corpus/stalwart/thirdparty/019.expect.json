@@ -1,0 +1,28 @@
+{
+  "text": [
+    {
+      "type": "text/plain",
+      "size": 19,
+      "sha256": "1b17036dac41e3a97cffdfcfd956c053c28e0edc677a6f56140241ee885a3fdc"
+    }
+  ],
+  "html": [
+    {
+      "type": "text/html",
+      "size": 274,
+      "sha256": "885827dcb3ac5128efb6fe7a2f22be6849b819eaa36fbc4429dde4e8f98f7699"
+    }
+  ],
+  "attachments": [
+    {
+      "type": "image/png",
+      "size": 241,
+      "sha256": "e4ef2370a1bb97a293f32283d378d98101efb6a3465405936d825433fcf8b6e4"
+    },
+    {
+      "type": "image/png",
+      "size": 157,
+      "sha256": "2403a1f53cbb2f84c067754d912b0ca77899b932f5e959a8224a224fb7b64a3d"
+    }
+  ]
+}

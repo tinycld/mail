@@ -1,0 +1,58 @@
+{
+  "text": [
+    {
+      "type": "text/plain",
+      "size": 262,
+      "sha256": "827e24c037c8aca29f92996bba2982907d85dd38bf3a06773c9899618379f43c"
+    },
+    {
+      "type": "text/plain",
+      "size": 111,
+      "sha256": "9032658848b2d19fe0b1892e11c31f72f218ccb8b18b6d43ce4ea4bb396b6475"
+    },
+    {
+      "type": "audio/basic",
+      "size": 45,
+      "sha256": "75d4a5c5f6de93c72cb9c74da2ad914c0fb5664867ef3bb8a16dd9cae6a895ff"
+    },
+    {
+      "type": "image/jpeg",
+      "size": 22,
+      "sha256": "2239e8cb06dcff0a4376c4472e00af42ef47a3ad2f042e4f146b79231aa11c0d"
+    }
+  ],
+  "html": [
+    {
+      "type": "text/plain",
+      "size": 262,
+      "sha256": "827e24c037c8aca29f92996bba2982907d85dd38bf3a06773c9899618379f43c"
+    },
+    {
+      "type": "text/plain",
+      "size": 111,
+      "sha256": "9032658848b2d19fe0b1892e11c31f72f218ccb8b18b6d43ce4ea4bb396b6475"
+    },
+    {
+      "type": "audio/basic",
+      "size": 45,
+      "sha256": "75d4a5c5f6de93c72cb9c74da2ad914c0fb5664867ef3bb8a16dd9cae6a895ff"
+    },
+    {
+      "type": "image/jpeg",
+      "size": 22,
+      "sha256": "2239e8cb06dcff0a4376c4472e00af42ef47a3ad2f042e4f146b79231aa11c0d"
+    }
+  ],
+  "attachments": [
+    {
+      "type": "text/enriched",
+      "size": 140,
+      "sha256": "fa7bff83afa6c5b29b2710fe776a204c07f11ef3da6463f4a2de8d697f3312a3"
+    },
+    {
+      "type": "message/rfc822",
+      "size": 223,
+      "sha256": "dc95c11e5274877678201d8fb8ed64a6c0f59785612932b2064d3f00bf8cd5c1"
+    }
+  ]
+}
