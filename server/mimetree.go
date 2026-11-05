@@ -159,6 +159,10 @@ func (r *treeReader) readChildren(p *mimePart, body []byte, depth int) {
 	if !mp.closed {
 		r.warn(p.Index, "truncated", "no closing delimiter; the last part runs to the end of the message")
 	}
+	// RFC 2046 drops the epilogue, but a dropped byte gets a warning.
+	if n := len(bytes.TrimSpace(mp.epilogue)); n > 0 {
+		r.warn(p.Index, "bad-multipart", "dropped an epilogue of %d bytes after the close delimiter", n)
+	}
 	if len(p.Children) == 0 && len(bytes.TrimSpace(mp.preamble)) > 0 {
 		// RFC 2046 drops the preamble, but a multipart with no parts has
 		// nothing else to show.

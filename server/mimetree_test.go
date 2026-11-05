@@ -531,3 +531,22 @@ func TestParseContentType_NoSubtype(t *testing.T) {
 		t.Fatalf("type %q params %v ok %v", typ, params, ok)
 	}
 }
+
+// RFC 2046 drops the epilogue; a dropped epilogue that is not blank gets a
+// warning that names only its length.
+func TestReadTree_EpilogueIsDroppedWithAWarning(t *testing.T) {
+	t.Parallel()
+	root, warnings := readTree(crlf("Content-Type: multipart/mixed; boundary=b\n\n--b\n\none\n--b--\nsecret epilogue\n"))
+	if len(root.Children) != 1 || string(root.Children[0].Body) != "one" {
+		t.Fatalf("children %+v", root.Children)
+	}
+	w := warningOfKind(t, warnings, "bad-multipart", "epilogue of 15 bytes")
+	if strings.Contains(w.Detail, "secret") {
+		t.Fatalf("warning quotes the epilogue: %q", w.Detail)
+	}
+
+	// A blank epilogue is the usual trailing line break: no warning.
+	if _, warnings = readTree(crlf("Content-Type: multipart/mixed; boundary=b\n\n--b\n\none\n--b--\n\n \n")); len(warnings) != 0 {
+		t.Fatalf("blank epilogue: warnings %+v", warnings)
+	}
+}
