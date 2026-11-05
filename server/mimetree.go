@@ -580,17 +580,28 @@ func (m *multipartParts) next() (part []byte, start int, ok bool) {
 	return nil, 0, false
 }
 
-// nextDelimiter finds the first delimiter line at or after m.search, which
-// is always the start of a line. cut is where the line break before the
+// nextDelimiter finds the first delimiter line at or after m.search.
+// bytes.Index finds each "--boundary", and only one at the start of a line
+// is read as a line: reading every line would read a message once per level
+// of nesting, 50 times for a crafted nest. "--boundary" is searched for
+// rather than "\n--boundary" because in text of short lines a line break is
+// every few bytes and a "--" is rare. cut is where the line break before the
 // delimiter begins and after where the next line starts; kind is 0 when
 // there is no delimiter left.
 func (m *multipartParts) nextDelimiter() (cut, after, kind int) {
 	for pos := m.search; pos < len(m.body); {
-		line, next := lineAt(m.body, pos)
-		if k := delimiterKind(line, m.delim); k != 0 {
-			return lineBreakStart(m.body, pos), next, k
+		i := bytes.Index(m.body[pos:], m.delim)
+		if i < 0 {
+			break
 		}
-		pos = next
+		at := pos + i
+		if at == 0 || m.body[at-1] == '\n' {
+			line, next := lineAt(m.body, at)
+			if k := delimiterKind(line, m.delim); k != 0 {
+				return lineBreakStart(m.body, at), next, k
+			}
+		}
+		pos = at + 1
 	}
 	return 0, 0, 0
 }

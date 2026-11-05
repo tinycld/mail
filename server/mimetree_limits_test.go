@@ -3,6 +3,8 @@ package mail
 import (
 	"bytes"
 	"fmt"
+	"math/rand/v2"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -150,6 +152,84 @@ func TestReadTree_MessageFieldCap(t *testing.T) {
 	for _, p := range root.Children[maxMessageFields/perPart:] {
 		if p.Header.Len() != 0 || string(p.Body) != content {
 			t.Fatalf("part %d has %d fields and a body of %d bytes", p.Index, p.Header.Len(), len(p.Body))
+		}
+	}
+}
+
+// Delimiters are found with bytes.Index, so a deep nest of multiparts over a
+// long run of short lines is read in time linear in its size; reading each
+// line once per level made this 15 times slower.
+func TestReadTree_DeepNestOverManyLines(t *testing.T) {
+	t.Parallel()
+	levels := maxMIMEDepth - 1
+	var b strings.Builder
+	for i := 0; i < levels; i++ {
+		fmt.Fprintf(&b, "Content-Type: multipart/mixed; boundary=b%d\r\n\r\n--b%d\r\n", i, i)
+	}
+	b.WriteString("Content-Type: text/plain\r\n\r\n")
+	lines := 1_000_000
+	b.WriteString(strings.Repeat("x\r\n", lines))
+	b.WriteString("end")
+	for i := levels - 1; i >= 0; i-- {
+		fmt.Fprintf(&b, "\r\n--b%d--", i)
+	}
+	b.WriteString("\r\n")
+
+	root, warnings := readTree([]byte(b.String()))
+	if len(warnings) != 0 {
+		t.Fatalf("warnings %+v", warnings)
+	}
+	ls := leaves(root)
+	if len(ls) != 1 || countParts(root) != levels+1 {
+		t.Fatalf("%d leaves, %d parts", len(ls), countParts(root))
+	}
+	if want := strings.Repeat("x\r\n", lines) + "end"; string(ls[0].Body) != want {
+		t.Fatalf("leaf of %d bytes, want %d", len(ls[0].Body), len(want))
+	}
+}
+
+// splitByLines is the splitter as it was before delimiters were searched
+// for: it reads every line. The search must find exactly what it found.
+func splitByLines(body []byte, boundary string) (preamble []byte, parts [][]byte, closed, found bool) {
+	delim := []byte("--" + boundary)
+	start := -1
+	for pos := 0; pos < len(body); {
+		line, next := lineAt(body, pos)
+		if kind := delimiterKind(line, delim); kind != 0 {
+			found = true
+			cut := lineBreakStart(body, pos)
+			if start < 0 {
+				preamble = body[:cut]
+			} else {
+				parts = append(parts, body[start:max(cut, start)])
+			}
+			if kind == 2 {
+				return preamble, parts, true, true
+			}
+			start = next
+		}
+		pos = next
+	}
+	if start >= 0 && start < len(body) {
+		parts = append(parts, body[start:])
+	}
+	return preamble, parts, false, found
+}
+
+func TestSplitMultipart_MatchesLineScan(t *testing.T) {
+	t.Parallel()
+	tokens := []string{"--b", "--b--", "--bx", "x--b", "\r\n", "\n", "\r", " ", "\t", "x", "-", "--"}
+	rng := rand.New(rand.NewPCG(1, 2))
+	for i := 0; i < 20_000; i++ {
+		var b strings.Builder
+		for n := rng.IntN(16); n > 0; n-- {
+			b.WriteString(tokens[rng.IntN(len(tokens))])
+		}
+		body := []byte(b.String())
+		pre, parts, closed, found := splitMultipart(body, "b")
+		wantPre, wantParts, wantClosed, wantFound := splitByLines(body, "b")
+		if !bytes.Equal(pre, wantPre) || !slices.EqualFunc(parts, wantParts, bytes.Equal) || closed != wantClosed || found != wantFound {
+			t.Fatalf("%q: got %q %q %v %v, want %q %q %v %v", body, pre, parts, closed, found, wantPre, wantParts, wantClosed, wantFound)
 		}
 	}
 }
