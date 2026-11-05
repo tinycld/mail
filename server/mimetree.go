@@ -97,7 +97,7 @@ func (r *treeReader) read(b []byte, depth int, defaultType string) *mimePart {
 	ct := p.Header.Get("Content-Type")
 	typ, params, ok := parseContentType(ct, defaultType)
 	if !ok {
-		r.warn(p.Index, "bad-content-type", "Content-Type of %d bytes read as %s", len(ct), typ)
+		r.warn(p.Index, "bad-content-type", "Content-Type of %d bytes read as %s", len(ct), logType(typ))
 	}
 	p.Type, p.Params = typ, params
 	p.Disposition, p.Name = r.disposition(p)
@@ -699,7 +699,7 @@ func decodeText(typ, label string, b []byte) ([]byte, string, string) {
 		if utf8.Valid(b) {
 			return b, "", ""
 		}
-		return windows1252(b), "unknown-charset", fmt.Sprintf("charset %q but not UTF-8; read as Windows-1252", label)
+		return windows1252(b), "unknown-charset", fmt.Sprintf("charset %q but not UTF-8; read as Windows-1252", logCharset(label))
 	case "utf-8", "utf8":
 		if utf8.Valid(b) {
 			return b, "", ""
@@ -721,16 +721,16 @@ func decodeText(typ, label string, b []byte) ([]byte, string, string) {
 			if utf8.Valid(decoded) {
 				return decoded, "", ""
 			}
-			return toValidUTF8(decoded), "invalid-utf8", fmt.Sprintf("%s text decoded to invalid UTF-8; replaced the bad sequences", label)
+			return toValidUTF8(decoded), "invalid-utf8", fmt.Sprintf("%s text decoded to invalid UTF-8; replaced the bad sequences", logCharset(label))
 		}
 	}
 	if utf8.Valid(b) {
-		return b, "unknown-charset", fmt.Sprintf("unknown charset %q; the bytes are UTF-8 and were used as such", label)
+		return b, "unknown-charset", fmt.Sprintf("unknown charset %q; the bytes are UTF-8 and were used as such", logCharset(label))
 	}
 	if out, ok := decodeMeta(typ, b); ok {
-		return out, "unknown-charset", fmt.Sprintf("unknown charset %q; read with the charset of the HTML meta tag", label)
+		return out, "unknown-charset", fmt.Sprintf("unknown charset %q; read with the charset of the HTML meta tag", logCharset(label))
 	}
-	return windows1252(b), "unknown-charset", fmt.Sprintf("unknown charset %q; read as Windows-1252", label)
+	return windows1252(b), "unknown-charset", fmt.Sprintf("unknown charset %q; read as Windows-1252", logCharset(label))
 }
 
 func windows1252(b []byte) []byte {

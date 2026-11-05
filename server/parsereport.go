@@ -2,6 +2,7 @@ package mail
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -59,9 +60,9 @@ func (r parseReport) structure() string {
 	var parts []string
 	var walk func(p *mimePart)
 	walk = func(p *mimePart) {
-		s := fmt.Sprintf("%d %s", p.Index, p.Type)
+		s := fmt.Sprintf("%d %s", p.Index, logType(p.Type))
 		if cs := p.Params["charset"]; cs != "" {
-			s += " charset=" + cs
+			s += " charset=" + logCharset(cs)
 		}
 		if p.Disposition != "" {
 			s += " " + p.Disposition
@@ -80,7 +81,7 @@ func (r parseReport) structure() string {
 	if r.root != nil {
 		walk(r.root)
 	}
-	return strings.Join(parts, "; ")
+	return joinCapped(parts, maxLoggedParts)
 }
 
 func (r parseReport) warningText() string {
@@ -88,7 +89,7 @@ func (r parseReport) warningText() string {
 	for _, w := range r.Warnings {
 		ws = append(ws, fmt.Sprintf("%d %s: %s", w.Part, w.Kind, w.Detail))
 	}
-	return strings.Join(ws, "; ")
+	return joinCapped(ws, maxLoggedWarnings)
 }
 
 // log leaves one warning line when needsLog is true. route says which path
@@ -107,4 +108,56 @@ func logUserID(user *core.Record) string {
 		return ""
 	}
 	return user.Id
+}
+
+const (
+	maxLoggedParts    = 50
+	maxLoggedWarnings = 20
+)
+
+// joinCapped bounds a log field: a message can hold thousands of parts.
+func joinCapped(items []string, limit int) string {
+	if len(items) <= limit {
+		return strings.Join(items, "; ")
+	}
+	return fmt.Sprintf("%s; +%d more", strings.Join(items[:limit], "; "), len(items)-limit)
+}
+
+var (
+	safeCharsetLabel = regexp.MustCompile(`^[a-z0-9._:-]{1,40}$`)
+	safeSubtype      = regexp.MustCompile(`^[a-z0-9.+-]{1,40}$`)
+	topLevelTypes    = map[string]bool{
+		"text": true, "image": true, "audio": true, "video": true, "application": true,
+		"multipart": true, "message": true, "font": true, "model": true,
+	}
+)
+
+// logCharset is a charset label that is safe to log: the sender chooses the
+// label, and it can hold a name or address. Only labels the decoder knows
+// are kept; the rest is "unknown".
+func logCharset(label string) string {
+	label = strings.ToLower(strings.TrimSpace(label))
+	if !safeCharsetLabel.MatchString(label) {
+		return "unknown"
+	}
+	if label == "utf-8" || label == "us-ascii" {
+		return label
+	}
+	if _, err := charsetReader(label, strings.NewReader("")); err != nil {
+		return "unknown"
+	}
+	return label
+}
+
+// logType is a media type that is safe to log: the sender chooses it, so
+// only registered top-level types and plain subtypes pass.
+func logType(typ string) string {
+	top, sub, _ := strings.Cut(strings.ToLower(typ), "/")
+	if !topLevelTypes[top] {
+		return "other"
+	}
+	if !safeSubtype.MatchString(sub) {
+		return top + "/other"
+	}
+	return top + "/" + sub
 }
