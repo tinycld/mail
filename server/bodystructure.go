@@ -1,9 +1,9 @@
 package mail
 
 import (
+	"bytes"
 	"fmt"
 	"html"
-	"regexp"
 	"sort"
 	"strings"
 )
@@ -153,8 +153,6 @@ func backfill(root *mimePart, l bodyLists) []*mimePart {
 	return out
 }
 
-var cidRef = regexp.MustCompile(`(?i)cid:([^"'\s>)]+)`)
-
 // rootText is a text part's body. The root leaf is the whole message, so no
 // delimiter took its closing line break: exactly one is framing. Parts inside
 // a multipart already lost theirs, so any break left is the sender's.
@@ -184,15 +182,6 @@ func flatten(l bodyLists, msg *storedMessage) {
 	}
 	msg.TextBody = strings.Join(texts, "\n")
 
-	referenced := map[string]bool{}
-	for _, p := range l.html {
-		if p.Type == "text/html" {
-			for _, m := range cidRef.FindAllStringSubmatch(string(p.Body), -1) {
-				referenced[normalizeCID(m[1])] = true
-			}
-		}
-	}
-
 	var files []*mimePart
 	seen := map[*mimePart]bool{}
 	addFile := func(p *mimePart) {
@@ -202,29 +191,18 @@ func flatten(l bodyLists, msg *storedMessage) {
 		}
 	}
 
-	var b strings.Builder
 	hasHTML := false
 	for _, p := range l.html {
 		switch {
 		case len(p.Body) == 0:
 		case p.Type == "text/html":
 			hasHTML = true
-			b.Write(p.Body)
-		case p.Type == "text/plain":
-			b.WriteString(`<div style="white-space: pre-wrap">` + html.EscapeString(rootText(p)) + `</div>`)
 		case isInlineMediaType(p.Type):
-			if p.ContentID == "" {
-				p.ContentID = fmt.Sprintf("<part-%d@tinycld.invalid>", p.Index)
-			}
-			if cid := normalizeCID(p.ContentID); !referenced[cid] {
-				// Shown where the sender put it, between the HTML parts.
-				b.WriteString(`<img src="cid:` + html.EscapeString(cid) + `">`)
-			}
 			addFile(p)
 		}
 	}
 	if hasHTML {
-		msg.HTMLBody = b.String()
+		msg.HTMLBody = htmlBody(l.html)
 	}
 
 	for _, p := range l.text {
@@ -247,4 +225,84 @@ func flatten(l bodyLists, msg *storedMessage) {
 	if strings.TrimSpace(msg.TextBody) == "" && msg.HTMLBody != "" {
 		msg.TextBody = stripHTMLToText(msg.HTMLBody)
 	}
+}
+
+// htmlBody joins the HTML-body list into one HTML string. A media part with
+// no Content-ID gets a generated one here, so its <img> can point at it, and
+// only here: a Content-ID makes Postmark send a file as embedded, and some
+// clients then hide it, so a plain-text message keeps its photo's ID empty.
+func htmlBody(parts []*mimePart) string {
+	cids := map[string]bool{}
+	for _, p := range parts {
+		if len(p.Body) > 0 && isInlineMediaType(p.Type) {
+			if p.ContentID == "" {
+				p.ContentID = fmt.Sprintf("<part-%d@tinycld.invalid>", p.Index)
+			}
+			cids[normalizeCID(p.ContentID)] = false
+		}
+	}
+	for _, p := range parts {
+		if p.Type == "text/html" {
+			markCIDRefs(p.Body, cids)
+		}
+	}
+
+	var b strings.Builder
+	for _, p := range parts {
+		switch {
+		case len(p.Body) == 0:
+		case p.Type == "text/html":
+			b.Write(p.Body)
+		case p.Type == "text/plain":
+			b.WriteString(`<div style="white-space: pre-wrap">` + html.EscapeString(rootText(p)) + `</div>`)
+		case isInlineMediaType(p.Type):
+			if cid := normalizeCID(p.ContentID); !cids[cid] {
+				// Shown where the sender put it, between the HTML parts.
+				b.WriteString(`<img src="cid:` + html.EscapeString(cid) + `">`)
+			}
+		}
+	}
+	return b.String()
+}
+
+// markCIDRefs sets cids[id] for each id in cids that a cid: reference in
+// body names. It scans the bytes itself: a regexp over a body of millions of
+// references allocated a match for each, and only the ids of the message's
+// own media parts are kept.
+func markCIDRefs(body []byte, cids map[string]bool) {
+	if len(cids) == 0 {
+		return
+	}
+	for i := 0; i < len(body); {
+		colon := bytes.IndexByte(body[i:], ':')
+		if colon < 0 {
+			return
+		}
+		colon += i
+		i = colon + 1
+		if colon < 3 || !bytes.EqualFold(body[colon-3:colon], []byte("cid")) {
+			continue
+		}
+		end := i
+		for end < len(body) && !isCIDRefEnd(body[end]) {
+			end++
+		}
+		if end > i {
+			id := normalizeCID(string(body[i:end]))
+			if _, ours := cids[id]; ours {
+				cids[id] = true
+			}
+		}
+		i = end
+	}
+}
+
+// isCIDRefEnd reports whether c ends a cid: reference in HTML: a quote, white
+// space, '>' or ')'.
+func isCIDRefEnd(c byte) bool {
+	switch c {
+	case '"', '\'', '>', ')', ' ', '\t', '\n', '\f', '\r':
+		return true
+	}
+	return false
 }

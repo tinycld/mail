@@ -243,9 +243,39 @@ func TestFlatten_PlainInHTMLListIsEscaped(t *testing.T) {
 func TestFlatten_ImageWithoutContentIDGetsOne(t *testing.T) {
 	t.Parallel()
 	msg := flattened(t, "Content-Type: multipart/mixed; boundary=m\n\n"+
-		"--m\nContent-Type: text/plain\n\nlook\n--m\nContent-Type: image/png\n\nPNG\n--m--\n")
+		"--m\nContent-Type: text/html\n\n<p>look</p>\n--m\nContent-Type: image/png\n\nPNG\n--m--\n")
 	if len(msg.Attachments) != 1 || msg.Attachments[0].ContentID != "<part-2@tinycld.invalid>" {
 		t.Errorf("attachments = %+v", msg.Attachments)
+	}
+	if !strings.Contains(msg.HTMLBody, `<img src="cid:part-2@tinycld.invalid">`) {
+		t.Errorf("html = %q", msg.HTMLBody)
+	}
+}
+
+// A plain-text message with a photo (iOS Mail) has no HTML body, so the photo
+// gets no generated Content-ID: Postmark would send it as embedded, and some
+// clients hide an embedded file.
+func TestFlatten_PlainTextImageGetsNoContentID(t *testing.T) {
+	t.Parallel()
+	msg := flattened(t, "Content-Type: multipart/mixed; boundary=m\n\n"+
+		"--m\nContent-Type: text/plain\n\nlook\n"+
+		"--m\nContent-Type: image/jpeg\nContent-Disposition: inline; filename=photo.jpg\n\nJPEG\n--m--\n")
+	if msg.HTMLBody != "" || msg.TextBody != "look" {
+		t.Errorf("text %q html %q", msg.TextBody, msg.HTMLBody)
+	}
+	if len(msg.Attachments) != 1 || msg.Attachments[0].Name != "photo.jpg" || msg.Attachments[0].ContentID != "" {
+		t.Errorf("attachments = %+v", msg.Attachments)
+	}
+}
+
+// Only a cid: reference to one of the message's own media parts counts;
+// any other is not looked up, however many the HTML holds.
+func TestMarkCIDRefs(t *testing.T) {
+	t.Parallel()
+	cids := map[string]bool{"a@x": false, "b@x": false, "c@x": false}
+	markCIDRefs([]byte(`<img src="CID:a@x"><img src='cid:<b@x>'> url(cid:other) cid: cid:`), cids)
+	if !cids["a@x"] || !cids["b@x"] || cids["c@x"] || len(cids) != 3 {
+		t.Errorf("cids = %v", cids)
 	}
 }
 
