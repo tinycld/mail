@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -52,6 +53,16 @@ func corpusName(p string) string { return strings.TrimPrefix(p, corpusRoot+"/") 
 // checkLosesNothing asserts the salvage guarantees on one message.
 func checkLosesNothing(t *testing.T, raw []byte) {
 	t.Helper()
+	for _, problem := range losesNothingProblems(raw) {
+		t.Error(problem)
+	}
+}
+
+// losesNothingProblems returns the salvage guarantees one message breaks. It
+// takes no *testing.T so the fuzz test can run it in a goroutine it abandons
+// on timeout. Problems name part numbers, types and sizes, never content.
+func losesNothingProblems(raw []byte) []string {
+	var problems []string
 	root, _ := readTree(raw)
 	l := parseStructure(root)
 	listed := map[*mimePart]bool{}
@@ -69,10 +80,10 @@ func checkLosesNothing(t *testing.T, raw []byte) {
 	textLeaf := false
 	for _, leaf := range leaves(root) {
 		if len(leaf.Body) > 0 && !listed[leaf] {
-			t.Errorf("part %d (%s, %d bytes) is in no list", leaf.Index, leaf.Type, len(leaf.Body))
+			problems = append(problems, fmt.Sprintf("part %d (%s, %d bytes) is in no list", leaf.Index, leaf.Type, len(leaf.Body)))
 		}
 		if leaf.RawSize > 0 && len(leaf.Body) == 0 {
-			t.Errorf("part %d (%s) had %d bytes and kept none", leaf.Index, leaf.Type, leaf.RawSize)
+			problems = append(problems, fmt.Sprintf("part %d (%s) had %d bytes and kept none", leaf.Index, leaf.Type, leaf.RawSize))
 		}
 		// Only text/plain and text/html can be bodies in RFC 8621; text/x-* is a file.
 		// Only parts parseStructure put in a body list count: a text part RFC 8621 sends to the files
@@ -85,12 +96,13 @@ func checkLosesNothing(t *testing.T, raw []byte) {
 	}
 	msg, _ := parseRFC5322(raw)
 	if textLeaf && strings.TrimSpace(msg.TextBody) == "" && strings.TrimSpace(msg.HTMLBody) == "" {
-		t.Errorf("the message has text, but both bodies are empty")
+		problems = append(problems, "the message has text, but both bodies are empty")
 	}
 	again, _ := parseRFC5322(raw)
 	if !reflect.DeepEqual(msg, again) {
-		t.Errorf("parsing twice gave different results")
+		problems = append(problems, "parsing twice gave different results")
 	}
+	return problems
 }
 
 func TestCorpus_LosesNothing(t *testing.T) {

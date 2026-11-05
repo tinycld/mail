@@ -20,18 +20,17 @@ func FuzzParseRFC5322(f *testing.F) {
 		f.Add(raw)
 	}
 	f.Fuzz(func(t *testing.T, raw []byte) {
-		done := make(chan struct{})
+		// The goroutine touches no t, so abandoning it on a hang is safe.
+		result := make(chan []string, 1)
 		start := time.Now()
-		go func() {
-			defer close(done)
-			checkLosesNothing(t, raw)
-		}()
+		go func() { result <- losesNothingProblems(raw) }()
 		select {
-		case <-done:
+		case problems := <-result:
+			for _, problem := range problems {
+				t.Error(problem)
+			}
 		case <-time.After(time.Second):
-			// Wait for the goroutine so its late t.Errorf cannot hit a finished test.
-			<-done
-			t.Fatalf("parsing %d bytes took %s, over a second", len(raw), time.Since(start))
+			t.Fatalf("parsing %d bytes did not finish within a second (waited %s)", len(raw), time.Since(start))
 		}
 	})
 }
