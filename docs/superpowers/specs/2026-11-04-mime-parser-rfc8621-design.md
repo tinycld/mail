@@ -154,6 +154,10 @@ error, and nothing ends the walk of the tree.
   - **Bad parameters** (broken RFC 2231 continuations, unbalanced quotes):
     each parameter keeps its raw value when it cannot be decoded, so a
     filename survives as written.
+  - **Unquoted parameter value in a lenient read:** the value continues to
+    the next `;`. The white space around it is removed. Thus
+    `filename=My Document.pdf` gives `My Document.pdf`. A quoted value is
+    read as before.
 - **Transfer encoding:**
   - **Unknown `Content-Transfer-Encoding`:** the body is kept as it is.
   - **Invalid base64 or quoted-printable:** the part is decoded up to the
@@ -183,12 +187,30 @@ error, and nothing ends the walk of the tree.
     kept, and the rest of that multipart's body, from the failing point,
     becomes one more leaf. Its siblings and parents go on.
   - **Preamble and epilogue:** dropped, as RFC 2046 says, unless the
-    multipart has no parts at all. The preamble is then its text.
+    multipart has no parts at all. The preamble is then its text. An
+    epilogue that is not blank gets a `bad-multipart` warning. The warning
+    gives only the length of the epilogue.
 - **Other cases:**
   - **`message/rfc822` and other `message/*`:** a leaf, kept as bytes and not
     recursed into, as RFC 8621 says. It becomes an `.eml` file.
   - **Nesting:** limited to 50 levels. A deeper multipart becomes one file
     part with its raw bytes (against nesting bombs).
+  - **Parts:** limited to 10,000 in one message, counted across the whole
+    tree. When a multipart gets to this limit, the rest of its body, from
+    that point, becomes one raw leaf. The leaf is `text/plain` when it looks
+    like text, and `application/octet-stream` if not. The multipart gets a
+    `bad-multipart` warning. This is the "any other read error" rule above.
+    Each enclosing multipart that has more parts adds one more such leaf.
+    A part uses much more memory than its delimiter line, so without this
+    limit 25 MB of empty parts used approximately 1 GB.
+  - **Header block:** limited to 1 MB or 10,000 fields, whichever comes
+    first. The header ends at the line that goes past the limit. The rest of
+    the header block is kept as the start of the body, so no byte is lost.
+    The part gets a `bad-header` warning.
+  - **Header fields of the whole message:** limited to 100,000, counted
+    across all parts. When a part's header gets to this limit, the same rule
+    as for one header block applies. Without this limit, many parts that
+    are each below the header-block limit still used approximately 300 MB.
   - **Single-part messages:** the root is itself a leaf.
   - **Empty parts:** kept. They are in the tree, but a body list or the file
     list skips a part with no bytes.
@@ -251,6 +273,10 @@ string, one HTML string and a file list:
     an HTML part already references its Content-ID. A part with no Content-ID
     gets a generated one (`part-<index>@tinycld.invalid`). An image placed
     between two HTML parts then shows where the sender put it.
+  - The generated Content-ID and the `<img>` are added only when an HTML
+    body is written. A plain-text message with an inline photo keeps an
+    empty Content-ID. Postmark sends a file that has a Content-ID as an
+    embedded file, and some clients do not show an embedded file.
 - If the HTML-body list holds no `text/html` part at all, HTMLBody stays
   empty. A plain-text message stays plain text, as today.
 - **Attachments:** the RFC attachment list plus every media part of the body
