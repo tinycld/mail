@@ -221,7 +221,7 @@ func TestDecodeText(t *testing.T) {
 		{"unknown, not UTF-8", "text/plain", "x-nobody-knows", []byte("caf\xe9"), "café", "unknown-charset"},
 		{"unknown, UTF-8", "text/plain", "x-nobody-knows", []byte("café"), "café", "unknown-charset"},
 		{"none, not UTF-8", "text/plain", "", []byte("caf\xe9"), "café", "unknown-charset"},
-		{"declared UTF-8, invalid", "text/plain", "utf-8", []byte("caf\xff"), "caf�", "invalid-utf8"},
+		{"declared UTF-8, invalid", "text/plain", "utf-8", []byte("caf\xff"), "caf\uFFFD", "invalid-utf8"},
 		{"html meta", "text/html", "", []byte(`<meta charset="iso-8859-1"><p>caf` + "\xe9"), `<meta charset="iso-8859-1"><p>café`, ""},
 		{"html stale meta on UTF-8", "text/html", "", []byte(`<meta charset="iso-8859-1"><p>café`), `<meta charset="iso-8859-1"><p>café`, ""},
 		{"html unknown label uses meta", "text/html", "x-nobody-knows", []byte(`<meta charset="iso-8859-1"><p>caf` + "\xe9"), `<meta charset="iso-8859-1"><p>café`, "unknown-charset"},

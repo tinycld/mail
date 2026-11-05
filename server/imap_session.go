@@ -166,13 +166,6 @@ func (s *imapSession) requireWritable(command string) error {
 	return nil
 }
 
-func (s *imapSession) userID() string {
-	if s.user == nil {
-		return ""
-	}
-	return s.user.Id
-}
-
 // Namespace returns the personal namespace descriptor.
 func (s *imapSession) Namespace() (*imap.NamespaceData, error) {
 	return &imap.NamespaceData{
