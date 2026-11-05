@@ -1,7 +1,7 @@
 # MIME parsing by RFC 8621, tested against a corpus — design
 
 Date: 2026-11-04
-Status: draft, for review
+Status: implemented (branch `mime-parser-rfc8621`)
 
 ## Why
 
@@ -75,14 +75,19 @@ raw bytes ──readTree──▶ part tree (+ warnings) ──parseStructure─
 ```
 
 `parseRFC5322(raw)` no longer returns an error; it always returns a
-message, with the warnings beside it. Its four callers change with it:
+message, with a `parseReport` beside it. The report carries the warnings.
+It also holds the tree and the lists, unexported, so that the callers can
+log the structure. Its callers change with it:
 
 ```go
-func parseRFC5322(raw []byte) (*storedMessage, []parseWarning)
+func parseRFC5322(raw []byte) (*storedMessage, parseReport)
 ```
 
-The SMTP "message could not be parsed" (554) path goes away: a message that
-reaches DATA is always stored or sent with whatever was salvaged.
+The SMTP "message could not be parsed" (554) path goes away from
+submission, from the port-25 inbound server and from the IMAP fetcher: a
+message that reaches DATA is always stored or sent with whatever was
+salvaged. The provider interface's `ParseInbound` keeps its error return,
+because Postmark's can fail.
 
 ### Step 1: `readTree` (new file `server/mimetree.go`)
 
@@ -185,6 +190,8 @@ a direct port of the RFC 8621 §4.1.4 algorithm:
   - type `text/plain`, `text/html` or `image|audio|video/*`;
   - and first in its multipart, or (not in `multipart/related` and
     (inline media or no name)).
+- The children of `multipart/digest` default to `message/rfc822`
+  (RFC 2046 §5.1.5), not `text/plain`.
 - In `multipart/alternative`: `text/plain` goes to the text body, `text/html`
   to the HTML body, and anything else is an attachment.
 - Inside an alternative, a `text/plain` part ends the HTML list for that
@@ -194,6 +201,9 @@ a direct port of the RFC 8621 §4.1.4 algorithm:
 - At the end of an alternative, a branch that filled only one list copies its
   parts into the other.
 - A single-part root is handled as `parts = [root]` in a `mixed` multipart.
+- `backfill`: every leaf that the algorithm put in no list is added to the
+  attachments. RFC 8621 defines attachments as every part that is in no body
+  list, but the algorithm can drop such a part.
 
 RFC 8621 calls this algorithm "a starting point … likely to require
 workarounds for malformed content". Each workaround we add:
@@ -206,7 +216,8 @@ workarounds for malformed content". Each workaround we add:
 This lets us tell a workaround from a bug. Stalwart's issue #67
 fixes (an alternative child with disposition attachment, a named HTML part
 in an alternative, an unterminated alternative) are the first candidates;
-the harness shows which ones we need.
+the harness showed which ones we need (see "Rulings made during
+implementation").
 
 ### Step 3: `flatten` (in `server/bodystructure.go`)
 
@@ -260,12 +271,13 @@ The line carries the structure and no content:
 ```
 msg="message parsed with problems" user=… route=smtp-submission
 structure="0 multipart/mixed; 1 text/html charset=windows-1252 →html; 2 application/pdf inline 48211B →file; 3 text/html charset=windows-1252 →html"
-warnings="1 unknown-charset windows-1252 (decoded as Windows-1252)"
+warnings="1 unknown-charset: unknown charset \"x-foo\"; read as Windows-1252"
 ```
 
 The structure lists, for each part: its index, type, charset, disposition,
 size, and which list it went to. It never includes names, addresses or body
-text. With this line, the third fault would have been found from the log,
+text. A warning detail names field names, lengths and charsets, never header
+values. With this line, the third fault would have been found from the log,
 without asking for the raw source.
 
 ### A message with no text
@@ -306,21 +318,24 @@ license text.
 | `mimekit` | jstedfast/MimeKit `UnitTests/TestData/messages` | no | MIT |
 | `zbateson` | zbateson/mail-mime-parser `tests/_data/emails` (GitHub-issue messages; the Hunny ones duplicate `legacy`) | no | BSD-2 |
 | `cpython` | python/cpython `Lib/test/test_email/data` | no | PSF |
-| `thunderbird` | comm-central `mailnews/test/data` MIME torture test | no | MPL-2.0 (file-level) |
-| `faults` | the faults above. Fault 3 is the real message, anonymized: names and addresses replaced, and each attachment's content replaced by a short placeholder (about 1 KB, still base64, not a valid file of its type). The structure, headers, boundaries, encodings and dispositions stay | yes (ours) | ours |
+| `thunderbird` | comm-central `mailnews/test/data` MIME torture test (1.8 MB, vendored unchanged) | no | MPL-2.0 (file-level) |
+| `faults` | the faults above. Fault 3 is the real message, anonymized: names and addresses replaced, and each attachment's content replaced by a short placeholder (about 1 KB, still base64, not a valid file of its type). The structure, headers, boundaries, encodings and dispositions stay | yes (ours, `NAME.flatten.json`) | ours |
 | `clients` | real client messages (below) | yes (ours) | ours |
 
-A script, `server/testdata/corpus/fetch.sh`, takes the external sources at
-pinned commits, so a refresh is a reviewed diff and not a hand copy.
+A Go tool, `server/testdata/corpus/tools/fetch`, takes the external sources
+at pinned commits, so a refresh is a reviewed diff and not a hand copy. Run
+it with `go run ./testdata/corpus/tools/fetch`.
 
 ### The tests (`server/corpus_test.go`)
 
 1. **`TestCorpus_LosesNothing`** runs on every message of every source:
    - every leaf of the tree with bytes is in the text, HTML or attachment
-     list;
+     list. Of the text parts, only those that `parseStructure` put in a body
+     list count as text. `TestCorpus_MatchesExpected` and the RFC unit tests
+     gate the classification;
    - no leaf that had bytes in the raw message has an empty body;
-   - whenever the tree has a `text/*` leaf that is not an attachment, the
-     text or the HTML body is not empty;
+   - whenever the tree has a `text/plain` or `text/html` leaf that is not
+     an attachment, the text or the HTML body is not empty;
    - the result is the same on a second run.
 2. **`TestCorpus_MatchesExpected`** runs on the stalwart sets:
    - **Expected side:** for message 0, the expected `text_body`, `html_body`
@@ -333,9 +348,11 @@ pinned commits, so a refresh is a reviewed diff and not a hand copy.
      message with a reason. A listed message that now matches also fails the
      test, so the list can only shrink.
 3. **`TestCorpus_Flatten`** runs on `faults` and `clients`. Each message has
-   an `NAME.expect.json` with the `storedMessage` facts that matter:
+   a `NAME.flatten.json` with the `storedMessage` facts that matter. (The
+   name `NAME.expect.json` is the stalwart lists.)
    - text and HTML snippets that must appear;
-   - the attachments by name, type and size;
+   - the attachments by name and type, and by size in decoded bytes when the
+     file gives one;
    - that no body is empty.
 4. **`FuzzParseRFC5322`** is seeded with every corpus message. It checks:
    - no panic, and always a message back;
@@ -367,9 +384,11 @@ No public corpus has mail from current clients. We build our own:
   - Thunderbird.
 - **Capture:** send each case to a test mailbox and save the raw source with
   the client's or webmail's "show original" or "raw source". Run
-  `testdata/corpus/clients/anonymize.go` over it. It replaces addresses,
-  names, Message-IDs and `Received` hosts and keeps the structure byte for
-  byte.
+  `go run ./testdata/corpus/tools/anonymize` over it. It keeps only an
+  allow-list of structural headers (`Content-*`, `MIME-Version`, `Date` and
+  `Subject` set to fixed values, message ids replaced). It rewrites every
+  address header from its unfolded value, and it drops every other header.
+  The body structure stays.
 - **Expected results:** written by hand from what the sending client showed.
 - This needs a person with those clients. The harness and the other sources
   do not wait for it. The set grows as clients are captured.
@@ -378,7 +397,9 @@ No public corpus has mail from current clients. We build our own:
 
 1. Land the harness and the corpus first, with the current parser, and
    record its failures. This is the baseline. It shows how much the new
-   parser fixes, and that it fixes the live fault.
+   parser fixes, and that it fixes the live fault. (Not done: the parser
+   landed before the corpus, so no baseline was recorded. See "Rulings made
+   during implementation".)
 2. Land `readTree`, `parseStructure` and `flatten` behind the same
    `parseRFC5322` signature.
 3. Land the diagnostics.
@@ -387,11 +408,65 @@ No public corpus has mail from current clients. We build our own:
 
 ## Testing
 
-- Corpus: the four tests above, on about 334 messages, about 0.7 MB in the
-  repo.
+- Corpus: the four tests above, on 337 messages (331 vendored and 6
+  faults), about 4.3 MB in the repo. The Thunderbird torture test is 1.8 MB.
 - Unit: `readTree`, `parseStructure` (a test per RFC branch), `flatten`.
 - The callers' existing tests (`imap_rfc5322_test.go`, `message_files_test.go`,
-  SMTP and IMAP tests) keep passing, with the new warnings return value.
+  SMTP and IMAP tests) keep passing, with the new report return value.
+
+## Rulings made during implementation
+
+These rulings settled points that the design left open. The sections above
+already hold the signature, the file and tool names, the `digest` default,
+`backfill` and the corpus size.
+
+1. **Anonymizer.** It keeps only an allow-list of structural headers
+   (`Content-*`, `MIME-Version`, `Date` and `Subject` fixed, message ids
+   replaced). It rewrites every address header from its unfolded value and
+   drops every other header.
+2. **Rollout.** The parser landed before the corpus. No baseline of the old
+   parser's corpus failures was recorded.
+3. **Header parsing.** A line that is not a field is skipped only when the
+   next line is a field. This covers an mbox `From ` first line. Any other
+   line that is not a field ends the header and starts the body, so no byte
+   is dropped. A continuation line after a skipped line is not joined to the
+   field before it.
+4. **Lenient Content-Type and Content-Disposition.** When
+   `mime.ParseMediaType` refuses a value, the type is only the leading
+   `token/token`, and the parameters are read from the rest of the value. A
+   value with no usable type and subtype gets the default type.
+5. **Charset order for a missing or unknown label.** Bytes that are valid
+   UTF-8 are used as they are. Otherwise, for HTML, a `<meta charset>` is
+   tried. Otherwise the bytes are read as Windows-1252. UTF-7 is decoded.
+   Ill-formed UTF-7 is kept as written, with a `bad-encoding` warning.
+6. **Quoted-printable.** A final `=` is a soft line break. A quoted-printable
+   body that is not blank and decodes to nothing is kept raw, with a
+   `bad-encoding` warning. This is the same rule as for base64.
+7. **Final line break.** `flatten` removes exactly one final line break from
+   the root leaf of a single-part message. It does not trim tree bodies. A
+   single-part message has no delimiter that takes the break.
+8. **`parseStructure` deviations from the RFC.** `bodystructure.go` lists
+   them in its header comment:
+   - Inside an alternative, a part for a list that the branch has stopped
+     goes to the attachments. The RFC's JavaScript would throw.
+   - `backfill`.
+   - The root-leaf trim.
+   - One workaround: a `multipart/related` root is taken from its `type`
+     parameter (`mimekit/multipart-related-mhtml`).
+9. **`needsLog` and the corpus tests.** `needsLog`, the log trigger, counts
+   `text/plain` and `text/html` leaves that are not `attachment`. Other
+   `text/*` leaves are attachments under RFC 8621.
+10. **Expected attachments.** A `NAME.flatten.json` attachment can carry a
+    `size` in decoded bytes. The test checks it when it is present.
+11. **Known deviations.** `known_deviations.txt` holds 31 messages in 11
+    cause groups. Each reason names the rule that we follow.
+12. **Log line limits.**
+    - The line never names a charset that go-message's `charset` package
+      does not know. It writes `unknown`.
+    - It writes a type only when the top level is a registered one and the
+      subtype is short and plain. Otherwise it writes `top/other` or
+      `other`.
+    - It caps the structure at 50 parts and the warnings at 20.
 
 ## Open questions
 
