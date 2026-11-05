@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/emersion/go-message/charset"
@@ -51,6 +52,9 @@ type parseWarning struct {
 }
 
 func readTree(raw []byte) (*mimePart, []parseWarning) {
+	// A final CR with no LF after it is the first half of a line break that
+	// the message was cut off in, not content (stalwart/legacy/049.eml).
+	raw = bytes.TrimSuffix(raw, []byte("\r"))
 	r := &treeReader{}
 	return r.read(raw, 0, "text/plain"), r.warnings
 }
@@ -178,8 +182,10 @@ func (r *treeReader) disposition(p *mimePart) (string, string) {
 			r.warn(p.Index, "bad-header-param", "Content-Disposition of %d bytes read leniently", len(raw))
 		}
 		disp, params = strings.ToLower(d), ps
-		if disp != "inline" && disp != "attachment" {
-			// RFC 2183: an unknown disposition is treated as attachment.
+		// RFC 2183: an unknown disposition is treated as attachment. A value
+		// with no type at all (";" then a filename) names no disposition, so
+		// the part keeps the one its place gives it (stalwart/malformed/017.eml).
+		if disp != "" && disp != "inline" && disp != "attachment" {
 			disp = "attachment"
 		}
 	}
@@ -190,7 +196,66 @@ func (r *treeReader) disposition(p *mimePart) (string, string) {
 	return disp, r.decodeWords(p.Index, name)
 }
 
-var wordDecoder = mime.WordDecoder{CharsetReader: charset.Reader}
+var wordDecoder = mime.WordDecoder{CharsetReader: charsetReader}
+
+// charsetReader is go-message's charset.Reader plus UTF-7 (RFC 2152), which
+// golang.org/x/text does not have and old Outlook versions send.
+func charsetReader(label string, r io.Reader) (io.Reader, error) {
+	switch strings.ToLower(strings.TrimSpace(label)) {
+	case "utf-7", "utf7", "unicode-1-1-utf-7", "csunicode11utf7":
+		b, err := io.ReadAll(r)
+		if err != nil {
+			return nil, err
+		}
+		return bytes.NewReader(decodeUTF7(b)), nil
+	}
+	return charset.Reader(label, r)
+}
+
+// decodeUTF7 decodes RFC 2152 UTF-7. "+" opens a run of modified base64
+// that holds UTF-16 code units; the first character outside the base64
+// alphabet ends it, and is kept unless it is "-". "+-" is a literal "+".
+// Bits left over at the end of a run are padding and are dropped; a lone
+// surrogate becomes U+FFFD.
+func decodeUTF7(b []byte) []byte {
+	out := make([]byte, 0, len(b))
+	for i := 0; i < len(b); {
+		if b[i] != '+' {
+			out = append(out, b[i])
+			i++
+			continue
+		}
+		i++
+		if i < len(b) && b[i] == '-' {
+			out = append(out, '+')
+			i++
+			continue
+		}
+		var units []uint16
+		var bits uint32
+		n := 0
+		for ; i < len(b); i++ {
+			v := strings.IndexByte(base64Alphabet, b[i])
+			if v < 0 {
+				break
+			}
+			bits = bits<<6 | uint32(v)
+			n += 6
+			if n >= 16 {
+				n -= 16
+				units = append(units, uint16(bits>>n))
+				bits &= 1<<n - 1
+			}
+		}
+		out = append(out, string(utf16.Decode(units))...)
+		if i < len(b) && b[i] == '-' {
+			i++
+		}
+	}
+	return out
+}
+
+const base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
 // decodeWords decodes RFC 2047 encoded words, keeping the value as written
 // when it cannot.
@@ -209,20 +274,30 @@ func (r *treeReader) decodeWords(part int, v string) string {
 var headerFieldLine = regexp.MustCompile(`^([!-9;-~]+)[ \t]*:(.*)$`)
 
 // parseHeaderBlock reads the header fields at the start of b and returns
-// them with the body after the blank line that ends them. It never fails. A
-// line that is neither a field nor a continuation is skipped when a field
-// follows it, and otherwise ends the header there: the body then starts at
-// that line, so nothing is lost. Input whose first line is not a field has no
-// header and is all body.
+// them with the body after the blank line that ends them. It never fails.
+//
+// A line that is neither a field nor a continuation is a broken field, and
+// is skipped with its continuations, when the header around it is readable:
+// a field comes right after it, or it looks like a field (it has a colon or
+// continuation lines) and the lines after it run as a header to a blank line
+// (stalwart/regressions/header-name-space.eml and its siblings). Any other
+// such line ends the header there, and the body starts at that line, so
+// nothing is lost. Input with no readable field before such a line has no
+// header and is all body (design, "Header block cannot be read").
 func parseHeaderBlock(b []byte) (textproto.Header, []byte, string) {
 	var fields []headerLine
 	var problem string
+	var ahead headerWalk
+	skipping := false
 	for pos := 0; pos < len(b); {
 		line, next := lineAt(b, pos)
 		switch {
 		case len(line) == 0:
 			return headerOf(fields), b[next:], problem
-		case line[0] == ' ' || line[0] == '\t':
+		case isContinuation(line):
+			if skipping {
+				break
+			}
 			if len(fields) == 0 {
 				return textproto.Header{}, b, ""
 			}
@@ -234,18 +309,17 @@ func parseHeaderBlock(b []byte) (textproto.Header, []byte, string) {
 		default:
 			if m := headerFieldLine.FindSubmatch(line); m != nil {
 				fields = append(fields, headerLine{string(m[1]), append([]byte(nil), m[2]...)})
+				skipping = false
 				break
 			}
 			// Problems name a line's length, never its text: a header line
 			// can hold a name or an address, and warnings reach the log.
-			if next < len(b) {
-				if following, _ := lineAt(b, next); headerFieldLine.Match(following) {
-					// Also the first line: an mbox "From " line comes before the fields.
-					problem = fmt.Sprintf("skipped a header line of %d bytes that is not a field", len(line))
-					break
-				}
+			if ahead.isBrokenField(b, line, next, len(fields) > 0) {
+				problem = fmt.Sprintf("skipped a header line of %d bytes that is not a field", len(line))
+				skipping = true
+				break
 			}
-			if pos == 0 {
+			if len(fields) == 0 {
 				return textproto.Header{}, b, ""
 			}
 			return headerOf(fields), b[pos:], fmt.Sprintf("header ended early at a line of %d bytes that is not a field", len(line))
@@ -253,6 +327,62 @@ func parseHeaderBlock(b []byte) (textproto.Header, []byte, string) {
 		pos = next
 	}
 	return headerOf(fields), nil, problem
+}
+
+func isContinuation(line []byte) bool {
+	return len(line) > 0 && (line[0] == ' ' || line[0] == '\t')
+}
+
+// headerWalk remembers one walk of the lines ahead of a broken field, so a
+// header of many broken lines is walked once, not once per line.
+type headerWalk struct {
+	done      bool
+	from, end int  // the walk started at from and stopped at the line at end
+	closed    bool // a blank line stopped it
+	lastField int  // where the last field line in the walk starts, or -1
+}
+
+// isBrokenField reports whether line, which is not a field, is a broken
+// field inside a header rather than the start of a body. next is where the
+// line after it starts; afterField is whether a field came before it.
+func (w *headerWalk) isBrokenField(b, line []byte, next int, afterField bool) bool {
+	following, _ := lineAt(b, next)
+	if next < len(b) && headerFieldLine.Match(following) {
+		// Also the first line: an mbox "From " line comes before the fields.
+		return true
+	}
+	if !bytes.ContainsRune(line, ':') && !(next < len(b) && isContinuation(following)) {
+		return false
+	}
+	if !w.done || next < w.from || next > w.end {
+		w.walk(b, next)
+	}
+	return w.closed && (afterField || w.lastField >= next)
+}
+
+// walk follows the lines from pos while they read as a header (fields,
+// continuations, lines with a colon, lines with continuations), up to a blank
+// line or a line that does not. A walk from any line it passed stops at the
+// same place, which is why one walk serves them all.
+func (w *headerWalk) walk(b []byte, pos int) {
+	*w = headerWalk{done: true, from: pos, lastField: -1}
+	for pos < len(b) {
+		line, next := lineAt(b, pos)
+		following, _ := lineAt(b, next)
+		switch {
+		case len(line) == 0:
+			w.end, w.closed = pos, true
+			return
+		case headerFieldLine.Match(line):
+			w.lastField = pos
+		case isContinuation(line), bytes.ContainsRune(line, ':'), next < len(b) && isContinuation(following):
+		default:
+			w.end = pos
+			return
+		}
+		pos = next
+	}
+	w.end = len(b)
 }
 
 type headerLine struct {
@@ -289,7 +419,10 @@ func parseContentType(v, defaultType string) (string, map[string]string, bool) {
 	if strings.TrimSpace(v) == "" {
 		return defaultType, map[string]string{}, true
 	}
-	if mt, params, err := mime.ParseMediaType(v); err == nil {
+	// mime.ParseMediaType accepts a type with no subtype ("multipart"),
+	// which RFC 2045 does not: that value is read leniently, so the part gets
+	// the default type (stalwart/malformed/023.eml).
+	if mt, params, err := mime.ParseMediaType(v); err == nil && strings.Contains(mt, "/") {
 		return mt, params, true
 	}
 	mt, params := lenientMediaType(v, mediaTypeToken)
@@ -361,7 +494,7 @@ func decodeExtValue(v string) string {
 	if cs == "" || strings.EqualFold(cs, "utf-8") || strings.EqualFold(cs, "us-ascii") {
 		return b
 	}
-	rd, err := charset.Reader(cs, strings.NewReader(b))
+	rd, err := charsetReader(cs, strings.NewReader(b))
 	if err != nil {
 		return b
 	}
@@ -560,7 +693,7 @@ func decodeMeta(typ string, b []byte) ([]byte, bool) {
 	if m == nil {
 		return nil, false
 	}
-	rd, err := charset.Reader(strings.ToLower(string(m[1])), bytes.NewReader(b))
+	rd, err := charsetReader(strings.ToLower(string(m[1])), bytes.NewReader(b))
 	if err != nil {
 		return nil, false
 	}
@@ -568,7 +701,7 @@ func decodeMeta(typ string, b []byte) ([]byte, bool) {
 	if err != nil {
 		return nil, false
 	}
-	return bytes.ToValidUTF8(out, []byte("\uFFFD")), true
+	return toValidUTF8(out), true
 }
 
 // decodeText turns a text part's bytes into UTF-8. A declared charset that
@@ -596,14 +729,14 @@ func decodeText(typ, label string, b []byte) ([]byte, string, string) {
 		if utf8.Valid(b) {
 			return b, "", ""
 		}
-		return bytes.ToValidUTF8(b, []byte("\uFFFD")), "invalid-utf8", "declared UTF-8 but holds invalid sequences; replaced them with U+FFFD"
+		return toValidUTF8(b), "invalid-utf8", "declared UTF-8 but holds invalid sequences; replaced them with U+FFFD"
 	}
-	if rd, err := charset.Reader(label, bytes.NewReader(b)); err == nil {
+	if rd, err := charsetReader(label, bytes.NewReader(b)); err == nil {
 		if decoded, err := io.ReadAll(rd); err == nil {
 			if utf8.Valid(decoded) {
 				return decoded, "", ""
 			}
-			return bytes.ToValidUTF8(decoded, []byte("\uFFFD")), "invalid-utf8", fmt.Sprintf("%s text decoded to invalid UTF-8; replaced the bad sequences", label)
+			return toValidUTF8(decoded), "invalid-utf8", fmt.Sprintf("%s text decoded to invalid UTF-8; replaced the bad sequences", label)
 		}
 	}
 	if utf8.Valid(b) {
@@ -618,8 +751,59 @@ func decodeText(typ, label string, b []byte) ([]byte, string, string) {
 func windows1252(b []byte) []byte {
 	if rd, err := charset.Reader("windows-1252", bytes.NewReader(b)); err == nil {
 		if out, err := io.ReadAll(rd); err == nil {
-			return bytes.ToValidUTF8(out, []byte("�"))
+			return toValidUTF8(out)
 		}
 	}
-	return bytes.ToValidUTF8(b, []byte("�"))
+	return toValidUTF8(b)
+}
+
+// toValidUTF8 replaces each maximal subpart of an invalid sequence with one
+// U+FFFD, as Unicode (§3.9, "U+FFFD Substitution of Maximal Subparts") and
+// WHATWG recommend. bytes.ToValidUTF8 replaces a whole run of bad bytes with
+// one, so three stray bytes would read as one (stalwart/thirdparty/002.eml).
+func toValidUTF8(b []byte) []byte {
+	if utf8.Valid(b) {
+		return b
+	}
+	out := make([]byte, 0, len(b)+8)
+	for i := 0; i < len(b); {
+		if r, size := utf8.DecodeRune(b[i:]); r != utf8.RuneError || size > 1 {
+			out = append(out, b[i:i+size]...)
+			i += size
+			continue
+		}
+		out = append(out, "\uFFFD"...)
+		i += maximalSubpart(b[i:])
+	}
+	return out
+}
+
+// maximalSubpart is the length of the longest start of b that could begin a
+// well-formed UTF-8 sequence, at least 1. b does not start with one.
+func maximalSubpart(b []byte) int {
+	lo, hi, need := byte(0x80), byte(0xBF), 0
+	switch c := b[0]; {
+	case c >= 0xC2 && c <= 0xDF:
+		need = 1
+	case c == 0xE0:
+		lo, need = 0xA0, 2
+	case c == 0xED:
+		hi, need = 0x9F, 2
+	case c >= 0xE1 && c <= 0xEF:
+		need = 2
+	case c == 0xF0:
+		lo, need = 0x90, 3
+	case c == 0xF4:
+		hi, need = 0x8F, 3
+	case c >= 0xF1 && c <= 0xF3:
+		need = 3
+	}
+	n := 1
+	for ; n <= need && n < len(b); n++ {
+		if b[n] < lo || b[n] > hi {
+			break
+		}
+		lo, hi = 0x80, 0xBF
+	}
+	return n
 }
