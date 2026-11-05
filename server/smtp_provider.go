@@ -113,7 +113,7 @@ func (p *SMTPProvider) Send(ctx context.Context, req *SendRequest) (*SendResult,
 // the error is always nil; callers that hold an *SMTPProvider use
 // inboundMessage directly.
 func (p *SMTPProvider) ParseInbound(body []byte) (*InboundMessage, error) {
-	return p.inboundMessage(body), nil
+	return p.inboundMessage(body, "smtp-inbound"), nil
 }
 
 // inboundMessage parses a raw RFC 5322 message into the InboundMessage shape
@@ -121,8 +121,9 @@ func (p *SMTPProvider) ParseInbound(body []byte) (*InboundMessage, error) {
 // IMAP APPEND) and adapts its storedMessage output so the downstream
 // pipeline stays unchanged. parseRFC5322 already returns message ids in the
 // stored "<id@host>" form.
-func (p *SMTPProvider) inboundMessage(body []byte) *InboundMessage {
-	stored, _ := parseRFC5322(body)
+func (p *SMTPProvider) inboundMessage(body []byte, route string) *InboundMessage {
+	stored, report := parseRFC5322(body)
+	report.log(route, "")
 
 	msg := &InboundMessage{
 		From:        Recipient{Name: stored.SenderName, Email: stored.SenderEmail},

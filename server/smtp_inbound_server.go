@@ -309,7 +309,7 @@ func (s *smtpInboundSession) Data(r io.Reader) error {
 	// Any message is accepted: the SMTP provider's inboundMessage salvages
 	// what it can and never fails.
 	parser := NewSMTPProvider(s.app, SMTPConfig{PublicHostname: s.hostname})
-	msg := parser.inboundMessage(body)
+	msg := parser.inboundMessage(body, "smtp-inbound")
 
 	stored, failed := 0, 0
 	var delivered targetSet

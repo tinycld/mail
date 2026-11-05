@@ -160,7 +160,7 @@ func (s *imapSession) requireWritable(command string) error {
 		}
 	}
 	if readonly.Active(s.app) {
-		imapLog.Info("imap write refused: the server is read-only", "command", command, "user", s.userID())
+		imapLog.Info("imap write refused: the server is read-only", "command", command, "user", logUserID(s.user))
 		return errServerReadOnly
 	}
 	return nil
@@ -572,7 +572,8 @@ func (s *imapSession) Append(mailbox string, r imap.LiteralReader, options *imap
 		return nil, fmt.Errorf("failed to read literal: %w", err)
 	}
 
-	msg, _ := parseRFC5322(raw)
+	msg, report := parseRFC5322(raw)
+	report.log("imap-append", logUserID(s.user))
 
 	// Set delivery status based on folder
 	switch target.folder {
@@ -1420,7 +1421,7 @@ func (s *imapSession) applyAppendFlags(threadID string, flags []imap.Flag) {
 func (s *imapSession) markSeen(msg *core.Record) {
 	threadID := msg.GetString("thread")
 	if readonly.Active(s.app) {
-		imapLog.Debug("imap fetch did not set \\Seen: the server is read-only", "thread", threadID, "user", s.userID())
+		imapLog.Debug("imap fetch did not set \\Seen: the server is read-only", "thread", threadID, "user", logUserID(s.user))
 		return
 	}
 	states, err := s.app.FindRecordsByFilter(

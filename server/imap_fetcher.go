@@ -191,7 +191,7 @@ func (m *imapFetcherManager) tick(ctx context.Context, cfg SMTPConfig) error {
 		if len(body) == 0 {
 			continue
 		}
-		msg := parser.inboundMessage(body)
+		msg := parser.inboundMessage(body, "imap-fetch")
 		if err := dispatchInbound(m.app, msg); err != nil {
 			addressLog.Warn("imap fetcher: dispatch failed; the next tick retries",
 				"messageID", msg.MessageID, "error", err)
