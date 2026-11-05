@@ -200,31 +200,49 @@ var wordDecoder = mime.WordDecoder{CharsetReader: charsetReader}
 
 // charsetReader is go-message's charset.Reader plus UTF-7 (RFC 2152), which
 // golang.org/x/text does not have and old Outlook versions send.
+// A header word or parameter has no warning path through this reader, so
+// ill-formed UTF-7 there is decoded as decodeUTF7 keeps it, without a warning;
+// decodeText reports it for bodies.
 func charsetReader(label string, r io.Reader) (io.Reader, error) {
-	switch strings.ToLower(strings.TrimSpace(label)) {
-	case "utf-7", "utf7", "unicode-1-1-utf-7", "csunicode11utf7":
+	if isUTF7(label) {
 		b, err := io.ReadAll(r)
 		if err != nil {
 			return nil, err
 		}
-		return bytes.NewReader(decodeUTF7(b)), nil
+		out, _ := decodeUTF7(b)
+		return bytes.NewReader(out), nil
 	}
 	return charset.Reader(label, r)
+}
+
+func isUTF7(label string) bool {
+	switch strings.ToLower(strings.TrimSpace(label)) {
+	case "utf-7", "utf7", "unicode-1-1-utf-7", "csunicode11utf7":
+		return true
+	}
+	return false
 }
 
 // decodeUTF7 decodes RFC 2152 UTF-7. "+" opens a run of modified base64
 // that holds UTF-16 code units; the first character outside the base64
 // alphabet ends it, and is kept unless it is "-". "+-" is a literal "+".
-// Bits left over at the end of a run are padding and are dropped; a lone
-// surrogate becomes U+FFFD.
-func decodeUTF7(b []byte) []byte {
-	out := make([]byte, 0, len(b))
+// Fewer than 6 bits left at the end of a run are padding; a lone surrogate
+// becomes U+FFFD.
+//
+// Ill-formed input is kept, and wellFormed is false: a "+" whose run holds
+// no whole code unit ("1 + 1", "C++", "x+y") is written out as it is, since
+// it is almost always a literal plus a sender did not escape, and 6 or more
+// bits left over become U+FFFD.
+func decodeUTF7(b []byte) (out []byte, wellFormed bool) {
+	out = make([]byte, 0, len(b))
+	wellFormed = true
 	for i := 0; i < len(b); {
 		if b[i] != '+' {
 			out = append(out, b[i])
 			i++
 			continue
 		}
+		start := i
 		i++
 		if i < len(b) && b[i] == '-' {
 			out = append(out, '+')
@@ -247,12 +265,21 @@ func decodeUTF7(b []byte) []byte {
 				bits &= 1<<n - 1
 			}
 		}
+		if len(units) == 0 {
+			wellFormed = false
+			out = append(out, b[start:i]...)
+			continue
+		}
 		out = append(out, string(utf16.Decode(units))...)
+		if n >= 6 {
+			wellFormed = false
+			out = append(out, "\uFFFD"...)
+		}
 		if i < len(b) && b[i] == '-' {
 			i++
 		}
 	}
-	return out
+	return out, wellFormed
 }
 
 const base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -730,6 +757,16 @@ func decodeText(typ, label string, b []byte) ([]byte, string, string) {
 			return b, "", ""
 		}
 		return toValidUTF8(b), "invalid-utf8", "declared UTF-8 but holds invalid sequences; replaced them with U+FFFD"
+	}
+	if isUTF7(label) {
+		out, wellFormed := decodeUTF7(b)
+		switch {
+		case !wellFormed:
+			return toValidUTF8(out), "bad-encoding", "ill-formed UTF-7; kept as written"
+		case !utf8.Valid(out):
+			return toValidUTF8(out), "invalid-utf8", "UTF-7 text holds bytes outside it; replaced them with U+FFFD"
+		}
+		return out, "", ""
 	}
 	if rd, err := charsetReader(label, bytes.NewReader(b)); err == nil {
 		if decoded, err := io.ReadAll(rd); err == nil {

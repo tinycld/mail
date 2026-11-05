@@ -400,26 +400,44 @@ func TestReadTree_LenientContentType(t *testing.T) {
 
 func TestDecodeUTF7(t *testing.T) {
 	t.Parallel()
-	for in, want := range map[string]string{
-		"+AKM.":                 "£.",
-		"x +AKM y":              "x £ y",
-		"+AKM, then":            "£, then",
-		"1 +- 1":                "1 + 1",
-		"+AKM-x":                "£x",
-		"+AKM--x":               "£-x",
-		"Fr+APY-sche":           "Frösche",
-		"+2D3eAA-":              "\U0001F600",
-		"lone +2D0- surrogate":  "lone \uFFFD surrogate",
-		"no runs at all, only ": "no runs at all, only ",
+	for _, tc := range []struct {
+		in, want   string
+		wellFormed bool
+	}{
+		{"+AKM.", "£.", true},
+		{"x +AKM y", "x £ y", true},
+		{"+AKM, then", "£, then", true},
+		{"1 +- 1", "1 + 1", true},
+		{"+AKM-x", "£x", true},
+		{"+AKM--x", "£-x", true},
+		{"Fr+APY-sche", "Frösche", true},
+		{"+2D3eAA-", "\U0001F600", true},
+		{"lone +2D0- surrogate", "lone \uFFFD surrogate", true},
+		{"no runs at all, only ", "no runs at all, only ", true},
+		// A plus that opens no code unit is a literal a sender did not escape.
+		{"1 + 1", "1 + 1", false},
+		{"C++ code", "C++ code", false},
+		{"x+y", "x+y", false},
+		{"end+", "end+", false},
+		// 6 or more bits left over are a cut-off code unit.
+		{"+AKMA-", "£\uFFFD", false},
 	} {
-		if got := string(decodeUTF7([]byte(in))); got != want {
-			t.Errorf("decodeUTF7(%q) = %q, want %q", in, got, want)
+		got, wellFormed := decodeUTF7([]byte(tc.in))
+		if string(got) != tc.want || wellFormed != tc.wellFormed {
+			t.Errorf("decodeUTF7(%q) = %q, %v; want %q, %v", tc.in, got, wellFormed, tc.want, tc.wellFormed)
 		}
 	}
 
 	root, warnings := readTree(crlf("Content-Type: text/plain; charset=utf-7\n\nDie Fr+APY-sche\n"))
 	if string(root.Body) != "Die Frösche\r\n" || len(warnings) != 0 {
 		t.Fatalf("body %q warnings %+v", root.Body, warnings)
+	}
+	root, warnings = readTree(crlf("Content-Type: text/plain; charset=utf-7\n\nC++ is 1 + 1\n"))
+	if string(root.Body) != "C++ is 1 + 1\r\n" || !hasWarning(warnings, "bad-encoding") {
+		t.Fatalf("ill-formed: body %q warnings %+v", root.Body, warnings)
+	}
+	if strings.Contains(warnings[0].Detail, "C++") {
+		t.Fatalf("warning quotes the text: %q", warnings[0].Detail)
 	}
 }
 
