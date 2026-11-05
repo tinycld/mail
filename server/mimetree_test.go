@@ -47,11 +47,17 @@ func TestParseHeaderBlock(t *testing.T) {
 		}
 	}
 
-	// A broken line with continuation lines, in a header that a blank line
-	// closes, is skipped with them; the fields around it stay.
-	h, body, problem = parseHeaderBlock(crlf("From: good@x.com\nfoo bar\n baz: qux\nTo: b@x.com\n\nbody\n"))
-	if h.Get("From") != "good@x.com" || h.Get("To") != "b@x.com" || h.Len() != 2 || string(body) != "body\r\n" || problem == "" {
-		t.Fatalf("continued broken line: %d fields, body %q, problem %q", h.Len(), body, problem)
+	// A body line over an indented line right after the fields ends the
+	// header: all three body lines are kept.
+	h, body, problem = parseHeaderBlock(crlf("Content-Type: text/plain\nDear Bob,\n   indented\n\nthanks"))
+	if h.Get("Content-Type") != "text/plain" || h.Len() != 1 || string(body) != "Dear Bob,\r\n   indented\r\n\r\nthanks" || problem == "" {
+		t.Fatalf("indented body line: %d fields, body %q, problem %q", h.Len(), body, problem)
+	}
+
+	// A skipped line takes no continuation: the field after it starts anew.
+	h, body, _ = parseHeaderBlock(crlf("From: a@x.com\nnot a field\nTo: b@x.com\n c@x.com\n\nbody"))
+	if h.Get("From") != "a@x.com" || h.Get("To") != "b@x.com c@x.com" || h.Len() != 2 || string(body) != "body" {
+		t.Fatalf("skip then field: from %q to %q, %d fields, body %q", h.Get("From"), h.Get("To"), h.Len(), body)
 	}
 
 	// With no readable field, the header block cannot be read: all is body.
@@ -348,13 +354,13 @@ func TestParseHeaderBlock_ManyContinuationLines(t *testing.T) {
 
 func TestParseHeaderBlock_ManyBrokenLines(t *testing.T) {
 	t.Parallel()
-	// 100k broken lines, each with a continuation, before the blank line:
-	// walking ahead to it from each one would read 10¹⁰ lines.
-	in := "Subject: a\r\n" + strings.Repeat("x\r\n y\r\n", 100_000) + "\r\nbody"
+	// 100k skipped lines, each before a field: each is decided by one line
+	// of lookahead, so the header is read in one pass.
+	in := "Subject: a\r\n" + strings.Repeat("x\r\nX-A: b\r\n", 100_000) + "\r\nbody"
 	start := time.Now()
 	h, body, _ := parseHeaderBlock([]byte(in))
-	if h.Get("Subject") != "a" || string(body) != "body" {
-		t.Fatalf("subject %q body of %d bytes", h.Get("Subject"), len(body))
+	if h.Get("Subject") != "a" || len(h.Values("X-A")) != 100_000 || string(body) != "body" {
+		t.Fatalf("subject %q, %d X-A fields, body of %d bytes", h.Get("Subject"), len(h.Values("X-A")), len(body))
 	}
 	if d := time.Since(start); d > 5*time.Second {
 		t.Fatalf("took %v", d)

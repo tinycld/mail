@@ -303,29 +303,25 @@ var headerFieldLine = regexp.MustCompile(`^([!-9;-~]+)[ \t]*:(.*)$`)
 // parseHeaderBlock reads the header fields at the start of b and returns
 // them with the body after the blank line that ends them. It never fails.
 //
-// A line that is neither a field nor a continuation is a broken field, and
-// is skipped with its continuations, when the header around it is readable:
-// a field comes right after it, or continuation lines do and the lines after
-// it run as a header to a blank line. Any other such line ends the header
-// there, and the body starts at that line, so no byte is dropped: a body
-// line with a colon ("Hi Bob: lunch?") right after the fields is body, even
+// A line that is neither a field nor a continuation is skipped, with its
+// continuations, only when a field comes right after it: the header goes on
+// past it. Any other such line ends the header there, and the body starts at
+// that line, so no byte is dropped: a body line right after the fields
+// ("Hi Bob: lunch?", or "Dear Bob," over an indented line) is body, even
 // though stalwart skips such a line (known_deviations.txt). Input with no
 // readable field before such a line has no header and is all body (design,
 // "Header block cannot be read").
 func parseHeaderBlock(b []byte) (textproto.Header, []byte, string) {
 	var fields []headerLine
 	var problem string
-	var ahead headerWalk
-	skipping := false
 	for pos := 0; pos < len(b); {
 		line, next := lineAt(b, pos)
 		switch {
 		case len(line) == 0:
 			return headerOf(fields), b[next:], problem
 		case isContinuation(line):
-			if skipping {
-				break
-			}
+			// A skipped line always has a field right after it, so a
+			// continuation here belongs to the last field.
 			if len(fields) == 0 {
 				return textproto.Header{}, b, ""
 			}
@@ -337,14 +333,13 @@ func parseHeaderBlock(b []byte) (textproto.Header, []byte, string) {
 		default:
 			if m := headerFieldLine.FindSubmatch(line); m != nil {
 				fields = append(fields, headerLine{string(m[1]), append([]byte(nil), m[2]...)})
-				skipping = false
 				break
 			}
 			// Problems name a line's length, never its text: a header line
 			// can hold a name or an address, and warnings reach the log.
-			if ahead.isBrokenField(b, line, next, len(fields) > 0) {
+			if following, _ := lineAt(b, next); next < len(b) && headerFieldLine.Match(following) {
+				// Also the first line: an mbox "From " line comes before the fields.
 				problem = fmt.Sprintf("skipped a header line of %d bytes that is not a field", len(line))
-				skipping = true
 				break
 			}
 			if len(fields) == 0 {
@@ -359,58 +354,6 @@ func parseHeaderBlock(b []byte) (textproto.Header, []byte, string) {
 
 func isContinuation(line []byte) bool {
 	return len(line) > 0 && (line[0] == ' ' || line[0] == '\t')
-}
-
-// headerWalk remembers one walk of the lines ahead of a broken field, so a
-// header of many broken lines is walked once, not once per line.
-type headerWalk struct {
-	done      bool
-	from, end int  // the walk started at from and stopped at the line at end
-	closed    bool // a blank line stopped it
-	lastField int  // where the last field line in the walk starts, or -1
-}
-
-// isBrokenField reports whether line, which is not a field, is a broken
-// field inside a header rather than the start of a body. next is where the
-// line after it starts; afterField is whether a field came before it.
-func (w *headerWalk) isBrokenField(b, line []byte, next int, afterField bool) bool {
-	following, _ := lineAt(b, next)
-	if next < len(b) && headerFieldLine.Match(following) {
-		// Also the first line: an mbox "From " line comes before the fields.
-		return true
-	}
-	if next >= len(b) || !isContinuation(following) {
-		return false
-	}
-	if !w.done || next < w.from || next > w.end {
-		w.walk(b, next)
-	}
-	return w.closed && (afterField || w.lastField >= next)
-}
-
-// walk follows the lines from pos while they read as a header (fields,
-// continuations, lines with continuations), up to a blank
-// line or a line that does not. A walk from any line it passed stops at the
-// same place, which is why one walk serves them all.
-func (w *headerWalk) walk(b []byte, pos int) {
-	*w = headerWalk{done: true, from: pos, lastField: -1}
-	for pos < len(b) {
-		line, next := lineAt(b, pos)
-		following, _ := lineAt(b, next)
-		switch {
-		case len(line) == 0:
-			w.end, w.closed = pos, true
-			return
-		case headerFieldLine.Match(line):
-			w.lastField = pos
-		case isContinuation(line), next < len(b) && isContinuation(following):
-		default:
-			w.end = pos
-			return
-		}
-		pos = next
-	}
-	w.end = len(b)
 }
 
 type headerLine struct {
