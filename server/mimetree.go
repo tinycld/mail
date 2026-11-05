@@ -26,9 +26,25 @@ import (
 // result. It still fills a go-message textproto.Header, so go-message's
 // mail.Header helpers read the fields.
 
-// maxMIMEDepth bounds how deep readTree follows nested multiparts, so a
-// crafted message cannot exhaust the stack.
-const maxMIMEDepth = 50
+const (
+	// maxMIMEDepth bounds how deep readTree follows nested multiparts, so a
+	// crafted message cannot exhaust the stack.
+	maxMIMEDepth = 50
+	// maxMIMEParts bounds the parts in one message's tree. A part costs far
+	// more memory than the bytes of its delimiter line, so 25 MB of empty
+	// parts would otherwise hold millions of them (about 1 GB). Real mail
+	// holds tens of parts.
+	maxMIMEParts = 10_000
+	// maxHeaderBytes and maxHeaderFields bound one header block: a field also
+	// costs far more memory than its bytes. The largest real headers (long
+	// Received chains, DKIM signatures) are a few hundred fields.
+	maxHeaderBytes  = 1 << 20
+	maxHeaderFields = 10_000
+	// maxMessageFields bounds the header fields of all parts together:
+	// under the per-block caps, 3,000 parts of 1,000 fields each still held
+	// about 300 MB. It allows ten fields for each of maxMIMEParts parts.
+	maxMessageFields = 100_000
+)
 
 type mimePart struct {
 	Index       int
@@ -73,6 +89,7 @@ func leaves(root *mimePart) []*mimePart {
 
 type treeReader struct {
 	next     int
+	fields   int // header fields read so far, across all parts
 	warnings []parseWarning
 }
 
@@ -87,7 +104,8 @@ func (r *treeReader) read(b []byte, depth int, defaultType string) *mimePart {
 	p := &mimePart{Index: r.next}
 	r.next++
 
-	h, body, problem := parseHeaderBlock(b)
+	h, body, problem := parseHeaderBlock(b, min(maxHeaderFields, maxMessageFields-r.fields))
+	r.fields += h.Len()
 	if problem != "" {
 		r.warn(p.Index, "bad-header", "%s", problem)
 	}
@@ -117,34 +135,37 @@ func (r *treeReader) readChildren(p *mimePart, body []byte, depth int) {
 		r.keepAsLeaf(p, "application/octet-stream", body)
 		return
 	}
-	preamble, parts, closed, found := splitMultipart(body, p.Params["boundary"])
-	if !found {
-		r.warn(p.Index, "bad-multipart", "no delimiter for the boundary of %d bytes; kept as one part", len(p.Params["boundary"]))
-		typ := "application/octet-stream"
-		if looksLikeText(body) {
-			typ = "text/plain"
-		}
-		r.keepAsLeaf(p, typ, body)
-		return
-	}
-	if !closed {
-		r.warn(p.Index, "truncated", "no closing delimiter; the last part runs to the end of the message")
-	}
-	if len(parts) == 0 && len(bytes.TrimSpace(preamble)) > 0 {
-		// RFC 2046 drops the preamble, but a multipart with no parts has
-		// nothing else to show.
-		child := &mimePart{Index: r.next, Type: "text/plain", Params: map[string]string{}, RawSize: len(bytes.TrimSpace(preamble))}
-		r.next++
-		r.decodeLeaf(child, "", preamble)
-		p.Children = []*mimePart{child}
-		return
-	}
 	childType := "text/plain"
 	if p.Type == "multipart/digest" {
 		childType = "message/rfc822"
 	}
-	for _, raw := range parts {
+	mp := newMultipartParts(body, p.Params["boundary"])
+	for raw, start, ok := mp.next(); ok; raw, start, ok = mp.next() {
+		// The last index left goes to one leaf holding the rest, so a flat
+		// message never passes the cap; each enclosing multipart that still
+		// has parts adds one more such leaf.
+		if r.next >= maxMIMEParts-1 {
+			r.warn(p.Index, "bad-multipart", "more than %d parts in the message; the last %d bytes of this multipart kept as one part", maxMIMEParts, len(body)-start)
+			p.Children = append(p.Children, r.rawLeaf(body[start:]))
+			return
+		}
 		p.Children = append(p.Children, r.read(raw, depth+1, childType))
+	}
+	if !mp.found {
+		r.warn(p.Index, "bad-multipart", "no delimiter for the boundary of %d bytes; kept as one part", len(p.Params["boundary"]))
+		r.keepAsLeaf(p, rawType(body), body)
+		return
+	}
+	if !mp.closed {
+		r.warn(p.Index, "truncated", "no closing delimiter; the last part runs to the end of the message")
+	}
+	if len(p.Children) == 0 && len(bytes.TrimSpace(mp.preamble)) > 0 {
+		// RFC 2046 drops the preamble, but a multipart with no parts has
+		// nothing else to show.
+		child := &mimePart{Index: r.next, Type: "text/plain", Params: map[string]string{}, RawSize: len(bytes.TrimSpace(mp.preamble))}
+		r.next++
+		r.decodeLeaf(child, "", mp.preamble)
+		p.Children = []*mimePart{child}
 	}
 }
 
@@ -155,6 +176,23 @@ func (r *treeReader) keepAsLeaf(p *mimePart, typ string, body []byte) {
 	p.Params = map[string]string{}
 	p.Children = nil
 	r.decodeLeaf(p, "", body)
+}
+
+// rawLeaf is a new leaf that holds bytes no longer read as parts.
+func (r *treeReader) rawLeaf(b []byte) *mimePart {
+	p := &mimePart{Index: r.next, RawSize: len(bytes.TrimSpace(b))}
+	r.next++
+	r.keepAsLeaf(p, rawType(b), b)
+	return p
+}
+
+// rawType is the type of bytes kept with no header of their own: text when
+// they read as text, a file otherwise.
+func rawType(b []byte) string {
+	if looksLikeText(b) {
+		return "text/plain"
+	}
+	return "application/octet-stream"
 }
 
 func (r *treeReader) decodeLeaf(p *mimePart, cte string, body []byte) {
@@ -311,14 +349,25 @@ var headerFieldLine = regexp.MustCompile(`^([!-9;-~]+)[ \t]*:(.*)$`)
 // though stalwart skips such a line (known_deviations.txt). Input with no
 // readable field before such a line has no header and is all body (design,
 // "Header block cannot be read").
-func parseHeaderBlock(b []byte) (textproto.Header, []byte, string) {
+//
+// A header block longer than maxHeaderBytes, or with more than maxFields
+// fields, ends at the line that passes the cap, and the rest of it is kept as
+// body.
+func parseHeaderBlock(b []byte, maxFields int) (textproto.Header, []byte, string) {
 	var fields []headerLine
 	var problem string
 	for pos := 0; pos < len(b); {
 		line, next := lineAt(b, pos)
-		switch {
-		case len(line) == 0:
+		if len(line) == 0 {
 			return headerOf(fields), b[next:], problem
+		}
+		if next > maxHeaderBytes {
+			return headerOf(fields), b[pos:], fmt.Sprintf("header longer than %d bytes; its last %d bytes kept as body", maxHeaderBytes, len(b)-pos)
+		}
+		if len(fields) >= maxFields && !isContinuation(line) {
+			return headerOf(fields), b[pos:], fmt.Sprintf("header field cap of %d reached; the last %d bytes of the header kept as body", maxFields, len(b)-pos)
+		}
+		switch {
 		case isContinuation(line):
 			// A skipped line always has a field right after it, so a
 			// continuation here belongs to the last field.
@@ -476,39 +525,84 @@ func decodeExtValue(v string) string {
 	return string(out)
 }
 
-// splitMultipart cuts a multipart body at the delimiter lines of boundary. A
-// delimiter line is "--boundary", or "--boundary--" for the close, at the
+// multipartParts reads a multipart body's parts one at a time, so a reader
+// that reaches maxMIMEParts stops without cutting up the rest of the body.
+// A delimiter line is "--boundary", or "--boundary--" for the close, at the
 // start of a line, with only white space after it; the line break before it
 // belongs to the delimiter (RFC 2046 §5.1.1). found is false when no
 // delimiter line exists. closed is false when the close delimiter is missing;
 // the last part then runs to the end of body.
-func splitMultipart(body []byte, boundary string) (preamble []byte, parts [][]byte, closed, found bool) {
-	if boundary == "" {
-		return nil, nil, false, false
+type multipartParts struct {
+	body   []byte
+	delim  []byte
+	search int // where the search for the next delimiter starts
+	start  int // where the current part starts; -1 before the first delimiter
+	done   bool
+
+	preamble, epilogue []byte
+	closed, found      bool
+}
+
+func newMultipartParts(body []byte, boundary string) *multipartParts {
+	return &multipartParts{
+		body:  body,
+		delim: []byte("--" + boundary),
+		start: -1,
+		done:  boundary == "",
 	}
-	delim := []byte("--" + boundary)
-	start := -1
-	for pos := 0; pos < len(body); {
-		line, next := lineAt(body, pos)
-		if kind := delimiterKind(line, delim); kind != 0 {
-			found = true
-			cut := lineBreakStart(body, pos)
-			if start < 0 {
-				preamble = body[:cut]
-			} else {
-				parts = append(parts, body[start:max(cut, start)])
+}
+
+// next returns the next part and where it starts in body; ok is false when
+// no part is left.
+func (m *multipartParts) next() (part []byte, start int, ok bool) {
+	for !m.done {
+		cut, after, kind := m.nextDelimiter()
+		if kind == 0 {
+			m.done = true
+			if m.start >= 0 && m.start < len(m.body) {
+				return m.body[m.start:], m.start, true
 			}
-			if kind == 2 {
-				return preamble, parts, true, true
-			}
-			start = next
+			return nil, 0, false
+		}
+		m.found = true
+		start := m.start
+		m.start, m.search = after, after
+		if kind == 2 {
+			m.done, m.closed = true, true
+			m.epilogue = m.body[after:]
+		}
+		if start < 0 {
+			m.preamble = m.body[:cut]
+			continue
+		}
+		return m.body[start:max(cut, start)], start, true
+	}
+	return nil, 0, false
+}
+
+// nextDelimiter finds the first delimiter line at or after m.search, which
+// is always the start of a line. cut is where the line break before the
+// delimiter begins and after where the next line starts; kind is 0 when
+// there is no delimiter left.
+func (m *multipartParts) nextDelimiter() (cut, after, kind int) {
+	for pos := m.search; pos < len(m.body); {
+		line, next := lineAt(m.body, pos)
+		if k := delimiterKind(line, m.delim); k != 0 {
+			return lineBreakStart(m.body, pos), next, k
 		}
 		pos = next
 	}
-	if start >= 0 && start < len(body) {
-		parts = append(parts, body[start:])
+	return 0, 0, 0
+}
+
+// splitMultipart cuts a whole multipart body at its delimiter lines, as
+// multipartParts reads it.
+func splitMultipart(body []byte, boundary string) (preamble []byte, parts [][]byte, closed, found bool) {
+	mp := newMultipartParts(body, boundary)
+	for part, _, ok := mp.next(); ok; part, _, ok = mp.next() {
+		parts = append(parts, part)
 	}
-	return preamble, parts, false, found
+	return mp.preamble, parts, mp.closed, mp.found
 }
 
 // delimiterKind is 1 for an open delimiter line, 2 for the close, 0 otherwise.

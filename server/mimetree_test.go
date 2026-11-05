@@ -22,13 +22,13 @@ func hasWarning(ws []parseWarning, kind string) bool {
 func TestParseHeaderBlock(t *testing.T) {
 	t.Parallel()
 
-	h, body, problem := parseHeaderBlock(crlf("Subject: one\n two\nFrom: a@example.org\n\nbody\n"))
+	h, body, problem := parseHeaderBlock(crlf("Subject: one\n two\nFrom: a@example.org\n\nbody\n"), maxHeaderFields)
 	if problem != "" || h.Get("Subject") != "one two" || h.Get("From") != "a@example.org" || string(body) != "body\r\n" {
 		t.Fatalf("got subject %q from %q body %q problem %q", h.Get("Subject"), h.Get("From"), body, problem)
 	}
 
 	// A broken line between fields is skipped; the fields after it stay.
-	h, body, problem = parseHeaderBlock(crlf("Subject: s\nthis is not a field\nContent-Type: text/html\n\n<p>x</p>"))
+	h, body, problem = parseHeaderBlock(crlf("Subject: s\nthis is not a field\nContent-Type: text/html\n\n<p>x</p>"), maxHeaderFields)
 	if h.Get("Content-Type") != "text/html" || string(body) != "<p>x</p>" || problem == "" {
 		t.Fatalf("skip: ct %q body %q problem %q", h.Get("Content-Type"), body, problem)
 	}
@@ -41,7 +41,7 @@ func TestParseHeaderBlock(t *testing.T) {
 		{"Subject: s\nHi Bob: see this\nthanks\n\nmore\n", "Subject", "Hi Bob: see this\r\nthanks\r\n\r\nmore\r\n"},
 		{"From: good@x.com\nFr om: evil@x.com\n\nbody\n", "From", "Fr om: evil@x.com\r\n\r\nbody\r\n"},
 	} {
-		h, body, problem = parseHeaderBlock(crlf(tc.in))
+		h, body, problem = parseHeaderBlock(crlf(tc.in), maxHeaderFields)
 		if h.Len() != 1 || h.Get(tc.field) == "" || string(body) != tc.body || problem == "" {
 			t.Fatalf("colon line in %q: %d fields, body %q, problem %q", tc.in, h.Len(), body, problem)
 		}
@@ -49,39 +49,39 @@ func TestParseHeaderBlock(t *testing.T) {
 
 	// A body line over an indented line right after the fields ends the
 	// header: all three body lines are kept.
-	h, body, problem = parseHeaderBlock(crlf("Content-Type: text/plain\nDear Bob,\n   indented\n\nthanks"))
+	h, body, problem = parseHeaderBlock(crlf("Content-Type: text/plain\nDear Bob,\n   indented\n\nthanks"), maxHeaderFields)
 	if h.Get("Content-Type") != "text/plain" || h.Len() != 1 || string(body) != "Dear Bob,\r\n   indented\r\n\r\nthanks" || problem == "" {
 		t.Fatalf("indented body line: %d fields, body %q, problem %q", h.Len(), body, problem)
 	}
 
 	// A skipped line takes no continuation: the field after it starts anew.
-	h, body, _ = parseHeaderBlock(crlf("From: a@x.com\nnot a field\nTo: b@x.com\n c@x.com\n\nbody"))
+	h, body, _ = parseHeaderBlock(crlf("From: a@x.com\nnot a field\nTo: b@x.com\n c@x.com\n\nbody"), maxHeaderFields)
 	if h.Get("From") != "a@x.com" || h.Get("To") != "b@x.com c@x.com" || h.Len() != 2 || string(body) != "body" {
 		t.Fatalf("skip then field: from %q to %q, %d fields, body %q", h.Get("From"), h.Get("To"), h.Len(), body)
 	}
 
 	// With no readable field, the header block cannot be read: all is body.
 	in0 := crlf("Sub ject: smuggled\nSub\tject: tab\n\nbody\n")
-	if h, body, _ = parseHeaderBlock(in0); h.Len() != 0 || !bytes.Equal(body, in0) {
+	if h, body, _ = parseHeaderBlock(in0, maxHeaderFields); h.Len() != 0 || !bytes.Equal(body, in0) {
 		t.Fatalf("unreadable: %d fields, body %q", h.Len(), body)
 	}
 
 	// A broken line with no field after it ends the header; nothing is lost.
-	h, body, problem = parseHeaderBlock(crlf("Subject: s\nnot a field\nmore text\n"))
+	h, body, problem = parseHeaderBlock(crlf("Subject: s\nnot a field\nmore text\n"), maxHeaderFields)
 	if h.Get("Subject") != "s" || string(body) != "not a field\r\nmore text\r\n" || problem == "" {
 		t.Fatalf("end: body %q problem %q", body, problem)
 	}
 
 	// Input that does not start with a field has no header at all.
 	in := []byte("\x00\x01binary garbage\nmore")
-	h, body, _ = parseHeaderBlock(in)
+	h, body, _ = parseHeaderBlock(in, maxHeaderFields)
 	if h.Len() != 0 || !bytes.Equal(body, in) {
 		t.Fatalf("no header: %d fields, body %q", h.Len(), body)
 	}
 
 	// The first of two fields with one name is what Get returns, and the
 	// fields iterate in message order.
-	h, _, _ = parseHeaderBlock(crlf("Received: first\nReceived: second\n\n"))
+	h, _, _ = parseHeaderBlock(crlf("Received: first\nReceived: second\n\n"), maxHeaderFields)
 	if h.Get("Received") != "first" {
 		t.Fatalf("Get = %q, want first", h.Get("Received"))
 	}
@@ -380,7 +380,7 @@ func TestParseHeaderBlock_ManyContinuationLines(t *testing.T) {
 	t.Parallel()
 	// 200k folded lines: string concatenation per line would copy GBs.
 	in := "Subject: a\r\n" + strings.Repeat(" a\r\n", 200_000) + "\r\nbody"
-	h, body, problem := parseHeaderBlock([]byte(in))
+	h, body, problem := parseHeaderBlock([]byte(in), maxHeaderFields)
 	if got := len(h.Get("Subject")); got != 1+2*200_000 || string(body) != "body" || problem != "" {
 		t.Fatalf("subject length %d body %q problem %q", got, body, problem)
 	}
@@ -388,12 +388,14 @@ func TestParseHeaderBlock_ManyContinuationLines(t *testing.T) {
 
 func TestParseHeaderBlock_ManyBrokenLines(t *testing.T) {
 	t.Parallel()
-	// 100k skipped lines, each before a field: each is decided by one line
-	// of lookahead, so the header is read in one pass.
-	in := "Subject: a\r\n" + strings.Repeat("x\r\nX-A: b\r\n", 100_000) + "\r\nbody"
+	// As many skipped lines as the field cap allows, each before a field:
+	// each is decided by one line of lookahead, so the header is read in one
+	// pass.
+	n := maxHeaderFields - 1
+	in := "Subject: a\r\n" + strings.Repeat("x\r\nX-A: b\r\n", n) + "\r\nbody"
 	start := time.Now()
-	h, body, _ := parseHeaderBlock([]byte(in))
-	if h.Get("Subject") != "a" || len(h.Values("X-A")) != 100_000 || string(body) != "body" {
+	h, body, _ := parseHeaderBlock([]byte(in), maxHeaderFields)
+	if h.Get("Subject") != "a" || len(h.Values("X-A")) != n || string(body) != "body" {
 		t.Fatalf("subject %q, %d X-A fields, body of %d bytes", h.Get("Subject"), len(h.Values("X-A")), len(body))
 	}
 	if d := time.Since(start); d > 5*time.Second {
@@ -403,7 +405,7 @@ func TestParseHeaderBlock_ManyBrokenLines(t *testing.T) {
 
 func TestParseHeaderBlock_MboxFromLine(t *testing.T) {
 	t.Parallel()
-	h, body, problem := parseHeaderBlock(crlf("From sender@example.org Tue Nov  4 10:00:00 2026\nSubject: s\nContent-Type: text/html\n\n<p>x</p>"))
+	h, body, problem := parseHeaderBlock(crlf("From sender@example.org Tue Nov  4 10:00:00 2026\nSubject: s\nContent-Type: text/html\n\n<p>x</p>"), maxHeaderFields)
 	if h.Get("Subject") != "s" || h.Get("Content-Type") != "text/html" || string(body) != "<p>x</p>" || problem == "" {
 		t.Fatalf("subject %q ct %q body %q problem %q", h.Get("Subject"), h.Get("Content-Type"), body, problem)
 	}

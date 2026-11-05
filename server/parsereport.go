@@ -57,23 +57,25 @@ func (r parseReport) structure() string {
 			in[p] = append(in[p], e.name)
 		}
 	}
-	var parts []string
+	parts := cappedList{limit: maxLoggedParts}
 	var walk func(p *mimePart)
 	walk = func(p *mimePart) {
-		s := fmt.Sprintf("%d %s", p.Index, logType(p.Type))
-		if cs := p.Params["charset"]; cs != "" {
-			s += " charset=" + logCharset(cs)
-		}
-		if p.Disposition != "" {
-			s += " " + p.Disposition
-		}
-		if !p.isMultipart() {
-			s += fmt.Sprintf(" %dB", len(p.Body))
-			if lists := in[p]; len(lists) > 0 {
-				s += " →" + strings.Join(lists, "+")
+		parts.add(func() string {
+			s := fmt.Sprintf("%d %s", p.Index, logType(p.Type))
+			if cs := p.Params["charset"]; cs != "" {
+				s += " charset=" + logCharset(cs)
 			}
-		}
-		parts = append(parts, s)
+			if p.Disposition != "" {
+				s += " " + p.Disposition
+			}
+			if !p.isMultipart() {
+				s += fmt.Sprintf(" %dB", len(p.Body))
+				if lists := in[p]; len(lists) > 0 {
+					s += " →" + strings.Join(lists, "+")
+				}
+			}
+			return s
+		})
 		for _, c := range p.Children {
 			walk(c)
 		}
@@ -81,15 +83,15 @@ func (r parseReport) structure() string {
 	if r.root != nil {
 		walk(r.root)
 	}
-	return joinCapped(parts, maxLoggedParts)
+	return parts.String()
 }
 
 func (r parseReport) warningText() string {
-	var ws []string
+	ws := cappedList{limit: maxLoggedWarnings}
 	for _, w := range r.Warnings {
-		ws = append(ws, fmt.Sprintf("%d %s: %s", w.Part, w.Kind, w.Detail))
+		ws.add(func() string { return fmt.Sprintf("%d %s: %s", w.Part, w.Kind, w.Detail) })
 	}
-	return joinCapped(ws, maxLoggedWarnings)
+	return ws.String()
 }
 
 // log leaves one warning line when needsLog is true. route says which path
@@ -115,12 +117,28 @@ const (
 	maxLoggedWarnings = 20
 )
 
-// joinCapped bounds a log field: a message can hold thousands of parts.
-func joinCapped(items []string, limit int) string {
-	if len(items) <= limit {
-		return strings.Join(items, "; ")
+// cappedList bounds a log field: a message can hold thousands of parts, so
+// only the first limit items are formatted and the rest are only counted.
+type cappedList struct {
+	limit int
+	items []string
+	more  int
+}
+
+func (c *cappedList) add(format func() string) {
+	if len(c.items) >= c.limit {
+		c.more++
+		return
 	}
-	return fmt.Sprintf("%s; +%d more", strings.Join(items[:limit], "; "), len(items)-limit)
+	c.items = append(c.items, format())
+}
+
+func (c *cappedList) String() string {
+	s := strings.Join(c.items, "; ")
+	if c.more > 0 {
+		s += fmt.Sprintf("; +%d more", c.more)
+	}
+	return s
 }
 
 var (
