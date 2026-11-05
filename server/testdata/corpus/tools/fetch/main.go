@@ -9,6 +9,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -16,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime/quotedprintable"
 	"net/http"
 	"os"
 	"path"
@@ -227,6 +229,7 @@ type stalwartFile struct {
 	Parts []struct {
 		ID         int     `json:"id"`
 		Kind       string  `json:"kind"`
+		Encoding   string  `json:"encoding"`
 		Text       *string `json:"text"`
 		Binary     *string `json:"binary"`
 		OffsetBody int     `json:"offset_body"`
@@ -241,6 +244,19 @@ type stalwartFile struct {
 			} `json:"value"`
 		} `json:"headers"`
 	} `json:"parts"`
+}
+
+// decodeSpan undoes a part's transfer encoding, as stalwart names it.
+func decodeSpan(encoding string, b []byte) ([]byte, error) {
+	switch encoding {
+	case "", "none":
+		return b, nil
+	case "base64":
+		return base64.StdEncoding.DecodeString(strings.Join(strings.Fields(string(b)), ""))
+	case "quoted-printable":
+		return io.ReadAll(quotedprintable.NewReader(bytes.NewReader(b)))
+	}
+	return nil, fmt.Errorf("unknown encoding %q", encoding)
 }
 
 // convert turns stalwart's expected parse of eml into expectLists, for the
@@ -287,7 +303,14 @@ func convert(js, eml []byte) ([]byte, error) {
 			}
 			content = b
 		case p.OffsetEnd >= p.OffsetBody && p.OffsetEnd <= len(eml):
-			content = eml[p.OffsetBody:p.OffsetEnd]
+			// A message part has neither field: its content is the raw
+			// span, which for an encoded part is still encoded. Its decoded
+			// bytes are what stalwart parses as the nested message.
+			b, err := decodeSpan(p.Encoding, eml[p.OffsetBody:p.OffsetEnd])
+			if err != nil {
+				return expectPart{}, fmt.Errorf("part %d: %w", id, err)
+			}
+			content = b
 		}
 		content = []byte(strings.ReplaceAll(string(content), "\r\n", "\n"))
 		sum := sha256.Sum256(content)
