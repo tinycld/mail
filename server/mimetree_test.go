@@ -550,3 +550,27 @@ func TestReadTree_EpilogueIsDroppedWithAWarning(t *testing.T) {
 		t.Fatalf("blank epilogue: warnings %+v", warnings)
 	}
 }
+
+// An unquoted parameter value runs to the next ';', so a filename with
+// spaces that a sender did not quote is kept whole.
+func TestReadTree_UnquotedNameWithSpaces(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ name, header, want string }{
+		{"disposition", "Content-Type: application/pdf\nContent-Disposition: attachment; filename=My Document.pdf", "My Document.pdf"},
+		{"content type", "Content-Type: application/pdf; name=My Document.pdf", "My Document.pdf"},
+		{"white space before ;", "Content-Type: application/pdf\nContent-Disposition: attachment; filename=My Document.pdf  ; size=3", "My Document.pdf"},
+		{"quoted value is unchanged", "Content-Type: application/pdf\nContent-Disposition: attachment; filename=\"Quoted  Name.pdf\"; x=a b", "Quoted  Name.pdf"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, warnings := readTree(crlf(tc.header + "\n\nPDF"))
+			if root.Name != tc.want || string(root.Body) != "PDF" {
+				t.Fatalf("name %q body %q", root.Name, root.Body)
+			}
+			for _, w := range warnings {
+				if strings.Contains(w.Detail, "Document") || strings.Contains(w.Detail, "Name") {
+					t.Fatalf("warning quotes the header: %q", w.Detail)
+				}
+			}
+		})
+	}
+}

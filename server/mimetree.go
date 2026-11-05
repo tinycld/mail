@@ -456,7 +456,9 @@ func parseContentType(v, defaultType string) (string, map[string]string, bool) {
 	return mt, params, false
 }
 
-var lenientParam = regexp.MustCompile(`(?i)([a-z0-9!#$&^_.+-]+)(\*[0-9]*\*?)?\s*=\s*("(?:[^"\\]|\\.)*"?|[^;\s]*)`)
+// An unquoted value runs to the next ';': senders write a filename with
+// spaces in it unquoted, and unquoteParam trims the white space around it.
+var lenientParam = regexp.MustCompile(`(?i)([a-z0-9!#$&^_.+-]+)(\*[0-9]*\*?)?\s*=\s*("(?:[^"\\]|\\.)*"?|[^;]*)`)
 
 var (
 	mediaTypeToken   = regexp.MustCompile(`(?i)^\s*([a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+)`)
