@@ -169,8 +169,19 @@ func TestDecodeBase64Lenient_OneLongLine(t *testing.T) {
 func TestDecodeQuotedPrintable(t *testing.T) {
 	t.Parallel()
 	got := decodeQuotedPrintable([]byte("caf=C3=A9 long=\r\nline =XY broken="))
-	if string(got) != "café longline =XY broken" {
+	if string(got) != "café longline =XY broken=" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// A body that is only "=" came from a fuzz run; dropping it left a part that
+// had bytes and kept none.
+func TestDecodeQuotedPrintable_TruncatedBodyKeepsTrailingEquals(t *testing.T) {
+	t.Parallel()
+	for _, in := range []string{"=", "a= ", "a=\t"} {
+		if got := decodeQuotedPrintable([]byte(in)); string(got) != in {
+			t.Errorf("%q decoded to %q, want it kept", in, got)
+		}
 	}
 }
 

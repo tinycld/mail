@@ -625,7 +625,9 @@ func decodeQuotedPrintable(body []byte) []byte {
 		}
 		switch {
 		case j == len(body):
-			i = j - 1
+			// No line break follows, so this is not a soft break; a
+			// truncated body must not lose its last byte.
+			out = append(out, c)
 		case body[j] == '\n':
 			i = j
 		case body[j] == '\r' && j+1 < len(body) && body[j+1] == '\n':

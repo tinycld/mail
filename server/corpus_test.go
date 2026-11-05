@@ -60,6 +60,12 @@ func checkLosesNothing(t *testing.T, raw []byte) {
 			listed[p] = true
 		}
 	}
+	isBody := map[*mimePart]bool{}
+	for _, list := range [][]*mimePart{l.text, l.html} {
+		for _, p := range list {
+			isBody[p] = true
+		}
+	}
 	textLeaf := false
 	for _, leaf := range leaves(root) {
 		if len(leaf.Body) > 0 && !listed[leaf] {
@@ -69,7 +75,9 @@ func checkLosesNothing(t *testing.T, raw []byte) {
 			t.Errorf("part %d (%s) had %d bytes and kept none", leaf.Index, leaf.Type, leaf.RawSize)
 		}
 		// Only text/plain and text/html can be bodies in RFC 8621; text/x-* is a file.
-		if (leaf.Type == "text/plain" || leaf.Type == "text/html") && leaf.Disposition != "attachment" && len(bytes.TrimSpace(leaf.Body)) > 0 {
+		// A text part RFC 8621 sends to the files (a second part of a multipart/related, a named part
+		// after the first) is no body, so it cannot be missing from one.
+		if (leaf.Type == "text/plain" || leaf.Type == "text/html") && leaf.Disposition != "attachment" && isBody[leaf] && len(bytes.TrimSpace(leaf.Body)) > 0 {
 			textLeaf = true
 		}
 	}
