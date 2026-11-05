@@ -196,6 +196,7 @@ type flattenExpect struct {
 	Attachments  []struct {
 		Name string `json:"name"`
 		Type string `json:"type"`
+		Size *int64 `json:"size"` // decoded bytes; checked when present
 	} `json:"attachments"`
 }
 
@@ -244,6 +245,9 @@ func TestCorpus_Flatten(t *testing.T) {
 			for i, a := range want.Attachments {
 				if got := msg.Attachments[i]; got.Name != a.Name || got.ContentType != a.Type {
 					t.Errorf("attachment %d = %s (%s), want %s (%s)", i, got.Name, got.ContentType, a.Name, a.Type)
+				}
+				if got := msg.Attachments[i].Size; a.Size != nil && got != *a.Size {
+					t.Errorf("attachment %d size = %d, want %d", i, got, *a.Size)
 				}
 			}
 		})
