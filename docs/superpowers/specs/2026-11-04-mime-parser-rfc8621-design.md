@@ -63,8 +63,10 @@ fix is a process, not a fourth patch:
   JSON it has already split, not MIME.
 - S/MIME, PGP, TNEF (`winmail.dat`) and calendar invitations beyond keeping
   their parts as files.
-- Replacing go-message. It stays the reader; go-imap v2 and our message
-  building use it too.
+- Replacing go-message. It still supplies `textproto.Header`, the `charset`
+  package and the `mail.Header` address, date and subject helpers, and
+  go-imap v2 and our message building use it too. `readTree` does not use
+  its entity reader.
 
 ## Design
 
@@ -100,8 +102,9 @@ to keep a partial result. Both are exactly where we must salvage. So
 `readTree` has three pieces of its own, each small:
 
 - **A lenient header parser.** It reads up to the first blank line and
-  unfolds continuation lines. A line with no colon is skipped with a
-  warning. It fills a go-message `textproto.Header`, so go-message's
+  unfolds continuation lines. A line that is not a field is skipped, with a
+  warning, only when the next line is a field. Any other such line ends the
+  header and starts the body. It fills a go-message `textproto.Header`, so go-message's
   `mail.Header` address, date and subject helpers keep working on it.
 - **A boundary splitter.** It finds delimiter lines (`--boundary`, with
   trailing white space allowed, CRLF or LF) in the multipart's bytes. It
@@ -136,11 +139,17 @@ error, and nothing ends the walk of the tree.
     read at all (for example binary garbage before the first blank line)
     makes the whole input one `text/plain` part. Its body is the raw bytes,
     charset-guessed as below.
-  - **Bad header field:** a single malformed field is skipped; the others
-    stay.
+  - **Line that is not a field:** it is skipped, with a warning, only when
+    the very next line is a field (this covers an mbox `From ` first line).
+    Any other non-field line ends the header and starts the body, so no byte
+    is dropped. A continuation line after a skipped line is not joined to
+    the field before it.
 - **Content type:**
-  - **Missing or unparseable `Content-Type`:** the part is `text/plain`, as
-    RFC 2045 says. If the raw value starts with `multipart/` and a boundary
+  - **`Content-Type` or `Content-Disposition` that `mime.ParseMediaType`
+    refuses:** it is read leniently. The type is only the leading
+    `token/token`, and the parameters are read from the rest of the value.
+  - **Missing `Content-Type`, or a value with no usable type and subtype:**
+    the part is `text/plain`, as RFC 2045 says. If the raw value starts with `multipart/` and a boundary
     can still be found in it, the part is read as that multipart.
   - **Bad parameters** (broken RFC 2231 continuations, unbalanced quotes):
     each parameter keeps its raw value when it cannot be decoded, so a
@@ -150,13 +159,17 @@ error, and nothing ends the walk of the tree.
   - **Invalid base64 or quoted-printable:** the part is decoded up to the
     first bad byte, and the rest is kept raw (skipping whitespace and
     characters that cannot be base64, as lenient decoders do). If nothing
-    decodes, the raw body is kept.
+    decodes, a body that is not blank is kept raw, with a `bad-encoding`
+    warning.
+  - **Quoted-printable:** a final `=` is a soft line break.
 - **Charset:**
   - **Unknown, missing or wrong:** go-message returns the part together
     with an unknown-charset error, and the part is kept. Its body is used as
     is when it is valid UTF-8. For HTML, a `<meta charset>` in the body is
     tried next. Otherwise the body is decoded as Windows-1252, which maps
     every byte to some character.
+  - **UTF-7:** it is decoded. Ill-formed UTF-7 is kept as written, with a
+    `bad-encoding` warning.
   - **Text that still is not valid UTF-8** after decoding has its bad
     sequences replaced with U+FFFD, so the text can always be stored and
     shown.
@@ -263,8 +276,9 @@ string, one HTML string and a file list:
 
 The callers log a warning line through `logging.ForPackage("mail")`:
 - when there are warnings;
-- when, after flattening, both bodies are empty but the tree has a `text/*`
-  leaf that is not an attachment.
+- when, after flattening, both bodies are empty but the tree has a
+  `text/plain` or `text/html` leaf, with bytes, that is not disposition
+  `attachment`.
 
 The line carries the structure and no content:
 
@@ -426,26 +440,13 @@ already hold the signature, the file and tool names, the `digest` default,
    drops every other header.
 2. **Rollout.** The parser landed before the corpus. No baseline of the old
    parser's corpus failures was recorded.
-3. **Header parsing.** A line that is not a field is skipped only when the
-   next line is a field. This covers an mbox `From ` first line. Any other
-   line that is not a field ends the header and starts the body, so no byte
-   is dropped. A continuation line after a skipped line is not joined to the
-   field before it.
-4. **Lenient Content-Type and Content-Disposition.** When
-   `mime.ParseMediaType` refuses a value, the type is only the leading
-   `token/token`, and the parameters are read from the rest of the value. A
-   value with no usable type and subtype gets the default type.
-5. **Charset order for a missing or unknown label.** Bytes that are valid
-   UTF-8 are used as they are. Otherwise, for HTML, a `<meta charset>` is
-   tried. Otherwise the bytes are read as Windows-1252. UTF-7 is decoded.
-   Ill-formed UTF-7 is kept as written, with a `bad-encoding` warning.
-6. **Quoted-printable.** A final `=` is a soft line break. A quoted-printable
-   body that is not blank and decodes to nothing is kept raw, with a
-   `bad-encoding` warning. This is the same rule as for base64.
-7. **Final line break.** `flatten` removes exactly one final line break from
+3. **Header, Content-Type, charset and quoted-printable rules.** The
+   "Step 1" bullets hold them: a non-field line, a lenient `Content-Type`,
+   the charset order, UTF-7 and the final `=`.
+4. **Final line break.** `flatten` removes exactly one final line break from
    the root leaf of a single-part message. It does not trim tree bodies. A
    single-part message has no delimiter that takes the break.
-8. **`parseStructure` deviations from the RFC.** `bodystructure.go` lists
+5. **`parseStructure` deviations from the RFC.** `bodystructure.go` lists
    them in its header comment:
    - Inside an alternative, a part for a list that the branch has stopped
      goes to the attachments. The RFC's JavaScript would throw.
@@ -453,14 +454,14 @@ already hold the signature, the file and tool names, the `digest` default,
    - The root-leaf trim.
    - One workaround: a `multipart/related` root is taken from its `type`
      parameter (`mimekit/multipart-related-mhtml`).
-9. **`needsLog` and the corpus tests.** `needsLog`, the log trigger, counts
+6. **`needsLog` and the corpus tests.** `needsLog`, the log trigger, counts
    `text/plain` and `text/html` leaves that are not `attachment`. Other
    `text/*` leaves are attachments under RFC 8621.
-10. **Expected attachments.** A `NAME.flatten.json` attachment can carry a
+7. **Expected attachments.** A `NAME.flatten.json` attachment can carry a
     `size` in decoded bytes. The test checks it when it is present.
-11. **Known deviations.** `known_deviations.txt` holds 31 messages in 11
+8. **Known deviations.** `known_deviations.txt` holds 31 messages in 11
     cause groups. Each reason names the rule that we follow.
-12. **Log line limits.**
+9. **Log line limits.**
     - The line never names a charset that go-message's `charset` package
       does not know. It writes `unknown`.
     - It writes a type only when the top level is a registered one and the
