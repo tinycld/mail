@@ -305,12 +305,13 @@ var headerFieldLine = regexp.MustCompile(`^([!-9;-~]+)[ \t]*:(.*)$`)
 //
 // A line that is neither a field nor a continuation is a broken field, and
 // is skipped with its continuations, when the header around it is readable:
-// a field comes right after it, or it looks like a field (it has a colon or
-// continuation lines) and the lines after it run as a header to a blank line
-// (stalwart/regressions/header-name-space.eml and its siblings). Any other
-// such line ends the header there, and the body starts at that line, so
-// nothing is lost. Input with no readable field before such a line has no
-// header and is all body (design, "Header block cannot be read").
+// a field comes right after it, or continuation lines do and the lines after
+// it run as a header to a blank line. Any other such line ends the header
+// there, and the body starts at that line, so no byte is dropped: a body
+// line with a colon ("Hi Bob: lunch?") right after the fields is body, even
+// though stalwart skips such a line (known_deviations.txt). Input with no
+// readable field before such a line has no header and is all body (design,
+// "Header block cannot be read").
 func parseHeaderBlock(b []byte) (textproto.Header, []byte, string) {
 	var fields []headerLine
 	var problem string
@@ -378,7 +379,7 @@ func (w *headerWalk) isBrokenField(b, line []byte, next int, afterField bool) bo
 		// Also the first line: an mbox "From " line comes before the fields.
 		return true
 	}
-	if !bytes.ContainsRune(line, ':') && !(next < len(b) && isContinuation(following)) {
+	if next >= len(b) || !isContinuation(following) {
 		return false
 	}
 	if !w.done || next < w.from || next > w.end {
@@ -388,7 +389,7 @@ func (w *headerWalk) isBrokenField(b, line []byte, next int, afterField bool) bo
 }
 
 // walk follows the lines from pos while they read as a header (fields,
-// continuations, lines with a colon, lines with continuations), up to a blank
+// continuations, lines with continuations), up to a blank
 // line or a line that does not. A walk from any line it passed stops at the
 // same place, which is why one walk serves them all.
 func (w *headerWalk) walk(b []byte, pos int) {
@@ -402,7 +403,7 @@ func (w *headerWalk) walk(b []byte, pos int) {
 			return
 		case headerFieldLine.Match(line):
 			w.lastField = pos
-		case isContinuation(line), bytes.ContainsRune(line, ':'), next < len(b) && isContinuation(following):
+		case isContinuation(line), next < len(b) && isContinuation(following):
 		default:
 			w.end = pos
 			return

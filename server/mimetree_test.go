@@ -33,30 +33,31 @@ func TestParseHeaderBlock(t *testing.T) {
 		t.Fatalf("skip: ct %q body %q problem %q", h.Get("Content-Type"), body, problem)
 	}
 
-	// A broken field before the blank line is skipped, with its
-	// continuations; the fields around it stay and it is not the body.
-	for _, in := range []string{
-		"From: good@x.com\nFr om: evil@x.com\n\nbody\n",
-		"From: good@x.com\n::  From: evil@x.com\n\nbody\n",
-		"From: good@x.com\nF\x00rom: evil@x.com\n\nbody\n",
-		"Sub ject: x\n:Weird: v\nfoo bar\n baz: qux\nFrom : good@x.com\n\nbody\n",
+	// A body line with a colon right after the fields ends the header: it is
+	// body, and no byte is dropped. This holds when a blank line follows it.
+	for _, tc := range []struct{ in, field, body string }{
+		{"Content-Type: text/plain\nHi Bob: lunch at noon?\n\nthanks", "Content-Type", "Hi Bob: lunch at noon?\r\n\r\nthanks"},
+		{"Subject: s\nDear team: see below\n\nthe report", "Subject", "Dear team: see below\r\n\r\nthe report"},
+		{"Subject: s\nHi Bob: see this\nthanks\n\nmore\n", "Subject", "Hi Bob: see this\r\nthanks\r\n\r\nmore\r\n"},
+		{"From: good@x.com\nFr om: evil@x.com\n\nbody\n", "From", "Fr om: evil@x.com\r\n\r\nbody\r\n"},
 	} {
-		h, body, problem = parseHeaderBlock(crlf(in))
-		if h.Get("From") != "good@x.com" || h.Len() != 1 || string(body) != "body\r\n" || problem == "" {
-			t.Fatalf("broken field in %q: from %q, %d fields, body %q, problem %q", in, h.Get("From"), h.Len(), body, problem)
+		h, body, problem = parseHeaderBlock(crlf(tc.in))
+		if h.Len() != 1 || h.Get(tc.field) == "" || string(body) != tc.body || problem == "" {
+			t.Fatalf("colon line in %q: %d fields, body %q, problem %q", tc.in, h.Len(), body, problem)
 		}
+	}
+
+	// A broken line with continuation lines, in a header that a blank line
+	// closes, is skipped with them; the fields around it stay.
+	h, body, problem = parseHeaderBlock(crlf("From: good@x.com\nfoo bar\n baz: qux\nTo: b@x.com\n\nbody\n"))
+	if h.Get("From") != "good@x.com" || h.Get("To") != "b@x.com" || h.Len() != 2 || string(body) != "body\r\n" || problem == "" {
+		t.Fatalf("continued broken line: %d fields, body %q, problem %q", h.Len(), body, problem)
 	}
 
 	// With no readable field, the header block cannot be read: all is body.
 	in0 := crlf("Sub ject: smuggled\nSub\tject: tab\n\nbody\n")
 	if h, body, _ = parseHeaderBlock(in0); h.Len() != 0 || !bytes.Equal(body, in0) {
 		t.Fatalf("unreadable: %d fields, body %q", h.Len(), body)
-	}
-
-	// A line with a colon that the header does not close after is the body.
-	h, body, _ = parseHeaderBlock(crlf("Subject: s\nHi Bob: see this\nthanks\n\nmore\n"))
-	if h.Get("Subject") != "s" || string(body) != "Hi Bob: see this\r\nthanks\r\n\r\nmore\r\n" {
-		t.Fatalf("colon in body: body %q", body)
 	}
 
 	// A broken line with no field after it ends the header; nothing is lost.
@@ -347,9 +348,9 @@ func TestParseHeaderBlock_ManyContinuationLines(t *testing.T) {
 
 func TestParseHeaderBlock_ManyBrokenLines(t *testing.T) {
 	t.Parallel()
-	// 200k broken fields before the blank line: walking ahead to it from
-	// each one would read 2·10¹⁰ lines.
-	in := "Subject: a\r\n" + strings.Repeat(":a\r\n", 200_000) + "\r\nbody"
+	// 100k broken lines, each with a continuation, before the blank line:
+	// walking ahead to it from each one would read 10¹⁰ lines.
+	in := "Subject: a\r\n" + strings.Repeat("x\r\n y\r\n", 100_000) + "\r\nbody"
 	start := time.Now()
 	h, body, _ := parseHeaderBlock([]byte(in))
 	if h.Get("Subject") != "a" || string(body) != "body" {
