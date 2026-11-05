@@ -557,7 +557,11 @@ func decodeTransfer(cte string, body []byte) ([]byte, string) {
 	case "base64":
 		return decodeBase64Lenient(body)
 	case "quoted-printable":
-		return decodeQuotedPrintable(body), ""
+		out := decodeQuotedPrintable(body)
+		if len(out) == 0 && len(bytes.TrimSpace(body)) > 0 {
+			return body, "quoted-printable body held nothing decodable; kept as is"
+		}
+		return out, ""
 	default:
 		return body, fmt.Sprintf("unknown Content-Transfer-Encoding of %d bytes; kept as is", len(cte))
 	}
@@ -625,9 +629,7 @@ func decodeQuotedPrintable(body []byte) []byte {
 		}
 		switch {
 		case j == len(body):
-			// No line break follows, so this is not a soft break; a
-			// truncated body must not lose its last byte.
-			out = append(out, c)
+			i = j - 1
 		case body[j] == '\n':
 			i = j
 		case body[j] == '\r' && j+1 < len(body) && body[j+1] == '\n':

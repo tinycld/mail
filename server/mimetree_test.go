@@ -169,19 +169,42 @@ func TestDecodeBase64Lenient_OneLongLine(t *testing.T) {
 func TestDecodeQuotedPrintable(t *testing.T) {
 	t.Parallel()
 	got := decodeQuotedPrintable([]byte("caf=C3=A9 long=\r\nline =XY broken="))
-	if string(got) != "café longline =XY broken=" {
+	if string(got) != "café longline =XY broken" {
 		t.Fatalf("got %q", got)
 	}
 }
 
-// A body that is only "=" came from a fuzz run; dropping it left a part that
-// had bytes and kept none.
-func TestDecodeQuotedPrintable_TruncatedBodyKeepsTrailingEquals(t *testing.T) {
+// A body of only "=" decodes to nothing; the raw body is kept so the part
+// does not lose its bytes (found by fuzzing).
+func TestReadTree_QuotedPrintableWithNothingDecodableIsKeptRaw(t *testing.T) {
 	t.Parallel()
-	for _, in := range []string{"=", "a= ", "a=\t"} {
-		if got := decodeQuotedPrintable([]byte(in)); string(got) != in {
-			t.Errorf("%q decoded to %q, want it kept", in, got)
+	for _, body := range []string{"=", "= \t"} {
+		raw := "Content-Type: text/plain\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n" + body
+		root, warnings := readTree([]byte(raw))
+		if string(root.Body) != body {
+			t.Errorf("body %q kept as %q", body, root.Body)
 		}
+		found := false
+		for _, w := range warnings {
+			found = found || w.Kind == "bad-encoding"
+		}
+		if !found {
+			t.Errorf("body %q: no bad-encoding warning in %v", body, warnings)
+		}
+	}
+}
+
+// The delimiter takes the part's last line break, so a final "=" there is a
+// real soft break and must not show.
+func TestReadTree_QuotedPrintableSoftBreakBeforeDelimiter(t *testing.T) {
+	t.Parallel()
+	raw := "Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: text/plain\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nsoft=\r\n--b--\r\n"
+	root, warnings := readTree([]byte(raw))
+	if got := string(root.Children[0].Body); got != "soft" {
+		t.Errorf("got %q", got)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("warnings: %v", warnings)
 	}
 }
 

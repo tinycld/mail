@@ -75,8 +75,10 @@ func checkLosesNothing(t *testing.T, raw []byte) {
 			t.Errorf("part %d (%s) had %d bytes and kept none", leaf.Index, leaf.Type, leaf.RawSize)
 		}
 		// Only text/plain and text/html can be bodies in RFC 8621; text/x-* is a file.
-		// A text part RFC 8621 sends to the files (a second part of a multipart/related, a named part
-		// after the first) is no body, so it cannot be missing from one.
+		// Only parts parseStructure put in a body list count: a text part RFC 8621 sends to the files
+		// (a second part of a multipart/related, a named part after the first) is no body. That
+		// classification is gated by TestCorpus_MatchesExpected and the RFC unit tests; this
+		// property gates flatten.
 		if (leaf.Type == "text/plain" || leaf.Type == "text/html") && leaf.Disposition != "attachment" && isBody[leaf] && len(bytes.TrimSpace(leaf.Body)) > 0 {
 			textLeaf = true
 		}
