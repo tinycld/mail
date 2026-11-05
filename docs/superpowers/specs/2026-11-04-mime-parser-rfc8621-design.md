@@ -141,8 +141,8 @@ error, and nothing ends the walk of the tree.
     charset-guessed as below.
   - **Line that is not a field:** it is skipped, with a warning, only when
     the very next line is a field (this covers an mbox `From ` first line).
-    Any other non-field line ends the header and starts the body, so no byte
-    is dropped. A continuation line after a skipped line is not joined to
+    Any other non-field line ends the header and starts the body, so that
+    line is kept as body. The skipped line itself is dropped. A continuation line after a skipped line is not joined to
     the field before it.
 - **Content type:**
   - **`Content-Type` or `Content-Disposition` that `mime.ParseMediaType`
@@ -277,8 +277,8 @@ string, one HTML string and a file list:
 The callers log a warning line through `logging.ForPackage("mail")`:
 - when there are warnings;
 - when, after flattening, both bodies are empty but the tree has a
-  `text/plain` or `text/html` leaf, with bytes, that is not disposition
-  `attachment`.
+  `text/plain` or `text/html` leaf that is not disposition `attachment` and
+  has a body that is not blank.
 
 The line carries the structure and no content:
 
@@ -348,8 +348,11 @@ it with `go run ./testdata/corpus/tools/fetch`.
      list count as text. `TestCorpus_MatchesExpected` and the RFC unit tests
      gate the classification;
    - no leaf that had bytes in the raw message has an empty body;
-   - whenever the tree has a `text/plain` or `text/html` leaf that is not
-     an attachment, the text or the HTML body is not empty;
+   - whenever a `text/plain` or `text/html` leaf that is not disposition
+     `attachment` is in the text or HTML list and has a body that is not
+     blank, the text or the HTML body is not empty. Other text parts are
+     left out, because `TestCorpus_MatchesExpected` and the RFC unit tests
+     gate the classification;
    - the result is the same on a second run.
 2. **`TestCorpus_MatchesExpected`** runs on the stalwart sets:
    - **Expected side:** for message 0, the expected `text_body`, `html_body`
@@ -455,8 +458,9 @@ already hold the signature, the file and tool names, the `digest` default,
    - One workaround: a `multipart/related` root is taken from its `type`
      parameter (`mimekit/multipart-related-mhtml`).
 6. **`needsLog` and the corpus tests.** `needsLog`, the log trigger, counts
-   `text/plain` and `text/html` leaves that are not `attachment`. Other
-   `text/*` leaves are attachments under RFC 8621.
+   `text/plain` and `text/html` leaves that are not `attachment` and have a
+   body that is not blank. Other `text/*` leaves are attachments under
+   RFC 8621.
 7. **Expected attachments.** A `NAME.flatten.json` attachment can carry a
     `size` in decoded bytes. The test checks it when it is present.
 8. **Known deviations.** `known_deviations.txt` holds 31 messages in 11
