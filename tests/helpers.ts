@@ -227,6 +227,8 @@ export interface DeliverOptions {
     // The message Date header, which orders the list. Defaults to now; the
     // header has one-second resolution, so a burst of deliveries ties.
     date?: Date
+    // The Message-ID of the message this one replies to; threads it under that one.
+    inReplyTo?: string
 }
 
 // Inject a fresh inbound message via the Postmark webhook so the test has
@@ -268,7 +270,15 @@ export async function deliverInbound(
         StrippedTextReply: opts.body ?? 'Test body',
         MessageID: messageId,
         MailboxHash: '',
-        Headers: [{ Name: 'Message-ID', Value: `<${messageId}>` }],
+        Headers: [
+            { Name: 'Message-ID', Value: `<${messageId}>` },
+            ...(opts.inReplyTo
+                ? [
+                      { Name: 'In-Reply-To', Value: `<${opts.inReplyTo}>` },
+                      { Name: 'References', Value: `<${opts.inReplyTo}>` },
+                  ]
+                : []),
+        ],
         Attachments: [],
     }
     const res = await request.post(url, {
