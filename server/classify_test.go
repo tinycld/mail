@@ -283,6 +283,7 @@ func TestClassifyMessage_NoKeyDoesNothing(t *testing.T) {
 func TestArchiveThreshold_FloorAndCeiling(t *testing.T) {
 	cases := map[string]float64{
 		"0.4": 0.9, "0.5": 0.5, "0.75": 0.75, "1": 1, "1.1": 0.9, "abc": 0.9, "": 0.9,
+		"NaN": 0.9, "Inf": 0.9, "-Inf": 0.9,
 	}
 	for in, want := range cases {
 		env := setupClassifyEnv(t)

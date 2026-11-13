@@ -2,6 +2,7 @@ package mail
 
 import (
 	"encoding/json"
+	"math"
 	"strconv"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -67,7 +68,8 @@ func archiveThreshold(app core.App) float64 {
 	v, err := strconv.ParseFloat(jsonString(rec.Get("value")), 64)
 	// Any signed-in member can write this org row, so the floor (the UI's
 	// minimum) is enforced here: a low value would archive at any confidence.
-	if err != nil || v < minArchiveThreshold || v > 1 {
+	// NaN passes both range comparisons, then makes every confidence check false.
+	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v < minArchiveThreshold || v > 1 {
 		return defaultArchiveThreshold
 	}
 	return v
