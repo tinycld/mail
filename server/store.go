@@ -472,12 +472,17 @@ func setThreadFolder(app core.App, threadID, userID, folder string) error {
 // row's other fields alone. The save is bound to ctx, so a rule action that
 // timed out or was cancelled at terminate does not write.
 func setThreadStateField(ctx context.Context, app core.App, threadID, userID, field string, value any) error {
-	record, err := threadStateOrNew(app, threadID, userID)
-	if err != nil {
-		return err
-	}
-	record.Set(field, value)
-	return app.SaveWithContext(ctx, record)
+	// Read and save in one transaction: a save writes every column, so a state
+	// row read before another writer (propagateThreadFields filling address_keys
+	// right after delivery) saved would write that writer's change away.
+	return app.RunInTransaction(func(txApp core.App) error {
+		record, err := threadStateOrNew(txApp, threadID, userID)
+		if err != nil {
+			return err
+		}
+		record.Set(field, value)
+		return txApp.SaveWithContext(ctx, record)
+	})
 }
 
 // threadStateOrNew returns the user's state row for the thread, or a new

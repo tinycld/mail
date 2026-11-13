@@ -148,7 +148,16 @@ async function buildStarRule(
 
     await page.getByText('add action', { exact: true }).click()
     await page.getByTestId('action-option-mail:star-message').click()
+    // The list shows the rule optimistically; mail delivered before the server
+    // stores it would not meet the rule.
+    const stored = page.waitForResponse(
+        res =>
+            res.url().includes('/api/collections/rules/records') &&
+            res.request().method() === 'POST' &&
+            res.ok()
+    )
     await page.getByTestId('rule-builder-save').click()
+    await stored
     await expect(ruleRow(page, opts.name)).toBeVisible()
 }
 
@@ -204,19 +213,20 @@ test.describe('AI classification', () => {
     test('archives a new junk thread but not a reply', async ({ page, request }) => {
         await setMode(page, 'labels_archive')
         const fresh = await deliverInbound(request, { subject: uniqueSubject('[jev:junk] Prize') })
+        // The base message has no marker, so it is never labelled; the reply
+        // below joins its thread by In-Reply-To, so the thread already has a
+        // message. It arrives after the junk one, so once it is listed the Inbox
+        // has loaded past the archive and the junk row's absence cannot be early.
+        const base = await deliverInbound(request, { subject: uniqueSubject('Thread start') })
         await expect(recentRow(page, fresh.subject)).toContainText('Labelled and archived')
-        // Asserted in the Archive folder rather than as absence from the Inbox:
-        // the paginated thread list can keep a stale Inbox page after a
-        // server-side folder change (HANDOFF-mail-realtime-new-thread.md).
         await goToInbox(page)
+        await expectRowVisible(page, base.subject)
+        await expect(emailRow(page, fresh.subject)).toHaveCount(0)
         await clickSidebarItem(page, 'Archive')
         await expectRowVisible(page, fresh.subject)
         await clickSidebarItem(page, 'Inbox')
-
-        // The base message has no marker, so it is never labelled; the reply
-        // joins its thread by In-Reply-To, so the thread already has a message.
-        const base = await deliverInbound(request, { subject: uniqueSubject('Thread start') })
         await expectRowVisible(page, base.subject)
+
         const reply = await deliverInbound(request, {
             subject: `Re: ${base.subject} [jev:junk]`,
             inReplyTo: base.messageId,

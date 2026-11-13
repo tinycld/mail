@@ -100,6 +100,14 @@ func fillThreadStateFromThread(app core.App, state *core.Record) error {
 // propagateThreadFields writes the thread's changed values to each of its
 // state rows, saving only rows that do not already carry them.
 func propagateThreadFields(app core.App, threadID string, values map[string]string) error {
+	// One transaction for the read and the saves: a save writes every column,
+	// so a state row read before a rule starred it would write the star away.
+	return app.RunInTransaction(func(txApp core.App) error {
+		return propagateInTransaction(txApp, threadID, values)
+	})
+}
+
+func propagateInTransaction(app core.App, threadID string, values map[string]string) error {
 	states, err := app.FindRecordsByFilter(
 		"mail_thread_state",
 		"thread = {:thread}",
