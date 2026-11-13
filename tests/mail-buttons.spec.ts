@@ -122,6 +122,16 @@ async function deliverToInbox(page: Page, request: APIRequestContext, label: str
     return subject
 }
 
+// A fresh thread reported as spam, with the Spam folder open.
+async function deliverToSpam(page: Page, request: APIRequestContext, label: string) {
+    const subject = await deliverToInbox(page, request, label)
+    await selectRow(page, subject)
+    await pressToolbarAction(page, await listToolbar(page), 'Report spam')
+    await expect(emailRow(page, subject)).toHaveCount(0)
+    await expectInFolder(page, 'Spam', subject)
+    return subject
+}
+
 async function expectInFolder(page: Page, folder: string, subject: string) {
     await clickSidebarItem(page, folder)
     await expectRowVisible(page, subject)
@@ -213,6 +223,19 @@ test.describe('Mail buttons — thread toolbar', () => {
         await expectListShown(page)
         await expect(emailRow(page, subject)).toHaveCount(0)
         await expectInFolder(page, 'Spam', subject)
+    })
+
+    test('Not spam returns a spam thread to Inbox', async ({ page, request }) => {
+        const subject = await deliverToSpam(page, request, 'BtnNotSpam')
+        await openThread(page, subject)
+        const toolbar = await threadToolbar(page)
+        await expect(toolbar.getByRole('button', { name: 'Report spam', exact: true })).toHaveCount(
+            0
+        )
+        await pressToolbarAction(page, toolbar, 'Not spam')
+        await expectListShown(page)
+        await expect(emailRow(page, subject)).toHaveCount(0)
+        await expectInFolder(page, 'Inbox', subject)
     })
 
     test('Delete files the thread under Trash', async ({ page, request }) => {
@@ -502,6 +525,21 @@ test.describe('Mail buttons — list', () => {
         await clickSidebarItem(page, 'Trash')
         await expectRowVisible(page, subject)
         await (await hoverAction(page, subject, 'Move to Inbox')).click()
+        await expect(emailRow(page, subject)).toHaveCount(0)
+        await expectInFolder(page, 'Inbox', subject)
+    })
+
+    test('the row Not spam returns a spam thread to Inbox', async ({ page, request }) => {
+        const subject = await deliverToSpam(page, request, 'BtnRowNotSpam')
+        await (await hoverAction(page, subject, 'Not spam')).click()
+        await expect(emailRow(page, subject)).toHaveCount(0)
+        await expectInFolder(page, 'Inbox', subject)
+    })
+
+    test('bulk Not spam returns the selection to Inbox', async ({ page, request }) => {
+        const subject = await deliverToSpam(page, request, 'BtnBulkNotSpam')
+        await selectRow(page, subject)
+        await pressToolbarAction(page, await listToolbar(page), 'Not spam')
         await expect(emailRow(page, subject)).toHaveCount(0)
         await expectInFolder(page, 'Inbox', subject)
     })

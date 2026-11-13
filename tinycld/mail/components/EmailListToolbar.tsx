@@ -8,7 +8,6 @@ import {
     Archive,
     ChevronLeft,
     ChevronRight,
-    CircleAlert,
     FolderInput,
     Mail,
     MailOpen,
@@ -22,6 +21,7 @@ import {
 } from 'lucide-react-native'
 import { useMemo } from 'react'
 import { Pressable, Text } from 'react-native'
+import { spamToolbarItem } from '../lib/spam-toolbar-item'
 import type { MailThreadState } from '../types'
 
 interface LabelInfo {
@@ -38,6 +38,7 @@ interface EmailListToolbarProps {
     someSelected: boolean
     allSelectedRead: boolean
     allSelectedStarred: boolean
+    allSelectedSpam: boolean
     labels: LabelInfo[]
     selectedItemLabelIds: Set<string>
     onToggleAll: () => void
@@ -157,6 +158,7 @@ function BulkActionsToolbar({
     someSelected,
     allSelectedRead,
     allSelectedStarred,
+    allSelectedSpam,
     labels,
     selectedItemLabelIds,
     onToggleAll,
@@ -211,13 +213,7 @@ function BulkActionsToolbar({
                 ),
             },
             { type: 'button', key: 'archive', icon: Archive, label: 'Archive', onPress: onArchive },
-            {
-                type: 'button',
-                key: 'spam',
-                icon: CircleAlert,
-                label: 'Report spam',
-                onPress: onSpam,
-            },
+            spamToolbarItem(allSelectedSpam, onSpam, onMove),
             { type: 'button', key: 'trash', icon: Trash2, label: 'Delete', onPress: onTrash },
             { type: 'separator' },
             {
@@ -270,6 +266,7 @@ function BulkActionsToolbar({
             foregroundColor,
             selectedCount,
             onArchive,
+            allSelectedSpam,
             onSpam,
             onTrash,
             ReadIcon,

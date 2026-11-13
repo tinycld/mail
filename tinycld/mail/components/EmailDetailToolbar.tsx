@@ -5,7 +5,6 @@ import {
     ArrowLeft,
     ChevronLeft,
     ChevronRight,
-    CircleAlert,
     FolderInput,
     Forward,
     ListFilter,
@@ -16,6 +15,7 @@ import {
     Trash2,
 } from 'lucide-react-native'
 import { useMemo } from 'react'
+import { spamToolbarItem } from '../lib/spam-toolbar-item'
 import type { MailThreadState } from '../types'
 
 interface LabelInfo {
@@ -77,18 +77,13 @@ export function EmailDetailToolbar({
 
     const ReadIcon = isRead ? MailOpen : Mail
     const readLabel = isRead ? 'Mark as unread' : 'Mark as read'
+    const isSpam = threadState?.folder === 'spam'
 
     const items: ToolbarItem[] = useMemo(
         () => [
             { type: 'button', key: 'back', icon: ArrowLeft, label: 'Back', onPress: onBack },
             { type: 'button', key: 'archive', icon: Archive, label: 'Archive', onPress: onArchive },
-            {
-                type: 'button',
-                key: 'spam',
-                icon: CircleAlert,
-                label: 'Report spam',
-                onPress: onSpam,
-            },
+            spamToolbarItem(isSpam, onSpam, onMove),
             { type: 'button', key: 'trash', icon: Trash2, label: 'Delete', onPress: onTrash },
             { type: 'separator' },
             {
@@ -150,6 +145,7 @@ export function EmailDetailToolbar({
         [
             onBack,
             onArchive,
+            isSpam,
             onSpam,
             onTrash,
             onMove,

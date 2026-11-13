@@ -17,6 +17,7 @@ import {
     Mail,
     MailOpen,
     Paperclip,
+    ShieldCheck,
     Square,
     SquareCheck,
     Trash2,
@@ -37,6 +38,14 @@ function AttachmentMarker({ isVisible }: { isVisible: boolean }) {
 }
 
 const starLabel = (isStarred: boolean) => (isStarred ? 'Remove star' : 'Add star')
+
+// The row's first action (onArchive): Archive, or back to Inbox for a thread
+// already archived or in Spam.
+function primaryRowAction(folder: string) {
+    if (folder === 'spam') return { icon: ShieldCheck, label: 'Not spam', shortLabel: 'Not spam' }
+    if (folder === 'archive') return { icon: Inbox, label: 'Move to Inbox', shortLabel: 'Inbox' }
+    return { icon: Archive, label: 'Archive', shortLabel: 'Archive' }
+}
 
 function MailboxChip({ label }: { label: string }) {
     const mutedColor = useThemeColor('muted-foreground')
@@ -212,11 +221,11 @@ function MobileEmailRow({
     const dateDisplay = formatRelativeDate(email.latestDate)
 
     const isTrashed = email.folder === 'trash'
-    const isArchived = email.folder === 'archive'
+    const primary = primaryRowAction(email.folder)
     const swipeActions = [
         {
-            icon: isArchived ? Inbox : Archive,
-            label: isArchived ? 'Inbox' : 'Archive',
+            icon: primary.icon,
+            label: primary.shortLabel,
             onPress: () => onArchive?.(),
             backgroundColor: infoColor,
         },
@@ -333,9 +342,7 @@ function EmailRowActions({
     const bg = isSelected ? hexToRgba(primaryColor, 0.16) : backgroundColor
 
     const isTrashed = email.folder === 'trash'
-    const isArchived = email.folder === 'archive'
-    const ArchiveIcon = isArchived ? Inbox : Archive
-    const archiveLabel = isArchived ? 'Move to Inbox' : 'Archive'
+    const primary = primaryRowAction(email.folder)
 
     return (
         <View
@@ -345,8 +352,8 @@ function EmailRowActions({
             }}
         >
             <HoverAction
-                icon={ArchiveIcon}
-                label={archiveLabel}
+                icon={primary.icon}
+                label={primary.label}
                 onPress={onArchive}
                 tooltipPosition={tooltipPosition}
             />
