@@ -1,9 +1,11 @@
 package mail
 
 import (
+	"context"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/addressbook"
 	"tinycld.org/core/automation"
 )
 
@@ -142,6 +144,59 @@ func TestReceivedFields_PersonalOnly(t *testing.T) {
 	f := receivedFields(env.app, env.alice, nil, msg)
 	if !hasField(f, "has_sent_to_sender", true) || hasKey(f, "sender_in_contacts") {
 		t.Fatalf("fields = %+v", f)
+	}
+}
+
+func TestClassifiedSendGuard_FollowsTheMessage(t *testing.T) {
+	t.Parallel()
+	env := setupClassifyEnv(t)
+	row := saveTestClassification(t, env, env.alice, "junk", false, "")
+	if skip, _ := classifiedSendGuard(env.app, row); skip {
+		t.Fatal("an ordinary message must not be skipped")
+	}
+	col := env.msg.Collection()
+	if col.Fields.GetByName("is_auto_submitted") == nil {
+		col.Fields.Add(&core.BoolField{Name: "is_auto_submitted"})
+		if err := env.app.Save(col); err != nil {
+			t.Fatalf("failed to add is_auto_submitted: %v", err)
+		}
+	}
+	env.msg.Set("is_auto_submitted", true)
+	if err := env.app.Save(env.msg); err != nil {
+		t.Fatalf("failed to save message: %v", err)
+	}
+	if skip, reason := classifiedSendGuard(env.app, row); !skip || reason != automaticMailReason {
+		t.Fatalf("auto-submitted message: skip=%v reason=%q", skip, reason)
+	}
+}
+
+func TestActionAudience_ClassifiedPersonalRuleNeverActsOnAnotherUsersRow(t *testing.T) {
+	t.Parallel()
+	env := setupClassifyEnv(t)
+	row := saveTestClassification(t, env, env.alice, "junk", false, "")
+	rule := newTestRule(t, env.app, env.bob, "personal")
+	if got := actionAudience(env.app, automation.ActionRequest{Rule: rule, OwnerID: env.bob, Record: row}); len(got) != 0 {
+		t.Fatalf("audience = %v", got)
+	}
+	own := newTestRule(t, env.app, env.alice, "personal")
+	if got := actionAudience(env.app, automation.ActionRequest{Rule: own, OwnerID: env.alice, Record: row}); len(got) != 1 || got[0] != env.alice {
+		t.Fatalf("own audience = %v", got)
+	}
+}
+
+// Not parallel: it swaps the process-wide address book lookup.
+func TestOfferExtraField_ContactsFactNeedsAnAddressBook(t *testing.T) {
+	addressbook.ResetForTest()
+	t.Cleanup(addressbook.ResetForTest)
+	if offerExtraField(nil, "sender_in_contacts") {
+		t.Fatal("no lookup registered: sender_in_contacts must be hidden")
+	}
+	if !offerExtraField(nil, "has_sent_to_sender") {
+		t.Fatal("has_sent_to_sender needs no address book")
+	}
+	addressbook.RegisterLookup(func(context.Context, core.App, string, string) (bool, error) { return true, nil })
+	if !offerExtraField(nil, "sender_in_contacts") {
+		t.Fatal("lookup registered: sender_in_contacts must be offered")
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/addressbook"
 	"tinycld.org/core/automation"
 )
 
@@ -13,6 +14,29 @@ func registerClassifiedTrigger() {
 	automation.RegisterOwnerResolver("mail:message-classified", classificationOwner)
 	automation.RegisterFieldsResolver("mail:message-classified", classifiedFields)
 	automation.RegisterFieldsResolver("mail:message-received", receivedFields)
+	for _, ref := range []string{"mail:message-received", "mail:message-classified"} {
+		automation.RegisterExtraFieldFilter(ref, offerExtraField)
+	}
+}
+
+// offerExtraField hides "sender is in my contacts" where no address book is
+// installed: the fact is absent there, so a rule on it could never match.
+func offerExtraField(_ core.App, key string) bool {
+	return key != "sender_in_contacts" || addressbook.Available()
+}
+
+// classifiedSendGuard applies mail's automatic-mail guard to the message a
+// classification is about; core looks guards up by the trigger record's
+// collection, which here is classifications.
+func classifiedSendGuard(app core.App, rec *core.Record) (bool, string) {
+	if rec.GetString("collection") != "mail_messages" {
+		return false, ""
+	}
+	msg, err := messageForRecord(app, rec)
+	if err != nil {
+		return false, ""
+	}
+	return automaticMailSendGuard(app, msg)
 }
 
 // classificationIsMail lets only real mail decisions fire rules: a preview

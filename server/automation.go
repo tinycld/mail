@@ -27,11 +27,14 @@ func registerAutomationResolver() {
 	automation.RegisterOwnerResolver("mail:message-bounced", messageOwnerResolver)
 	automation.RegisterTriggerFilter("mail:message-bounced", messageDidBounce)
 
-	// Core's "Send an email" action can run on a received message too, so it
-	// must not answer automatic mail either.
 	registerClassifiedTrigger()
 
+	// Core's "Send an email" action can run on a received message too, so it
+	// must not answer automatic mail either. It checks guards by the trigger
+	// record's collection, so a classified rule needs the guard on
+	// classifications as well.
 	automation.RegisterSendGuard("mail_messages", "mail.automatic-mail", automaticMailSendGuard)
+	automation.RegisterSendGuard("classifications", "mail.automatic-mail", classifiedSendGuard)
 }
 
 // deliveryFailureStatuses are the two delivery_status values that mean the

@@ -71,19 +71,24 @@ func actionAudience(app core.App, req automation.ActionRequest) []string {
 	// A classification belongs to one user, so an org rule acts only for that
 	// user: otherwise a three-member mailbox would run the org rule's actions
 	// once per member, for everyone, on each member's own row.
+	scope := ""
+	if req.Rule != nil {
+		scope = req.Rule.GetString("scope")
+	}
+
 	if req.Record.Collection().Name == "classifications" {
 		rowUser := req.Record.GetString("user")
+		// A personal rule never acts on another user's row, even though the
+		// owner resolver already pairs them; this keeps that true if it changes.
+		if rowUser == "" || (scope != "org" && req.OwnerID != rowUser) {
+			return nil
+		}
 		for _, member := range members {
-			if rowUser != "" && member.GetString("user") == rowUser {
+			if member.GetString("user") == rowUser {
 				return []string{rowUser}
 			}
 		}
 		return nil
-	}
-
-	scope := ""
-	if req.Rule != nil {
-		scope = req.Rule.GetString("scope")
 	}
 
 	if scope == "org" {
