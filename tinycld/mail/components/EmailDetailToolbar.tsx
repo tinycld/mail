@@ -37,6 +37,7 @@ interface EmailDetailToolbarProps {
     onToggleRead: () => void
     onToggleStar: () => void
     onForwardAll: () => void
+    onFilterLikeThese: () => void
     onNewer?: () => void
     onOlder?: () => void
     hasNewer?: boolean
@@ -65,6 +66,7 @@ export function EmailDetailToolbar({
     onToggleRead,
     onToggleStar,
     onForwardAll,
+    onFilterLikeThese,
     onNewer,
     onOlder,
     hasNewer = false,
@@ -135,8 +137,7 @@ export function EmailDetailToolbar({
                 key: 'filter',
                 icon: ListFilter,
                 label: 'Filter messages like these',
-                onPress: () => {},
-                disabled: true,
+                onPress: onFilterLikeThese,
             },
             {
                 type: 'button',
@@ -161,6 +162,7 @@ export function EmailDetailToolbar({
             isStarred,
             onToggleStar,
             onForwardAll,
+            onFilterLikeThese,
         ]
     )
 

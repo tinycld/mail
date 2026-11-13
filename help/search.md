@@ -36,6 +36,13 @@ Open the **Advanced** drop-down next to the search box for structured filters. T
 
 Text typed in the search box is always searched as literal words. Use the Advanced panel to set filters.
 
+## To find more mail from one sender
+
+1. Open a thread from that sender.
+2. In the thread toolbar, press **Filter messages like these**. On a narrow screen it is in the **More actions** menu.
+3. The Advanced panel opens with **From** set to the sender's address. Change or add filters if necessary.
+4. Press **Search**.
+
 ## Scope
 
 Search is scoped to every inbox you have access to — your personal inbox plus every shared inbox you're a member of. There's no per-inbox switch yet; if you want to narrow it, combine with a **To** filter pointing at one inbox's primary address.
