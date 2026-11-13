@@ -32,6 +32,7 @@ import { useScrolledToBottom } from '../hooks/useScrolledToBottom'
 import { useSendableIdentities } from '../hooks/useSendableIdentities'
 import { useThreadActions } from '../hooks/useThreadActions'
 import { useThreadNavigation } from '../hooks/useThreadNavigation'
+import { useAdvancedSearchStore } from '../stores/advanced-search-store'
 import { useAttachmentPreviewStore } from '../stores/attachment-preview-store'
 import { useAttachmentStripStore } from '../stores/attachment-strip-store'
 import { useThreadExpansionStore } from '../stores/thread-expansion-store'
@@ -53,15 +54,19 @@ function useAutoMarkAsRead(
             })
         }),
     })
-    if (threadState && !threadState.is_read && markedRef.current !== threadId) {
+    // Decide once, on the first state seen for this thread. Waiting for an
+    // unread state instead would mark the thread read again the moment the
+    // user marks it unread.
+    if (threadState && markedRef.current !== threadId) {
         markedRef.current = threadId
-        markAsRead.mutate(threadState.id)
+        if (!threadState.is_read) markAsRead.mutate(threadState.id)
     }
 }
 
 export default function MailDetailScreen() {
     const { id = '' } = useLocalSearchParams<{ id: string }>()
     const openReply = useOpenReply()
+    const openAdvancedSearch = useAdvancedSearchStore(s => s.openWith)
 
     const [threadStateCollection, messagesCollection, threadsCollection] = useStore(
         'mail_thread_state',
@@ -245,6 +250,13 @@ export default function MailDetailScreen() {
 
     const mailboxId = thread?.mailbox ?? ''
 
+    // The thread's first message names who started it; a later message may
+    // be my own reply.
+    const handleFilterLikeThese = () => {
+        const sender = messageList[0]?.sender_email
+        if (sender) openAdvancedSearch({ from: sender })
+    }
+
     const handleForwardAll = () => {
         if (!lastMessage) return
         openReply(
@@ -286,6 +298,7 @@ export default function MailDetailScreen() {
                     onToggleRead={() => toggleRead.mutate()}
                     onToggleStar={() => toggleStar.mutate()}
                     onForwardAll={handleForwardAll}
+                    onFilterLikeThese={handleFilterLikeThese}
                     onNewer={goToPrevious}
                     onOlder={goToNext}
                     hasNewer={hasPrevious}

@@ -98,6 +98,7 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={Bold}
+                        label="Bold"
                         isActive={toolbarState.isBoldActive}
                         onPress={() => commands.toggleBold()}
                         iconColor={iconColor}
@@ -112,6 +113,7 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={Italic}
+                        label="Italic"
                         isActive={toolbarState.isItalicActive}
                         onPress={() => commands.toggleItalic()}
                         iconColor={iconColor}
@@ -126,6 +128,7 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={Underline}
+                        label="Underline"
                         isActive={toolbarState.isUnderlineActive}
                         onPress={() => commands.toggleUnderline()}
                         iconColor={iconColor}
@@ -145,6 +148,7 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={List}
+                        label="Bullet list"
                         isActive={toolbarState.isBulletListActive}
                         onPress={() => commands.toggleBulletList()}
                         iconColor={iconColor}
@@ -163,6 +167,7 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={ListOrdered}
+                        label="Numbered list"
                         isActive={toolbarState.isOrderedListActive}
                         onPress={() => commands.toggleOrderedList()}
                         iconColor={iconColor}
@@ -182,6 +187,7 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={Quote}
+                        label="Blockquote"
                         isActive={toolbarState.isBlockquoteActive}
                         onPress={() => commands.toggleBlockquote()}
                         iconColor={iconColor}
@@ -200,6 +206,7 @@ export function ComposeToolbar({
                 element: (
                     <FormatButton
                         icon={Link2}
+                        label="Link"
                         isActive={toolbarState.isLinkActive}
                         onPress={handleLink}
                         iconColor={iconColor}
@@ -244,8 +251,17 @@ export function ComposeToolbar({
     )
 }
 
+// On web a mousedown blurs the editor and collapses its selection before the
+// press is handled, so a format would apply to nothing. Web-only: native has
+// no DOM focus, and React Native rejects the unknown prop.
+const FOCUS_GUARD =
+    Platform.OS === 'web'
+        ? { onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault() }
+        : {}
+
 interface FormatButtonProps {
     icon: React.ComponentType<{ size: number; color: string }>
+    label: string
     isActive: boolean
     onPress: () => void
     iconColor: string
@@ -254,6 +270,7 @@ interface FormatButtonProps {
 
 function FormatButton({
     icon: Icon,
+    label,
     isActive,
     onPress,
     iconColor,
@@ -264,6 +281,10 @@ function FormatButton({
             className="rounded-md p-1.5"
             style={isActive ? { backgroundColor: `${activeColor}22` } : undefined}
             onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{ selected: isActive }}
+            {...FOCUS_GUARD}
         >
             <Icon size={16} color={isActive ? activeColor : iconColor} />
         </Pressable>

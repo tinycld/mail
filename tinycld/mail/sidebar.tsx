@@ -173,6 +173,8 @@ export default function MailSidebar(_props: MailSidebarProps) {
                 action={
                     <Pressable
                         onPress={() => setLabelManagerOpen(true)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Manage labels"
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                         <Settings size={14} color={mutedColor} />

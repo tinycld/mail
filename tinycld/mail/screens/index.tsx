@@ -333,7 +333,9 @@ export default function MailListScreen() {
     const archiveThread = useMutation({
         mutationFn: mutation(function* ({ stateId, folder }: { stateId: string; folder: string }) {
             yield threadStateCollection.update(stateId, draft => {
-                draft.folder = folder === 'archive' ? 'inbox' : 'archive'
+                // The row's first action: Archive, or back to Inbox for a
+                // thread already archived or in Spam (Not spam).
+                draft.folder = folder === 'archive' || folder === 'spam' ? 'inbox' : 'archive'
             })
         }),
     })
@@ -530,6 +532,7 @@ export default function MailListScreen() {
                     someSelected={selection.someSelected}
                     allSelectedRead={selection.allSelectedRead}
                     allSelectedStarred={selection.allSelectedStarred}
+                    allSelectedSpam={selection.allSelectedSpam}
                     labels={allLabels}
                     selectedItemLabelIds={selectedItemLabelIds}
                     onToggleAll={selection.toggleAll}

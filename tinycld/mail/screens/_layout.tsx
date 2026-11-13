@@ -12,6 +12,7 @@ import {
     hasActiveFilters,
     SearchContext,
 } from '../hooks/useSearchState'
+import { useAdvancedSearchStore } from '../stores/advanced-search-store'
 import { useComposeStore } from '../stores/compose-store'
 
 // Lazy boundary keeps the rich-text editor (and its transitive
@@ -24,7 +25,9 @@ export { useThreadListContext } from '../stores/thread-list-store'
 export default function MailLayout() {
     const [searchQuery, setSearchQuery] = useState('')
     const [advancedFilters, setAdvancedFilters] = useState<AdvancedSearchFilters>({})
-    const [isFilterOpen, setIsFilterOpen] = useState(false)
+    const isFilterOpen = useAdvancedSearchStore(s => s.isOpen)
+    const setIsFilterOpen = useAdvancedSearchStore(s => s.setOpen)
+    const filterDraft = useAdvancedSearchStore(s => s.draft)
     const breakpoint = useBreakpoint()
     const setDrawerOpen = useWorkspaceStore(s => s.setDrawerOpen)
     const composeMode = useComposeStore(s => s.mode)
@@ -71,7 +74,7 @@ export default function MailLayout() {
                         onFilterOpenChange={setIsFilterOpen}
                         onApplyFilters={setAdvancedFilters}
                         activeFilterCount={activeFilterCount}
-                        currentFilters={advancedFilters}
+                        currentFilters={filterDraft ?? advancedFilters}
                     />
                 </View>
                 <View className="flex-1">

@@ -45,6 +45,16 @@ Open **Trash**, find the thread, and choose **Move to Inbox** (or **Move to Arch
 
 There is no "Empty trash" bulk action yet; delete threads individually.
 
+## Mail that is not spam
+
+To move a thread out of **Spam** and back to **Inbox**:
+
+- In the open thread, press **Not spam** in the toolbar. It is where **Report spam** is for other folders.
+- In the list, hover the row and press **Not spam**. On a phone, swipe the row.
+- To do this for many threads, select them and press **Not spam** in the toolbar at the top of the list.
+
+If a [mail rule](help://mail:rules) moved the thread to Spam, the rule moves the next message from that sender to Spam again. Change or turn off the rule to stop this.
+
 ## All Inboxes
 
 If you have two or more inboxes, an **All Inboxes** entry appears at the top of the sidebar. It shows unread threads across every Inbox you have access to. Use it as a triage view first thing in the morning.

@@ -25,6 +25,7 @@ export function useMailSelection(items: ThreadListItem[], folder: string | null,
 
     const allSelectedRead = hasSelection && selectedItems.every(i => i.isRead)
     const allSelectedStarred = hasSelection && selectedItems.every(i => i.isStarred)
+    const allSelectedSpam = hasSelection && selectedItems.every(i => i.folder === 'spam')
 
     function toggle(stateId: string) {
         if (!itemIds.has(stateId)) return
@@ -60,6 +61,7 @@ export function useMailSelection(items: ThreadListItem[], folder: string | null,
         someSelected,
         allSelectedRead,
         allSelectedStarred,
+        allSelectedSpam,
         toggle,
         toggleAll,
         clearSelection,

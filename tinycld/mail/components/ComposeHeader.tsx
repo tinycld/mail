@@ -47,10 +47,22 @@ export function ComposeHeader({
             <View className="flex-row items-center gap-1">
                 {showWindowControls ? (
                     <>
-                        <Pressable className="rounded" style={{ padding: 6 }} onPress={onMinimize}>
+                        <Pressable
+                            className="rounded"
+                            style={{ padding: 6 }}
+                            onPress={onMinimize}
+                            accessibilityRole="button"
+                            accessibilityLabel="Minimize"
+                        >
                             <Minimize2 size={14} color={backgroundColor} />
                         </Pressable>
-                        <Pressable className="rounded" style={{ padding: 6 }} onPress={onMaximize}>
+                        <Pressable
+                            className="rounded"
+                            style={{ padding: 6 }}
+                            onPress={onMaximize}
+                            accessibilityRole="button"
+                            accessibilityLabel="Maximize"
+                        >
                             <Maximize2 size={14} color={backgroundColor} />
                         </Pressable>
                     </>

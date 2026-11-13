@@ -76,7 +76,11 @@ export function ComposeFields({
                 {!showCc || !showBcc ? (
                     <View className="flex-row gap-2 ml-2">
                         {showCc ? null : (
-                            <Pressable onPress={() => setShowCc(true)} tabIndex={-1}>
+                            <Pressable
+                                onPress={() => setShowCc(true)}
+                                tabIndex={-1}
+                                accessibilityRole="button"
+                            >
                                 <Text
                                     style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}
                                 >
@@ -85,7 +89,11 @@ export function ComposeFields({
                             </Pressable>
                         )}
                         {showBcc ? null : (
-                            <Pressable onPress={() => setShowBcc(true)} tabIndex={-1}>
+                            <Pressable
+                                onPress={() => setShowBcc(true)}
+                                tabIndex={-1}
+                                accessibilityRole="button"
+                            >
                                 <Text
                                     style={{ fontSize: 13, fontWeight: '500', color: mutedColor }}
                                 >

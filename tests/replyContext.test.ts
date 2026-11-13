@@ -47,8 +47,22 @@ describe('buildReplyContext', () => {
         })
         expect(ctx.to).toEqual([{ name: 'Bo', email: 'bo@else.example' }])
         expect(ctx.from).toEqual({ mailboxId: 'mb1', addressId: 'com' })
-        expect(ctx.subject).toBe('Plan')
+        expect(ctx.subject).toBe('Re: Plan')
         expect(ctx.mailboxId).toBe('mb1')
+    })
+
+    it('keeps a single prefix on a subject that already has one', () => {
+        const build = (kind: 'reply' | 'forward', subject: string) =>
+            buildReplyContext({
+                kind,
+                message: { ...message, subject },
+                threadId: 't1',
+                threadMailboxId: 'mb1',
+                identities: [personal],
+            }).subject
+        expect(build('reply', 'Re: Plan')).toBe('Re: Plan')
+        expect(build('forward', 'Fwd: Plan')).toBe('Fwd: Plan')
+        expect(build('forward', 'Re: Plan')).toBe('Fwd: Re: Plan')
     })
 
     it('reply-all drops every one of my addresses', () => {

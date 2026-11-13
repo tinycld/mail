@@ -41,9 +41,15 @@ export async function expectRowVisible(page: Page, subject: string) {
 // it never re-resolves. Live-query hydration after a reload rerenders the
 // FlashList rows at exactly that moment, so retry the whole resolve+scroll
 // until it lands on a node that stays attached.
+//
+// The node it resolved can also be hidden rather than detached: after a
+// folder switch the previous list stays mounted, then turns display:none, and
+// a call that resolved the old copy of the row waits for it to show again.
+// Each attempt is bounded so the retry re-resolves to the visible copy instead
+// of spending the whole budget on the hidden one.
 async function scrollRowIntoView(row: Locator) {
     await expect(async () => {
-        await row.scrollIntoViewIfNeeded()
+        await row.scrollIntoViewIfNeeded({ timeout: 1_000 })
     }).toPass({ timeout: 10_000 })
 }
 
