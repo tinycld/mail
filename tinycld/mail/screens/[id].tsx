@@ -31,6 +31,7 @@ import { useOpenReply } from '../hooks/useOpenReply'
 import { useScrolledToBottom } from '../hooks/useScrolledToBottom'
 import { useSendableIdentities } from '../hooks/useSendableIdentities'
 import { useThreadActions } from '../hooks/useThreadActions'
+import { useThreadClassification } from '../hooks/useThreadClassification'
 import { useThreadNavigation } from '../hooks/useThreadNavigation'
 import { useAdvancedSearchStore } from '../stores/advanced-search-store'
 import { useAttachmentPreviewStore } from '../stores/attachment-preview-store'
@@ -121,6 +122,8 @@ export default function MailDetailScreen() {
 
     const { labels: allLabels } = useLabels()
     const { labels, labelIds: threadLabelIds } = useThreadLabels(threadState?.id ?? '')
+
+    const aiLabel = useThreadClassification(id)
 
     useAutoMarkAsRead(threadStateCollection, threadState, id)
 
@@ -313,7 +316,7 @@ export default function MailDetailScreen() {
                 onLayout={onBottomLayout}
                 scrollEventThrottle={16}
             >
-                <ThreadSubjectHeader subject={subject} labels={labels} />
+                <ThreadSubjectHeader subject={subject} labels={labels} aiLabel={aiLabel} />
                 {messageList.map((msg: MailMessages, index) => {
                     const expanded = isMessageExpanded(msg, index)
                     return (
