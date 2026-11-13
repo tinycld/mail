@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/addressbook"
 	"tinycld.org/core/approutes"
 	"tinycld.org/core/appstate"
 	"tinycld.org/core/logging"
@@ -31,8 +32,10 @@ var mailNotificationURL = approutes.Href("mail")
 var notifyLog = logging.ForPackage("mail")
 
 type pendingMail struct {
-	sender  string
-	subject string
+	sender      string
+	senderEmail string
+	subject     string
+	threadID    string
 }
 
 // mailBufferKey holds the app's pending notifications, userID ->
@@ -51,13 +54,15 @@ type mailBucket struct {
 
 // bufferMailNotificationForUser adds a mail message to the app's per-user
 // buffer for batched delivery. Called from the inbound message hook.
-func bufferMailNotificationForUser(app core.App, userID, sender, subject string) {
+func bufferMailNotificationForUser(app core.App, userID, threadID, sender, senderEmail, subject string) {
 	val, _ := mailBufferFor(app).LoadOrStore(userID, &mailBucket{})
 	buf := val.(*mailBucket)
 	buf.mu.Lock()
 	buf.items = append(buf.items, pendingMail{
-		sender:  sender,
-		subject: subject,
+		sender:      sender,
+		senderEmail: senderEmail,
+		subject:     subject,
+		threadID:    threadID,
 	})
 	buf.mu.Unlock()
 }
@@ -207,22 +212,14 @@ func getMailNotifyMode(app core.App, userID string) string {
 // filterImportantMail keeps only mail from a known contact, and records a
 // silent (no-push) notification for the rest.
 //
-// The contacts package is optional — a workspace may not have it installed, in
-// which case the collection is absent and every sender reads as unknown. That
-// degrades to "nothing is important", which is the safe direction: the user
-// still gets the silent notifications, just no push.
+// Core's address book answers "is this sender known"; mail never reads the
+// contacts collection. With no address book registered every sender reads as
+// unknown. That degrades to "nothing is important", which is the safe
+// direction: the user still gets the silent notifications, just no push.
 func filterImportantMail(app core.App, userID string, items []pendingMail) []pendingMail {
 	var important []pendingMail
 	for _, item := range items {
-		contacts, err := app.FindRecordsByFilter(
-			"contacts",
-			"owner = {:userId} && email ~ {:sender}",
-			"",
-			1,
-			0,
-			map[string]any{"userId": userID, "sender": item.sender},
-		)
-		if err == nil && len(contacts) > 0 {
+		if known, ok := addressbook.IsKnown(context.Background(), app, userID, item.senderEmail); ok && known {
 			important = append(important, item)
 			continue
 		}

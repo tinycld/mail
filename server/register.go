@@ -736,7 +736,7 @@ func bufferMailNotification(app core.App, msgRecord *core.Record) {
 
 	for _, member := range members {
 		if userID := member.GetString("user"); userID != "" {
-			bufferMailNotificationForUser(app, userID, sender, subject)
+			bufferMailNotificationForUser(app, userID, msgRecord.GetString("thread"), sender, senderEmail, subject)
 		}
 	}
 }
