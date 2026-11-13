@@ -689,7 +689,16 @@ test.describe('Mail buttons — compose window', () => {
     test('Link turns the selection into a link', async ({ page }) => {
         await startNewMessage(page)
         await page.keyboard.type('linked')
-        await page.keyboard.press('Shift+Home')
+        // Select All, not Shift+Home. ProseMirror applies its own Select All
+        // command to the editor state at once. Shift+Home moves only the DOM
+        // selection, which ProseMirror reads later on `selectionchange`. When
+        // the editor gets focus, ProseMirror also sets a 20ms timer that writes
+        // the state selection back to the DOM. Synthetic keys come faster than a
+        // person types, so that timer can run after Shift+Home but before the
+        // editor reads it. The timer then collapses the selection, and Link
+        // only arms a stored mark. Nothing in the page shows when the timer has
+        // run, so the test cannot wait for it.
+        await page.keyboard.press('ControlOrMeta+a')
         page.once('dialog', dialog => dialog.accept('https://example.com/'))
         await pressToolbarAction(page, await fittedToolbar(composeWindow(page)), 'Link')
         await expect(editor(page).locator('a[href="https://example.com/"]')).toHaveText('linked')
