@@ -1,18 +1,15 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { login, navigateToPackage } from '@tinycld/core/e2e-helpers'
-import PocketBase from 'pocketbase'
+import { clickSidebarItem, login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 import {
     deliverInbound,
     emailRow,
     expectRowVisible,
     navigateToPersonalInbox,
     openThread,
-    PB_URL,
-    SUPERUSER_EMAIL,
-    SUPERUSER_PASSWORD,
-    TEST_USER_USERNAME,
+    TEST_USER_MAILBOX,
     uniqueSubject,
 } from './helpers'
+import { appendMessage, findPersonalInbox, listMailboxes, withImapClient } from './imap-helpers'
 
 // AI classification, end to end through the UI. The e2e server is built with
 // the `classifierfake` tag: an in-process stand-in for the model accepts the key
@@ -20,15 +17,30 @@ import {
 // subject. A subject without a marker is refused, so mail from other specs is
 // never labelled.
 //
-// One fixture is seeded by a superuser write: the sent-mail record behind "I
-// have sent email to the sender". The real path is a send, and the e2e server
-// has no mail provider credentials, so a send cannot succeed and never records
-// the recipient. The spec therefore does not cover the send that records a
-// correspondent (server/correspondents_test.go covers it); it covers only how a
-// rule reads that record.
+// The compose UI cannot send in e2e (there is no mail provider), so the "I have
+// sent email to the sender" record comes from an IMAP client saving a message
+// to Sent, which the server records as a sent message to that address.
+//
+// The spec leaves the system classifier key and the org taxonomy set. That is
+// harmless to other specs: each user's mode defaults to off, and the fake
+// refuses subjects without a marker.
 
 const PHONE = { width: 390, height: 844 }
 const USER_PREFERENCE_WRITE = /\/api\/collections\/user_preferences\/records/
+const ORG_EDITOR = 'mail-classifier-org-editor'
+
+type Mode = 'off' | 'preview' | 'labels' | 'labels_archive'
+
+const MODE_LABELS: Record<Mode, string> = {
+    off: 'Off',
+    preview: 'Preview only',
+    labels: 'Labels',
+    labels_archive: 'Labels and archive',
+}
+
+// Names the tests below mark subjects with; "Newsletters" is spelled as the
+// seed has it, because a taxonomy reuses a label by name.
+const NEEDED_LABELS = ['junk', 'opportunities', 'newsletters', 'personal']
 
 // Settings entries share labels across the core system panel, the mail
 // organization panel and the mail account panel, so they are picked by testID.
@@ -50,38 +62,47 @@ async function enableClassifier(page: Page) {
     await expect(page.getByTestId('classifier-verify-result')).toHaveText('Connected')
 }
 
-async function ensureUniversalLabels(page: Page) {
-    await openSettingsLink(page, 'settings-org-mail-classification')
-    const editor = 'mail-classifier-org-editor'
-    // Enabled once the stored taxonomy has loaded.
-    await expect(page.getByTestId(`${editor}-save`)).toBeEnabled()
-    const hasLabels = (await page.getByTestId(`${editor}-row-0-name`).count()) > 0
-    if (hasLabels) return
-
-    await page.getByTestId(`${editor}-preset`).click()
-    await page.getByTestId(`${editor}-preset-universal`).click()
-    // The last label written is "review"; its rule text is unique to it.
-    const lastWrite = page.waitForResponse(
-        res =>
-            res.request().method() === 'POST' &&
-            res.url().includes('/api/collections/classifier_labels/records') &&
-            (res.request().postData() ?? '').includes('does not clearly fit')
+async function orgLabelNames(page: Page) {
+    const inputs = page.locator(`[data-testid^="${ORG_EDITOR}-row-"][data-testid$="-name"]`)
+    const values = await inputs.evaluateAll(nodes =>
+        nodes.map(node => (node as HTMLInputElement).value.toLowerCase())
     )
-    await page.getByTestId(`${editor}-save`).click()
-    await lastWrite
+    return values
 }
 
-let modeChanged = false
+async function ensureUniversalLabels(page: Page) {
+    await openSettingsLink(page, 'settings-org-mail-classification')
+    const save = page.getByTestId(`${ORG_EDITOR}-save`)
+    // Enabled once the stored taxonomy has loaded.
+    await expect(save).toBeEnabled()
+    const names = await orgLabelNames(page)
+    if (NEEDED_LABELS.every(name => names.includes(name))) return
 
-async function setMode(page: Page, mode: 'off' | 'preview' | 'labels' | 'labels_archive') {
+    await page.getByTestId(`${ORG_EDITOR}-preset`).click()
+    await page.getByTestId(`${ORG_EDITOR}-preset-universal`).click()
+    await save.click()
+    // Disabled while the labels and rows are written, enabled again once the
+    // last one is stored.
+    await expect(save).toBeDisabled()
+    await expect(save).toBeEnabled()
+}
+
+async function setMode(page: Page, mode: Mode) {
     await openSettingsLink(page, 'settings-account-mail-classification')
-    modeChanged = mode !== 'off'
-    await page.getByTestId('mail-classifier-mode').click()
+    const trigger = page.getByTestId('mail-classifier-mode')
+    const shown = `Classify incoming mail: ${MODE_LABELS[mode]}`
+    if ((await trigger.getAttribute('aria-label')) === shown) return
+
+    await trigger.click()
     const written = page.waitForResponse(
-        res => USER_PREFERENCE_WRITE.test(res.url()) && res.request().method() !== 'GET'
+        res =>
+            USER_PREFERENCE_WRITE.test(res.url()) &&
+            res.request().method() !== 'GET' &&
+            (res.request().postData() ?? '').includes(`"${mode}"`)
     )
     await page.getByTestId(`mail-classifier-mode-${mode}`).click()
     await written
+    await expect(trigger).toHaveAttribute('aria-label', shown)
 }
 
 function recentRow(page: Page, subject: string): Locator {
@@ -95,6 +116,17 @@ async function goToInbox(page: Page) {
     await navigateToPersonalInbox(page)
 }
 
+async function openMailRules(page: Page) {
+    await navigateToPackage(page, 'mail', { waitFor: page.getByTestId('package-sidebar-mounted') })
+    await page.getByTestId('mail-sidebar-rules').click()
+    // A rules screen visited earlier stays mounted underneath, so two headings exist.
+    await expect(page.getByText('Mail rules', { exact: true }).last()).toBeVisible()
+}
+
+function ruleRow(page: Page, name: string): Locator {
+    return page.locator('[data-testid="rule-row"]:visible').filter({ hasText: name })
+}
+
 async function selectFromMenu(page: Page, trigger: Locator, optionLabel: string) {
     await trigger.click()
     await page.getByText(optionLabel, { exact: true }).click()
@@ -105,44 +137,47 @@ async function buildStarRule(
     page: Page,
     opts: { name: string; trigger: string; fieldTestID: string; value?: string }
 ) {
-    await navigateToPackage(page, 'mail', { waitFor: page.getByTestId('package-sidebar-mounted') })
-    await page.getByTestId('mail-sidebar-rules').click()
-    await expect(page.getByText('Mail rules', { exact: true })).toBeVisible()
-
+    await openMailRules(page)
     await page.getByText('New rule', { exact: true }).first().click()
-    await expect(page.getByText('New rule', { exact: true }).last()).toBeVisible()
     await page.getByPlaceholder('Rule name').fill(opts.name)
     await selectFromMenu(page, page.getByText('Select a trigger…', { exact: true }), opts.trigger)
 
     await page.getByText('Field…', { exact: true }).click()
     await page.getByTestId(opts.fieldTestID).click()
-    if (opts.value) await page.getByRole('textbox').last().fill(opts.value)
+    if (opts.value) await page.getByLabel('Condition value').fill(opts.value)
 
     await page.getByText('add action', { exact: true }).click()
-    await page.getByText('Star the message', { exact: true }).click()
-    // Earlier screens stay mounted, so scope Save to the builder that holds the
-    // rule name field.
-    const builder = page
-        .locator('div')
-        .filter({ has: page.getByPlaceholder('Rule name') })
-        .filter({ has: page.getByText('Save', { exact: true }) })
-        .last()
-    await builder.getByText('Save', { exact: true }).click()
-    await expect(page.getByText(opts.name, { exact: true })).toBeVisible()
+    await page.getByTestId('action-option-mail:star-message').click()
+    await page.getByTestId('rule-builder-save').click()
+    await expect(ruleRow(page, opts.name)).toBeVisible()
 }
 
-async function seedCorrespondent(email: string) {
-    const pb = new PocketBase(PB_URL)
-    await pb.collection('_superusers').authWithPassword(SUPERUSER_EMAIL, SUPERUSER_PASSWORD)
-    const user = await pb.collection('users').getFirstListItem(`username = "${TEST_USER_USERNAME}"`)
-    const filter = pb.filter('user = {:user} && email = {:email}', { user: user.id, email })
-    const existing = await pb.collection('mail_correspondents').getList(1, 1, { filter })
-    if (existing.totalItems > 0) return
-    await pb.collection('mail_correspondents').create({
-        user: user.id,
-        email,
-        last_sent: new Date().toISOString(),
+// Reruns share one user, so each rule the spec builds is removed again.
+async function deleteRule(page: Page, name: string) {
+    await openMailRules(page)
+    await ruleRow(page, name).getByTestId('rule-row-menu').click()
+    await page.getByTestId('rule-row-delete').click()
+    await page.getByRole('dialog').getByText('Delete', { exact: true }).last().click()
+    await expect(ruleRow(page, name)).toHaveCount(0)
+}
+
+async function saveSentMessageTo(email: string) {
+    await withImapClient(async client => {
+        const inbox = findPersonalInbox(await listMailboxes(client))
+        await appendMessage(client, inbox.replace('INBOX', 'Sent'), {
+            from: TEST_USER_MAILBOX,
+            to: email,
+            subject: uniqueSubject('Sent to a known address'),
+            body: 'Saved to Sent by a mail client.',
+        })
     })
+}
+
+async function expectStarred(page: Page, subject: string) {
+    await expectRowVisible(page, subject)
+    await expect(
+        emailRow(page, subject).getByRole('button', { name: 'Remove star', exact: true })
+    ).toBeVisible()
 }
 
 test.describe('AI classification', () => {
@@ -153,14 +188,11 @@ test.describe('AI classification', () => {
     })
 
     test.afterEach(async ({ page }) => {
-        if (!modeChanged) return
         await setMode(page, 'off')
     })
 
     test('labels a new message and shows the AI chip', async ({ page, request }) => {
         await setMode(page, 'labels')
-        // The seed already has a "Newsletters" label; the taxonomy reuses a
-        // label by name, so the model sees that exact spelling.
         const { subject } = await deliverInbound(request, {
             subject: uniqueSubject('[jev:Newsletters] Weekly'),
         })
@@ -173,8 +205,13 @@ test.describe('AI classification', () => {
         await setMode(page, 'labels_archive')
         const fresh = await deliverInbound(request, { subject: uniqueSubject('[jev:junk] Prize') })
         await expect(recentRow(page, fresh.subject)).toContainText('Labelled and archived')
+        // Asserted in the Archive folder rather than as absence from the Inbox:
+        // the paginated thread list can keep a stale Inbox page after a
+        // server-side folder change (HANDOFF-mail-realtime-new-thread.md).
         await goToInbox(page)
-        await expect(emailRow(page, fresh.subject)).toHaveCount(0)
+        await clickSidebarItem(page, 'Archive')
+        await expectRowVisible(page, fresh.subject)
+        await clickSidebarItem(page, 'Inbox')
 
         // The base message has no marker, so it is never labelled; the reply
         // joins its thread by In-Reply-To, so the thread already has a message.
@@ -207,38 +244,42 @@ test.describe('AI classification', () => {
 
     test('a message-classified rule runs', async ({ page, request }) => {
         await setMode(page, 'labels')
+        const name = `AI opportunity rule ${Date.now()}`
         await buildStarRule(page, {
-            name: `AI opportunity rule ${Date.now()}`,
+            name,
             trigger: 'AI classifies a message',
             fieldTestID: 'condition-field-option-label_name',
             value: 'opportunities',
         })
-        const { subject } = await deliverInbound(request, {
-            subject: uniqueSubject('[jev:opportunities] Partnership'),
-        })
-        await page.getByText('Inbox', { exact: true }).first().click()
-        await expectRowVisible(page, subject)
-        await expect(
-            emailRow(page, subject).getByRole('button', { name: 'Remove star', exact: true })
-        ).toBeVisible()
+        try {
+            const { subject } = await deliverInbound(request, {
+                subject: uniqueSubject('[jev:opportunities] Partnership'),
+            })
+            await navigateToPersonalInbox(page)
+            await expectStarred(page, subject)
+        } finally {
+            await deleteRule(page, name)
+        }
     })
 
     test('a has-sent-to rule on message-received runs', async ({ page, request }) => {
-        await seedCorrespondent('known@example.com')
+        await saveSentMessageTo('known@example.com')
+        const name = `Known sender rule ${Date.now()}`
         await buildStarRule(page, {
-            name: `Known sender rule ${Date.now()}`,
+            name,
             trigger: 'A message arrives',
             fieldTestID: 'condition-field-option-fields.has_sent_to_sender',
         })
-        const { subject } = await deliverInbound(request, {
-            subject: uniqueSubject('From a known sender'),
-            fromEmail: 'known@example.com',
-        })
-        await page.getByText('Inbox', { exact: true }).first().click()
-        await expectRowVisible(page, subject)
-        await expect(
-            emailRow(page, subject).getByRole('button', { name: 'Remove star', exact: true })
-        ).toBeVisible()
+        try {
+            const { subject } = await deliverInbound(request, {
+                subject: uniqueSubject('From a known sender'),
+                fromEmail: 'known@example.com',
+            })
+            await navigateToPersonalInbox(page)
+            await expectStarred(page, subject)
+        } finally {
+            await deleteRule(page, name)
+        }
     })
 })
 
