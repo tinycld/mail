@@ -156,6 +156,11 @@ func flushMailBuffer(ctx context.Context, app core.App) {
 			return true
 		}
 
+		items = stillInInbox(app, userID, items)
+		if len(items) == 0 {
+			return true
+		}
+
 		mode := getMailNotifyMode(app, userID)
 		if mode == "important_only" {
 			items = filterImportantMail(app, userID, items)
@@ -181,6 +186,22 @@ func flushMailBuffer(ctx context.Context, app core.App) {
 
 		return true
 	})
+}
+
+// stillInInbox drops buffered mail whose thread a rule or the classifier has
+// filed away since it arrived: the user asked for that mail not to need
+// attention, and a push would say the opposite.
+func stillInInbox(app core.App, userID string, items []pendingMail) []pendingMail {
+	out := items[:0:0]
+	for _, item := range items {
+		if item.threadID != "" {
+			if state := findThreadState(app, item.threadID, userID); state != nil && state.GetString("folder") != "inbox" {
+				continue
+			}
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 func getMailNotifyMode(app core.App, userID string) string {
