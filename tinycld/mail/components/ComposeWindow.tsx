@@ -172,11 +172,8 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
             const toValue =
                 replyContext.to.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
                 (replyContext.to.length > 0 ? ', ' : '')
-            const subjectPrefix = replyContext.subject.startsWith('Re:')
-                ? replyContext.subject
-                : `Re: ${replyContext.subject}`
-            reset({ to: toValue, cc: '', bcc: '', subject: subjectPrefix })
-            setHeaderTitle(subjectPrefix)
+            reset({ to: toValue, cc: '', bcc: '', subject: replyContext.subject })
+            setHeaderTitle(replyContext.subject)
             // To and Subject are pre-filled; the user almost always wants to
             // type the body next.
             editorRef.current.focus('start')

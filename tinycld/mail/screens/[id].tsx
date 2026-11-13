@@ -53,9 +53,12 @@ function useAutoMarkAsRead(
             })
         }),
     })
-    if (threadState && !threadState.is_read && markedRef.current !== threadId) {
+    // Decide once, on the first state seen for this thread. Waiting for an
+    // unread state instead would mark the thread read again the moment the
+    // user marks it unread.
+    if (threadState && markedRef.current !== threadId) {
         markedRef.current = threadId
-        markAsRead.mutate(threadState.id)
+        if (!threadState.is_read) markAsRead.mutate(threadState.id)
     }
 }
 

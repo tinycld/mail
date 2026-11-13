@@ -149,14 +149,18 @@ export function MessageHeader({
     return (
         <View style={{ gap: 0 }}>
             <DeliveryStatusBadge status={deliveryStatus} bounceReason={bounceReason} />
-            <Pressable onPress={onToggleExpand}>
-                <View
-                    className="flex-row items-center px-4 py-3 gap-2"
-                    style={{
-                        borderBottomWidth: 1,
-                        borderBottomColor: borderColor,
-                    }}
-                >
+            <View
+                className="flex-row items-center px-4 py-3 gap-2"
+                style={{
+                    borderBottomWidth: 1,
+                    borderBottomColor: borderColor,
+                }}
+            >
+                {/* The action buttons sit outside this Pressable: the web
+                    ToolbarIconButton is a plain <button>, so a press on it
+                    would also reach an enclosing Pressable and toggle the
+                    message. */}
+                <Pressable className="flex-1 flex-row items-center gap-2" onPress={onToggleExpand}>
                     <View
                         className="size-10 rounded-full items-center justify-center"
                         style={{
@@ -187,42 +191,46 @@ export function MessageHeader({
                     <Text style={{ fontSize: 12, flexShrink: 0, color: mutedColor }}>
                         {dateDisplay}
                     </Text>
-                    {isStarred != null ? (
-                        <Tooltip label={isStarred ? 'Remove star' : 'Add star'}>
-                            <Pressable
-                                className="rounded-full"
-                                style={{ padding: 6 }}
-                                onPress={onToggleStar}
-                            >
-                                <StarIcon isStarred={!!isStarred} size={18} />
-                            </Pressable>
-                        </Tooltip>
-                    ) : null}
-                    <ToolbarIconButton icon={Reply} label="Reply" onPress={onReply} />
-                    <Tooltip label={isExpanded ? 'Collapse' : 'Expand'}>
+                </Pressable>
+                {isStarred != null ? (
+                    <Tooltip label={isStarred ? 'Remove star' : 'Add star'}>
                         <Pressable
                             className="rounded-full"
                             style={{ padding: 6 }}
-                            onPress={onToggleExpand}
+                            onPress={onToggleStar}
+                            accessibilityRole="button"
+                            accessibilityLabel={isStarred ? 'Remove star' : 'Add star'}
                         >
-                            {isExpanded ? (
-                                <ChevronUp size={18} color={mutedColor} />
-                            ) : (
-                                <ChevronDown size={18} color={mutedColor} />
-                            )}
+                            <StarIcon isStarred={!!isStarred} size={18} />
                         </Pressable>
                     </Tooltip>
-                    <Menu
-                        trigger={<ToolbarIconButton icon={MoreVertical} label="More options" />}
-                        placement="bottom-end"
-                        title="More options"
+                ) : null}
+                <ToolbarIconButton icon={Reply} label="Reply" onPress={onReply} />
+                <Tooltip label={isExpanded ? 'Collapse' : 'Expand'}>
+                    <Pressable
+                        className="rounded-full"
+                        style={{ padding: 6 }}
+                        onPress={onToggleExpand}
+                        accessibilityRole="button"
+                        accessibilityLabel={isExpanded ? 'Collapse' : 'Expand'}
                     >
-                        <Menu.Item label="Reply" icon={Reply} onSelect={onReply} />
-                        <Menu.Item label="Reply all" icon={ReplyAll} onSelect={onReplyAll} />
-                        <Menu.Item label="Forward" icon={Forward} onSelect={onForward} />
-                    </Menu>
-                </View>
-            </Pressable>
+                        {isExpanded ? (
+                            <ChevronUp size={18} color={mutedColor} />
+                        ) : (
+                            <ChevronDown size={18} color={mutedColor} />
+                        )}
+                    </Pressable>
+                </Tooltip>
+                <Menu
+                    trigger={<ToolbarIconButton icon={MoreVertical} label="More options" />}
+                    placement="bottom-end"
+                    title="More options"
+                >
+                    <Menu.Item label="Reply" icon={Reply} onSelect={onReply} />
+                    <Menu.Item label="Reply all" icon={ReplyAll} onSelect={onReplyAll} />
+                    <Menu.Item label="Forward" icon={Forward} onSelect={onForward} />
+                </Menu>
+            </View>
         </View>
     )
 }

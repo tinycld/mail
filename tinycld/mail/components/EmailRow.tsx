@@ -36,6 +36,8 @@ function AttachmentMarker({ isVisible }: { isVisible: boolean }) {
     )
 }
 
+const starLabel = (isStarred: boolean) => (isStarred ? 'Remove star' : 'Add star')
+
 function MailboxChip({ label }: { label: string }) {
     const mutedColor = useThemeColor('muted-foreground')
     const borderColor = useThemeColor('border')
@@ -276,6 +278,8 @@ function MobileEmailRow({
                                     e.preventDefault()
                                     onToggleStar?.()
                                 }}
+                                accessibilityRole="button"
+                                accessibilityLabel={starLabel(email.isStarred)}
                             >
                                 <StarIcon isStarred={email.isStarred} />
                             </Pressable>
@@ -433,6 +437,9 @@ function DesktopEmailRow({
                         e.preventDefault()
                         onToggleSelect?.()
                     }}
+                    accessibilityRole="checkbox"
+                    accessibilityLabel="Select"
+                    accessibilityState={{ checked: !!isSelected }}
                 >
                     <CheckboxIcon size={16} color={checkboxColor} />
                 </Pressable>
@@ -443,6 +450,8 @@ function DesktopEmailRow({
                         e.preventDefault()
                         onToggleStar?.()
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel={starLabel(email.isStarred)}
                 >
                     <StarIcon isStarred={email.isStarred} />
                 </Pressable>

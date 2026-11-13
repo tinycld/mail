@@ -31,6 +31,11 @@ function recipientsFor(kind: ReplyKind, message: ReplySource) {
     return [sender, ...message.recipients_to, ...message.recipients_cc]
 }
 
+// A reply to a reply stays "Re: X", not "Re: Re: X".
+function prefixedSubject(prefix: string, subject: string) {
+    return subject.startsWith(prefix) ? subject : `${prefix} ${subject}`
+}
+
 /**
  * Pure: everything compose needs to start a reply, reply-all or forward of
  * one message. Shared by the thread screen's per-message actions and the
@@ -59,7 +64,7 @@ export function buildReplyContext({
     return {
         messageId: message.id,
         threadId,
-        subject: kind === 'forward' ? `Fwd: ${message.subject}` : message.subject,
+        subject: prefixedSubject(kind === 'forward' ? 'Fwd:' : 'Re:', message.subject),
         to,
         mailboxId: threadMailboxId,
         from,

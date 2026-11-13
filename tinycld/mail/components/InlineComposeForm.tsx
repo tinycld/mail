@@ -51,9 +51,6 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
     const toValue =
         replyContext.to.map(r => (r.name ? `${r.name} <${r.email}>` : r.email)).join(', ') +
         (replyContext.to.length > 0 ? ', ' : '')
-    const subjectValue = replyContext.subject.startsWith('Re:')
-        ? replyContext.subject
-        : `Re: ${replyContext.subject}`
 
     const {
         control,
@@ -63,7 +60,7 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
     } = useForm({
         resolver: zodResolver(composeSchema),
         mode: 'onChange',
-        defaultValues: { to: toValue, cc: '', bcc: '', subject: subjectValue },
+        defaultValues: { to: toValue, cc: '', bcc: '', subject: replyContext.subject },
     })
 
     const { send, isPending, uploadProgress } = useSendEmail({

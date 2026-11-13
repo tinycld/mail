@@ -101,7 +101,13 @@ function DefaultToolbar({
                 type: 'custom',
                 key: 'select-all',
                 element: (
-                    <Pressable className="p-2" onPress={onToggleAll}>
+                    <Pressable
+                        className="p-2"
+                        onPress={onToggleAll}
+                        accessibilityRole="checkbox"
+                        accessibilityLabel="Select all"
+                        accessibilityState={{ checked: false }}
+                    >
                         <Square size={18} color={mutedColor} />
                     </Pressable>
                 ),
@@ -173,6 +179,7 @@ function BulkActionsToolbar({
     const primaryColor = useThemeColor('primary')
 
     const SelectIcon = allSelected ? SquareCheck : someSelected ? SquareMinus : Square
+    const selectAllChecked = allSelected ? true : someSelected ? 'mixed' : false
 
     const ReadIcon = allSelectedRead ? MailOpen : Mail
     const readLabel = allSelectedRead ? 'Mark as unread' : 'Mark as read'
@@ -183,7 +190,13 @@ function BulkActionsToolbar({
                 type: 'custom',
                 key: 'select-all',
                 element: (
-                    <Pressable className="p-2" onPress={onToggleAll}>
+                    <Pressable
+                        className="p-2"
+                        onPress={onToggleAll}
+                        accessibilityRole="checkbox"
+                        accessibilityLabel="Select all"
+                        accessibilityState={{ checked: selectAllChecked }}
+                    >
                         <SelectIcon size={18} color={primaryColor} />
                     </Pressable>
                 ),
@@ -252,6 +265,7 @@ function BulkActionsToolbar({
         [
             onToggleAll,
             SelectIcon,
+            selectAllChecked,
             primaryColor,
             foregroundColor,
             selectedCount,
