@@ -1,0 +1,48 @@
+package mail
+
+import (
+	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/classifier"
+)
+
+const (
+	actionNone         = "none"
+	actionLabel        = "label"
+	actionLabelArchive = "label_archive"
+)
+
+// decideAction is the only place mail decides to archive. Every guard must
+// hold: the user asked for archiving, the label allows it, the model is sure
+// and its choice is its own top probability, nothing else has filed the
+// thread, and the message started the thread (a reply in a conversation is
+// never archived).
+func decideAction(app core.App, userID, mode, threadID string, r classifier.Result, threshold float64) string {
+	if mode == modePreview || mode == modeOff {
+		return actionNone
+	}
+	if mode != modeLabelsArchive || !r.Label.AutoAction || r.ArgmaxMismatch || r.Confidence < threshold {
+		return actionLabel
+	}
+	state := findThreadState(app, threadID, userID)
+	if state == nil || state.GetString("folder") != "inbox" {
+		return actionLabel
+	}
+	thread, err := app.FindRecordById("mail_threads", threadID)
+	if err != nil || thread.GetInt("message_count") != 1 {
+		return actionLabel
+	}
+	return actionLabelArchive
+}
+
+func applyAction(app core.App, userID, threadID, action string, r classifier.Result) error {
+	if action == actionNone {
+		return nil
+	}
+	if err := addThreadLabel(app, threadID, userID, r.Label.LabelID); err != nil {
+		return err
+	}
+	if action == actionLabelArchive {
+		return setThreadFolder(app, threadID, userID, "archive")
+	}
+	return nil
+}

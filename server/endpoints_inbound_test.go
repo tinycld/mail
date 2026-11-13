@@ -9,12 +9,58 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 	"github.com/pocketbase/pocketbase/tools/router"
+	"tinycld.org/core/classifier"
+	"tinycld.org/core/classifier/fakeprovider"
 	"tinycld.org/core/rlstest"
 )
+
+// TestHandleInbound_ClassifiesOncePerStoredMessage waits on the create hook of
+// the classifications row, not a sleep. The duplicate delivery is checked
+// after Cleanup, which waits for every background job: a classification
+// queued by the duplicate would have raised the fake's call count by then.
+func TestHandleInbound_ClassifiesOncePerStoredMessage(t *testing.T) {
+	app := setupInboundTestApp(t)
+	fake, _ := installClassifier(t, app, map[string]string{classifier.KeyAPIKey: fakeprovider.AcceptedKey})
+	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_classify_in1")
+	seedMember(t, app, "mb_classify_in1", "user_alice")
+	setPref(t, app, "user_alice", "classifier.mode", "labels")
+
+	saved := make(chan struct{}, 4)
+	app.OnRecordAfterCreateSuccess("classifications").BindFunc(func(e *core.RecordEvent) error {
+		saved <- struct{}{}
+		return e.Next()
+	})
+
+	body := postmarkPayload(t, []string{"alice@acme.com"}, "[jev:junk] Buy now", "body", "<msg-classify-1@example.org>")
+	provider := &stubProvider{parse: (&PostmarkProvider{}).ParseInbound}
+	deliver := func() {
+		re, _ := makeInboundRequest(t, app, "tok-classify", body)
+		if err := handleInbound(app, provider, re, "tok-classify"); err != nil {
+			t.Fatalf("delivery: %v", err)
+		}
+	}
+
+	deliver()
+	select {
+	case <-saved:
+	case <-time.After(10 * time.Second):
+		t.Fatal("delivery did not produce a classification row")
+	}
+
+	deliver()
+	app.Cleanup()
+	if got := fake.Calls.Load(); got != 1 {
+		t.Fatalf("classifier calls = %d, want 1 (duplicate must not classify)", got)
+	}
+	if len(saved) != 0 {
+		t.Fatal("duplicate delivery wrote a second classification row")
+	}
+}
 
 // makeInboundRequest constructs a *core.RequestEvent suitable for calling
 // handleInbound directly. The request body is the JSON-encoded payload, the
