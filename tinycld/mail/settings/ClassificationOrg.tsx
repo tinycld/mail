@@ -1,4 +1,5 @@
 import { TaxonomyEditor } from '@tinycld/core/components/classifier/TaxonomyEditor'
+import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { useClassifierAvailable } from '@tinycld/core/lib/classifier/use-classifier-available'
 import { ButtonText, ServerActionButton } from '@tinycld/core/ui/button'
 import { FormErrorSummary, TextInput } from '@tinycld/core/ui/form'
@@ -56,7 +57,10 @@ export default function ClassificationOrg() {
     const { available, isKnown } = useClassifierAvailable()
     return (
         <ScrollView contentContainerClassName="gap-4 p-4">
-            <Text className="text-lg font-semibold text-foreground">AI classification</Text>
+            <View className="flex-row items-center gap-1.5">
+                <Text className="text-lg font-semibold text-foreground">AI classification</Text>
+                <HelpIcon topic="mail:ai-classification" />
+            </View>
             <Text className="text-muted-foreground text-sm">
                 The labels every member starts with. Members can switch to their own labels.
             </Text>

@@ -1,4 +1,5 @@
 import { TaxonomyEditor } from '@tinycld/core/components/classifier/TaxonomyEditor'
+import { HelpIcon } from '@tinycld/core/components/help/HelpIcon'
 import { useClassifierAvailable } from '@tinycld/core/lib/classifier/use-classifier-available'
 import { useTaxonomy } from '@tinycld/core/lib/classifier/use-taxonomy'
 import { SelectInput, useForm } from '@tinycld/core/ui/form'
@@ -92,7 +93,10 @@ export default function Classification() {
     const { available, isKnown } = useClassifierAvailable()
     return (
         <ScrollView contentContainerClassName="gap-4 p-4">
-            <Text className="text-lg font-semibold text-foreground">AI classification</Text>
+            <View className="flex-row items-center gap-1.5">
+                <Text className="text-lg font-semibold text-foreground">AI classification</Text>
+                <HelpIcon topic="mail:ai-classification" />
+            </View>
             <ClassifierUnavailable isVisible={isKnown && !available} />
             <AccountBody isVisible={available} />
         </ScrollView>
