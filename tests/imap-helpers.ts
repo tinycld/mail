@@ -2,7 +2,8 @@ import { TEST_USER_NAME, TEST_USER_PASSWORD } from '@tinycld/core/e2e-helpers'
 import { ImapFlow } from 'imapflow'
 import { TEST_USER_MAILBOX } from './helpers'
 
-const IMAP_PORT = 1193
+// Matches core scripts/e2e-serve.ts, which binds IMAP on E2E_IMAP_PORT so lanes do not share it.
+const IMAP_PORT = Number(process.env.E2E_IMAP_PORT ?? 1193)
 
 interface ImapMessage {
     uid: number
