@@ -36,7 +36,7 @@ export function useRecentClassifications() {
         // label_name is the snapshot, so the row still reads right after the
         // taxonomy label it came from was deleted.
         label: row.label || 'No label',
-        confidence: confidenceText(row.confidence),
+        confidence: confidenceText(row.confidence, row.error),
         stage: stageText(row.stage),
         action: actionText(row),
     }))

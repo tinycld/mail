@@ -41,7 +41,7 @@ const manifest = {
         { slug: 'mailboxes', label: 'Shared inboxes', component: 'settings/mailboxes' },
         {
             slug: 'classification',
-            label: 'Mail AI classification',
+            label: 'AI classification',
             component: 'settings/ClassificationOrg',
         },
     ],

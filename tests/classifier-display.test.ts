@@ -23,6 +23,7 @@ describe('classification display', () => {
     it('formats confidence and stage', () => {
         expect(confidenceText(0.924)).toBe('92%')
         expect(confidenceText(null)).toBe('0%')
+        expect(confidenceText(0, 'budget_exceeded')).toBe('')
         expect(stageText('full')).toBe('Full text')
         expect(stageText('metadata')).toBe('Metadata')
     })

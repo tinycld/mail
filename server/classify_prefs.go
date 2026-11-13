@@ -19,6 +19,7 @@ const (
 	prefTaxonomy            = "classifier.taxonomy"
 	settingArchiveThreshold = "classifier.archive_threshold"
 	defaultArchiveThreshold = 0.9
+	minArchiveThreshold     = 0.5
 )
 
 // jsonString reads a json-typed value column that holds a JSON string.
@@ -64,7 +65,9 @@ func archiveThreshold(app core.App) float64 {
 		return defaultArchiveThreshold
 	}
 	v, err := strconv.ParseFloat(jsonString(rec.Get("value")), 64)
-	if err != nil || v < 0 || v > 1 {
+	// Any signed-in member can write this org row, so the floor (the UI's
+	// minimum) is enforced here: a low value would archive at any confidence.
+	if err != nil || v < minArchiveThreshold || v > 1 {
 		return defaultArchiveThreshold
 	}
 	return v

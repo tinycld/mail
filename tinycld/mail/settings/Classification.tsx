@@ -30,15 +30,25 @@ function useClassificationSettings() {
     const { control } = useForm({
         values: { mode: prefs.mode, taxonomy: prefs.taxonomy },
     })
-    const orgPreset = {
-        id: 'org',
-        label: 'Copy of organization labels',
-        rows: orgRows.map(({ name, assignWhen, autoAction }) => ({ name, assignWhen, autoAction })),
-    }
+    // An empty org taxonomy would make the copy preset wipe the editor.
+    const orgPresets =
+        orgRows.length === 0
+            ? []
+            : [
+                  {
+                      id: 'org',
+                      label: 'Copy of organization labels',
+                      rows: orgRows.map(({ name, assignWhen, autoAction }) => ({
+                          name,
+                          assignWhen,
+                          autoAction,
+                      })),
+                  },
+              ]
     return {
         control,
         taxonomy: prefs.taxonomy,
-        presets: [orgPreset, ...MAIL_TAXONOMY_PRESETS],
+        presets: [...orgPresets, ...MAIL_TAXONOMY_PRESETS],
         onModeChange: (value: string) => prefs.setMode(value as ClassifierMode),
         onTaxonomyChange: (value: string) => prefs.setTaxonomy(value as TaxonomyChoice),
     }
@@ -79,11 +89,11 @@ function AccountBody({ isVisible }: { isVisible: boolean }) {
 }
 
 export default function Classification() {
-    const { available } = useClassifierAvailable()
+    const { available, isKnown } = useClassifierAvailable()
     return (
         <ScrollView contentContainerClassName="gap-4 p-4">
             <Text className="text-lg font-semibold text-foreground">AI classification</Text>
-            <ClassifierUnavailable isVisible={!available} />
+            <ClassifierUnavailable isVisible={isKnown && !available} />
             <AccountBody isVisible={available} />
         </ScrollView>
     )

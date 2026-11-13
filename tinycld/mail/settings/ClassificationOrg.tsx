@@ -53,14 +53,14 @@ function OrgBody({ isVisible }: { isVisible: boolean }) {
 }
 
 export default function ClassificationOrg() {
-    const { available } = useClassifierAvailable()
+    const { available, isKnown } = useClassifierAvailable()
     return (
         <ScrollView contentContainerClassName="gap-4 p-4">
-            <Text className="text-lg font-semibold text-foreground">Mail AI classification</Text>
+            <Text className="text-lg font-semibold text-foreground">AI classification</Text>
             <Text className="text-muted-foreground text-sm">
                 The labels every member starts with. Members can switch to their own labels.
             </Text>
-            <ClassifierUnavailable isVisible={!available} />
+            <ClassifierUnavailable isVisible={isKnown && !available} />
             <OrgBody isVisible={available} />
         </ScrollView>
     )

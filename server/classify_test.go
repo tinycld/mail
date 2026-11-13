@@ -279,3 +279,22 @@ func TestClassifyMessage_NoKeyDoesNothing(t *testing.T) {
 	env.classify(t, "[jev:junk] x")
 	assertNoRow(t, env.app, env.messageID(), env.alice)
 }
+
+func TestArchiveThreshold_FloorAndCeiling(t *testing.T) {
+	cases := map[string]float64{
+		"0.4": 0.9, "0.5": 0.5, "0.75": 0.75, "1": 1, "1.1": 0.9, "abc": 0.9, "": 0.9,
+	}
+	for in, want := range cases {
+		env := setupClassifyEnv(t)
+		col, _ := env.app.FindCollectionByNameOrId("settings")
+		rec := core.NewRecord(col)
+		raw, _ := json.Marshal(in)
+		rec.Set("app", classifierApp)
+		rec.Set("key", settingArchiveThreshold)
+		rec.Set("value", json.RawMessage(raw))
+		mustSave(t, env.app, rec)
+		if got := archiveThreshold(env.app); got != want {
+			t.Errorf("threshold %q = %v, want %v", in, got, want)
+		}
+	}
+}

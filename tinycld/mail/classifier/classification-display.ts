@@ -20,7 +20,9 @@ export interface ClassificationFacts {
     error: string
 }
 
-export function confidenceText(confidence: number | null | undefined) {
+// An error row has no result, so a confidence would only read as "0%".
+export function confidenceText(confidence: number | null | undefined, error = '') {
+    if (error) return ''
     return `${Math.round((confidence ?? 0) * 100)}%`
 }
 
