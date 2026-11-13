@@ -21,6 +21,11 @@ type classifyGroup struct {
 	modes    map[string]string
 }
 
+// enqueueClassificationFn is the delivery path's seam: a test swaps it to see
+// which deliveries queue a classification, because the job itself runs in the
+// background and offers no barrier.
+var enqueueClassificationFn = enqueueClassification
+
 // enqueueClassification runs after the delivery transaction commits. It
 // copies what it needs: the InboundMessage holds headers that are not stored.
 func enqueueClassification(app core.App, in classifyInput) {
@@ -103,10 +108,11 @@ func runGroup(ctx context.Context, app core.App, in classifyInput, g *classifyGr
 		}
 		if err == nil {
 			action := decideAction(app, userID, g.modes[userID], in.ThreadID, res, threshold)
-			if aerr := applyAction(app, userID, in.ThreadID, action, res); aerr != nil {
+			done, aerr := applyAction(app, userID, in.ThreadID, action, res)
+			if aerr != nil {
 				notifyLog.WarnContext(ctx, "applying classification failed", "messageID", in.MessageID, "userID", userID, "err", aerr)
-				action = actionNone
 			}
+			action = done
 			row.ClassifierLabelID, row.LabelName = res.Label.ID, res.Label.Name
 			row.Confidence, row.Probabilities = res.Confidence, res.Probabilities
 			row.Stage, row.Model, row.Action = res.Stage, res.Model, action
@@ -143,7 +149,12 @@ func metadataEvidence(msg *InboundMessage) map[string]any {
 	if snippet == "" {
 		snippet = msg.TextBody
 	}
+	size := len(msg.TextBody) + len(msg.HTMLBody)
+	for _, a := range msg.Attachments {
+		size += int(a.Size)
+	}
 	return map[string]any{
+		"size_bytes":            size,
 		"from":                  strings.TrimSpace(msg.From.Name + " <" + msg.From.Email + ">"),
 		"to":                    addressList(msg.To),
 		"cc":                    addressList(msg.Cc),

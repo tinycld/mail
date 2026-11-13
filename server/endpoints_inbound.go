@@ -253,7 +253,7 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 		return nil
 	})
 	if err == nil && classifyIn != nil {
-		enqueueClassification(app, *classifyIn)
+		enqueueClassificationFn(app, *classifyIn)
 	}
 	return err
 }

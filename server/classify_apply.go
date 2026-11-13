@@ -34,15 +34,19 @@ func decideAction(app core.App, userID, mode, threadID string, r classifier.Resu
 	return actionLabelArchive
 }
 
-func applyAction(app core.App, userID, threadID, action string, r classifier.Result) error {
+// applyAction returns the action it completed, which is what the saved row
+// must say: "label" when the label landed but the archive failed.
+func applyAction(app core.App, userID, threadID, action string, r classifier.Result) (string, error) {
 	if action == actionNone {
-		return nil
+		return actionNone, nil
 	}
 	if err := addThreadLabel(app, threadID, userID, r.Label.LabelID); err != nil {
-		return err
+		return actionNone, err
 	}
 	if action == actionLabelArchive {
-		return setThreadFolder(app, threadID, userID, "archive")
+		if err := setThreadFolder(app, threadID, userID, "archive"); err != nil {
+			return actionLabel, err
+		}
 	}
-	return nil
+	return action, nil
 }

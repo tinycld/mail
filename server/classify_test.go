@@ -3,6 +3,7 @@ package mail
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -202,11 +203,18 @@ func TestClassifyMessage_SharedMailboxMixedModes(t *testing.T) {
 
 func (e classifyEnv) messageID() string { return e.msg.Id }
 
+func (e classifyEnv) classify(t *testing.T, subject string) {
+	t.Helper()
+	if err := classifyMessage(context.Background(), e.app, e.input(subject)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestClassifyMessage_OffAndPreview(t *testing.T) {
 	env := setupClassifyEnv(t)
 	setPref(t, env.app, env.alice, "classifier.mode", "preview")
 	// bob has no pref → off
-	_ = classifyMessage(context.Background(), env.app, env.input("[jev:junk] Buy now"))
+	env.classify(t, "[jev:junk] Buy now")
 	assertRow(t, env.app, env.messageID(), env.alice, "junk", "none")
 	assertNotLabelled(t, env.app, env.threadID, env.alice)
 	assertNoRow(t, env.app, env.messageID(), env.bob)
@@ -222,16 +230,42 @@ func TestClassifyMessage_PersonalTaxonomySeparateCall(t *testing.T) {
 	setPref(t, env.app, env.bob, "classifier.mode", "labels")
 	setPref(t, env.app, env.bob, "classifier.taxonomy", "personal")
 	seedPersonalTaxonomy(t, env.app, env.bob, "newsletters")
-	_ = classifyMessage(context.Background(), env.app, env.input("[jev:newsletters] x"))
+	env.classify(t, "[jev:newsletters] x")
 	if env.fake.Calls.Load() != 2 {
 		t.Fatalf("calls = %d", env.fake.Calls.Load())
 	}
+	assertRow(t, env.app, env.messageID(), env.bob, "newsletters", "label")
+	// The org taxonomy has no "newsletters", so the fake gets no match for
+	// alice's group and the call fails; her row proves she used the org set.
+	if rec := rowFor(t, env.app, env.messageID(), env.alice); rec == nil || rec.GetString("label_name") == "newsletters" {
+		t.Fatal("alice must classify against the org taxonomy")
+	}
+}
+
+func TestClassifyMessage_PersonalWithoutRowsFallsBackToOrg(t *testing.T) {
+	env := setupClassifyEnv(t)
+	setPref(t, env.app, env.bob, "classifier.mode", "labels")
+	setPref(t, env.app, env.bob, "classifier.taxonomy", "personal")
+	env.classify(t, "[jev:junk] x")
+	assertRow(t, env.app, env.messageID(), env.bob, "junk", "label")
+	assertLabelled(t, env.app, env.threadID, env.bob, env.junkLabelID)
+}
+
+func TestClassifyMessage_ArchiveFailureRecordsLabelOnly(t *testing.T) {
+	env := setupClassifyEnv(t)
+	setPref(t, env.app, env.alice, "classifier.mode", "labels_archive")
+	env.app.OnRecordUpdate("mail_thread_state").BindFunc(func(e *core.RecordEvent) error {
+		return errors.New("archive blocked")
+	})
+	env.classify(t, "[jev:junk] Buy now")
+	assertLabelled(t, env.app, env.threadID, env.alice, env.junkLabelID)
+	assertRow(t, env.app, env.messageID(), env.alice, "junk", "label")
 }
 
 func TestClassifyMessage_BudgetExceededRecordsErrorOnly(t *testing.T) {
 	env := setupClassifyEnv(t, withSetting("classifier.monthly_budget_usd", "0"))
 	setPref(t, env.app, env.alice, "classifier.mode", "labels")
-	_ = classifyMessage(context.Background(), env.app, env.input("[jev:junk] x"))
+	env.classify(t, "[jev:junk] x")
 	recs, _ := env.app.FindRecordsByFilter("classifications", "user = {:u}", "", 0, 0, map[string]any{"u": env.alice})
 	if len(recs) != 1 || recs[0].GetString("error") != "budget_exceeded" || env.fake.Calls.Load() != 0 {
 		t.Fatalf("recs=%d calls=%d", len(recs), env.fake.Calls.Load())
@@ -242,6 +276,6 @@ func TestClassifyMessage_BudgetExceededRecordsErrorOnly(t *testing.T) {
 func TestClassifyMessage_NoKeyDoesNothing(t *testing.T) {
 	env := setupClassifyEnv(t, withSetting("classifier.api_key", ""))
 	setPref(t, env.app, env.alice, "classifier.mode", "labels")
-	_ = classifyMessage(context.Background(), env.app, env.input("[jev:junk] x"))
+	env.classify(t, "[jev:junk] x")
 	assertNoRow(t, env.app, env.messageID(), env.alice)
 }

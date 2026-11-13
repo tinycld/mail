@@ -16,15 +16,6 @@ func TestIMAPStatus_FillsEveryRequestedItem(t *testing.T) {
 	env := setupScopeEnv(t)
 	s := &imapSession{app: env.app, user: env.user}
 
-	// The shared fixture has no UID state collection; UIDNEXT and UIDVALIDITY need it.
-	uidState := core.NewBaseCollection("mail_imap_mailbox_state")
-	uidState.Fields.Add(&core.RelationField{Name: "mailbox", Required: true, CollectionId: env.mbA.Collection().Id, MaxSelect: 1})
-	uidState.Fields.Add(&core.NumberField{Name: "uid_validity"})
-	uidState.Fields.Add(&core.NumberField{Name: "uid_next"})
-	if err := env.app.Save(uidState); err != nil {
-		t.Fatal(err)
-	}
-
 	options := &imap.StatusOptions{
 		NumMessages:    true,
 		UIDNext:        true,
@@ -89,14 +80,6 @@ func TestIMAPStatus_CountsWhatSelectLists(t *testing.T) {
 	t.Parallel()
 	env := setupScopeEnv(t)
 	s := &imapSession{app: env.app, user: env.user}
-
-	uidState := core.NewBaseCollection("mail_imap_mailbox_state")
-	uidState.Fields.Add(&core.RelationField{Name: "mailbox", Required: true, CollectionId: env.mbA.Collection().Id, MaxSelect: 1})
-	uidState.Fields.Add(&core.NumberField{Name: "uid_validity"})
-	uidState.Fields.Add(&core.NumberField{Name: "uid_next"})
-	if err := env.app.Save(uidState); err != nil {
-		t.Fatal(err)
-	}
 
 	// The fixture's one unread INBOX thread: give its message a UID, add a
 	// second listed message, and a third that has no UID.

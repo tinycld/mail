@@ -13,18 +13,7 @@ import (
 // mailbox, to the scope fixture.
 func setupUIDEnv(t *testing.T) *scopeEnv {
 	t.Helper()
-	env := setupScopeEnv(t)
-	uidState := core.NewBaseCollection("mail_imap_mailbox_state")
-	uidState.Fields.Add(&core.RelationField{
-		Name: "mailbox", Required: true, CollectionId: env.mbA.Collection().Id, MaxSelect: 1,
-	})
-	uidState.Fields.Add(&core.NumberField{Name: "uid_validity"})
-	uidState.Fields.Add(&core.NumberField{Name: "uid_next"})
-	uidState.AddIndex("idx_imap_mb_state_mailbox", true, "mailbox", "")
-	if err := env.app.Save(uidState); err != nil {
-		t.Fatal(err)
-	}
-	return env
+	return setupScopeEnv(t)
 }
 
 // newUnsavedMessage builds a message record for assignUID to save.
