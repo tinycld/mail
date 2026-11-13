@@ -443,19 +443,10 @@ func newThreadState(app core.App, threadID, userID string) (*core.Record, error)
 // Callers that mean to change only one of the two must not use this — see
 // setThreadFolder / setThreadRead, which leave the other field alone.
 func ensureThreadState(app core.App, threadID, userID, folder string, isRead bool) error {
-	if record := findThreadState(app, threadID, userID); record != nil {
-		record.Set("folder", folder)
-		record.Set("is_read", isRead)
-		return app.Save(record)
-	}
-
-	record, err := newThreadState(app, threadID, userID)
-	if err != nil {
-		return err
-	}
-	record.Set("folder", folder)
-	record.Set("is_read", isRead)
-	return app.Save(record)
+	return setThreadStateFields(context.Background(), app, threadID, userID, map[string]any{
+		"folder":  folder,
+		"is_read": isRead,
+	})
 }
 
 // setThreadFolder moves a thread into a folder for one user, preserving that
@@ -467,22 +458,63 @@ func setThreadFolder(app core.App, threadID, userID, folder string) error {
 	return setThreadStateField(context.Background(), app, threadID, userID, "folder", folder)
 }
 
-// setThreadStateField sets one field of a user's state row for a thread,
-// creating the row in the Inbox when the user has none yet, and leaves the
-// row's other fields alone. The save is bound to ctx, so a rule action that
-// timed out or was cancelled at terminate does not write.
-func setThreadStateField(ctx context.Context, app core.App, threadID, userID, field string, value any) error {
-	// Read and save in one transaction: a save writes every column, so a state
-	// row read before another writer (propagateThreadFields filling address_keys
-	// right after delivery) saved would write that writer's change away.
+// errThreadStateUnchanged is returned by a modifyThreadState callback that has
+// nothing to write, so the row is not saved.
+var errThreadStateUnchanged = errors.New("thread state unchanged")
+
+// modifyThreadState is the one way server code changes a user's state row. The
+// read and the save share one transaction: a save writes every column, so a row
+// read on its own and saved later writes away whatever another server writer
+// (rule star, AI archive, an IMAP flag, address_keys propagation after delivery)
+// saved in between. All writes share one connection, so nothing commits between
+// the read and the save. With createIfMissing a user without a row gets one in
+// the Inbox (the callback sees it as IsNew); without it a missing row is left
+// alone. The save is bound to ctx, so a rule action that timed out or was
+// cancelled at terminate does not write.
+func modifyThreadState(
+	ctx context.Context,
+	app core.App,
+	threadID, userID string,
+	createIfMissing bool,
+	mutate func(txApp core.App, state *core.Record) error,
+) error {
 	return app.RunInTransaction(func(txApp core.App) error {
-		record, err := threadStateOrNew(txApp, threadID, userID)
-		if err != nil {
+		record := findThreadState(txApp, threadID, userID)
+		if record == nil {
+			if !createIfMissing {
+				return nil
+			}
+			var err error
+			record, err = newThreadState(txApp, threadID, userID)
+			if err != nil {
+				return err
+			}
+		}
+		if err := mutate(txApp, record); err != nil {
+			if errors.Is(err, errThreadStateUnchanged) {
+				return nil
+			}
 			return err
 		}
-		record.Set(field, value)
 		return txApp.SaveWithContext(ctx, record)
 	})
+}
+
+// setThreadStateFields sets the given fields of a user's state row for a
+// thread, creating the row in the Inbox when the user has none yet, and leaves
+// the row's other fields alone.
+func setThreadStateFields(ctx context.Context, app core.App, threadID, userID string, fields map[string]any) error {
+	return modifyThreadState(ctx, app, threadID, userID, true, func(_ core.App, state *core.Record) error {
+		for field, value := range fields {
+			state.Set(field, value)
+		}
+		return nil
+	})
+}
+
+// setThreadStateField sets one field; see setThreadStateFields.
+func setThreadStateField(ctx context.Context, app core.App, threadID, userID, field string, value any) error {
+	return setThreadStateFields(ctx, app, threadID, userID, map[string]any{field: value})
 }
 
 // threadStateOrNew returns the user's state row for the thread, or a new
@@ -580,24 +612,22 @@ func threadHasReceivedMessage(app core.App, threadID string) bool {
 // conversation belongs — the Inbox when someone wrote to the user, Sent when
 // the user started it.
 func markThreadSent(app core.App, threadID, userID string) error {
-	record := findThreadState(app, threadID, userID)
-	if record == nil {
-		var err error
-		record, err = newThreadState(app, threadID, userID)
-		if err != nil {
-			return err
-		}
-		record.Set("folder", "sent")
-	} else if record.GetString("folder") == "drafts" {
-		if threadHasReceivedMessage(app, threadID) {
-			record.Set("folder", "inbox")
-		} else {
+	err := modifyThreadState(context.Background(), app, threadID, userID, true, func(txApp core.App, record *core.Record) error {
+		switch {
+		case record.IsNew():
 			record.Set("folder", "sent")
+		case record.GetString("folder") == "drafts":
+			if threadHasReceivedMessage(txApp, threadID) {
+				record.Set("folder", "inbox")
+			} else {
+				record.Set("folder", "sent")
+			}
 		}
-	}
-	record.Set("is_sent", true)
-	record.Set("is_read", true)
-	if err := app.Save(record); err != nil {
+		record.Set("is_sent", true)
+		record.Set("is_read", true)
+		return nil
+	})
+	if err != nil {
 		return err
 	}
 	// The send has already happened (or the IMAP APPEND is being stored), so
@@ -636,22 +666,20 @@ func markThreadSentForMembers(app core.App, thread *core.Record, senderID string
 		if userID == senderID {
 			continue
 		}
-		record := findThreadState(app, thread.Id, userID)
-		if record == nil {
-			record, err = newThreadState(app, thread.Id, userID)
-			if err != nil {
-				return err
+		err := modifyThreadState(context.Background(), app, thread.Id, userID, true, func(txApp core.App, record *core.Record) error {
+			if record.IsNew() {
+				if threadHasReceivedMessage(txApp, thread.Id) {
+					record.Set("folder", "inbox")
+				} else {
+					record.Set("folder", "sent")
+				}
+			} else if record.GetBool("is_sent") {
+				return errThreadStateUnchanged
 			}
-			if threadHasReceivedMessage(app, thread.Id) {
-				record.Set("folder", "inbox")
-			} else {
-				record.Set("folder", "sent")
-			}
-		} else if record.GetBool("is_sent") {
-			continue
-		}
-		record.Set("is_sent", true)
-		if err := app.Save(record); err != nil {
+			record.Set("is_sent", true)
+			return nil
+		})
+		if err != nil {
 			errs = append(errs, fmt.Errorf("member %s: %w", userID, err))
 		}
 	}

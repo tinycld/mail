@@ -48,6 +48,19 @@ func registerThreadStateSyncHooks(app core.App) {
 			for _, field := range threadOwnedStateFields {
 				e.Record.Set(field, stored.GetString(field))
 			}
+			// A column the request did not send keeps its stored value too, not
+			// the one the request loaded before it waited to write: a rule that
+			// starred the thread in between would otherwise be written away by a
+			// client that only marked it read.
+			info, err := e.RequestInfo()
+			if err != nil {
+				return err
+			}
+			for _, name := range e.Record.Collection().Fields.FieldNames() {
+				if name != "id" && !requestSetsField(info.Body, name) {
+					e.Record.Set(name, stored.Get(name))
+				}
+			}
 			// is_sent only ever becomes true (a send, or filing the thread
 			// under Sent), so a stored true is kept.
 			if stored.GetBool("is_sent") {
@@ -75,6 +88,17 @@ func registerThreadStateSyncHooks(app core.App) {
 		}
 		return e.Next()
 	})
+}
+
+// requestSetsField reports whether a PocketBase record request body writes the
+// field, directly or through its "+field" / "field+" / "field-" modifiers.
+func requestSetsField(body map[string]any, name string) bool {
+	for _, key := range []string{name, "+" + name, name + "+", name + "-"} {
+		if _, ok := body[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // threadOwnedStateFields are the state columns copied from the thread. The

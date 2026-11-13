@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -15,6 +16,48 @@ import (
 // web app marking the thread read while a mail client saves a reply to
 // Sent), the save wrote the stale is_sent=false back, and the reply left the
 // Sent folder.
+func TestThreadState_APIUpdateKeepsColumnsItDoesNotSend(t *testing.T) {
+	t.Parallel()
+	var env *addressKeysEnv
+	var threadID string
+	scenario := tests.ApiScenario{
+		Name:            "a member marks a thread read while a rule stars it",
+		Method:          http.MethodPatch,
+		Body:            strings.NewReader(`{"is_read":true}`),
+		Headers:         map[string]string{"Content-Type": "application/json"},
+		ExpectedStatus:  http.StatusOK,
+		ExpectedContent: []string{`"is_read":true`},
+	}
+	scenario.TestAppFactory = func(_ testing.TB) *tests.TestApp {
+		env = setupAddressKeysEnv(t)
+		threadID = env.deliverTo(t, "ann@q.example", "<in-race-star@sender.example>", "").GetString("thread")
+		state := findThreadState(env.app, threadID, env.ann.Id)
+		scenario.URL = "/api/collections/mail_thread_state/records/" + state.Id
+		scenario.Headers["Authorization"] = authTokenFor(t, env.ann)
+		// The request has loaded the row; a rule stars the thread before it saves.
+		env.app.OnRecordUpdateRequest("mail_thread_state").Bind(&hook.Handler[*core.RecordRequestEvent]{
+			Priority: -1,
+			Func: func(e *core.RecordRequestEvent) error {
+				if err := setThreadStateField(context.Background(), e.App, threadID, env.ann.Id, "is_starred", true); err != nil {
+					return err
+				}
+				return e.Next()
+			},
+		})
+		return env.app
+	}
+	scenario.AfterTestFunc = func(_ testing.TB, app *tests.TestApp, _ *http.Response) {
+		state := findThreadState(app, threadID, env.ann.Id)
+		if !state.GetBool("is_starred") {
+			t.Fatal("the API update wrote is_starred=false over the rule's star")
+		}
+		if !state.GetBool("is_read") {
+			t.Error("the API update's own is_read was lost")
+		}
+	}
+	scenario.Test(t)
+}
+
 func TestThreadState_APIUpdateKeepsIsSentSetMeanwhile(t *testing.T) {
 	t.Parallel()
 	var env *addressKeysEnv

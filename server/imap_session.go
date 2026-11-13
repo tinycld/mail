@@ -2,6 +2,7 @@ package mail
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -695,27 +696,27 @@ func (s *imapSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) er
 
 		// Move to trash, or permanently delete if already in trash
 		threadID := msg.GetString("thread")
-		states, err := s.app.FindRecordsByFilter(
-			"mail_thread_state",
-			"thread = {:thread} && user = {:user}",
-			"",
-			1,
-			0,
-			map[string]any{"thread": threadID, "user": s.user.Id},
-		)
 		if msg.GetString("delivery_status") == "draft" {
 			// Clients autosave drafts and expunge the older copies as they go.
 			// Trashing the thread would take the whole conversation (a reply
 			// draft shares its thread with the mail it answers) to Trash.
 			s.app.Delete(msg)
-		} else if err == nil && len(states) > 0 {
-			if states[0].GetString("folder") == "trash" {
+		} else {
+			wasInTrash := false
+			err := modifyThreadState(context.Background(), s.app, threadID, s.user.Id, false, func(_ core.App, state *core.Record) error {
+				if state.GetString("folder") == "trash" {
+					wasInTrash = true
+					return errThreadStateUnchanged
+				}
+				state.Set("folder", "trash")
+				return nil
+			})
+			if err != nil {
+				imapLog.Warn("expunge could not move the thread to trash", "thread", threadID, "user", logUserID(s.user), "error", err)
+			}
+			if wasInTrash {
 				// Already in trash — permanently delete the message
 				s.app.Delete(msg)
-			} else {
-				// Move to trash
-				states[0].Set("folder", "trash")
-				s.app.Save(states[0])
 			}
 		}
 
@@ -1345,18 +1346,7 @@ func (s *imapSession) messageFlags(msg *core.Record) []imap.Flag {
 // applyFlags modifies thread state based on IMAP flag operations.
 func (s *imapSession) applyFlags(msg *core.Record, flags *imap.StoreFlags) {
 	threadID := msg.GetString("thread")
-	states, err := s.app.FindRecordsByFilter(
-		"mail_thread_state",
-		"thread = {:thread} && user = {:user}",
-		"",
-		1,
-		0,
-		map[string]any{"thread": threadID, "user": s.user.Id},
-	)
-	if err != nil || len(states) == 0 {
-		return
-	}
-	state := states[0]
+	fields := map[string]any{}
 
 	for _, flag := range flags.Flags {
 		val := flags.Op == imap.StoreFlagsAdd || flags.Op == imap.StoreFlagsSet
@@ -1366,9 +1356,9 @@ func (s *imapSession) applyFlags(msg *core.Record, flags *imap.StoreFlags) {
 
 		switch flag {
 		case imap.FlagSeen:
-			state.Set("is_read", val)
+			fields["is_read"] = val
 		case imap.FlagFlagged:
-			state.Set("is_starred", val)
+			fields["is_starred"] = val
 		case imap.FlagDeleted:
 			if val {
 				s.deleted[msg.Id] = true
@@ -1378,33 +1368,39 @@ func (s *imapSession) applyFlags(msg *core.Record, flags *imap.StoreFlags) {
 		}
 	}
 
-	s.app.Save(state)
+	s.saveStateFields(threadID, fields)
+}
+
+// saveStateFields writes the given columns of the session user's state row, if
+// the user has one. A failure is logged: the IMAP command has no way to report
+// it after the fact.
+func (s *imapSession) saveStateFields(threadID string, fields map[string]any) {
+	if len(fields) == 0 {
+		return
+	}
+	err := modifyThreadState(context.Background(), s.app, threadID, s.user.Id, false, func(_ core.App, state *core.Record) error {
+		for field, value := range fields {
+			state.Set(field, value)
+		}
+		return nil
+	})
+	if err != nil {
+		imapLog.Warn("could not save the thread state", "thread", threadID, "user", logUserID(s.user), "error", err)
+	}
 }
 
 // applyAppendFlags applies flags from an APPEND command.
 func (s *imapSession) applyAppendFlags(threadID string, flags []imap.Flag) {
-	states, err := s.app.FindRecordsByFilter(
-		"mail_thread_state",
-		"thread = {:thread} && user = {:user}",
-		"",
-		1,
-		0,
-		map[string]any{"thread": threadID, "user": s.user.Id},
-	)
-	if err != nil || len(states) == 0 {
-		return
-	}
-	state := states[0]
-
+	fields := map[string]any{}
 	for _, flag := range flags {
 		switch flag {
 		case imap.FlagSeen:
-			state.Set("is_read", true)
+			fields["is_read"] = true
 		case imap.FlagFlagged:
-			state.Set("is_starred", true)
+			fields["is_starred"] = true
 		}
 	}
-	s.app.Save(state)
+	s.saveStateFields(threadID, fields)
 }
 
 // markSeen marks the thread as read when a non-peek BODY fetch occurs.
@@ -1417,19 +1413,7 @@ func (s *imapSession) markSeen(msg *core.Record) {
 		imapLog.Debug("imap fetch did not set \\Seen: the server is read-only", "thread", threadID, "user", logUserID(s.user))
 		return
 	}
-	states, err := s.app.FindRecordsByFilter(
-		"mail_thread_state",
-		"thread = {:thread} && user = {:user}",
-		"",
-		1,
-		0,
-		map[string]any{"thread": threadID, "user": s.user.Id},
-	)
-	if err != nil || len(states) == 0 {
-		return
-	}
-	states[0].Set("is_read", true)
-	s.app.Save(states[0])
+	s.saveStateFields(threadID, map[string]any{"is_read": true})
 }
 
 // storeRawHeaders saves original RFC 5322 headers to a message record.

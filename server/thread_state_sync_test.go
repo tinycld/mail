@@ -1,9 +1,13 @@
 package mail
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/router"
 	"tinycld.org/core/rlstest"
 )
 
@@ -166,9 +170,18 @@ func TestThreadStateUpdateRequest_KeepsMailboxAndLatestDate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The hook keeps stored values for columns the request body does not send,
+	// so the body names the ones this test expects to survive.
+	request := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(
+		`{"mailbox":"other","latest_date":"2099-01-01 00:00:00.000Z","is_starred":true}`))
+	request.Header.Set("Content-Type", "application/json")
 	e := &core.RecordRequestEvent{
-		RequestEvent: &core.RequestEvent{Auth: env.user, App: env.app},
-		Record:       fresh,
+		RequestEvent: &core.RequestEvent{
+			Auth:  env.user,
+			App:   env.app,
+			Event: router.Event{Request: request, Response: httptest.NewRecorder()},
+		},
+		Record: fresh,
 	}
 	// Tags() reads the embedded collection; without it the tagged hook skips
 	// the handler and the test passes for the wrong reason.
