@@ -12,6 +12,7 @@ import type {
     MailThreadState as GenMailThreadState,
     MailThreads as GenMailThreads,
     Groups,
+    Schema,
     Users,
 } from '@tinycld/core/types/pbSchema'
 
@@ -79,7 +80,9 @@ export interface MailFolderCounts extends Omit<GenMailFolderCounts, 'inbox_by_ad
     inbox_by_address: Record<string, { unread: number; total: number }> | null
 }
 
-export type MailSchema = {
+// classifications is core's collection; the message-classified trigger watches
+// it, so the automation definitions need its entry to type-check.
+export type MailSchema = Pick<Schema, 'classifications'> & {
     mail_domains: {
         type: MailDomains
         relations: {

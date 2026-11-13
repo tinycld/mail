@@ -59,8 +59,25 @@ func actionAudience(app core.App, req automation.ActionRequest) []string {
 		return nil
 	}
 
-	members := mailboxMembersForMessage(app, req.Record)
+	msg, err := messageForRecord(app, req.Record)
+	if err != nil {
+		return nil
+	}
+	members := mailboxMembersForMessage(app, msg)
 	if len(members) == 0 {
+		return nil
+	}
+
+	// A classification belongs to one user, so an org rule acts only for that
+	// user: otherwise a three-member mailbox would run the org rule's actions
+	// once per member, for everyone, on each member's own row.
+	if req.Record.Collection().Name == "classifications" {
+		rowUser := req.Record.GetString("user")
+		for _, member := range members {
+			if rowUser != "" && member.GetString("user") == rowUser {
+				return []string{rowUser}
+			}
+		}
 		return nil
 	}
 
@@ -89,13 +106,14 @@ func actionAudience(app core.App, req automation.ActionRequest) []string {
 }
 
 // threadIDForAction returns the thread the triggering message belongs to.
-func threadIDForAction(req automation.ActionRequest) (string, error) {
-	if req.Record == nil {
-		return "", fmt.Errorf("no trigger record")
+func threadIDForAction(app core.App, req automation.ActionRequest) (string, error) {
+	msg, err := messageForRecord(app, req.Record)
+	if err != nil {
+		return "", err
 	}
-	threadID := req.Record.GetString("thread")
+	threadID := msg.GetString("thread")
 	if threadID == "" {
-		return "", fmt.Errorf("message %s has no thread", req.Record.Id)
+		return "", fmt.Errorf("message %s has no thread", msg.Id)
 	}
 	return threadID, nil
 }
@@ -108,7 +126,7 @@ func actionMoveToFolder(app core.App, req automation.ActionRequest) error {
 		return fmt.Errorf("mail:move-to-folder: unsupported folder %q", folder)
 	}
 
-	threadID, err := threadIDForAction(req)
+	threadID, err := threadIDForAction(app, req)
 	if err != nil {
 		return err
 	}
@@ -154,7 +172,7 @@ func applyToAudience(app core.App, req automation.ActionRequest, action string, 
 // actionMarkAsRead clears the unread state for each user in the audience,
 // leaving the folder they have the thread filed under alone.
 func actionMarkAsRead(app core.App, req automation.ActionRequest) error {
-	threadID, err := threadIDForAction(req)
+	threadID, err := threadIDForAction(app, req)
 	if err != nil {
 		return err
 	}
@@ -167,7 +185,7 @@ func actionMarkAsRead(app core.App, req automation.ActionRequest) error {
 // actionStarMessage stars the triggering message's thread for each user in
 // the audience, leaving their folder and read state alone.
 func actionStarMessage(app core.App, req automation.ActionRequest) error {
-	threadID, err := threadIDForAction(req)
+	threadID, err := threadIDForAction(app, req)
 	if err != nil {
 		return err
 	}
@@ -194,7 +212,11 @@ func sendAsRuleOwner(app core.App, req automation.ActionRequest, to, subject, bo
 		return fmt.Errorf("no rule owner to send as")
 	}
 
-	mailboxID, err := mailboxIDForMessage(app, req.Record)
+	msg, err := messageForRecord(app, req.Record)
+	if err != nil {
+		return err
+	}
+	mailboxID, err := mailboxIDForMessage(app, msg)
 	if err != nil {
 		return err
 	}
@@ -332,10 +354,11 @@ func mailboxIDForMessage(app core.App, record *core.Record) (string, error) {
 
 // actionForwardMessage forwards the triggering message to another address.
 func actionForwardMessage(app core.App, req automation.ActionRequest) error {
-	if req.Record == nil {
-		return fmt.Errorf("mail:forward-message: no trigger record")
+	msg, err := messageForRecord(app, req.Record)
+	if err != nil {
+		return fmt.Errorf("mail:forward-message: %w", err)
 	}
-	if err := skipAutomaticMail(req.Record); err != nil {
+	if err := skipAutomaticMail(msg); err != nil {
 		return err
 	}
 
@@ -343,12 +366,12 @@ func actionForwardMessage(app core.App, req automation.ActionRequest) error {
 		return err
 	}
 
-	subject := req.Record.GetString("subject")
+	subject := msg.GetString("subject")
 	if subject == "" {
 		subject = noSubject
 	}
 
-	body := forwardedBody(app, req.Record)
+	body := forwardedBody(app, msg)
 	if err := sendAsRuleOwner(app, req, req.Params["to"], "Fwd: "+subject, body, automation.AutoForwarded); err != nil {
 		return fmt.Errorf("mail:forward-message: %w", err)
 	}
@@ -473,7 +496,11 @@ func formatForwardDate(stored string) string {
 
 // actionSendMessage sends a new message with a templated subject and body.
 func actionSendMessage(app core.App, req automation.ActionRequest) error {
-	if err := skipAutomaticMail(req.Record); err != nil {
+	msg, err := messageForRecord(app, req.Record)
+	if err != nil {
+		return fmt.Errorf("mail:send-message: %w", err)
+	}
+	if err := skipAutomaticMail(msg); err != nil {
 		return err
 	}
 	if err := checkSendRateLimit(app, req); err != nil {
@@ -542,7 +569,11 @@ func checkSendRateLimit(app core.App, req automation.ActionRequest) error {
 		return nil
 	}
 
-	mailboxID, err := mailboxIDForMessage(app, req.Record)
+	msg, err := messageForRecord(app, req.Record)
+	if err != nil {
+		return fmt.Errorf("send rate-limit check: %w", err)
+	}
+	mailboxID, err := mailboxIDForMessage(app, msg)
 	if err != nil {
 		return fmt.Errorf("send rate-limit check: %w", err)
 	}

@@ -29,6 +29,8 @@ func registerAutomationResolver() {
 
 	// Core's "Send an email" action can run on a received message too, so it
 	// must not answer automatic mail either.
+	registerClassifiedTrigger()
+
 	automation.RegisterSendGuard("mail_messages", "mail.automatic-mail", automaticMailSendGuard)
 }
 

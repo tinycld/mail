@@ -21,6 +21,41 @@ const automation = {
                 // sending alias of outbound mail and stays empty on arrival.
                 { key: 'delivered_to', label: 'Received at address' },
             ],
+            extraFields: [
+                {
+                    key: 'has_sent_to_sender',
+                    label: 'I have sent email to the sender',
+                    type: 'boolean',
+                },
+                { key: 'sender_in_contacts', label: 'Sender is in my contacts', type: 'boolean' },
+            ],
+        },
+        {
+            // Fires once per user when the AI classifier labels a message for
+            // them. Not for previews or failed classifications (Go filter in
+            // server/automation_classified.go).
+            id: 'message-classified',
+            label: 'AI classifies a message',
+            collection: 'classifications',
+            on: 'create',
+            fields: [
+                { key: 'label_name', label: 'AI label' },
+                { key: 'confidence', label: 'Confidence' },
+                'stage',
+                'action',
+            ],
+            extraFields: [
+                { key: 'subject', label: 'Subject', type: 'text' },
+                { key: 'sender_email', label: 'Sender', type: 'text' },
+                { key: 'sender_name', label: 'Sender name', type: 'text' },
+                { key: 'archived', label: 'Archived by AI', type: 'boolean' },
+                {
+                    key: 'has_sent_to_sender',
+                    label: 'I have sent email to the sender',
+                    type: 'boolean',
+                },
+                { key: 'sender_in_contacts', label: 'Sender is in my contacts', type: 'boolean' },
+            ],
         },
         {
             // A delivery failure is a different event from "a message

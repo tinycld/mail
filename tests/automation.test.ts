@@ -16,4 +16,26 @@ describe('mail automation definitions', () => {
         expect(fields).toContainEqual({ key: 'delivered_to', label: 'Received at address' })
         expect(fields.map(f => f.key)).not.toContain('alias')
     })
+
+    it('offers sender facts on both inbound triggers', () => {
+        for (const id of ['message-received', 'message-classified']) {
+            const trigger = automation.triggers.find(t => t.id === id)
+            const keys = (trigger && 'extraFields' in trigger ? trigger.extraFields : []).map(
+                f => f.key
+            )
+            expect(keys).toContain('has_sent_to_sender')
+            expect(keys).toContain('sender_in_contacts')
+        }
+    })
+
+    it('fires message-classified on a new classifications row', () => {
+        const trigger = automation.triggers.find(t => t.id === 'message-classified')
+        expect(trigger).toMatchObject({ collection: 'classifications', on: 'create' })
+        expect(triggerFields('message-classified').map(f => f.key)).toEqual([
+            'label_name',
+            'confidence',
+            'stage',
+            'action',
+        ])
+    })
 })
