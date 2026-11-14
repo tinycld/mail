@@ -2,8 +2,6 @@ package mail
 
 import (
 	"encoding/json"
-	"math"
-	"strconv"
 
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/classifier"
@@ -16,11 +14,8 @@ const (
 	modeLabels        = "labels"
 	modeLabelsArchive = "labels_archive"
 
-	prefMode                = "classifier.mode"
-	prefTaxonomy            = "classifier.taxonomy"
-	settingArchiveThreshold = "classifier.archive_threshold"
-	defaultArchiveThreshold = 0.9
-	minArchiveThreshold     = 0.5
+	prefMode     = "classifier.mode"
+	prefTaxonomy = "classifier.taxonomy"
 )
 
 // jsonString reads a json-typed value column that holds a JSON string.
@@ -59,20 +54,9 @@ func userClassifierPrefs(app core.App, userID string) (mode, taxonomy string) {
 	return mode, taxonomy
 }
 
+// archiveThreshold is the admin-only system setting; core validates its range.
 func archiveThreshold(app core.App) float64 {
-	rec, err := app.FindFirstRecordByFilter("settings", "app = {:a} && key = {:k}",
-		map[string]any{"a": classifierApp, "k": settingArchiveThreshold})
-	if err != nil {
-		return defaultArchiveThreshold
-	}
-	v, err := strconv.ParseFloat(jsonString(rec.Get("value")), 64)
-	// Any signed-in member can write this org row, so the floor (the UI's
-	// minimum) is enforced here: a low value would archive at any confidence.
-	// NaN passes both range comparisons, then makes every confidence check false.
-	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v < minArchiveThreshold || v > 1 {
-		return defaultArchiveThreshold
-	}
-	return v
+	return classifier.LoadConfig(app).AutoActionThreshold
 }
 
 // loadTaxonomy reads one scope's rows in order. userID "" is the org default.
@@ -84,12 +68,9 @@ func loadTaxonomy(app core.App, userID string) []classifier.TaxonomyLabel {
 	}
 	out := make([]classifier.TaxonomyLabel, 0, len(rows))
 	for _, r := range rows {
-		label, err := app.FindRecordById("labels", r.GetString("label"))
-		if err != nil {
-			continue
-		}
+		// Name comes from the taxonomy row: the core label is only what gets applied.
 		out = append(out, classifier.TaxonomyLabel{
-			ID: r.Id, LabelID: label.Id, Name: label.GetString("name"),
+			ID: r.Id, LabelID: r.GetString("label"), Name: r.GetString("name"),
 			AssignWhen: r.GetString("assign_when"), AutoAction: r.GetBool("auto_action"),
 		})
 	}

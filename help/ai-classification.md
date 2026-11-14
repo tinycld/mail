@@ -18,7 +18,7 @@ AI classification reads each new message and gives it one label from a list of p
 
 ## When mail is archived
 
-All of these must be true: your mode is **Labels and archive**, the label is **Archive eligible**, the confidence is at or above the archive threshold (your admin sets it; the minimum is 0.5 and the default is 0.9), the message starts a new conversation, and the conversation is still in your Inbox. A reply in an existing conversation is never archived. Mail that is archived before the next notification batch is sent does not send a notification.
+All of these must be true: your mode is **Labels and archive**, the label is **Archive eligible**, the confidence is at or above the archive threshold (an admin sets it in the system **AI classification** panel; the minimum is 0.5 and the default is 0.9), the message starts a new conversation, and the conversation is still in your Inbox. A reply in an existing conversation is never archived. Mail that is archived before the next notification batch is sent does not send a notification.
 
 ## Write good rules
 

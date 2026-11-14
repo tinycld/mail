@@ -63,12 +63,16 @@ func seedClassifierRow(t *testing.T, app core.App, userID, name, when string, au
 	t.Helper()
 	labelsCol, _ := app.FindCollectionByNameOrId("labels")
 	label := core.NewRecord(labelsCol)
-	label.Set("name", name)
+	// The core label's name differs from the taxonomy name so a read of the
+	// wrong one fails: members can rename core labels, the taxonomy is the
+	// source of the option name.
+	label.Set("name", "core "+name)
 	label.Set("user", userID)
 	mustSave(t, app, label)
 	taxCol, _ := app.FindCollectionByNameOrId("classifier_labels")
 	row := core.NewRecord(taxCol)
 	row.Set("app", classifierApp)
+	row.Set("name", name)
 	row.Set("label", label.Id)
 	row.Set("assign_when", when)
 	row.Set("auto_action", auto)
@@ -337,14 +341,7 @@ func TestArchiveThreshold_FloorAndCeiling(t *testing.T) {
 		"NaN": 0.9, "Inf": 0.9, "-Inf": 0.9,
 	}
 	for in, want := range cases {
-		env := setupClassifyEnv(t)
-		col, _ := env.app.FindCollectionByNameOrId("settings")
-		rec := core.NewRecord(col)
-		raw, _ := json.Marshal(in)
-		rec.Set("app", classifierApp)
-		rec.Set("key", settingArchiveThreshold)
-		rec.Set("value", json.RawMessage(raw))
-		mustSave(t, env.app, rec)
+		env := setupClassifyEnv(t, withSetting(classifier.KeyAutoActionThreshold, in))
 		if got := archiveThreshold(env.app); got != want {
 			t.Errorf("threshold %q = %v, want %v", in, got, want)
 		}
