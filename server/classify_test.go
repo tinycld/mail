@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -105,10 +107,8 @@ func setupClassifyEnv(t *testing.T, opts ...func(map[string]string)) classifyEnv
 }
 
 func (e classifyEnv) input(subject string) classifyInput {
-	return classifyInput{
-		MessageID: e.msg.Id, ThreadID: e.threadID, MailboxID: e.mailboxID,
-		Msg: &InboundMessage{From: Recipient{Email: "s@example.com"}, Subject: subject, TextBody: "body"},
-	}
+	return newClassifyInput(e.msg.Id, e.threadID, e.mailboxID,
+		&InboundMessage{From: Recipient{Email: "s@example.com"}, Subject: subject, TextBody: "body"})
 }
 
 func setPref(t *testing.T, app core.App, userID, key, value string) {
@@ -278,6 +278,57 @@ func TestClassifyMessage_NoKeyDoesNothing(t *testing.T) {
 	setPref(t, env.app, env.alice, "classifier.mode", "labels")
 	env.classify(t, "[jev:junk] x")
 	assertNoRow(t, env.app, env.messageID(), env.alice)
+}
+
+func TestNewClassifyInput_DropsAttachmentContent(t *testing.T) {
+	msg := &InboundMessage{
+		From:        Recipient{Email: "s@example.com"},
+		TextBody:    "body",
+		Attachments: []InboundAttachment{{Name: "a.bin", Content: "SECRET-ATTACHMENT-BYTES", Size: 1234}},
+	}
+	in := newClassifyInput("m", "t", "mb", msg)
+	if got := fmt.Sprintf("%+v", in); strings.Contains(got, "SECRET-ATTACHMENT-BYTES") {
+		t.Fatalf("input keeps attachment content: %s", got)
+	}
+	if size := in.evidence["size_bytes"]; size != len("body")+1234 {
+		t.Fatalf("size_bytes = %v, want attachment size counted", size)
+	}
+}
+
+func TestAcquireClassifySlot_BoundsConcurrency(t *testing.T) {
+	env := setupClassifyEnv(t)
+	var releases []func()
+	for range maxConcurrentClassifications {
+		release, err := acquireClassifySlot(context.Background(), env.app)
+		if err != nil {
+			t.Fatal(err)
+		}
+		releases = append(releases, release)
+	}
+
+	// All slots are taken: a cancelled context ends the wait with its error.
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := acquireClassifySlot(cancelled, env.app); !errors.Is(err, context.Canceled) {
+		t.Fatalf("full slots + cancelled ctx: err = %v", err)
+	}
+
+	// A waiter gets in only once a slot is released.
+	got := make(chan struct{})
+	go func() {
+		release, err := acquireClassifySlot(context.Background(), env.app)
+		if err == nil {
+			release()
+		}
+		close(got)
+	}()
+	select {
+	case <-got:
+		t.Fatal("acquired a slot while every slot was taken")
+	default:
+	}
+	releases[0]()
+	<-got
 }
 
 func TestArchiveThreshold_FloorAndCeiling(t *testing.T) {

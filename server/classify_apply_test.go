@@ -60,3 +60,28 @@ func TestDecideAction_NeverArchivesOngoingOrMovedThreads(t *testing.T) {
 		t.Fatalf("moved thread: %s", got)
 	}
 }
+
+func TestApplyAction_ThreadMovedAfterDecisionStaysPut(t *testing.T) {
+	env := setupClassifyEnv(t)
+	res := junk(0.99, false)
+	res.Label.LabelID = env.junkLabelID
+	action := decideAction(env.app, env.alice, modeLabelsArchive, env.threadID, res, 0.9)
+	if action != actionLabelArchive {
+		t.Fatalf("setup: action = %s", action)
+	}
+	// A rule or the user files the thread between the decision and the write.
+	if err := setThreadFolder(env.app, env.threadID, env.alice, "spam"); err != nil {
+		t.Fatal(err)
+	}
+	done, err := applyAction(env.app, env.alice, env.threadID, action, res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if done != actionLabel {
+		t.Fatalf("done = %s, want label", done)
+	}
+	if got := threadStateFor(t, env.app, env.threadID, env.alice).GetString("folder"); got != "spam" {
+		t.Fatalf("folder = %s, want spam", got)
+	}
+	assertLabelled(t, env.app, env.threadID, env.alice, env.junkLabelID)
+}

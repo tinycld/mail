@@ -170,6 +170,16 @@ func TestClassifiedSendGuard_FollowsTheMessage(t *testing.T) {
 	}
 }
 
+func TestClassifiedSendGuard_MissingMessageSkips(t *testing.T) {
+	t.Parallel()
+	env := setupClassifyEnv(t)
+	row := saveTestClassification(t, env, env.alice, "junk", false, "")
+	row.Set("record_id", "missing_message0")
+	if skip, reason := classifiedSendGuard(env.app, row); !skip || reason != "message not found" {
+		t.Fatalf("unknown message: skip=%v reason=%q", skip, reason)
+	}
+}
+
 func TestActionAudience_ClassifiedPersonalRuleNeverActsOnAnotherUsersRow(t *testing.T) {
 	t.Parallel()
 	env := setupClassifyEnv(t)

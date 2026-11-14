@@ -236,7 +236,8 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 		if err != nil {
 			return fmt.Errorf("storeMessage: %w", err)
 		}
-		classifyIn = &classifyInput{MessageID: rec.Id, ThreadID: thread.Id, MailboxID: mailboxID, Msg: msg}
+		in := newClassifyInput(rec.Id, thread.Id, mailboxID, msg)
+		classifyIn = &in
 
 		// Use stripped reply for snippet when available (just the new content, no quoted history)
 		snippet := msg.StrippedReply

@@ -5,7 +5,7 @@ tags: [ai, labels, classification, archive, rules]
 order: 40
 ---
 
-AI classification reads each new message and gives it one label from a list of plain-English rules. Your admin must first turn it on in **Settings → AI classification**.
+AI classification reads each new message and gives it one label from a list of plain-English rules. Your admin must first turn it on: the admin enters the OpenRouter key in the system settings **AI classification** panel. The admin edits the organization labels under the **Mail** section, in **AI classification**.
 
 ## Turn it on for yourself
 
@@ -14,11 +14,11 @@ AI classification reads each new message and gives it one label from a list of p
    - **Preview only**: messages are classified, but nothing changes. Use this first, and check **Recent classifications**.
    - **Labels**: each new message gets its label.
    - **Labels and archive**: also archives a new conversation when its label is archive eligible and the AI is very sure.
-3. Choose **Organization default** labels, or **My own labels** to write your own.
+3. Choose **Organization default** labels, or **My own labels** to write your own. **My own labels** starts empty. Use the **Copy of organization labels** preset to start from the organization list. The organization labels stay in use until you save your own.
 
 ## When mail is archived
 
-All of these must be true: your mode is **Labels and archive**, the label is **Archive eligible**, the confidence is at or above the archive threshold (your admin sets it; the minimum is 0.5 and the default is 0.9), the message starts a new conversation, and the conversation is still in your Inbox. A reply in an existing conversation is never archived. Archived mail does not send a notification.
+All of these must be true: your mode is **Labels and archive**, the label is **Archive eligible**, the confidence is at or above the archive threshold (your admin sets it; the minimum is 0.5 and the default is 0.9), the message starts a new conversation, and the conversation is still in your Inbox. A reply in an existing conversation is never archived. Mail that is archived before the next notification batch is sent does not send a notification.
 
 ## Write good rules
 

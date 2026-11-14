@@ -1,6 +1,8 @@
 package mail
 
 import (
+	"context"
+
 	"github.com/pocketbase/pocketbase/core"
 	"tinycld.org/core/classifier"
 )
@@ -44,8 +46,22 @@ func applyAction(app core.App, userID, threadID, action string, r classifier.Res
 		return actionNone, err
 	}
 	if action == actionLabelArchive {
-		if err := setThreadFolder(app, threadID, userID, "archive"); err != nil {
+		archived := false
+		// The inbox check runs inside the state transaction: a rule or a user
+		// that filed the thread after decideAction must win.
+		err := modifyThreadState(context.Background(), app, threadID, userID, false, func(_ core.App, state *core.Record) error {
+			if state.GetString("folder") != "inbox" {
+				return errThreadStateUnchanged
+			}
+			state.Set("folder", "archive")
+			archived = true
+			return nil
+		})
+		if err != nil {
 			return actionLabel, err
+		}
+		if !archived {
+			return actionLabel, nil
 		}
 	}
 	return action, nil

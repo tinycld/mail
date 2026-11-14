@@ -296,7 +296,7 @@ func registerShared(app *pocketbase.PocketBase) {
 		return e.Next()
 	})
 	app.OnRecordAfterUpdateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
-		if err := recordCorrespondents(e.App, e.Record); err != nil {
+		if err := recordCorrespondentsOnUpdate(e.App, e.Record); err != nil {
 			notifyLog.Warn("recording correspondents failed", "messageID", e.Record.Id, "err", err)
 		}
 		return e.Next()

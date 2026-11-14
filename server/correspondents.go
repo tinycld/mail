@@ -11,6 +11,17 @@ import (
 // recordCorrespondents remembers every address a sent message went to, for
 // the user who sent it. Called on create and update of mail_messages: a send
 // may be stored first and marked sent afterwards.
+func recordCorrespondentsOnUpdate(app core.App, msg *core.Record) error {
+	// Flag updates (read, starred, labels) fire this hook for every sent
+	// message; only the move to "sent" or a change of sender adds recipients.
+	orig := msg.Original()
+	if orig.GetString("delivery_status") == msg.GetString("delivery_status") &&
+		orig.GetString("sent_by") == msg.GetString("sent_by") {
+		return nil
+	}
+	return recordCorrespondents(app, msg)
+}
+
 func recordCorrespondents(app core.App, msg *core.Record) error {
 	userID := msg.GetString("sent_by")
 	if userID == "" || msg.GetString("delivery_status") != "sent" {

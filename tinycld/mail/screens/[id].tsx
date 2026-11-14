@@ -123,7 +123,7 @@ export default function MailDetailScreen() {
     const { labels: allLabels } = useLabels()
     const { labels, labelIds: threadLabelIds } = useThreadLabels(threadState?.id ?? '')
 
-    const aiLabel = useThreadClassification(id)
+    const aiLabel = useThreadClassification(messages?.map(m => m.id) ?? [])
 
     useAutoMarkAsRead(threadStateCollection, threadState, id)
 

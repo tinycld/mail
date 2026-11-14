@@ -1,23 +1,22 @@
-import { and, eq } from '@tanstack/db'
+import { and, eq, inArray } from '@tanstack/db'
 import { useStore } from '@tinycld/core/lib/pocketbase'
 import { useMyLiveQuery } from '@tinycld/core/lib/use-my-live-query'
 
-export function useThreadClassification(threadId: string) {
-    const [classificationsCollection, messagesCollection] = useStore(
-        'classifications',
-        'mail_messages'
-    )
+// Bounded by the thread's own message ids, so the query never loads or
+// subscribes to the rest of the user's classifications.
+export function useThreadClassification(messageIds: string[]) {
+    const [classificationsCollection] = useStore('classifications')
+    const idsKey = messageIds.join(',')
     const { data } = useMyLiveQuery(
         (query, { userId }) =>
             query
                 .from({ c: classificationsCollection })
-                .innerJoin({ m: messagesCollection }, ({ c, m }) => eq(m.id, c.record_id))
-                .where(({ c, m }) =>
+                .where(({ c }) =>
                     and(
+                        inArray(c.record_id, messageIds),
                         eq(c.user, userId),
                         eq(c.error, ''),
-                        eq(c.preview, false),
-                        eq(m.thread, threadId)
+                        eq(c.preview, false)
                     )
                 )
                 .orderBy(({ c }) => c.created, 'desc')
@@ -27,7 +26,7 @@ export function useThreadClassification(threadId: string) {
                     stage: c.stage,
                 }))
                 .findOne(),
-        [threadId]
+        [idsKey]
     )
     if (!data) return undefined
     return {

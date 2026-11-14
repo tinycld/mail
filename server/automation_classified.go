@@ -34,7 +34,8 @@ func classifiedSendGuard(app core.App, rec *core.Record) (bool, string) {
 	}
 	msg, err := messageForRecord(app, rec)
 	if err != nil {
-		return false, ""
+		// Failing open would let a send bypass the automatic-mail loop guard.
+		return true, "message not found"
 	}
 	return automaticMailSendGuard(app, msg)
 }

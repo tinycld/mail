@@ -5,13 +5,30 @@ import (
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
+	"tinycld.org/core/appstate"
 	"tinycld.org/core/background"
 	"tinycld.org/core/classifier"
 )
 
+// classifyInput holds only what classification reads. The InboundMessage it
+// is built from carries attachment bytes, and the background job outlives the
+// delivery request, so the job must not keep that message reachable.
 type classifyInput struct {
 	MessageID, ThreadID, MailboxID string
-	Msg                            *InboundMessage
+	FromEmail                      string
+	// evidence is the metadata-stage payload; groups copy it before adding facts.
+	evidence map[string]any
+	// Bodies feed the second stage only; stripping HTML waits until it runs.
+	strippedReply, textBody, htmlBody string
+}
+
+func newClassifyInput(messageID, threadID, mailboxID string, msg *InboundMessage) classifyInput {
+	return classifyInput{
+		MessageID: messageID, ThreadID: threadID, MailboxID: mailboxID,
+		FromEmail:     msg.From.Email,
+		evidence:      metadataEvidence(msg),
+		strippedReply: msg.StrippedReply, textBody: msg.TextBody, htmlBody: msg.HTMLBody,
+	}
 }
 
 type classifyGroup struct {
@@ -26,13 +43,37 @@ type classifyGroup struct {
 // background and offers no barrier.
 var enqueueClassificationFn = enqueueClassification
 
-// enqueueClassification runs after the delivery transaction commits. It
-// copies what it needs: the InboundMessage holds headers that are not stored.
+// maxConcurrentClassifications bounds simultaneous model calls per app, so a
+// burst of deliveries queues instead of opening one request each.
+const maxConcurrentClassifications = 4
+
+var classifySlotsKey = appstate.NewKey[chan struct{}]("mail.classifySlots")
+
+// acquireClassifySlot waits for a free slot or for ctx to end.
+func acquireClassifySlot(ctx context.Context, app core.App) (release func(), err error) {
+	slots := classifySlotsKey.GetOrInit(app, func() chan struct{} {
+		return make(chan struct{}, maxConcurrentClassifications)
+	})
+	select {
+	case slots <- struct{}{}:
+		return func() { <-slots }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// enqueueClassification runs after the delivery transaction commits, with the
+// input's own copy of the message data.
 func enqueueClassification(app core.App, in classifyInput) {
 	if !classifier.Available(app) {
 		return
 	}
 	background.For(app, "mail").Run("classify:"+in.MessageID, func(ctx context.Context) {
+		release, err := acquireClassifySlot(ctx, app)
+		if err != nil {
+			return
+		}
+		defer release()
 		if err := classifyMessage(ctx, app, in); err != nil {
 			notifyLog.WarnContext(ctx, "classification failed", "messageID", in.MessageID, "err", err)
 		}
@@ -65,7 +106,7 @@ func classifyMessage(ctx context.Context, app core.App, in classifyInput) error 
 		if len(tax) == 0 {
 			continue
 		}
-		facts := factsFor(ctx, app, userID, in.Msg.From.Email)
+		facts := factsFor(ctx, app, userID, in.FromEmail)
 		key := scopeUser + "|" + facts.key()
 		g := groups[key]
 		if g == nil {
@@ -87,7 +128,10 @@ func runGroup(ctx context.Context, app core.App, in classifyInput, g *classifyGr
 	for _, mode := range g.modes {
 		anyArchive = anyArchive || mode == modeLabelsArchive
 	}
-	evidence := metadataEvidence(in.Msg)
+	evidence := make(map[string]any, len(in.evidence))
+	for k, v := range in.evidence {
+		evidence[k] = v
+	}
 	for k, v := range g.facts.evidence() {
 		evidence[k] = v
 	}
@@ -95,7 +139,7 @@ func runGroup(ctx context.Context, app core.App, in classifyInput, g *classifyGr
 		Taxonomy: g.taxonomy,
 		Evidence: evidence,
 		FullEvidence: func(context.Context) (map[string]any, error) {
-			return map[string]any{"body": bodyText(in.Msg)}, nil
+			return map[string]any{"body": in.bodyText()}, nil
 		},
 		NeedsFull: func(r classifier.Result) bool {
 			return anyArchive && r.Label.AutoAction && r.Confidence < threshold
@@ -172,13 +216,13 @@ func metadataEvidence(msg *InboundMessage) map[string]any {
 	}
 }
 
-func bodyText(msg *InboundMessage) string {
+func (in classifyInput) bodyText() string {
 	switch {
-	case msg.StrippedReply != "":
-		return msg.StrippedReply
-	case msg.TextBody != "":
-		return msg.TextBody
+	case in.strippedReply != "":
+		return in.strippedReply
+	case in.textBody != "":
+		return in.textBody
 	default:
-		return stripHTMLToText(msg.HTMLBody)
+		return stripHTMLToText(in.htmlBody)
 	}
 }

@@ -58,6 +58,54 @@ func TestRecordCorrespondents_SentMessage(t *testing.T) {
 	}
 }
 
+func TestRecordCorrespondentsOnUpdate_OnlyWhenBecomingSent(t *testing.T) {
+	app := setupInboundTestApp(t)
+	newCorrespondentsCollection(t, app)
+	seedDomainAndMailbox(t, app, "corr-three.test", "alice", "mb_corr_000003")
+	thread := newTestThread(t, app, padID("mb_corr_000003"), "s")
+	msg := newTestMessage(t, app, thread.Id, "s")
+	msg.Set("sent_by", "user_alice_0000")
+	msg.Set("delivery_status", "draft")
+	msg.Set("recipients_to", `[{"email":"later@example.com"}]`)
+	if err := app.Save(msg); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := app.FindRecordById("mail_messages", msg.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded.Set("delivery_status", "sent")
+	if err := recordCorrespondentsOnUpdate(app, loaded); err != nil {
+		t.Fatal(err)
+	}
+	if !hasSentTo(app, "user_alice_0000", "later@example.com") {
+		t.Fatal("a draft that became sent must record its recipients")
+	}
+
+	if err := app.Save(loaded); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := app.FindFirstRecordByFilter("mail_correspondents", "email = 'later@example.com'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.Delete(deleted); err != nil {
+		t.Fatal(err)
+	}
+	flagged, err := app.FindRecordById("mail_messages", msg.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	flagged.Set("is_starred", true)
+	if err := recordCorrespondentsOnUpdate(app, flagged); err != nil {
+		t.Fatal(err)
+	}
+	if hasSentTo(app, "user_alice_0000", "later@example.com") {
+		t.Fatal("a flag update on an already-sent message must write nothing")
+	}
+}
+
 func TestRecordCorrespondents_IgnoresInboundAndDrafts(t *testing.T) {
 	app := setupInboundTestApp(t)
 	newCorrespondentsCollection(t, app)
