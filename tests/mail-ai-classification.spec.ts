@@ -38,8 +38,9 @@ const MODE_LABELS: Record<Mode, string> = {
     labels_archive: 'Labels and archive',
 }
 
-// Names the tests below mark subjects with. The taxonomy owns its option
-// names (the model sees them, not the core label's), so they are the preset's.
+// Names the tests below mark subjects with; "Newsletters" is spelled as the
+// seed has it, because a new taxonomy row reuses a core label by name and
+// takes that label's exact spelling.
 const NEEDED_LABELS = ['junk', 'opportunities', 'newsletters', 'personal']
 
 // Settings entries share labels across the core system panel, the mail
@@ -203,11 +204,11 @@ test.describe('AI classification', () => {
     test('labels a new message and shows the AI chip', async ({ page, request }) => {
         await setMode(page, 'labels')
         const { subject } = await deliverInbound(request, {
-            subject: uniqueSubject('[jev:newsletters] Weekly'),
+            subject: uniqueSubject('[jev:Newsletters] Weekly'),
         })
         await goToInbox(page)
         await openThread(page, subject)
-        await expect(page.getByTestId('mail-ai-chip')).toContainText('newsletters')
+        await expect(page.getByTestId('mail-ai-chip')).toContainText('Newsletters')
     })
 
     test('archives a new junk thread but not a reply', async ({ page, request }) => {
