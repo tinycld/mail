@@ -48,6 +48,19 @@ func registerThreadStateSyncHooks(app core.App) {
 			for _, field := range threadOwnedStateFields {
 				e.Record.Set(field, stored.GetString(field))
 			}
+			// A column the request did not send keeps its stored value too, not
+			// the one the request loaded before it waited to write: a rule that
+			// starred the thread in between would otherwise be written away by a
+			// client that only marked it read.
+			info, err := e.RequestInfo()
+			if err != nil {
+				return err
+			}
+			for _, name := range e.Record.Collection().Fields.FieldNames() {
+				if name != "id" && !requestSetsField(info.Body, name) {
+					e.Record.Set(name, stored.Get(name))
+				}
+			}
 			// is_sent only ever becomes true (a send, or filing the thread
 			// under Sent), so a stored true is kept.
 			if stored.GetBool("is_sent") {
@@ -77,6 +90,17 @@ func registerThreadStateSyncHooks(app core.App) {
 	})
 }
 
+// requestSetsField reports whether a PocketBase record request body writes the
+// field, directly or through its "+field" / "field+" / "field-" modifiers.
+func requestSetsField(body map[string]any, name string) bool {
+	for _, key := range []string{name, "+" + name, name + "+", name + "-"} {
+		if _, ok := body[key]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 // threadOwnedStateFields are the state columns copied from the thread. The
 // mailbox never changes after create, so only the others are propagated.
 var (
@@ -100,6 +124,14 @@ func fillThreadStateFromThread(app core.App, state *core.Record) error {
 // propagateThreadFields writes the thread's changed values to each of its
 // state rows, saving only rows that do not already carry them.
 func propagateThreadFields(app core.App, threadID string, values map[string]string) error {
+	// One transaction for the read and the saves: a save writes every column,
+	// so a state row read before a rule starred it would write the star away.
+	return app.RunInTransaction(func(txApp core.App) error {
+		return propagateInTransaction(txApp, threadID, values)
+	})
+}
+
+func propagateInTransaction(app core.App, threadID string, values map[string]string) error {
 	states, err := app.FindRecordsByFilter(
 		"mail_thread_state",
 		"thread = {:thread}",

@@ -42,19 +42,7 @@ func seedSentEnv(t *testing.T) (*scopeEnv, *core.Record, *imapSession) {
 	t.Helper()
 	env := setupScopeEnv(t)
 
-	// APPEND assigns IMAP UIDs, which needs the per-mailbox UID state and the
-	// raw-headers file field from migration 1713000004.
-	mailboxes, err := env.app.FindCollectionByNameOrId("mail_mailboxes")
-	if err != nil {
-		t.Fatal(err)
-	}
-	uidState := core.NewBaseCollection("mail_imap_mailbox_state")
-	uidState.Fields.Add(&core.RelationField{Name: "mailbox", Required: true, CollectionId: mailboxes.Id, MaxSelect: 1})
-	uidState.Fields.Add(&core.NumberField{Name: "uid_validity"})
-	uidState.Fields.Add(&core.NumberField{Name: "uid_next"})
-	if err := env.app.Save(uidState); err != nil {
-		t.Fatal(err)
-	}
+	// APPEND needs the raw-headers file field from migration 1713000004.
 	messages, err := env.app.FindCollectionByNameOrId("mail_messages")
 	if err != nil {
 		t.Fatal(err)

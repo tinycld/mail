@@ -62,7 +62,7 @@ func TestFlushMailBufferHoldsWhileReadOnly(t *testing.T) {
 	app := newNotificationsTestApp(t)
 	t.Cleanup(func() { readonly.Leave(app) })
 
-	bufferMailNotificationForUser(app, userID, "sender@external.example", "held while read-only")
+	bufferMailNotificationForUser(app, userID, "", "sender@external.example", "sender@external.example", "held while read-only")
 
 	readonly.Enter(app)
 	flushMailBuffer(context.Background(), app)
@@ -211,7 +211,7 @@ func waitDone(t *testing.T, done <-chan struct{}, what string) {
 func TestMailBatcherFlushWaitsWhileReadOnly(t *testing.T) {
 	const userID = "user_ro_flush_wait"
 	app := newNotificationsTestApp(t)
-	bufferMailNotificationForUser(app, userID, "sender@external.example", "waits for read-only")
+	bufferMailNotificationForUser(app, userID, "", "sender@external.example", "sender@external.example", "waits for read-only")
 	readonly.Enter(app)
 	t.Cleanup(func() { readonly.Leave(app) })
 
@@ -238,8 +238,8 @@ func TestMailBatcherFlushWaitsWhileReadOnly(t *testing.T) {
 func TestMailBatcherFlushDroppedAndLoggedWhenReadOnlyOutlastsTheWait(t *testing.T) {
 	const userID = "user_ro_flush_drop"
 	app := newNotificationsTestApp(t)
-	bufferMailNotificationForUser(app, userID, "sender@external.example", "dropped one")
-	bufferMailNotificationForUser(app, userID, "sender@external.example", "dropped two")
+	bufferMailNotificationForUser(app, userID, "", "sender@external.example", "sender@external.example", "dropped one")
+	bufferMailNotificationForUser(app, userID, "", "sender@external.example", "sender@external.example", "dropped two")
 	logs := readonlytest.CaptureLogs(t)
 	readonly.Enter(app)
 	t.Cleanup(func() { readonly.Leave(app) })
@@ -271,7 +271,7 @@ func TestMailBatcherFlushDroppedAndLoggedWhenReadOnlyOutlastsTheWait(t *testing.
 func TestMailBatcherFlushesAtTerminate(t *testing.T) {
 	const userID = "user_flush_at_terminate"
 	app := newNotificationsTestApp(t)
-	bufferMailNotificationForUser(app, userID, "sender@external.example", "sent at terminate")
+	bufferMailNotificationForUser(app, userID, "", "sender@external.example", "sender@external.example", "sent at terminate")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

@@ -34,7 +34,21 @@ function visibleDetail(page: Page): Locator {
 
 async function fittedToolbar(scope: Locator): Promise<Locator> {
     const toolbar = scope.getByTestId('toolbar').filter({ visible: true }).first()
-    await expect(toolbar.getByTestId('toolbar-row')).toHaveCSS('opacity', '1')
+    const row = toolbar.getByTestId('toolbar-row')
+    await expect(row).toHaveCSS('opacity', '1')
+    // The row measures its width on layout. After a viewport shrinks, it shows
+    // the fit for the old width for a frame or two. A button that fit inline
+    // before then folds into More actions. The fit for the current width is in
+    // place when every slot ends inside the row. The 1px slack is the same
+    // FIT_TOLERANCE that fitToolbarItems allows for layout rounding.
+    await expect
+        .poll(() =>
+            row.evaluate(el => {
+                const right = el.getBoundingClientRect().right + 1
+                return Array.from(el.children).every(c => c.getBoundingClientRect().right <= right)
+            })
+        )
+        .toBe(true)
     return toolbar
 }
 
@@ -689,7 +703,16 @@ test.describe('Mail buttons — compose window', () => {
     test('Link turns the selection into a link', async ({ page }) => {
         await startNewMessage(page)
         await page.keyboard.type('linked')
-        await page.keyboard.press('Shift+Home')
+        // Select All, not Shift+Home. ProseMirror applies its own Select All
+        // command to the editor state at once. Shift+Home moves only the DOM
+        // selection, which ProseMirror reads later on `selectionchange`. When
+        // the editor gets focus, ProseMirror also sets a 20ms timer that writes
+        // the state selection back to the DOM. Synthetic keys come faster than a
+        // person types, so that timer can run after Shift+Home but before the
+        // editor reads it. The timer then collapses the selection, and Link
+        // only arms a stored mark. Nothing in the page shows when the timer has
+        // run, so the test cannot wait for it.
+        await page.keyboard.press('ControlOrMeta+a')
         page.once('dialog', dialog => dialog.accept('https://example.com/'))
         await pressToolbarAction(page, await fittedToolbar(composeWindow(page)), 'Link')
         await expect(editor(page).locator('a[href="https://example.com/"]')).toHaveText('linked')

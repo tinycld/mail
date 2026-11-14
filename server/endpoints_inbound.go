@@ -179,7 +179,11 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 	//
 	// Rollback also removes a thread this call created, which is why there is
 	// no manual thread cleanup on the storeMessage error path any more.
-	return app.RunInTransaction(func(txApp core.App) error {
+	//
+	// Classification is queued only after the commit, and only for a message
+	// this call stored: the duplicate and self-sent paths leave classifyIn nil.
+	var classifyIn *classifyInput
+	err := app.RunInTransaction(func(txApp core.App) error {
 		// Idempotency: skip a message whose Message-ID this mailbox already
 		// holds. The check runs inside the transaction: SQLite allows one
 		// writer, so a provider retry that arrives while this delivery is
@@ -228,9 +232,12 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 			}
 		}
 
-		if _, err := storeMessage(txApp, thread.Id, stored); err != nil {
+		rec, err := storeMessage(txApp, thread.Id, stored)
+		if err != nil {
 			return fmt.Errorf("storeMessage: %w", err)
 		}
+		in := newClassifyInput(rec.Id, thread.Id, mailboxID, msg)
+		classifyIn = &in
 
 		// Use stripped reply for snippet when available (just the new content, no quoted history)
 		snippet := msg.StrippedReply
@@ -246,6 +253,10 @@ func processInboundForMailbox(app core.App, mailbox *core.Record, msg *InboundMe
 
 		return nil
 	})
+	if err == nil && classifyIn != nil {
+		enqueueClassificationFn(app, *classifyIn)
+	}
+	return err
 }
 
 // fileIntoInbox files a thread into every member's Inbox, keeping each

@@ -57,7 +57,7 @@ func TestIdleNotifierIsPerApp(t *testing.T) {
 func TestMailBufferIsPerApp(t *testing.T) {
 	a, b := newNotificationsTestApp(t), newNotificationsTestApp(t)
 	const userID = "user_two_apps"
-	bufferMailNotificationForUser(a, userID, "sender@external.example", "for app a")
+	bufferMailNotificationForUser(a, userID, "", "sender@external.example", "sender@external.example", "for app a")
 
 	flushMailBuffer(context.Background(), b)
 

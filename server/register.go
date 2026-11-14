@@ -288,6 +288,20 @@ func registerShared(app *pocketbase.PocketBase) {
 		return e.Next()
 	})
 
+	// Remember who each user has sent mail to, for the "has sent to" sender fact.
+	app.OnRecordAfterCreateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
+		if err := recordCorrespondents(e.App, e.Record); err != nil {
+			notifyLog.Warn("recording correspondents failed", "messageID", e.Record.Id, "err", err)
+		}
+		return e.Next()
+	})
+	app.OnRecordAfterUpdateSuccess("mail_messages").BindFunc(func(e *core.RecordEvent) error {
+		if err := recordCorrespondentsOnUpdate(e.App, e.Record); err != nil {
+			notifyLog.Warn("recording correspondents failed", "messageID", e.Record.Id, "err", err)
+		}
+		return e.Next()
+	})
+
 	// Generate thumbnails for any supported attachments (PDF, Office docs, HEIC).
 	// AfterUpdate fires from our own Save below, so the hook short-circuits when
 	// the attachments list hasn't changed since the last time we ran.
@@ -722,7 +736,7 @@ func bufferMailNotification(app core.App, msgRecord *core.Record) {
 
 	for _, member := range members {
 		if userID := member.GetString("user"); userID != "" {
-			bufferMailNotificationForUser(app, userID, sender, subject)
+			bufferMailNotificationForUser(app, userID, msgRecord.GetString("thread"), sender, senderEmail, subject)
 		}
 	}
 }

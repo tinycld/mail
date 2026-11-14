@@ -9,12 +9,74 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 	"github.com/pocketbase/pocketbase/tools/router"
+	"tinycld.org/core/classifier"
+	"tinycld.org/core/classifier/fakeprovider"
 	"tinycld.org/core/rlstest"
 )
+
+// TestHandleInbound_DeliveryProducesClassificationRow waits on the create hook
+// of the classifications row, not a sleep.
+func TestHandleInbound_DeliveryProducesClassificationRow(t *testing.T) {
+	app := setupInboundTestApp(t)
+	installClassifier(t, app, map[string]string{classifier.KeyAPIKey: fakeprovider.AcceptedKey})
+	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_classify_in1")
+	seedMember(t, app, "mb_classify_in1", "user_alice")
+	setPref(t, app, "user_alice", "classifier.mode", "labels")
+
+	saved := make(chan struct{}, 4)
+	app.OnRecordAfterCreateSuccess("classifications").BindFunc(func(e *core.RecordEvent) error {
+		saved <- struct{}{}
+		return e.Next()
+	})
+
+	body := postmarkPayload(t, []string{"alice@acme.com"}, "[jev:junk] Buy now", "body", "<msg-classify-1@example.org>")
+	provider := &stubProvider{parse: (&PostmarkProvider{}).ParseInbound}
+	re, _ := makeInboundRequest(t, app, "tok-classify", body)
+	if err := handleInbound(app, provider, re, "tok-classify"); err != nil {
+		t.Fatalf("delivery: %v", err)
+	}
+	select {
+	case <-saved:
+	case <-time.After(10 * time.Second):
+		t.Fatal("delivery did not produce a classification row")
+	}
+}
+
+// TestHandleInbound_ClassifiesOncePerStoredMessage swaps the enqueue seam, so
+// it is not parallel: it must not overlap another delivery test.
+func TestHandleInbound_ClassifiesOncePerStoredMessage(t *testing.T) {
+	var queued []classifyInput
+	orig := enqueueClassificationFn
+	enqueueClassificationFn = func(_ core.App, in classifyInput) { queued = append(queued, in) }
+	t.Cleanup(func() { enqueueClassificationFn = orig })
+
+	app := setupInboundTestApp(t)
+	seedDomainAndMailbox(t, app, "acme.com", "alice", "mb_classify_in2")
+	seedMember(t, app, "mb_classify_in2", "user_alice")
+
+	body := postmarkPayload(t, []string{"alice@acme.com"}, "once", "body", "<msg-classify-2@example.org>")
+	provider := &stubProvider{parse: (&PostmarkProvider{}).ParseInbound}
+	deliver := func() {
+		re, _ := makeInboundRequest(t, app, "tok-classify", body)
+		if err := handleInbound(app, provider, re, "tok-classify"); err != nil {
+			t.Fatalf("delivery: %v", err)
+		}
+	}
+
+	deliver()
+	if len(queued) != 1 {
+		t.Fatalf("first delivery queued %d classifications, want 1", len(queued))
+	}
+	deliver()
+	if len(queued) != 1 {
+		t.Fatalf("duplicate delivery queued a classification: %d total", len(queued))
+	}
+}
 
 // makeInboundRequest constructs a *core.RequestEvent suitable for calling
 // handleInbound directly. The request body is the JSON-encoded payload, the
@@ -230,6 +292,18 @@ func setupInboundTestApp(t *testing.T) *tests.TestApp {
 	counts.Fields.Add(&core.JSONField{Name: "inbox_by_address", MaxSize: 200000})
 	if err := app.Save(counts); err != nil {
 		t.Fatalf("failed to save mail_folder_counts: %v", err)
+	}
+
+	// The UID hook assigns imap_uid from this state row on every stored message.
+	uidState := core.NewBaseCollection("mail_imap_mailbox_state")
+	uidState.Fields.Add(&core.RelationField{
+		Name: "mailbox", Required: true, CollectionId: mailboxesCol.Id, MaxSelect: 1,
+	})
+	uidState.Fields.Add(&core.NumberField{Name: "uid_validity"})
+	uidState.Fields.Add(&core.NumberField{Name: "uid_next"})
+	uidState.AddIndex("idx_imap_mb_state_mailbox", true, "mailbox", "")
+	if err := app.Save(uidState); err != nil {
+		t.Fatalf("failed to save mail_imap_mailbox_state: %v", err)
 	}
 
 	registerMessageUIDHook(app)

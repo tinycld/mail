@@ -9,13 +9,16 @@ import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { Menu } from '@tinycld/core/ui/menu'
 import { ChevronDown, ChevronUp, Forward, MoreVertical, Reply, ReplyAll } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
+import type { useThreadClassification } from '../hooks/useThreadClassification'
+import { AiLabelChip } from './AiLabelChip'
 
 interface ThreadSubjectHeaderProps {
     subject: string
     labels: { id: string; name: string; color: string }[]
+    aiLabel: ReturnType<typeof useThreadClassification>
 }
 
-export function ThreadSubjectHeader({ subject, labels }: ThreadSubjectHeaderProps) {
+export function ThreadSubjectHeader({ subject, labels, aiLabel }: ThreadSubjectHeaderProps) {
     const breakpoint = useBreakpoint()
     const isMobile = breakpoint === 'mobile'
     const foregroundColor = useThemeColor('foreground')
@@ -31,6 +34,7 @@ export function ThreadSubjectHeader({ subject, labels }: ThreadSubjectHeaderProp
                 {labels.map(label => (
                     <LabelBadge key={label.id} name={label.name} color={label.color} />
                 ))}
+                <AiLabelChip classification={aiLabel} isVisible={aiLabel !== undefined} />
             </View>
         </View>
     )

@@ -44,6 +44,11 @@ describe('mail manifest', () => {
         expect(manifest.accountSettings).toEqual([
             { slug: 'email', label: 'Email', component: 'settings/AccountEmail' },
             { slug: 'mail-apps', label: 'Mail apps', component: 'settings/MailAppSetup' },
+            {
+                slug: 'classification',
+                label: 'AI classification',
+                component: 'settings/Classification',
+            },
         ])
     })
 
