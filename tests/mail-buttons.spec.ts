@@ -34,7 +34,21 @@ function visibleDetail(page: Page): Locator {
 
 async function fittedToolbar(scope: Locator): Promise<Locator> {
     const toolbar = scope.getByTestId('toolbar').filter({ visible: true }).first()
-    await expect(toolbar.getByTestId('toolbar-row')).toHaveCSS('opacity', '1')
+    const row = toolbar.getByTestId('toolbar-row')
+    await expect(row).toHaveCSS('opacity', '1')
+    // The row measures its width on layout. After a viewport shrinks, it shows
+    // the fit for the old width for a frame or two. A button that fit inline
+    // before then folds into More actions. The fit for the current width is in
+    // place when every slot ends inside the row. The 1px slack is the same
+    // FIT_TOLERANCE that fitToolbarItems allows for layout rounding.
+    await expect
+        .poll(() =>
+            row.evaluate(el => {
+                const right = el.getBoundingClientRect().right + 1
+                return Array.from(el.children).every(c => c.getBoundingClientRect().right <= right)
+            })
+        )
+        .toBe(true)
     return toolbar
 }
 
