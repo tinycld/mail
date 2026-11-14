@@ -38,10 +38,12 @@ const MODE_LABELS: Record<Mode, string> = {
     labels_archive: 'Labels and archive',
 }
 
-// Names the tests below mark subjects with; "Newsletters" is spelled as the
-// seed has it, because a new taxonomy row reuses a core label by name and
-// takes that label's exact spelling.
-const NEEDED_LABELS = ['junk', 'opportunities', 'newsletters', 'personal']
+// Names the tests below mark subjects with. None of them is a label that the
+// mail seed or another spec creates: a new taxonomy row reuses an existing
+// core label by name and takes its exact spelling, and whether such a label
+// exists (org-wide or only for the test user) differs between local and CI
+// runs, so a seeded name would make the marker's spelling unpredictable.
+const NEEDED_LABELS = ['junk', 'opportunities', 'important-update', 'review']
 
 // Settings entries share labels across the core system panel, the mail
 // organization panel and the mail account panel, so they are picked by testID.
@@ -204,11 +206,11 @@ test.describe('AI classification', () => {
     test('labels a new message and shows the AI chip', async ({ page, request }) => {
         await setMode(page, 'labels')
         const { subject } = await deliverInbound(request, {
-            subject: uniqueSubject('[jev:Newsletters] Weekly'),
+            subject: uniqueSubject('[jev:important-update] Weekly'),
         })
         await goToInbox(page)
         await openThread(page, subject)
-        await expect(page.getByTestId('mail-ai-chip')).toContainText('Newsletters')
+        await expect(page.getByTestId('mail-ai-chip')).toContainText('important-update')
     })
 
     test('archives a new junk thread but not a reply', async ({ page, request }) => {
@@ -243,7 +245,7 @@ test.describe('AI classification', () => {
     test('preview mode records a result without labelling', async ({ page, request }) => {
         await setMode(page, 'preview')
         const { subject } = await deliverInbound(request, {
-            subject: uniqueSubject('[jev:personal] Hi'),
+            subject: uniqueSubject('[jev:review] Hi'),
         })
         const recent = page.getByTestId('mail-classifier-recent')
         await expect(recent).toContainText(subject)
