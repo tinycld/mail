@@ -173,6 +173,7 @@ func registerShared(app *pocketbase.PocketBase) {
 	registerIdentityHooks(app)
 	registerRuleAddressHooks(app)
 	registerIdentityEditHooks(app)
+	registerUsernameFollowHook(app)
 	registerGroupMembershipListener()
 
 	// Clean up orphaned personal mailboxes when a user is deleted.
