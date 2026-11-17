@@ -84,3 +84,26 @@ func TestUsernameFollow_OffboardingDoesNotFollow(t *testing.T) {
 		t.Fatalf("a tombstone username became a mail name: %q", identity.GetString("email_name"))
 	}
 }
+
+// A rule address with the old name stays too, as the mail settings rename
+// does with "Keep the old addresses" on.
+func TestUsernameFollow_KeepsTheOldRuleAddress(t *testing.T) {
+	t.Parallel()
+	app := newUsernameFollowApp(t)
+	s := seedIdentityEdit(t, app)
+	second := saveRealRecord(t, app, "mail_domains", map[string]any{"domain": "second.org", "verified": true, "coverage": coverageEveryone})
+	if row, err := findAddressRow(app, "ann", second.Id); err != nil || row == nil {
+		t.Fatalf("seed: ann@second.org = %v %v", row, err)
+	}
+
+	if err := renameUser(t, app, s.ann.Id, "anna"); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if row, err := findAddressRow(app, "anna", second.Id); err != nil || row == nil || row.GetString("source") != addressSourceRule {
+		t.Fatalf("anna@second.org = %v %v, want a rule row", row, err)
+	}
+	old, err := findAddressRow(app, "ann", second.Id)
+	if err != nil || old == nil || old.GetString("mailbox") != s.annInbox.Id || old.GetString("source") != addressSourceManual {
+		t.Fatalf("ann@second.org = %v %v, want a kept manual row of ann's inbox", old, err)
+	}
+}

@@ -44,6 +44,11 @@ func registerUsernameFollowHook(app core.App) {
 			if err := e.Next(); err != nil {
 				return err
 			}
+			// Before the rename, so the identity's reconcile sees them as
+			// hand-made rows of the inbox and leaves them in place.
+			if err := keepOldRuleAddresses(txApp, identity.GetString("inbox"), oldEmail); err != nil {
+				return err
+			}
 			identity.Set("email_name", usernameEmailBase(newName))
 			if err := txApp.Save(identity); err != nil {
 				return emailNameAsUsername(err)
@@ -79,6 +84,30 @@ func keepOldAddress(app core.App, identity *core.Record, local string) error {
 	row.Set("mailbox", inbox.Id)
 	row.Set("source", addressSourceManual)
 	return app.Save(row)
+}
+
+// keepOldRuleAddresses turns the inbox's rule addresses with the old name into
+// hand-made addresses, the server-side match of the mail settings rename with
+// "Keep the old addresses" on. Converting in place keeps each row's id, so a
+// Default From that pointed at one still does.
+func keepOldRuleAddresses(app core.App, inboxID, local string) error {
+	if inboxID == "" {
+		return nil
+	}
+	rows, err := app.FindRecordsByFilter("mail_addresses",
+		"mailbox = {:inbox} && source = {:rule} && local_part = {:local}", "", 0, 0,
+		dbx.Params{"inbox": inboxID, "rule": addressSourceRule, "local": local})
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		row.Set("source", addressSourceManual)
+		row.Set("via_group", "")
+		if err := app.Save(row); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // emailNameAsUsername puts a refusal of the new email name on username, the
