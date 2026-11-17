@@ -27,6 +27,8 @@ The **Keep the old addresses as extra addresses** switch is on by default. When 
 
 If your Default From is your main address, it changes to the new main address. If your Default From is an old rule address, it stays on that old address when the switch is on. When the switch is off, it changes to **The main domain's address**.
 
+When an admin changes your username under **Settings → Members**, your email name changes to the new username, as if the switch were on: the old addresses stay as extra addresses. If an admin set your email name by hand, it does not change.
+
 ## Choose your Default From
 
 Your Default From is the address that a new message starts from.
