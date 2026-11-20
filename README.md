@@ -299,7 +299,7 @@ Nothing is dispatched when the drained buffer is empty — either because no mai
 
 ### Cross-package coupling
 
-- **Contacts (optional)** — when installed, the composer's recipient autocomplete queries `contacts` for matching names / emails alongside the user directory. If Contacts isn't installed, autocomplete falls back to the user directory only.
+- **Contacts (optional)** — when installed, the composer's recipient autocomplete queries the user's own `contacts` for matching names / emails. If Contacts isn't installed, the composer offers no suggestions.
 - **Drive (planned)** — large attachments (>25 MB) could be diverted to Drive automatically with a share link inserted in the body. Not yet implemented.
 
 Mail itself doesn't require any other package; it works standalone.
