@@ -64,6 +64,7 @@ In the compose window:
 |---|---|
 | ⌘⏎ | Send |
 | ⌘B / ⌘I / ⌘U | Bold / italic / underline |
+| ⌘K | Add a link: in the message body, opens the **Link** dialog for the selected text |
 
 ## See also
 

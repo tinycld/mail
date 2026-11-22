@@ -1,11 +1,11 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { login, navigateToPackage } from '@tinycld/core/e2e-helpers'
 
-// The compose toolbar's Link dialog at a phone viewport. Below the mobile
-// breakpoint Link folds into the toolbar's More actions menu and the dialog
-// opens as a Sheet, which is different code from the desktop run in
-// mail-buttons.spec.ts. The helpers below are copied from that spec, which
-// keeps its own private.
+// The compose toolbar's Link dialog: opened by ⌘K in the body, and at a phone
+// viewport. Below the mobile breakpoint Link folds into the toolbar's More
+// actions menu and the dialog opens as a Sheet, which is different code from
+// the desktop run in mail-buttons.spec.ts. The helpers below are copied from
+// that spec, which keeps its own private.
 
 const PHONE = { width: 390, height: 844 }
 
@@ -67,6 +67,46 @@ async function openLinkFromMore(page: Page, toolbar: Locator) {
 }
 
 test.describe('email-share: compose link dialog', () => {
+    test('⌘K in the body opens Link and links the selection, and not in Subject', async ({
+        page,
+    }) => {
+        await login(page)
+        await navigateToPackage(page, 'mail', {
+            waitFor: page.getByTestId('package-sidebar-mounted'),
+        })
+        await page.getByText('Compose', { exact: true }).first().click()
+        await expect(page.getByTestId('mail-compose-to')).toBeVisible()
+        const input = page.getByRole('textbox', { name: 'Link', exact: true })
+
+        // ⌘K belongs to the body editor only. Had it opened the dialog here,
+        // the dialog's input would take the focus and the typed text would
+        // not reach Subject.
+        const subject = page.getByTestId('mail-compose-subject')
+        await subject.click()
+        await page.keyboard.press('ControlOrMeta+k')
+        await page.keyboard.type('Hello')
+        await expect(subject).toHaveValue('Hello')
+        await expect(input).toBeHidden()
+
+        await editor(page).click()
+        await page.keyboard.type('linked')
+        // Select All, not Shift+Home: see the Link test in mail-buttons.spec.ts.
+        await page.keyboard.press('ControlOrMeta+a')
+        await page.keyboard.press('ControlOrMeta+k')
+        await expect(input).toBeFocused()
+        await expect(input).toHaveValue('https://')
+        await input.fill('https://example.com/')
+        await page
+            .getByRole('button', { name: /^Apply/ })
+            .filter({ visible: true })
+            .click()
+        await expect(input).toBeHidden()
+        const link = editor(page).locator('a[href]')
+        await expect(link).toHaveCount(1)
+        await expect(link).toHaveAttribute('href', 'https://example.com/')
+        await expect(link).toHaveText('linked')
+    })
+
     test('at phone width Link in More sets a link and Cancel keeps it', async ({ page }) => {
         await login(page)
         await navigateToPackage(page, 'mail', {
