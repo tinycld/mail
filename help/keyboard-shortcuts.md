@@ -34,7 +34,6 @@ After `x`-ing one or more conversations, the top of the list shows a bulk-action
 | ⌘B | Bold |
 | ⌘I | Italic |
 | ⌘U | Underline |
-| ⌘K | Add a link to the selected text |
 
 ## In an open thread
 

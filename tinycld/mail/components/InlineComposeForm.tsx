@@ -1,8 +1,9 @@
+import { RichTextToolbar } from '@tinycld/core/components/editor/RichTextToolbar'
 import { usePickFiles } from '@tinycld/core/file-viewer/use-pick-files'
 import { useFileDrop } from '@tinycld/core/lib/file-drop/use-file-drop'
 import { useThemeColor } from '@tinycld/core/lib/use-app-theme'
 import { useForm, zodResolver } from '@tinycld/core/ui/form'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { View } from 'react-native'
 import { composeSchema, parseRecipients } from '../hooks/composeSchema'
 import { useComposeAttachments } from '../hooks/useComposeAttachments'
@@ -13,7 +14,7 @@ import { useSendEmail } from '../hooks/useSendEmail'
 import { AttachmentRibbon } from './AttachmentRibbon'
 import { ComposeFields } from './ComposeFields'
 import { ComposeFromRow } from './ComposeFromRow'
-import { ComposeToolbar } from './ComposeToolbar'
+import { composeToolbarItems } from './compose-toolbar-items'
 import { DropOverlay } from './DropOverlay'
 
 interface InlineComposeFormProps {
@@ -111,6 +112,19 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
         if (picked.length > 0) addFilesSafely(picked.map(p => p.file))
     }, [pickFiles, addFilesSafely])
 
+    const isSendDisabled = !from
+    const toolbarItems = useMemo(
+        () =>
+            composeToolbarItems({
+                onSend,
+                onAttach: handleAttach,
+                onDiscard: onClose,
+                isPending,
+                isSendDisabled,
+            }),
+        [onSend, handleAttach, onClose, isPending, isSendDisabled]
+    )
+
     return (
         <View
             className="m-4 border rounded-lg"
@@ -132,14 +146,13 @@ export default function InlineComposeForm({ replyContext, onClose }: InlineCompo
                     onRemove={removeItem}
                     uploadProgress={uploadProgress}
                 />
-                <ComposeToolbar
+                <RichTextToolbar
                     commands={commands}
                     toolbarState={toolbarState}
-                    onDiscard={onClose}
-                    onSend={onSend}
-                    onAttach={handleAttach}
-                    isPending={isPending}
-                    isSendDisabled={!from}
+                    leadingItems={toolbarItems.leadingItems}
+                    trailingItems={toolbarItems.trailingItems}
+                    rightItems={toolbarItems.rightItems}
+                    className="border-t border-border"
                 />
                 <DropOverlay isVisible={isDragging} />
             </View>

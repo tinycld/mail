@@ -64,7 +64,6 @@ In the compose window:
 |---|---|
 | ⌘⏎ | Send |
 | ⌘B / ⌘I / ⌘U | Bold / italic / underline |
-| ⌘K | Add a link |
 
 ## See also
 

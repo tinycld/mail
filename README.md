@@ -416,7 +416,7 @@ tinycld/mail/
     system-settings/
         provider.tsx       deployment-wide provider credentials (setup console)
     components/
-        ComposeWindow + ComposeFields + ComposeToolbar + ComposeHeader
+        ComposeWindow + ComposeFields + RichTextToolbar (core) + compose-toolbar-items + ComposeHeader
         InlineComposeForm + InlineReply
         FromIdentityPicker (mailboxes + addresses) + RecipientField + RecipientSuggestionList
         AttachmentRibbon + AttachmentStrip + AttachmentThumbnail + DropOverlay
