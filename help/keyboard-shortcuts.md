@@ -34,7 +34,7 @@ After `x`-ing one or more conversations, the top of the list shows a bulk-action
 | ⌘B | Bold |
 | ⌘I | Italic |
 | ⌘U | Underline |
-| ⌘K | Add a link to the selected text |
+| ⌘K | Add a link to the selected text (opens the **Link** dialog while the message body has focus) |
 
 ## In an open thread
 

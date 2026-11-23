@@ -1,3 +1,4 @@
+import { RichTextToolbar } from '@tinycld/core/components/editor/RichTextToolbar'
 import { useBreakpoint } from '@tinycld/core/components/workspace/useBreakpoint'
 import { usePickFiles } from '@tinycld/core/file-viewer/use-pick-files'
 import { useFileDrop } from '@tinycld/core/lib/file-drop/use-file-drop'
@@ -25,7 +26,7 @@ import { AttachmentRibbon } from './AttachmentRibbon'
 import { ComposeFields } from './ComposeFields'
 import { ComposeFromRow } from './ComposeFromRow'
 import { ComposeHeader } from './ComposeHeader'
-import { ComposeToolbar } from './ComposeToolbar'
+import { composeToolbarItems } from './compose-toolbar-items'
 import { DropOverlay } from './DropOverlay'
 
 export type { ComposeFormData } from '../hooks/composeSchema'
@@ -229,10 +230,10 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
 
     // The window stays mounted while closed, so a discard must drop the
     // attachments and the removals too, or the next open shows them.
-    const discard = () => {
+    const discard = useCallback(() => {
         clearAttachments()
         close()
-    }
+    }, [clearAttachments, close])
 
     const finishClose = () => {
         draftIdRef.current = null
@@ -276,6 +277,42 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         })
     }
 
+    // Send is disabled without a resolved From, but ⌘Enter reaches this handler
+    // directly, so it must still refuse.
+    const onSend = handleSubmit(async data => {
+        if (!from) return
+
+        const htmlBody = await editor.getHTML()
+        const textBody = await editor.getText()
+
+        const cc = data.cc ? parseRecipients(data.cc) : undefined
+        const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
+
+        const request = composeSendRequest(from, draftIdRef.current, keptSaved, {
+            to: parseRecipients(data.to),
+            cc,
+            bcc,
+            subject: data.subject,
+            html_body: htmlBody,
+            text_body: textBody,
+            in_reply_to_message_id: replyContext?.messageId,
+        })
+        send({ ...request, attachments: attachmentFiles })
+    })
+
+    const isSendDisabled = !from
+    const toolbarItems = useMemo(
+        () =>
+            composeToolbarItems({
+                onSend,
+                onAttach: handleAttach,
+                onDiscard: discard,
+                isPending,
+                isSendDisabled,
+            }),
+        [onSend, handleAttach, discard, isPending, isSendDisabled]
+    )
+
     if (!isVisible) return null
 
     const isMinimized = mode === 'minimized'
@@ -307,29 +344,6 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
         right: insets.right,
     }
     const windowStyle = isNotDesktop ? fullscreenStyle : modeStyles[mode]
-
-    // Send is disabled without a resolved From, but ⌘Enter reaches this handler
-    // directly, so it must still refuse.
-    const onSend = handleSubmit(async data => {
-        if (!from) return
-
-        const htmlBody = await editor.getHTML()
-        const textBody = await editor.getText()
-
-        const cc = data.cc ? parseRecipients(data.cc) : undefined
-        const bcc = data.bcc ? parseRecipients(data.bcc) : undefined
-
-        const request = composeSendRequest(from, draftIdRef.current, keptSaved, {
-            to: parseRecipients(data.to),
-            cc,
-            bcc,
-            subject: data.subject,
-            html_body: htmlBody,
-            text_body: textBody,
-            in_reply_to_message_id: replyContext?.messageId,
-        })
-        send({ ...request, attachments: attachmentFiles })
-    })
 
     const composeWindow = (
         <View
@@ -369,14 +383,13 @@ export function ComposeWindow({ isVisible }: ComposeWindowProps) {
                     onRemove={removeItem}
                     uploadProgress={uploadProgress}
                 />
-                <ComposeToolbar
+                <RichTextToolbar
                     commands={commands}
                     toolbarState={toolbarState}
-                    onDiscard={discard}
-                    onSend={onSend}
-                    onAttach={handleAttach}
-                    isPending={isPending}
-                    isSendDisabled={!from}
+                    leadingItems={toolbarItems.leadingItems}
+                    trailingItems={toolbarItems.trailingItems}
+                    rightItems={toolbarItems.rightItems}
+                    className="border-t border-border"
                 />
                 <DropOverlay isVisible={isDragging} />
             </View>

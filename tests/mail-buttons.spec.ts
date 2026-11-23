@@ -713,9 +713,33 @@ test.describe('Mail buttons — compose window', () => {
         // only arms a stored mark. Nothing in the page shows when the timer has
         // run, so the test cannot wait for it.
         await page.keyboard.press('ControlOrMeta+a')
-        page.once('dialog', dialog => dialog.accept('https://example.com/'))
-        await pressToolbarAction(page, await fittedToolbar(composeWindow(page)), 'Link')
+        const toolbar = await fittedToolbar(composeWindow(page))
+        // The toolbar's Link button has the same label as the dialog's input,
+        // so the input is found by its textbox role.
+        const input = page.getByRole('textbox', { name: 'Link', exact: true })
+        const apply = page.getByRole('button', { name: /^Apply/ }).filter({ visible: true })
+
+        await pressToolbarAction(page, toolbar, 'Link')
+        await expect(
+            page.getByRole('dialog').filter({ has: page.getByText('Link', { exact: true }) })
+        ).toBeVisible()
+        await expect(input).toBeFocused()
+        await expect(input).toHaveValue('https://')
+        await input.fill('https://example.com/')
+        await apply.click()
         await expect(editor(page).locator('a[href="https://example.com/"]')).toHaveText('linked')
+
+        // With the caret's link as the default value, an empty value removes it.
+        await editor(page).click()
+        await page.keyboard.press('ControlOrMeta+a')
+        await pressToolbarAction(page, toolbar, 'Link')
+        await expect(input).toBeFocused()
+        await expect(input).toHaveValue('https://example.com/')
+        await input.fill('')
+        await apply.click()
+        await expect(input).toBeHidden()
+        await expect(editor(page).locator('a')).toHaveCount(0)
+        await expect(editor(page)).toContainText('linked')
     })
 
     test('Attach opens the file picker', async ({ page }) => {
